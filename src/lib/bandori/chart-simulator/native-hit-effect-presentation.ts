@@ -9,8 +9,10 @@ import {
   upperBoundBandoriNoteTime,
   type BandoriNativeChartVisuals,
   type BandoriNativeNoteVisual,
+  type BandoriNativeRibbonVisual,
 } from "./native-note-presentation";
 import type { BandoriNativeSwipeEffectKind } from "./native-swipe-effect-presentation";
+import { roundNonNegativeMidpointToEven } from "./numeric";
 
 export type BandoriNativeTapHitEffectKind = "normal" | "skill";
 export type BandoriNativeHitEffectKind =
@@ -125,11 +127,7 @@ export type BandoriApproximateKiraSample = BandoriApproximateHitLayerSample & {
 };
 
 function getBandoriNativeTargetCenterLane(lane: number): number {
-  const lower = Math.floor(lane);
-  const fraction = lane - lower;
-  if (fraction < 0.5) return lower;
-  if (fraction > 0.5) return lower + 1;
-  return lower % 2 === 0 ? lower : lower + 1;
+  return roundNonNegativeMidpointToEven(lane);
 }
 
 function getBandoriNativeEffectTarget(
@@ -757,6 +755,7 @@ export function collectBandoriNativeLaneEffectEvents(
   chartVisuals: BandoriNativeChartVisuals,
   previousTimeSeconds: number,
   currentTimeSeconds: number,
+  indexedRibbons?: ReadonlyMap<number, BandoriNativeRibbonVisual>,
 ): BandoriNativeLaneEffectEvent[] {
   if (
     !Number.isFinite(previousTimeSeconds)
@@ -768,11 +767,12 @@ export function collectBandoriNativeLaneEffectEvents(
   // NoteLaneEffectOn returns before enabling its Animator for every
   // IsMultiRangeNotes chart. OffReserve cannot make a disabled renderer visible.
   if (isBandoriHabahiroChart(compiled)) return [];
-  const ribbonByIndex = new Map(
-    chartVisuals.ribbons.map((ribbon) => [ribbon.ribbonIndex, ribbon]),
-  );
   const startIndex = upperBoundBandoriNoteTime(compiled.notes.times, previousTimeSeconds);
   const endIndex = upperBoundBandoriNoteTime(compiled.notes.times, currentTimeSeconds);
+  if (startIndex === endIndex) return [];
+  const ribbonByIndex = indexedRibbons ?? new Map(
+    chartVisuals.ribbons.map((ribbon) => [ribbon.ribbonIndex, ribbon]),
+  );
   const events: BandoriNativeLaneEffectEvent[] = [];
   const push = (
     action: BandoriNativeLaneEffectEvent["action"],

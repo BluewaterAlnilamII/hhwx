@@ -72,10 +72,10 @@ test("music and one-shot sound effects use compatible browser audio sessions", a
     readFile(new URL("src/app/[locale]/bandori/cards/[cardId]/CardDetailPageClient.tsx", ROOT_URL), "utf8"),
   ]);
 
-  const playbackClaimIndex = host.indexOf("setMusicPlaybackAudioSessionActive(true)");
+  const playbackClaimIndex = host.indexOf("playbackAudioSessionRef.current?.setActive(true)");
   const mediaPlayIndex = host.indexOf("await audio.play()");
   assert.ok(playbackClaimIndex >= 0 && playbackClaimIndex < mediaPlayIndex);
-  assert.match(host, /setMusicPlaybackAudioSessionActive\(false\)/u);
+  assert.match(host, /playbackAudioSessionRef\.current\?\.setActive\(false\)/u);
   assert.doesNotMatch(host, /className="hidden"/u);
   assert.match(host, /className="pointer-events-none fixed left-0 top-0 h-px w-px opacity-0"/u);
   assert.match(host, /type: "image\/png"/u);

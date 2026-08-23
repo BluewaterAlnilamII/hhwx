@@ -18,6 +18,7 @@ export type LoadedBandoriChartSimulatorAssets = {
 
 const loadedByIndexUrl = new Map<string, LoadedBandoriChartSimulatorAssets>();
 const inFlightByIndexUrl = new Map<string, Promise<LoadedBandoriChartSimulatorAssets>>();
+const requestSequenceByIndexUrl = new Map<string, number>();
 
 async function sha256Hex(body: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", body);
@@ -42,6 +43,8 @@ export async function loadBandoriChartSimulatorAssets(options?: {
   }
 
   const fetcher = options?.fetcher ?? fetch;
+  const requestSequence = (requestSequenceByIndexUrl.get(indexUrl) ?? 0) + 1;
+  requestSequenceByIndexUrl.set(indexUrl, requestSequence);
   const request = (async () => {
     const indexResponse = await fetcher(indexUrl, {
       cache: options?.refresh ? "no-cache" : "default",
@@ -81,7 +84,9 @@ export async function loadBandoriChartSimulatorAssets(options?: {
         options?.baseUrl,
       ),
     };
-    loadedByIndexUrl.set(indexUrl, loaded);
+    if (requestSequenceByIndexUrl.get(indexUrl) === requestSequence) {
+      loadedByIndexUrl.set(indexUrl, loaded);
+    }
     return loaded;
   })();
   inFlightByIndexUrl.set(indexUrl, request);

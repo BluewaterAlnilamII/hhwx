@@ -5,7 +5,7 @@
  * ParticleSystem implementation.
  */
 
-export const BANDORI_DEFAULT_EFFECT_RECIPE_SCHEMA =
+export const BANDORI_EFFECT_RECIPE_SCHEMA =
   "hhwx-bandori-chart-simulator-browser-effect-recipe-v2" as const;
 
 const DEFAULT_FIXED_STEP_SECONDS = 1 / 120;
@@ -132,7 +132,7 @@ export interface BandoriEffectFrame {
   isRootActive: boolean;
 }
 
-export interface BandoriDefaultEffectRuntimeOptions {
+export interface BandoriEffectRecipeRuntimeOptions {
   seed: number;
   buttonIndex: number;
   fixedStepSeconds?: number;
@@ -143,7 +143,7 @@ export interface BandoriDefaultEffectRuntimeOptions {
   }>;
 }
 
-export interface BandoriDefaultEffectRuntime {
+export interface BandoriEffectRecipeRuntime {
   readonly frame: BandoriEffectFrame;
   readonly seed: number;
   readonly buttonIndex: number;
@@ -155,7 +155,7 @@ export interface BandoriDefaultEffectRuntime {
   setButtonIndex(buttonIndex: number): void;
 }
 
-export interface BandoriDefaultEffectPlacement {
+export interface BandoriEffectRecipePlacement {
   pixelsPerWorldUnit: number;
   screenX: number;
   screenY: number;
@@ -408,9 +408,19 @@ interface CompiledSystem {
   serializedRandomSeed: number;
   particles: ParticlePool;
   renderInstances: BandoriEffectFrameInstance[];
+  activeParticleCount: number;
   nextOrdinal: number;
   rateCarry: number;
 }
+
+type CompiledSystemTemplate = Omit<
+  CompiledSystem,
+  | "activeParticleCount"
+  | "nextOrdinal"
+  | "particles"
+  | "rateCarry"
+  | "renderInstances"
+>;
 
 interface ParticlePool {
   alive: Uint8Array;
@@ -445,6 +455,17 @@ interface CompiledRecipe {
   systems: CompiledSystem[];
   frameCapacity: number;
 }
+
+type CompiledRecipeTemplate = Omit<CompiledRecipe, "systems"> & {
+  systems: CompiledSystemTemplate[];
+};
+
+declare const BANDORI_COMPILED_EFFECT_RECIPE: unique symbol;
+export type BandoriCompiledEffectRecipe = Readonly<{
+  [BANDORI_COMPILED_EFFECT_RECIPE]: true;
+}>;
+
+const compiledEffectRecipeTemplates = new WeakMap<object, CompiledRecipeTemplate>();
 
 function fail(path: string, message: string): never {
   throw new Error(`Invalid Bandori effect recipe at ${path}: ${message}`);
@@ -992,7 +1013,9 @@ function parseShapeDirection(
     "randomPositionAmountWorldUnits",
     "sphericalDirectionAmount",
   ]);
-  bool(source.alignToDirection, `${path}.alignToDirection`);
+  if (bool(source.alignToDirection, `${path}.alignToDirection`)) {
+    fail(`${path}.alignToDirection`, "direction-aligned particles are unsupported");
+  }
   return {
     randomDirectionAmount: finite(
       source.randomDirectionAmount,
@@ -1721,7 +1744,7 @@ function parseNode(
   path: string,
   materials: ReadonlyMap<string, MaterialSpec>,
   meshes: ReadonlyMap<string, MeshSpec>,
-  systems: CompiledSystem[],
+  systems: CompiledSystemTemplate[],
   parentPosition: Vec3,
   parentRotation: Quaternion,
   parentScale: Vec3,
@@ -1800,9 +1823,13 @@ function parseNode(
       "stopAction",
       "useUnscaledTime",
     ]);
-    bool(particle.playOnAwake, `${particlePath}.playOnAwake`);
+    if (bool(particle.playOnAwake, `${particlePath}.playOnAwake`)) {
+      fail(`${particlePath}.playOnAwake`, "play-on-awake is outside the runtime lifecycle");
+    }
     const prewarm = bool(particle.prewarm, `${particlePath}.prewarm`);
-    bool(particle.useUnscaledTime, `${particlePath}.useUnscaledTime`);
+    if (bool(particle.useUnscaledTime, `${particlePath}.useUnscaledTime`)) {
+      fail(`${particlePath}.useUnscaledTime`, "unscaled particle time is unsupported");
+    }
     if (particle.emitterVelocity !== "transform") {
       fail(`${particlePath}.emitterVelocity`, "unsupported emitter velocity mode");
     }
@@ -1830,10 +1857,17 @@ function parseNode(
       fail(`${particlePath}.simulationSpace`, "unsupported simulation space");
     }
     const scalingSpace = text(particle.scalingSpace, `${particlePath}.scalingSpace`);
-    if (!new Set(["hierarchy", "local", "shape"]).has(scalingSpace)) {
+    if (scalingSpace !== "local") {
       fail(`${particlePath}.scalingSpace`, "unsupported scaling space");
     }
-    text(particle.cullingMode, `${particlePath}.cullingMode`);
+    const cullingMode = text(particle.cullingMode, `${particlePath}.cullingMode`);
+    if (
+      cullingMode !== "automatic"
+      && cullingMode !== "always-simulate"
+      && cullingMode !== "pause-and-catch-up"
+    ) {
+      fail(`${particlePath}.cullingMode`, "unsupported culling mode");
+    }
     const modules = record(particle.modules, `${particlePath}.modules`);
     const supportedModules = new Set([
       "colorOverLifetime",
@@ -1987,14 +2021,6 @@ function parseNode(
         worldScale: world.scale,
         autoRandomSeed,
         serializedRandomSeed: integer(particle.randomSeed, `${particlePath}.randomSeed`),
-        particles: particlePool(initial.maxParticles),
-        renderInstances: createRenderInstances(
-          initial.maxParticles,
-          hierarchyPath,
-          renderer,
-        ),
-        nextOrdinal: 0,
-        rateCarry: 0,
       });
     }
   }
@@ -2014,7 +2040,7 @@ function parseNode(
   }
 }
 
-function compileRecipe(value: unknown): CompiledRecipe {
+function compileRecipe(value: unknown): CompiledRecipeTemplate {
   const source = record(value, "recipe");
   exactKeys(source, "recipe", [
     "kind",
@@ -2024,7 +2050,7 @@ function compileRecipe(value: unknown): CompiledRecipe {
     "root",
     "schemaVersion",
   ], ["meshes"]);
-  if (source.schemaVersion !== BANDORI_DEFAULT_EFFECT_RECIPE_SCHEMA) {
+  if (source.schemaVersion !== BANDORI_EFFECT_RECIPE_SCHEMA) {
     fail("recipe.schemaVersion", "unsupported schema");
   }
   if (source.kind !== "particle-system-hierarchy") {
@@ -2081,7 +2107,7 @@ function compileRecipe(value: unknown): CompiledRecipe {
   }
   const materials = parseMaterials(source.materials, "recipe.materials");
   const meshes = parseMeshes(source.meshes ?? {}, "recipe.meshes");
-  const systems: CompiledSystem[] = [];
+  const systems: CompiledSystemTemplate[] = [];
   parseNode(
     source.root,
     "recipe.root",
@@ -2112,6 +2138,57 @@ function compileRecipe(value: unknown): CompiledRecipe {
     systems,
     frameCapacity,
   };
+}
+
+function curveIsConstantZero(curve: MinMaxCurve): boolean {
+  return curve.mode === "constant" && curve.value === 0;
+}
+
+function systemCanEmit(system: CompiledSystemTemplate): boolean {
+  return system.bursts.length > 0
+    || !curveIsConstantZero(system.rateOverTime)
+    || !curveIsConstantZero(system.rateOverDistance);
+}
+
+function instantiateRecipe(template: CompiledRecipeTemplate): CompiledRecipe {
+  return {
+    ...template,
+    systems: template.systems.map((system) => {
+      const particleCapacity = system.renderer.enabled || systemCanEmit(system)
+        ? system.initial.maxParticles
+        : 0;
+      return {
+        ...system,
+        particles: particlePool(particleCapacity),
+        renderInstances: system.renderer.enabled && system.renderer.material
+          ? createRenderInstances(
+              system.initial.maxParticles,
+              system.hierarchyPath,
+              system.renderer,
+            )
+          : [],
+        activeParticleCount: 0,
+        nextOrdinal: 0,
+        rateCarry: 0,
+      };
+    }),
+  };
+}
+
+function resolveCompiledRecipe(recipe: unknown): CompiledRecipeTemplate {
+  if (recipe !== null && typeof recipe === "object") {
+    const template = compiledEffectRecipeTemplates.get(recipe);
+    if (template) return template;
+  }
+  return compileRecipe(recipe);
+}
+
+export function compileBandoriEffectRecipe(
+  recipe: unknown,
+): BandoriCompiledEffectRecipe {
+  const handle = Object.freeze({}) as BandoriCompiledEffectRecipe;
+  compiledEffectRecipeTemplates.set(handle, compileRecipe(recipe));
+  return handle;
 }
 
 function createRenderInstances(
@@ -2341,6 +2418,7 @@ function findFreeSlot(pool: ParticlePool): number {
 
 function clearSystem(system: CompiledSystem): void {
   system.particles.alive.fill(0);
+  system.activeParticleCount = 0;
   system.nextOrdinal = 0;
   system.rateCarry = 0;
 }
@@ -2401,6 +2479,7 @@ function spawnParticle(
     { r: 0, g: 0, b: 0, a: 0 },
   );
   pool.alive[slot] = 1;
+  system.activeParticleCount += 1;
   pool.ordinal[slot] = ordinal;
   pool.birth[slot] = eventTime;
   pool.lifetime[slot] = lifetime;
@@ -2607,6 +2686,7 @@ function updateParticles(
   fromTime: number,
   toTime: number,
 ): void {
+  if (system.activeParticleCount === 0) return;
   const pool = system.particles;
   for (let slot = 0; slot < pool.alive.length; slot += 1) {
     if (pool.alive[slot] === 0) continue;
@@ -2614,6 +2694,7 @@ function updateParticles(
     const ageAtEnd = toTime - pool.birth[slot];
     if (ageAtEnd >= pool.lifetime[slot] - EPSILON) {
       pool.alive[slot] = 0;
+      system.activeParticleCount -= 1;
       continue;
     }
     const activeDt = Math.max(0, toTime - Math.max(fromTime, pool.birth[slot]));
@@ -2791,7 +2872,7 @@ function frameComesAfter(
 
 function sortFrameInstances(instances: BandoriEffectFrameInstance[], count: number): void {
   // Insertion sort avoids the temporary arrays created by generic sort paths,
-  // and particle counts in the frozen default effects remain small.
+  // and particle counts in the frozen effect recipes remain small.
   for (let index = 1; index < count; index += 1) {
     const current = instances[index];
     let position = index;
@@ -2871,7 +2952,7 @@ function writeCustomMeshFrame(
     : 0;
 }
 
-class DefaultEffectRuntime implements BandoriDefaultEffectRuntime {
+class EffectRecipeRuntime implements BandoriEffectRecipeRuntime {
   readonly frame: BandoriEffectFrame;
   private readonly recipe: CompiledRecipe;
   private readonly fixedStepSeconds: number;
@@ -2883,8 +2964,8 @@ class DefaultEffectRuntime implements BandoriDefaultEffectRuntime {
   private playing = false;
   private rootActive: boolean;
 
-  constructor(recipe: unknown, options: BandoriDefaultEffectRuntimeOptions) {
-    this.recipe = compileRecipe(recipe);
+  constructor(recipe: unknown, options: BandoriEffectRecipeRuntimeOptions) {
+    this.recipe = instantiateRecipe(resolveCompiledRecipe(recipe));
     if (!Number.isInteger(options.seed) || !Number.isFinite(options.seed)) {
       throw new Error("Bandori effect seed must be a finite integer");
     }
@@ -3006,7 +3087,10 @@ class DefaultEffectRuntime implements BandoriDefaultEffectRuntime {
   }
 
   private clearParticles(): void {
-    for (const system of this.recipe.systems) system.particles.alive.fill(0);
+    for (const system of this.recipe.systems) {
+      system.particles.alive.fill(0);
+      system.activeParticleCount = 0;
+    }
   }
 
   private startDelay(system: CompiledSystem, index: number): number {
@@ -3084,9 +3168,7 @@ class DefaultEffectRuntime implements BandoriDefaultEffectRuntime {
       const endTime =
         this.startDelay(system, index) + system.durationSeconds / system.simulationSpeed;
       if (timeSeconds <= endTime + EPSILON) return false;
-      for (const alive of system.particles.alive) {
-        if (alive !== 0) return false;
-      }
+      if (system.activeParticleCount > 0) return false;
     }
     return true;
   }
@@ -3101,6 +3183,7 @@ class DefaultEffectRuntime implements BandoriDefaultEffectRuntime {
       for (let systemIndex = 0; systemIndex < this.recipe.systems.length; systemIndex += 1) {
         const system = this.recipe.systems[systemIndex];
         if (!system.renderer.enabled || !system.renderer.material) continue;
+        if (system.activeParticleCount === 0) continue;
         const seed = systemSeed(this.runtimeSeed, system, systemIndex);
         const pool = system.particles;
         for (let slot = 0; slot < pool.alive.length; slot += 1) {
@@ -3284,18 +3367,18 @@ class DefaultEffectRuntime implements BandoriDefaultEffectRuntime {
   }
 }
 
-export function createBandoriDefaultEffectRuntime(
+export function createBandoriEffectRecipeRuntime(
   recipe: unknown,
-  options: BandoriDefaultEffectRuntimeOptions,
-): BandoriDefaultEffectRuntime {
-  return new DefaultEffectRuntime(recipe, options);
+  options: BandoriEffectRecipeRuntimeOptions,
+): BandoriEffectRecipeRuntime {
+  return new EffectRecipeRuntime(recipe, options);
 }
 
-export function getBandoriDefaultEffectPlacement(
+export function getBandoriEffectRecipePlacement(
   recipe: unknown,
   buttonIndex: number,
-): BandoriDefaultEffectPlacement {
-  const compiled = compileRecipe(recipe);
+): BandoriEffectRecipePlacement {
+  const compiled = resolveCompiledRecipe(recipe);
   if (
     !Number.isInteger(buttonIndex)
     || buttonIndex < 0

@@ -14,18 +14,28 @@ test("song detail composes existing master and music-index contracts in parallel
   assert.doesNotMatch(source, /multiRange|chartFeatures|local override/iu);
 });
 
-test("the heavy runtime and renderer stay outside the default song-detail view", async () => {
+test("the heavy runtime stays lazy and remains mounted after the simulator opens", async () => {
   const detail = await read("../src/app/[locale]/bandori/songs/[songId]/SongDetailPageClient.tsx");
   const shell = await read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorClientShell.tsx");
   const runtime = await read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx");
 
-  assert.match(detail, /activeView === "info"[\s\S]*<ChartSimulatorClientShell \{\.\.\.simulator\} \/>/u);
+  assert.match(detail, /hasOpenedSimulator[\s\S]*hidden=\{activeView !== "simulator"\}[\s\S]*<ChartSimulatorClientShell/u);
+  assert.match(detail, /isActive=\{activeView === "simulator"\}/u);
+  assert.match(detail, /loadBandoriChartSimulatorAssets/u);
+  assert.match(detail, /requestIdleCallback/u);
+  assert.match(detail, /window\.history\.replaceState/u);
+  assert.doesNotMatch(detail, /router\.replace|useRouter/u);
   assert.match(shell, /dynamic\(\(\) => import\("\.\/ChartSimulatorRuntime"\)/u);
   assert.match(shell, /ssr: false/u);
   assert.match(shell, /ChartSimulatorLoadingIndicator/u);
   assert.match(shell, /t\("loading\.simulator"\)/u);
-  assert.match(runtime, /dynamic\(\(\) => import\("\.\/NativeSimulatorStage"\)/u);
+  assert.match(runtime, /loadNativeSimulatorStageModule = \(\) => import\("\.\/NativeSimulatorStage"\)/u);
+  assert.match(runtime, /dynamic\(loadNativeSimulatorStageModule/u);
+  assert.match(runtime, /void loadNativeSimulatorStageModule\(\)/u);
   assert.match(runtime, /compileBandoriChartInWorker/u);
+  assert.match(runtime, /compiledChartsRef/u);
+  assert.match(runtime, /cache: chartLoadAttempt > 0 \? "reload" : "default"/u);
+  assert.doesNotMatch(runtime, /cache: "no-store"/u);
 });
 
 test("simulator loading reuses the page spinner and keeps the resource count compact", async () => {
@@ -66,19 +76,29 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /plannedResourceUrls = new Set\([\s\S]*requiredLogicalUrls\.map\(resolveAssetUrl\)/u);
   assert.match(stage, /completedResourceUrls = new Set<string>\(\)/u);
   assert.match(stage, /onLoadProgress\(\{[\s\S]*phase: "resources"[\s\S]*totalResources/u);
-  assert.match(stage, /backgroundSkin\.layers\.map\(\(layer\) => loadTexture\(layer\.textureUrl\)\)/u);
-  assert.match(stage, /loadTexture\(fieldSkin\.textureUrl\)/u);
-  assert.match(stage, /loadTexture\(fieldSkin\.judgmentLineTextureUrl\)/u);
-  assert.match(stage, /loadTexture\(noteSkin\.atlasUrl\)/u);
-  assert.match(stage, /loadTexture\(noteSkin\.syncLineUrl\)/u);
+  assert.match(stage, /const mainTextureUrls: Array<string \| null> = \[/u);
+  assert.match(stage, /backgroundSkin\.layers\.map\(\(layer\) => layer\.textureUrl\)/u);
+  assert.match(stage, /fieldSkin\.textureUrl/u);
+  assert.match(stage, /fieldSkin\.judgmentLineTextureUrl/u);
+  assert.match(stage, /noteSkin\.frameSource === "atlas" \? noteSkin\.atlasUrl : null/u);
+  assert.match(stage, /noteSkin\.syncLineUrl/u);
   assert.match(stage, /getBandoriNativeRhythmSupportNoteUrl\(noteSkin, lane\)/u);
-  assert.match(stage, /loadTexture\(directionalFlickSkin\.atlasUrl\)/u);
-  assert.match(stage, /loadOrdinaryTapTexture\(BANDORI_NATIVE_TAP_EFFECT_ATLAS_1_URL\)/u);
-  assert.match(stage, /loadOrdinaryTapTexture\(BANDORI_NATIVE_TAP_EFFECT_ATLAS_2_URL\)/u);
-  assert.match(stage, /usesLimitedDirectionalEffect[\s\S]*Promise\.resolve\(Texture\.EMPTY\)/u);
+  assert.match(stage, /directionalFlickSkin\.atlasUrl/u);
+  assert.match(stage, /Promise\.all\(mainTextureUrls\.map\([\s\S]*loadTexture\(url\)/u);
+  assert.match(stage, /usesLimitedTapEffect \? null : BANDORI_NATIVE_TAP_EFFECT_ATLAS_1_URL/u);
+  assert.match(stage, /usesLimitedTapEffect \? null : BANDORI_NATIVE_TAP_EFFECT_ATLAS_2_URL/u);
+  assert.match(stage, /BANDORI_NATIVE_DIRECTIONAL_EFFECT_FRAME_URLS\.map\([\s\S]*usesLimitedDirectionalEffect \? null : url/u);
   assert.match(stage, /app\.stage\.addChild\([\s\S]*directionalLineLayer,[\s\S]*judgmentLine,[\s\S]*laneEffectLayer,[\s\S]*lowHitEffectLayer,[\s\S]*highHitEffectLayer,[\s\S]*ribbonLayer,[\s\S]*noteLayer/u);
   assert.match(stage, /app\.ticker\.add\(renderNotes\)/u);
-  assert.match(stage, /prepareBandoriNativeChartVisuals\(compiled, isMirrored\)/u);
+  assert.match(stage, /autoStart: false/u);
+  assert.match(stage, /app\.ticker\.add\(renderNotes\);[\s\S]*if \(isActiveRef\.current\) app\.start\(\)/u);
+  assert.match(stage, /if \(isActive\) application\.start\(\);[\s\S]*else application\.stop\(\)/u);
+  assert.match(runtime, /isActive=\{isActive && activeTab === "stage" && isSelectedChartReady\}/u);
+  assert.match(stage, /void initialize\(\)\.catch/u);
+  assert.match(stage, /resourceAbortController\.abort\(\)/u);
+  assert.match(stage, /prepareBandoriNativeChartVisuals\(compiled, false\)/u);
+  assert.match(stage, /prepareBandoriNativeChartVisuals\(compiled, true\)/u);
+  assert.match(stage, /renderedMirror !== isMirroredRef\.current/u);
   assert.match(stage, /atlasHeight - frame\.y - frame\.height/u);
   assert.match(runtime, /currentTransport\.phase === "playing"[\s\S]*runtime\?\.isMusicPlaying[\s\S]*runtime\.getMusicTime\(\)/u);
   assert.match(notePresentation, /BANDORI_NATIVE_NOTE_SPEED_MIN = 1/u);
@@ -107,7 +127,8 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /note\.visual\.lane === display\.rightVisualLane/u);
   assert.doesNotMatch(stage, /leftNoteIndex\)\?\.notes\[0\]/u);
   assert.doesNotMatch(stage, /rightNoteIndex\)\?\.notes\[0\]/u);
-  assert.match(stage, /updateSyncLine\(display, activeNotes, syncLineEnabledRef\.current\)/u);
+  assert.match(stage, /if \(syncLineEnabledRef\.current\)[\s\S]*desiredSyncLines\.add\(display\)/u);
+  assert.match(stage, /updateSyncLine\(display, activeNotes, true\)/u);
   assert.match(stage, /rhythmSupportEnabledRef\.current[\s\S]*&& note\.rhythmSupportTexture/u);
   assert.match(stage, /isRhythmSupportNote && visual\.body === "normal"/u);
   assert.match(stage, /if \(laneEffectEnabledRef\.current\)/u);
@@ -134,14 +155,14 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(runtime, /removeEventListener\([\s\S]*"visibilitychange",[\s\S]*pauseWhenDocumentBecomesHidden/u);
   assert.match(runtime, /transportRef\.current\.phase !== "playing"/u);
   assert.match(runtime, /createBandoriNativeNoteSoundTimeline/u);
-  assert.match(runtime, /createBandoriNativeNoteSoundRuntime/u);
+  assert.match(runtime, /createBandoriNativeAudioRuntime/u);
   assert.match(runtime, /collectBandoriNativeNoteSoundEvents/u);
   assert.doesNotMatch(runtime, /<audio|crossOrigin="anonymous"/u);
   assert.match(runtime, /BANDORI_NATIVE_NOTE_SOUND_SCHEDULE_AHEAD_SECONDS/u);
   assert.match(runtime, /runtime\.prepareMusic\(audioUrl, controller\.signal\)/u);
   assert.match(runtime, /runtime\.prepareCueBank\(cueBank, \(url\) =>/u);
   assert.match(runtime, /currentStageLoadProgress\.completedResources[\s\S]*currentSoundLoadProgress\.completedResources[\s\S]*currentMusicLoadProgress\?\.completedResources/u);
-  assert.match(runtime, /<ChartSimulatorLoadingIndicator[\s\S]*completedResources=\{completedResources\}[\s\S]*totalResources=\{totalResources\}/u);
+  assert.match(runtime, /<ChartSimulatorLoadingIndicator[\s\S]*completedResources=\{isSelectedChartReady \? completedResources : null\}[\s\S]*totalResources=\{isSelectedChartReady \? totalResources : null\}/u);
   assert.match(runtime, /disabled=\{!audioUrl \|\| \(!isPlaying && !isSimulatorReady\)\}/u);
   const performanceLoadingIndex = runtime.indexOf('t("loading.performance")');
   const soundLoadingIndex = runtime.indexOf('t("loading.sound")');
@@ -177,7 +198,7 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(hitPresentation, /count: 25/u);
   assert.match(hitPresentation, /only motion semantic[\s\S]*approximated/u);
   assert.match(holdPresentation, /BANDORI_NATIVE_LONG_FLASH_PERIOD_SECONDS = 0\.8333333135/u);
-  assert.match(holdPresentation, /createBandoriDefaultEffectRuntime\(selectedRecipe/u);
+  assert.match(holdPresentation, /createBandoriEffectRecipeRuntime\(selectedRecipe/u);
   assert.match(holdPresentation, /variant\.kind === "long"/u);
   assert.match(stage, /getBandoriHabahiroLongFlashSpriteName\(head\.coveredLanes\)/u);
   assert.doesNotMatch(stage, /getBandoriHabahiroLongFlashSpriteName\(point\.coveredLanes\)/u);

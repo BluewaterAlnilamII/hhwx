@@ -58,8 +58,11 @@ test("Songs filters use the game terminology and Cards-style regional release or
   ]);
 });
 
-test("song detail uses one URL-backed first-level view and mounts the simulator on demand", async () => {
-  const detail = await read("src/app/[locale]/bandori/songs/[songId]/SongDetailPageClient.tsx");
+test("song detail keeps one URL-backed view and retains the simulator after first use", async () => {
+  const [detail, runtime] = await Promise.all([
+    read("src/app/[locale]/bandori/songs/[songId]/SongDetailPageClient.tsx"),
+    read("src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx"),
+  ]);
 
   assert.match(detail, /searchParams\.get\("view"\) === "simulator"/u);
   assert.match(detail, /role="tablist"/u);
@@ -68,5 +71,10 @@ test("song detail uses one URL-backed first-level view and mounts the simulator 
   assert.match(detail, /next\.delete\("server"\)/u);
   assert.doesNotMatch(detail, /getBandoriServerFromCode|useBandoriPreferredServer/u);
   assert.match(detail, /next\.set\("view", view\)/u);
-  assert.match(detail, /activeView === "info"[\s\S]*<ChartSimulatorClientShell \{\.\.\.simulator\} \/>/u);
+  assert.match(detail, /window\.history\.replaceState/u);
+  assert.match(detail, /hasOpenedSimulator[\s\S]*hidden=\{activeView !== "simulator"\}/u);
+  assert.match(detail, /onDifficultyChange=\{selectDifficulty\}/u);
+  assert.doesNotMatch(detail, /aria-label=\{t\("difficultyLabel"\)\}/u);
+  assert.match(runtime, /aria-label=\{songsT\("difficultyLabel"\)\}/u);
+  assert.match(runtime, /difficulties\.map\(\(option\) =>/u);
 });

@@ -156,11 +156,13 @@ export default async function BandoriSongDetailPage({
       selectedDifficulty={selectedDifficulty}
       simulator={{
         songId,
-        difficulty: selectedDifficulty,
-        chartUrl: `/api/bandori/charts/${songId}/${selectedDifficulty}`,
+        difficulties: difficulties.map(({ difficulty, notes }) => ({
+          difficulty,
+          chartUrl: `/api/bandori/charts/${songId}/${difficulty}`,
+          expectedCombo: notes,
+        })),
         audioUrl: buildBandoriPublicAssetUrl(assets.files.audio),
         durationSeconds: assets.length,
-        expectedCombo: selected.notes,
       }}
     />
   );

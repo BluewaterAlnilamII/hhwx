@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useBandoriMusicAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { buildBandoriMusicPlayerArtworkUpdates } from "@/lib/bandori-music-player";
-import { setMusicPlaybackAudioSessionActive } from "@/lib/browser-audio-session";
+import { createMusicPlaybackBrowserAudioSession } from "@/lib/browser-audio-session";
 import {
   MUSIC_PLAYER_PREFERENCES_STORAGE_KEY,
   MUSIC_PLAYER_QUEUE_STORAGE_KEY,
@@ -67,6 +67,10 @@ function applyAudioSeek(
 }
 
 export default function MusicPlayerHost() {
+  const playbackAudioSessionRef = useRef<ReturnType<
+    typeof createMusicPlaybackBrowserAudioSession
+  > | null>(null);
+  playbackAudioSessionRef.current ??= createMusicPlaybackBrowserAudioSession();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const coordinatorRef = useRef<PlaybackCoordinator | null>(null);
   const handledCommandIdRef = useRef(0);
@@ -138,7 +142,7 @@ export default function MusicPlayerHost() {
     );
 
     return () => {
-      setMusicPlaybackAudioSessionActive(false);
+      playbackAudioSessionRef.current?.setActive(false);
       coordinatorRef.current?.dispose();
       coordinatorRef.current = null;
     };
@@ -155,7 +159,7 @@ export default function MusicPlayerHost() {
     audio.currentTime = 0;
 
     if (!currentTrackSourceUrl) {
-      setMusicPlaybackAudioSessionActive(false);
+      playbackAudioSessionRef.current?.setActive(false);
       audio.removeAttribute("src");
       audio.load();
       return;
@@ -192,7 +196,7 @@ export default function MusicPlayerHost() {
     }
 
     if (command.type === "clear") {
-      setMusicPlaybackAudioSessionActive(false);
+      playbackAudioSessionRef.current?.setActive(false);
       playAttemptIdRef.current += 1;
       audio.pause();
       audio.currentTime = 0;
@@ -221,7 +225,7 @@ export default function MusicPlayerHost() {
     const play = async () => {
       // WebKit uses the playback audio-session category to keep music eligible
       // for iOS lock-screen controls and background playback.
-      setMusicPlaybackAudioSessionActive(true);
+      playbackAudioSessionRef.current?.setActive(true);
       if (audio.getAttribute("src") !== currentTrack.sourceUrl) {
         audio.src = currentTrack.sourceUrl;
       }
@@ -240,6 +244,7 @@ export default function MusicPlayerHost() {
         }
       } catch {
         if (playAttemptIdRef.current === attemptId) {
+          playbackAudioSessionRef.current?.setActive(false);
           useMusicPlayerStore.getState().setPlaybackStatus("error");
         }
       }

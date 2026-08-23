@@ -136,6 +136,12 @@ function parseLogicalAssetPath(logicalUrl: string): string {
 
 export function inferBandoriChartSimulatorBundleKey(logicalUrl: string): string {
   const relativePath = parseLogicalAssetPath(logicalUrl);
+  return inferBandoriChartSimulatorBundleKeyFromRelativePath(relativePath);
+}
+
+function inferBandoriChartSimulatorBundleKeyFromRelativePath(
+  relativePath: string,
+): string {
   const parts = relativePath.split("/");
   if (parts[0] === "apk") return "apk";
   if (parts[0] === "sound" && parts[1] === "common" && parts.length >= 3) {
@@ -171,7 +177,7 @@ export function inferBandoriChartSimulatorBundleKey(logicalUrl: string): string 
     }
     return `ingameskin/${parts[5]}/${parts[6]}`;
   }
-  throw new Error(`Cannot infer Bandori chart-simulator source bundle: ${logicalUrl}`);
+  throw new Error(`Cannot infer Bandori chart-simulator source bundle: ${relativePath}`);
 }
 
 function appendEncodedPath(baseUrl: string, path: string): string {
@@ -204,14 +210,14 @@ export function createBandoriChartSimulatorAssetResolver(
   }
   return (logicalUrl) => {
     const relativePath = parseLogicalAssetPath(logicalUrl);
-    const bundleKey = inferBandoriChartSimulatorBundleKey(logicalUrl);
-    const packHash = manifest.packs[bundleKey];
-    if (!packHash) {
+    const bundleKey = inferBandoriChartSimulatorBundleKeyFromRelativePath(relativePath);
+    const packTreeHash = manifest.packs[bundleKey];
+    if (!packTreeHash) {
       throw new Error(`Bandori chart-simulator asset pack is unavailable: ${bundleKey}`);
     }
     return appendEncodedPath(
       normalizedBaseUrl,
-      `bandori/chart-simulator/packs/${packHash}/${relativePath}`,
+      `bandori/chart-simulator/packs/${packTreeHash}/${relativePath}`,
     );
   };
 }

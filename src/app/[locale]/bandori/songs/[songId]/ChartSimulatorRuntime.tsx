@@ -44,7 +44,7 @@ import {
   parseBandoriChartForSimulator,
   type BandoriChartEntity,
 } from "@/lib/bandori-chart-simulator-contract";
-import { setMusicPlaybackAudioSessionActive } from "@/lib/browser-audio-session";
+import { createMusicPlaybackBrowserAudioSession } from "@/lib/browser-audio-session";
 import {
   type CompiledBandoriChart,
 } from "@/lib/bandori/chart-simulator/compiler";
@@ -68,10 +68,10 @@ import {
 } from "@/lib/bandori/chart-simulator/native-note-sound-presentation";
 import {
   BANDORI_NATIVE_NOTE_SOUND_SCHEDULE_AHEAD_SECONDS,
-  createBandoriNativeNoteSoundRuntime,
+  createBandoriNativeAudioRuntime,
   type BandoriNativeNoteSoundCueBank,
-  type BandoriNativeNoteSoundRuntime,
-} from "@/lib/bandori/chart-simulator/native-note-sound-runtime";
+  type BandoriNativeAudioRuntime,
+} from "@/lib/bandori/chart-simulator/native-audio-runtime";
 import {
   createBandoriMediaOperationSequencer,
 } from "@/lib/bandori/chart-simulator/media-operation-sequencer";
@@ -116,9 +116,13 @@ import type {
   NativeSimulatorStageLoadProgress,
 } from "./NativeSimulatorStage";
 
-const NativeSimulatorStage = dynamic(() => import("./NativeSimulatorStage"), {
+const loadNativeSimulatorStageModule = () => import("./NativeSimulatorStage");
+const NativeSimulatorStage = dynamic(loadNativeSimulatorStageModule, {
   ssr: false,
 });
+// The whole simulator is already lazy. Start its default stage chunk as soon as
+// the runtime opens instead of waiting for chart and manifest requests to finish.
+void loadNativeSimulatorStageModule();
 
 type SimulatorTab = "stage" | "fullChart";
 const PLAYBACK_RATE_DECREASES = [-10, -1] as const;
@@ -140,10 +144,24 @@ function createResolvedNoteSoundCueBank(
   };
 }
 
+type ReadyChart = {
+  readonly compiled: CompiledBandoriChart;
+  readonly difficulty: ChartSimulatorClientShellProps["difficulty"];
+};
+
 type LoadState =
-  | { status: "loading" }
-  | { status: "ready"; compiled: CompiledBandoriChart }
-  | { status: "error"; message: string };
+  | {
+      status: "loading";
+      difficulty: ChartSimulatorClientShellProps["difficulty"];
+      previous: ReadyChart | null;
+    }
+  | ({ status: "ready" } & ReadyChart)
+  | {
+      status: "error";
+      difficulty: ChartSimulatorClientShellProps["difficulty"];
+      message: string;
+      previous: ReadyChart | null;
+    };
 
 type AssetLoadState =
   | { status: "loading" }
@@ -234,18 +252,24 @@ function getPlaybackRateAdjustmentLevel(
 export default function ChartSimulatorRuntime({
   songId,
   difficulty,
-  chartUrl,
+  difficulties,
   audioUrl,
   durationSeconds,
-  expectedCombo,
+  isActive,
+  onDifficultyChange,
 }: ChartSimulatorClientShellProps) {
   const t = useTranslations("bandori.songs.simulator");
+  const songsT = useTranslations("bandori.songs");
   const playbackRateHundredthsRef = useRef(
     BANDORI_SIMULATOR_PLAYBACK_RATE_DEFAULT_HUNDREDTHS,
   );
+  const playbackAudioSessionRef = useRef<ReturnType<
+    typeof createMusicPlaybackBrowserAudioSession
+  > | null>(null);
+  playbackAudioSessionRef.current ??= createMusicPlaybackBrowserAudioSession();
   const transportRef = useRef(createBandoriChartTransportState(durationSeconds));
   const effectTimelineVersionRef = useRef(0);
-  const noteSoundRuntimeRef = useRef<BandoriNativeNoteSoundRuntime | null>(null);
+  const nativeAudioRuntimeRef = useRef<BandoriNativeAudioRuntime | null>(null);
   const noteSoundTimelineRef = useRef<BandoriNativeNoteSoundTimeline | null>(null);
   const noteSoundCursorRef = useRef(-1e-7);
   const noteSoundLastMediaTimeRef = useRef(0);
@@ -259,12 +283,23 @@ export default function ChartSimulatorRuntime({
   const coordinatorRef = useRef<ReturnType<typeof createMusicPlayerPlaybackCoordinator> | null>(null);
   const [mediaOperationSequencer] = useState(createBandoriMediaOperationSequencer);
   const [loadAttempt, setLoadAttempt] = useState(0);
-  const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
+  const [chartLoadAttempt, setChartLoadAttempt] = useState(0);
+  const compiledChartsRef = useRef(new Map<
+    ChartSimulatorClientShellProps["difficulty"],
+    CompiledBandoriChart
+  >());
+  const chartLoadPromisesRef = useRef(new Map<string, Promise<CompiledBandoriChart>>());
+  const [loadState, setLoadState] = useState<LoadState>({
+    status: "loading",
+    difficulty,
+    previous: null,
+  });
   const [assetLoadState, setAssetLoadState] = useState<AssetLoadState>({
     status: "loading",
   });
   const [transport, setTransport] = useState(transportRef.current);
   const [activeTab, setActiveTab] = useState<SimulatorTab>("stage");
+  const [hasOpenedFullChart, setHasOpenedFullChart] = useState(false);
   const [isMirrored, setIsMirrored] = useState(false);
   const [playbackRateHundredths, setPlaybackRateHundredths] = useState(
     BANDORI_SIMULATOR_PLAYBACK_RATE_DEFAULT_HUNDREDTHS,
@@ -317,14 +352,26 @@ export default function ChartSimulatorRuntime({
   const effectiveDirectionalFlickSkin =
     limitedPerformanceSkin?.directionalFlickSkin ?? directionalFlickSkin;
   const effectiveTapSeSkin = limitedPerformanceSkin?.tapSeSkin ?? tapSeSkin;
+  const selectedDifficultyOption = difficulties.find(
+    (option) => option.difficulty === difficulty,
+  );
+  if (!selectedDifficultyOption) {
+    throw new Error(`Unknown Bandori chart difficulty: ${difficulty}`);
+  }
+  const displayedChart: ReadyChart | null = loadState.status === "ready"
+    ? loadState
+    : loadState.previous;
+  const isSelectedChartReady = loadState.status === "ready"
+    && loadState.difficulty === difficulty;
   const stageLoadId = assetLoadState.status === "ready"
-    ? `${loadAttempt}:${assetLoadState.manifestSha256}:${songId}:${effectiveBackgroundSkin.id}:${effectiveFieldSkin.id}:${effectiveNoteSkin.id}:${effectiveDirectionalFlickSkin.id}:${limitedPerformanceSkin?.id ?? "ordinary"}:${difficulty}:${isMirrored ? "mirror" : "normal"}`
-    : "unavailable";
-  const soundLoadId = assetLoadState.status === "ready"
-    ? `${loadAttempt}:${assetLoadState.manifestSha256}:${getBandoriNativeTapSeCueBankId(effectiveTapSeSkin)}`
+    && displayedChart
+    ? `${loadAttempt}:${assetLoadState.manifestSha256}:${songId}:${effectiveBackgroundSkin.id}:${effectiveFieldSkin.id}:${effectiveNoteSkin.id}:${effectiveDirectionalFlickSkin.id}:${limitedPerformanceSkin?.id ?? "ordinary"}:${displayedChart.difficulty}`
     : "unavailable";
   const musicLoadId = assetLoadState.status === "ready" && audioUrl
     ? `${loadAttempt}:${assetLoadState.manifestSha256}:${audioUrl}`
+    : "unavailable";
+  const soundLoadId = assetLoadState.status === "ready"
+    ? `${musicLoadId}:${getBandoriNativeTapSeCueBankId(effectiveTapSeSkin)}`
     : "unavailable";
   const stageLoadIdRef = useRef(stageLoadId);
   stageLoadIdRef.current = stageLoadId;
@@ -338,14 +385,14 @@ export default function ChartSimulatorRuntime({
   );
 
   const noteSoundTimeline = useMemo(() => {
-    if (loadState.status !== "ready") return null;
+    if (!displayedChart) return null;
     try {
-      return createBandoriNativeNoteSoundTimeline(loadState.compiled);
+      return createBandoriNativeNoteSoundTimeline(displayedChart.compiled);
     } catch {
       // Sound follows the same renderability contract as visual presentation.
       return null;
     }
-  }, [loadState]);
+  }, [displayedChart]);
 
   const updateTransport = useCallback((next: BandoriChartTransportState) => {
     transportRef.current = next;
@@ -358,12 +405,12 @@ export default function ChartSimulatorRuntime({
 
   const pauseAudioInternally = useCallback(() => {
     shouldMediaPlayRef.current = false;
-    return noteSoundRuntimeRef.current?.pauseMusic() ?? null;
+    return nativeAudioRuntimeRef.current?.pauseMusic() ?? null;
   }, []);
 
   const getStagePresentationTime = useCallback(() => {
     const currentTransport = transportRef.current;
-    const runtime = noteSoundRuntimeRef.current;
+    const runtime = nativeAudioRuntimeRef.current;
     if (
       currentTransport.phase === "playing"
       && isMediaPlaybackReadyRef.current
@@ -380,7 +427,7 @@ export default function ChartSimulatorRuntime({
   const getStageEffectPlaybackState = useCallback(() => ({
     isPlaying: transportRef.current.phase === "playing"
       && isMediaPlaybackReadyRef.current
-      && noteSoundRuntimeRef.current?.isMusicPlaying === true,
+      && nativeAudioRuntimeRef.current?.isMusicPlaying === true,
     playbackRate: getBandoriSimulatorPlaybackRate(playbackRateHundredthsRef.current),
     timelineVersion: effectTimelineVersionRef.current,
   }), []);
@@ -394,7 +441,7 @@ export default function ChartSimulatorRuntime({
     rebuildActiveLoops: boolean,
     includeBoundary = false,
   ) => {
-    noteSoundRuntimeRef.current?.stopAll();
+    nativeAudioRuntimeRef.current?.stopAll();
     noteSoundCursorRef.current = includeBoundary
       ? timeSeconds - 1e-7
       : timeSeconds;
@@ -403,7 +450,7 @@ export default function ChartSimulatorRuntime({
   }, []);
 
   const flushNoteSoundsThrough = useCallback((timeSeconds: number) => {
-    const runtime = noteSoundRuntimeRef.current;
+    const runtime = nativeAudioRuntimeRef.current;
     const timeline = noteSoundTimelineRef.current;
     const currentTimeSeconds = Math.max(0, timeSeconds);
     if (!runtime || !timeline || !runtime.isPrepared) {
@@ -468,7 +515,7 @@ export default function ChartSimulatorRuntime({
     if (
       current.phase !== "playing"
       || !isMediaPlaybackReadyRef.current
-      || noteSoundRuntimeRef.current?.isMusicPlaying !== true
+      || nativeAudioRuntimeRef.current?.isMusicPlaying !== true
     ) {
       return current;
     }
@@ -486,8 +533,8 @@ export default function ChartSimulatorRuntime({
       snapshot.currentTimeSeconds,
       snapshot.currentTimeSeconds > 0,
     );
-    noteSoundRuntimeRef.current?.stopAll();
-    setMusicPlaybackAudioSessionActive(false);
+    nativeAudioRuntimeRef.current?.stopAll();
+    playbackAudioSessionRef.current?.setActive(false);
   }, [
     cancelPendingMediaOperation,
     pauseAudioInternally,
@@ -510,7 +557,7 @@ export default function ChartSimulatorRuntime({
 
     isMediaPlaybackReadyRef.current = false;
     pauseAudioInternally();
-    setMusicPlaybackAudioSessionActive(false);
+    playbackAudioSessionRef.current?.setActive(false);
     invalidateStageEffects();
     stopAndResetNoteSounds(
       requestedTimeSeconds,
@@ -519,7 +566,7 @@ export default function ChartSimulatorRuntime({
     );
     updateTransport(pendingTransport);
 
-    const runtime = noteSoundRuntimeRef.current;
+    const runtime = nativeAudioRuntimeRef.current;
     if (!runtime?.isMusicPrepared) {
       if (shouldResume) setPlaybackError("Native music is not prepared");
       return;
@@ -544,7 +591,7 @@ export default function ChartSimulatorRuntime({
 
       await runtime.resume();
       operation.throwIfSuperseded();
-      if (noteSoundRuntimeRef.current !== runtime) {
+      if (nativeAudioRuntimeRef.current !== runtime) {
         throw new Error("Native audio runtime changed during playback start");
       }
       const startedMediaTime = runtime.startMusic(
@@ -590,7 +637,7 @@ export default function ChartSimulatorRuntime({
           phase: "playing",
           currentTimeSeconds: settledTimeSeconds,
         });
-        setMusicPlaybackAudioSessionActive(true);
+        playbackAudioSessionRef.current?.setActive(true);
       },
       reportError: (error) => {
         shouldMediaPlayRef.current = false;
@@ -612,7 +659,7 @@ export default function ChartSimulatorRuntime({
           fallbackTimeSeconds === 0,
         );
         runtime.stopAll();
-        setMusicPlaybackAudioSessionActive(false);
+        playbackAudioSessionRef.current?.setActive(false);
         setPlaybackError(error instanceof Error ? error.message : String(error));
       },
     });
@@ -692,7 +739,7 @@ export default function ChartSimulatorRuntime({
     shouldMediaPlayRef.current = false;
     isMediaPlaybackReadyRef.current = false;
     flushNoteSoundsThrough(durationSeconds);
-    setMusicPlaybackAudioSessionActive(false);
+    playbackAudioSessionRef.current?.setActive(false);
     updateTransport({
       ...transportRef.current,
       phase: "ended",
@@ -716,12 +763,12 @@ export default function ChartSimulatorRuntime({
       BANDORI_NATIVE_TAP_SE_SKIN,
       assetLoadState.resolveAssetUrl,
     );
-    const runtime = createBandoriNativeNoteSoundRuntime(
+    const runtime = createBandoriNativeAudioRuntime(
       [initialCueBank],
       initialCueBank.id,
       BANDORI_NATIVE_NOTE_SOUND_VOLUME,
     );
-    noteSoundRuntimeRef.current = runtime;
+    nativeAudioRuntimeRef.current = runtime;
     const unsubscribeContextState = runtime.subscribeContextState((state) => {
       if (
         state === "running"
@@ -740,7 +787,7 @@ export default function ChartSimulatorRuntime({
         totalResources: 1,
       });
       void runtime.prepareMusic(audioUrl, controller.signal).then(() => {
-        if (!isCurrent || noteSoundRuntimeRef.current !== runtime) return;
+        if (!isCurrent || nativeAudioRuntimeRef.current !== runtime) return;
         setMusicLoadProgress({
           completedResources: 1,
           loadId: musicLoadId,
@@ -751,7 +798,7 @@ export default function ChartSimulatorRuntime({
         if (
           controller.signal.aborted
           || !isCurrent
-          || noteSoundRuntimeRef.current !== runtime
+          || nativeAudioRuntimeRef.current !== runtime
         ) return;
         const message = error instanceof Error ? error.message : String(error);
         setMusicLoadProgress({
@@ -773,7 +820,7 @@ export default function ChartSimulatorRuntime({
       unsubscribeContextState();
       unsubscribeMusicEnded();
       runtime.dispose();
-      if (noteSoundRuntimeRef.current === runtime) noteSoundRuntimeRef.current = null;
+      if (nativeAudioRuntimeRef.current === runtime) nativeAudioRuntimeRef.current = null;
     };
   }, [
     assetLoadState,
@@ -786,8 +833,9 @@ export default function ChartSimulatorRuntime({
 
   useEffect(() => {
     if (assetLoadState.status !== "ready") return;
-    const runtime = noteSoundRuntimeRef.current;
+    const runtime = nativeAudioRuntimeRef.current;
     if (!runtime) return;
+    const controller = new AbortController();
     const cueBank = createResolvedNoteSoundCueBank(
       effectiveTapSeSkin,
       assetLoadState.resolveAssetUrl,
@@ -804,7 +852,7 @@ export default function ChartSimulatorRuntime({
     void runtime.prepareCueBank(cueBank, (url) => {
       if (
         !isCurrent
-        || noteSoundRuntimeRef.current !== runtime
+        || nativeAudioRuntimeRef.current !== runtime
         || completedResourceUrls.has(url)
       ) return;
       completedResourceUrls.add(url);
@@ -814,8 +862,8 @@ export default function ChartSimulatorRuntime({
         status: "loading",
         totalResources: resourceUrls.size,
       });
-    }).then(() => {
-      if (!isCurrent || noteSoundRuntimeRef.current !== runtime) return;
+    }, controller.signal).then(() => {
+      if (!isCurrent || nativeAudioRuntimeRef.current !== runtime) return;
       runtime.selectCueBank(cueBank.id);
       setSoundLoadProgress({
         completedResources: resourceUrls.size,
@@ -830,7 +878,11 @@ export default function ChartSimulatorRuntime({
         currentTimeSeconds === 0,
       );
     }).catch((error: unknown) => {
-      if (isCurrent && noteSoundRuntimeRef.current === runtime) {
+      if (
+        !controller.signal.aborted
+        && isCurrent
+        && nativeAudioRuntimeRef.current === runtime
+      ) {
         const message = error instanceof Error ? error.message : String(error);
         setSoundLoadProgress({
           completedResources: completedResourceUrls.size,
@@ -844,6 +896,7 @@ export default function ChartSimulatorRuntime({
     });
     return () => {
       isCurrent = false;
+      controller.abort();
     };
   }, [
     assetLoadState,
@@ -867,13 +920,12 @@ export default function ChartSimulatorRuntime({
     pauseAudioInternally();
     effectTimelineVersionRef.current += 1;
     stopAndResetNoteSounds(0, false, true);
-    noteSoundRuntimeRef.current?.stopAll();
+    nativeAudioRuntimeRef.current?.stopAll();
     setTransport(next);
     setLoopRange(nextLoopRange);
     setIsLoopEnabled(false);
-    setIsMirrored(false);
     setPlaybackError(null);
-    setMusicPlaybackAudioSessionActive(false);
+    playbackAudioSessionRef.current?.setActive(false);
   }, [
     cancelPendingMediaOperation,
     difficulty,
@@ -883,6 +935,10 @@ export default function ChartSimulatorRuntime({
     stopAndResetNoteSounds,
   ]);
 
+  useEffect(() => {
+    if (!isActive) pauseAudioAndTransport();
+  }, [isActive, pauseAudioAndTransport]);
+
   useEffect(
     () => () => cancelPendingMediaOperation(),
     [cancelPendingMediaOperation],
@@ -891,7 +947,9 @@ export default function ChartSimulatorRuntime({
   useEffect(() => {
     let isCurrent = true;
     setAssetLoadState({ status: "loading" });
-    void loadBandoriChartSimulatorAssets({ refresh: loadAttempt > 0 }).then(
+    void loadBandoriChartSimulatorAssets({
+      refresh: loadAttempt > 0,
+    }).then(
       (loaded) => {
         if (!isCurrent) return;
         setAssetLoadState({
@@ -914,14 +972,26 @@ export default function ChartSimulatorRuntime({
   }, [loadAttempt]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    setLoadState({ status: "loading" });
-    const load = async () => {
-      try {
-        const response = await fetch(chartUrl, {
-          cache: "no-store",
+    let isCurrent = true;
+    const cached = compiledChartsRef.current.get(difficulty);
+    if (cached) {
+      setLoadState({ status: "ready", difficulty, compiled: cached });
+      return () => {
+        isCurrent = false;
+      };
+    }
+    setLoadState((current) => ({
+      status: "loading",
+      difficulty,
+      previous: current.status === "ready" ? current : current.previous,
+    }));
+    const requestKey = `${chartLoadAttempt}:${difficulty}`;
+    let request = chartLoadPromisesRef.current.get(requestKey);
+    if (!request) {
+      request = (async () => {
+        const response = await fetch(selectedDifficultyOption.chartUrl, {
+          cache: chartLoadAttempt > 0 ? "reload" : "default",
           credentials: "same-origin",
-          signal: controller.signal,
         });
         const payload: unknown = await response.json().catch(() => null);
         if (!response.ok) {
@@ -931,23 +1001,44 @@ export default function ChartSimulatorRuntime({
         const compiled = await compileBandoriChartInWorker({
           chart,
           mediaDurationSeconds: durationSeconds,
-          signal: controller.signal,
         });
-        if (compiled.maxCombo !== expectedCombo) {
-          throw new Error(`Compiled combo ${compiled.maxCombo} does not match Music metadata ${expectedCombo}`);
+        if (compiled.maxCombo !== selectedDifficultyOption.expectedCombo) {
+          throw new Error(`Compiled combo ${compiled.maxCombo} does not match Music metadata ${selectedDifficultyOption.expectedCombo}`);
         }
-        setLoadState({ status: "ready", compiled });
-      } catch (error) {
-        if (controller.signal.aborted) return;
-        setLoadState({
+        compiledChartsRef.current.set(difficulty, compiled);
+        chartLoadPromisesRef.current.delete(requestKey);
+        return compiled;
+      })().catch((error: unknown) => {
+        chartLoadPromisesRef.current.delete(requestKey);
+        throw error;
+      });
+      chartLoadPromisesRef.current.set(requestKey, request);
+    }
+    void request.then(
+      (compiled) => {
+        if (!isCurrent) return;
+        setLoadState({ status: "ready", difficulty, compiled });
+      },
+      (error: unknown) => {
+        if (!isCurrent) return;
+        setLoadState((current) => ({
           status: "error",
+          difficulty,
           message: error instanceof Error ? error.message : String(error),
-        });
-      }
+          previous: current.status === "ready" ? current : current.previous,
+        }));
+      },
+    );
+    return () => {
+      isCurrent = false;
     };
-    void load();
-    return () => controller.abort();
-  }, [chartUrl, difficulty, durationSeconds, expectedCombo, loadAttempt, songId]);
+  }, [
+    chartLoadAttempt,
+    difficulty,
+    durationSeconds,
+    selectedDifficultyOption,
+    songId,
+  ]);
 
   useEffect(() => {
     const coordinator = createMusicPlayerPlaybackCoordinator(
@@ -958,11 +1049,11 @@ export default function ChartSimulatorRuntime({
     return () => {
       shouldMediaPlayRef.current = false;
       isMediaPlaybackReadyRef.current = false;
-      noteSoundRuntimeRef.current?.pauseMusic();
-      noteSoundRuntimeRef.current?.stopAll();
+      nativeAudioRuntimeRef.current?.pauseMusic();
+      nativeAudioRuntimeRef.current?.stopAll();
       coordinator.dispose();
       coordinatorRef.current = null;
-      setMusicPlaybackAudioSessionActive(false);
+      playbackAudioSessionRef.current?.setActive(false);
     };
   }, [pauseAudioAndTransport]);
 
@@ -992,14 +1083,11 @@ export default function ChartSimulatorRuntime({
   }, [noteSoundTimeline, stopAndResetNoteSounds]);
 
   useEffect(() => {
-    if (activeTab === "fullChart") setStageLoadProgress(null);
-  }, [activeTab]);
-
-  useEffect(() => {
+    if (!isActive) return;
     let animationFrame = 0;
     let lastUiUpdateMs = 0;
     const updatePlayback = (nowMs: number) => {
-      const runtime = noteSoundRuntimeRef.current;
+      const runtime = nativeAudioRuntimeRef.current;
       if (
         transportRef.current.phase === "playing"
         && isMediaPlaybackReadyRef.current
@@ -1024,6 +1112,7 @@ export default function ChartSimulatorRuntime({
   }, [
     flushNoteSoundsThrough,
     getStagePresentationTime,
+    isActive,
     noteSoundTimeline,
     updateTransport,
     wrapLoopAtBoundary,
@@ -1039,8 +1128,9 @@ export default function ChartSimulatorRuntime({
       || soundLoadProgress.status !== "ready"
       || stageLoadProgress?.loadId !== stageLoadId
       || stageLoadProgress.phase !== "ready"
-      || noteSoundRuntimeRef.current?.isMusicPrepared !== true
-      || loadState.status !== "ready"
+      || nativeAudioRuntimeRef.current?.isMusicPrepared !== true
+      || nativeAudioRuntimeRef.current?.isPrepared !== true
+      || !isSelectedChartReady
     ) return;
     const next = playBandoriChartTransport(transportRef.current);
     useMusicPlayerStore.getState().requestPause();
@@ -1070,8 +1160,8 @@ export default function ChartSimulatorRuntime({
     stopAndResetNoteSounds(current.currentTimeSeconds, false);
     updateTransport(beginBandoriChartScrub(current));
     pauseAudioInternally();
-    noteSoundRuntimeRef.current?.stopAll();
-    setMusicPlaybackAudioSessionActive(false);
+    nativeAudioRuntimeRef.current?.stopAll();
+    playbackAudioSessionRef.current?.setActive(false);
   };
 
   const previewScrub = (value: number) => {
@@ -1095,6 +1185,20 @@ export default function ChartSimulatorRuntime({
     setLimitedPerformanceSkin(skin);
   };
 
+  const changeDifficulty = (
+    nextDifficulty: ChartSimulatorClientShellProps["difficulty"],
+  ) => {
+    if (nextDifficulty === difficulty) return;
+    pauseAudioAndTransport();
+    setActiveTab("stage");
+    onDifficultyChange(nextDifficulty);
+  };
+
+  const changeTab = (tab: SimulatorTab) => {
+    if (tab === "fullChart") setHasOpenedFullChart(true);
+    setActiveTab(tab);
+  };
+
   const changePlaybackRate = (adjustmentHundredths: number) => {
     const nextHundredths = adjustBandoriSimulatorPlaybackRate(
       playbackRateHundredthsRef.current,
@@ -1102,7 +1206,7 @@ export default function ChartSimulatorRuntime({
     );
     if (nextHundredths === playbackRateHundredthsRef.current) return;
     const currentTransport = snapshotTransportAtAudioTime();
-    const runtime = noteSoundRuntimeRef.current;
+    const runtime = nativeAudioRuntimeRef.current;
     playbackRateHundredthsRef.current = nextHundredths;
     setPlaybackRateHundredths(nextHundredths);
     const nextPlaybackRate = getBandoriSimulatorPlaybackRate(nextHundredths);
@@ -1137,6 +1241,10 @@ export default function ChartSimulatorRuntime({
   const isStageReady = currentStageLoadProgress?.phase === "ready";
   const isSoundReady = currentSoundLoadProgress?.status === "ready";
   const isMusicReady = !audioUrl || currentMusicLoadProgress?.status === "ready";
+  const chartLoadingError = loadState.status === "error"
+    && loadState.difficulty === difficulty
+    ? loadState.message
+    : null;
   const audioLoadingError = currentSoundLoadProgress?.status === "error"
     ? currentSoundLoadProgress.message ?? t("unavailableTitle")
     : currentMusicLoadProgress?.status === "error"
@@ -1144,8 +1252,11 @@ export default function ChartSimulatorRuntime({
       : null;
   const simulatorLoadingLabel = currentStageLoadProgress?.phase === "error"
     || audioLoadingError
+    || chartLoadingError
     ? null
-    : !currentStageLoadProgress
+    : !isSelectedChartReady
+      ? t("loading.chart")
+      : !currentStageLoadProgress
       || currentStageLoadProgress.phase === "resources"
       ? t("loading.performance")
       : !isSoundReady
@@ -1155,7 +1266,8 @@ export default function ChartSimulatorRuntime({
           : !isStageReady
             ? t("loading.stage")
             : null;
-  const hasResourceCount = currentStageLoadProgress?.totalResources !== null
+  const hasResourceCount = isSelectedChartReady
+    && currentStageLoadProgress?.totalResources !== null
     && currentStageLoadProgress?.totalResources !== undefined
     && currentSoundLoadProgress !== null
     && (!audioUrl || currentMusicLoadProgress !== null);
@@ -1169,12 +1281,55 @@ export default function ChartSimulatorRuntime({
       + currentSoundLoadProgress.totalResources
       + (currentMusicLoadProgress?.totalResources ?? 0)
     : null;
-  const isSimulatorReady = isStageReady && isSoundReady && isMusicReady;
+  const isSimulatorReady = isSelectedChartReady
+    && isStageReady
+    && isSoundReady
+    && isMusicReady;
+  const retryChartLoading = () => {
+    pauseAudioAndTransport();
+    setPlaybackError(null);
+    setChartLoadAttempt((value) => value + 1);
+  };
+  const retryLoading = () => {
+    pauseAudioAndTransport();
+    nativeAudioRuntimeRef.current?.stopAll();
+    setPlaybackError(null);
+    setStageLoadProgress(null);
+    setSoundLoadProgress(null);
+    setMusicLoadProgress(null);
+    setLoadAttempt((value) => value + 1);
+  };
 
-  if (loadState.status === "loading" || assetLoadState.status === "loading") {
-    const loadingLabel = loadState.status === "loading"
-      ? t("loading.chart")
-      : t("loading.manifest");
+  if (!displayedChart && loadState.status === "error") {
+    return (
+      <section className="rounded-3xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] p-6">
+        <h2 className="text-lg font-bold text-[var(--theme-color-semantic-danger-foreground)]">{t("unavailableTitle")}</h2>
+        <p className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{loadState.message}</p>
+        <button
+          type="button"
+          className={`${controlClassName()} mt-4`}
+          onClick={retryChartLoading}
+        >
+          {t("retry")}
+        </button>
+      </section>
+    );
+  }
+
+  if (assetLoadState.status === "error") {
+    return (
+      <section className="rounded-3xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] p-6">
+        <h2 className="text-lg font-bold text-[var(--theme-color-semantic-danger-foreground)]">{t("unavailableTitle")}</h2>
+        <p className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{assetLoadState.message}</p>
+        <button type="button" className={`${controlClassName()} mt-4`} onClick={retryLoading}>
+          {t("retry")}
+        </button>
+      </section>
+    );
+  }
+
+  if (assetLoadState.status === "loading" || !displayedChart) {
+    const loadingLabel = !displayedChart ? t("loading.chart") : t("loading.manifest");
     return (
       <section
         aria-busy="true"
@@ -1191,21 +1346,6 @@ export default function ChartSimulatorRuntime({
         >
           <ChartSimulatorLoadingIndicator label={loadingLabel} />
         </div>
-      </section>
-    );
-  }
-
-  if (loadState.status === "error" || assetLoadState.status === "error") {
-    const message = loadState.status === "error"
-      ? loadState.message
-      : assetLoadState.status === "error" ? assetLoadState.message : "";
-    return (
-      <section className="rounded-3xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] p-6">
-        <h2 className="text-lg font-bold text-[var(--theme-color-semantic-danger-foreground)]">{t("unavailableTitle")}</h2>
-        <p className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{message}</p>
-        <button type="button" className={`${controlClassName()} mt-4`} onClick={() => setLoadAttempt((value) => value + 1)}>
-          {t("retry")}
-        </button>
       </section>
     );
   }
@@ -1235,7 +1375,7 @@ export default function ChartSimulatorRuntime({
               key={tab}
               type="button"
               aria-pressed={activeTab === tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => changeTab(tab)}
               className={`rounded-lg px-4 py-2 text-sm font-semibold outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${activeTab === tab ? "bg-[var(--theme-color-selection-subtle-background)] text-[var(--theme-color-selection-subtle-foreground)] shadow-sm ring-1 ring-inset ring-[var(--theme-color-selection-subtle-ring)]" : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)]"}`}
             >
               {t(`tabs.${tab}`)}
@@ -1244,81 +1384,107 @@ export default function ChartSimulatorRuntime({
         </div>
       </div>
 
+      <div
+        aria-label={songsT("difficultyLabel")}
+        className="mt-4 flex max-w-full gap-2 overflow-x-auto pb-1"
+      >
+        {difficulties.map((option) => {
+          const selected = option.difficulty === difficulty;
+          return (
+            <button
+              key={option.difficulty}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => changeDifficulty(option.difficulty)}
+              className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${selected ? "border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-control-foreground-pressed)]" : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)]"}`}
+            >
+              {songsT(`difficulties.${option.difficulty}`)}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="mt-5">
-        {activeTab === "stage" ? (
-          <div className="relative" aria-busy={simulatorLoadingLabel !== null}>
-            <NativeSimulatorStage
-              key={stageLoadId}
-              allPerfectStatusEnabled={isAllPerfectStatusEnabled}
-              ariaLabel={t("stageAria")}
-              backgroundSkin={effectiveBackgroundSkin}
-              compiled={loadState.compiled}
-              directionalFlickSkin={effectiveDirectionalFlickSkin}
-              fieldSkin={effectiveFieldSkin}
-              getEffectPlaybackState={getStageEffectPlaybackState}
-              getPresentationTime={getStagePresentationTime}
-              isMirrored={isMirrored}
-              laneEffectEnabled={isLaneEffectEnabled}
-              limitedPerformanceSkin={limitedPerformanceSkin}
-              loadId={stageLoadId}
-              noteApproachTimeScale={noteApproachTimeScale}
-              noteSpeed={noteSpeed}
-              noteSkin={effectiveNoteSkin}
-              noteContractErrorLabel={t("stageNoteContractUnavailable")}
-              onLoadProgress={handleStageLoadProgress}
-              rendererErrorLabel={t("rendererUnavailable")}
-              resourceErrorLabel={t("stageResourceUnavailable")}
-              resolveAssetUrl={assetLoadState.resolveAssetUrl}
-              rhythmSupportEnabled={isRhythmSupportEnabled}
-              syncLineEnabled={isSyncLineEnabled}
-            />
-            {audioLoadingError ? (
-              <div
-                className="absolute inset-x-0 top-0 z-20 flex items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--theme-color-surface-background)_94%,transparent)] p-6 text-center backdrop-blur-sm"
-                style={{
-                  aspectRatio: `${BANDORI_NATIVE_STAGE_SIZE.width} / ${BANDORI_NATIVE_STAGE_SIZE.height}`,
-                }}
-              >
-                <div>
-                  <h3 className="text-base font-bold text-[var(--theme-color-semantic-danger-foreground)]">
-                    {t("unavailableTitle")}
-                  </h3>
-                  <p className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">
-                    {audioLoadingError}
-                  </p>
-                  <button
-                    type="button"
-                    className={`${controlClassName()} mt-4`}
-                    onClick={() => setLoadAttempt((value) => value + 1)}
-                  >
-                    {t("retry")}
-                  </button>
-                </div>
-              </div>
-            ) : simulatorLoadingLabel ? (
-              <div
-                className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--theme-color-surface-background)_90%,transparent)] p-6 backdrop-blur-sm"
-                style={{
-                  aspectRatio: `${BANDORI_NATIVE_STAGE_SIZE.width} / ${BANDORI_NATIVE_STAGE_SIZE.height}`,
-                }}
-              >
-                <ChartSimulatorLoadingIndicator
-                  completedResources={completedResources}
-                  label={simulatorLoadingLabel}
-                  totalResources={totalResources}
-                />
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <BandoriFullChartView
-            compiled={loadState.compiled}
+        <div
+          className="relative"
+          aria-busy={simulatorLoadingLabel !== null}
+          hidden={activeTab !== "stage"}
+        >
+          <NativeSimulatorStage
+            key={stageLoadId}
+            allPerfectStatusEnabled={isAllPerfectStatusEnabled}
+            ariaLabel={t("stageAria")}
+            backgroundSkin={effectiveBackgroundSkin}
+            compiled={displayedChart.compiled}
+            directionalFlickSkin={effectiveDirectionalFlickSkin}
+            fieldSkin={effectiveFieldSkin}
+            getEffectPlaybackState={getStageEffectPlaybackState}
+            getPresentationTime={getStagePresentationTime}
+            isActive={isActive && activeTab === "stage" && isSelectedChartReady}
             isMirrored={isMirrored}
-            ariaLabel={t("fullChartAria")}
-            description={t("fullChartDescription")}
-            analysisLabel={t("fullChartAnalysisLabel")}
+            laneEffectEnabled={isLaneEffectEnabled}
+            limitedPerformanceSkin={limitedPerformanceSkin}
+            loadId={stageLoadId}
+            noteApproachTimeScale={noteApproachTimeScale}
+            noteSpeed={noteSpeed}
+            noteSkin={effectiveNoteSkin}
+            noteContractErrorLabel={t("stageNoteContractUnavailable")}
+            onLoadProgress={handleStageLoadProgress}
+            rendererErrorLabel={t("rendererUnavailable")}
+            resourceErrorLabel={t("stageResourceUnavailable")}
+            resolveAssetUrl={assetLoadState.resolveAssetUrl}
+            rhythmSupportEnabled={isRhythmSupportEnabled}
+            syncLineEnabled={isSyncLineEnabled}
           />
-        )}
+          {chartLoadingError || audioLoadingError ? (
+            <div
+              className="absolute inset-x-0 top-0 z-20 flex items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--theme-color-surface-background)_94%,transparent)] p-6 text-center backdrop-blur-sm"
+              style={{
+                aspectRatio: `${BANDORI_NATIVE_STAGE_SIZE.width} / ${BANDORI_NATIVE_STAGE_SIZE.height}`,
+              }}
+            >
+              <div>
+                <h3 className="text-base font-bold text-[var(--theme-color-semantic-danger-foreground)]">
+                  {t("unavailableTitle")}
+                </h3>
+                <p className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">
+                  {chartLoadingError ?? audioLoadingError}
+                </p>
+                <button
+                  type="button"
+                  className={`${controlClassName()} mt-4`}
+                  onClick={chartLoadingError ? retryChartLoading : retryLoading}
+                >
+                  {t("retry")}
+                </button>
+              </div>
+            </div>
+          ) : simulatorLoadingLabel ? (
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--theme-color-surface-background)_90%,transparent)] p-6 backdrop-blur-sm"
+              style={{
+                aspectRatio: `${BANDORI_NATIVE_STAGE_SIZE.width} / ${BANDORI_NATIVE_STAGE_SIZE.height}`,
+              }}
+            >
+              <ChartSimulatorLoadingIndicator
+                completedResources={isSelectedChartReady ? completedResources : null}
+                label={simulatorLoadingLabel}
+                totalResources={isSelectedChartReady ? totalResources : null}
+              />
+            </div>
+          ) : null}
+        </div>
+        {hasOpenedFullChart ? (
+          <div hidden={activeTab !== "fullChart"}>
+            <BandoriFullChartView
+              compiled={displayedChart.compiled}
+              isMirrored={isMirrored}
+              ariaLabel={t("fullChartAria")}
+              description={t("fullChartDescription")}
+              analysisLabel={t("fullChartAnalysisLabel")}
+            />
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-5 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] p-4 shadow-sm">
@@ -1398,8 +1564,8 @@ export default function ChartSimulatorRuntime({
 
       <div className="mt-5 space-y-4">
         <SimulatorLoopControls
-          key={`${songId}:${difficulty}:${durationSeconds}`}
-          compiled={loadState.compiled}
+          key={`${songId}:${displayedChart.difficulty}:${durationSeconds}`}
+          compiled={displayedChart.compiled}
           isEnabled={isLoopEnabled}
           onEnabledChange={changeLoopEnabled}
           onRangeApply={applyLoopRange}

@@ -6,11 +6,11 @@ type AudioSessionNavigator = Navigator & {
   };
 };
 
-let musicPlaybackSessionActive = false;
+const musicPlaybackSessionClaims = new Set<symbol>();
 let ambientSessionClaimCount = 0;
 
 function resolveBrowserAudioSessionType(): BrowserAudioSessionType {
-  if (musicPlaybackSessionActive) {
+  if (musicPlaybackSessionClaims.size > 0) {
     return "playback";
   }
   if (ambientSessionClaimCount > 0) {
@@ -36,9 +36,32 @@ function applyBrowserAudioSessionType(): void {
   }
 }
 
-export function setMusicPlaybackAudioSessionActive(active: boolean): void {
-  musicPlaybackSessionActive = active;
-  applyBrowserAudioSessionType();
+export type MusicPlaybackBrowserAudioSession = Readonly<{
+  release: () => void;
+  setActive: (active: boolean) => void;
+}>;
+
+/** Owns one playback claim so unrelated players cannot release each other. */
+export function createMusicPlaybackBrowserAudioSession(): MusicPlaybackBrowserAudioSession {
+  const token = Symbol("music-playback-audio-session");
+  let active = false;
+  let released = false;
+  return {
+    release: () => {
+      if (released) return;
+      released = true;
+      if (active) musicPlaybackSessionClaims.delete(token);
+      active = false;
+      applyBrowserAudioSessionType();
+    },
+    setActive: (nextActive) => {
+      if (released || active === nextActive) return;
+      active = nextActive;
+      if (active) musicPlaybackSessionClaims.add(token);
+      else musicPlaybackSessionClaims.delete(token);
+      applyBrowserAudioSessionType();
+    },
+  };
 }
 
 export function claimAmbientBrowserAudioSession(): () => void {
@@ -57,7 +80,7 @@ export function claimAmbientBrowserAudioSession(): () => void {
 }
 
 export function resetBrowserAudioSessionPolicy(): void {
-  musicPlaybackSessionActive = false;
+  musicPlaybackSessionClaims.clear();
   ambientSessionClaimCount = 0;
   applyBrowserAudioSessionType();
 }
