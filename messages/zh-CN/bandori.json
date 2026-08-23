@@ -638,7 +638,7 @@
       "skinControls": {
         "ariaLabel": "演出样式切换",
         "noteStyle": "节奏标志",
-        "directionalFlickStyle": "左右 Flick 标志",
+        "directionalFlickStyle": "左右flick标志",
         "fieldStyle": "按键条·判定线",
         "backgroundStyle": "背景",
         "backgroundSkin": {
@@ -656,7 +656,7 @@
         "allPerfectStatus": "Perfect状态显示",
         "on": "开",
         "off": "关",
-        "tapSeStyle": "节奏标志 SE",
+        "tapSeStyle": "SE",
         "limitedPerformance": {
           "label": "限定演出皮肤",
           "none": "无（使用普通设置）",
