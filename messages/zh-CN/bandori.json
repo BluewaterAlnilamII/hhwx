@@ -554,6 +554,249 @@
       }
     }
   },
+  "songs": {
+    "page": {
+      "title": "歌曲图鉴",
+      "resultCount": "{count} 首歌曲",
+      "showMore": "再显示 {count} 首"
+    },
+    "filters": {
+      "searchPlaceholder": "搜索歌曲名、乐队名或歌曲 ID",
+      "otherBand": "其他",
+      "serverAvailabilityAria": "筛选在 {server} 服务器有效的歌曲",
+      "levelMin": "最低",
+      "levelMax": "最高",
+      "rows": {
+        "serverAvailability": "服务器",
+        "band": "乐队",
+        "type": "类型",
+        "difficulty": "难易度",
+        "level": "乐曲等级",
+        "sort": "排序"
+      },
+      "types": {
+        "original": "原创歌曲",
+        "cover": "翻唱歌曲",
+        "extra": "EXTRA 曲",
+        "other": "其他"
+      },
+      "difficulties": {
+        "easy": "EASY",
+        "normal": "NORMAL",
+        "hard": "HARD",
+        "expert": "EXPERT",
+        "special": "SPECIAL"
+      },
+      "sort": {
+        "id": "歌曲 ID",
+        "title": "歌曲名",
+        "level": "乐曲等级",
+        "release_jp": "发布日期（JP）",
+        "release_en": "发布日期（EN）",
+        "release_tw": "发布日期（TW）",
+        "release_cn": "发布日期（CN）"
+      },
+      "sortDirection": {
+        "desc": "倒序",
+        "asc": "正序",
+        "descTitle": "当前为倒序，点击切换为正序",
+        "ascTitle": "当前为正序，点击切换为倒序",
+        "descAria": "排序方向：倒序",
+        "ascAria": "排序方向：正序"
+      },
+      "actions": {
+        "all": "全部",
+        "clear": "清除筛选",
+        "selectAll": "选择全部{group}",
+        "clearAll": "清除全部{group}"
+      }
+    },
+    "states": {
+      "loading": "正在读取歌曲图鉴",
+      "loadFailed": "读取歌曲数据失败，请稍后重试",
+      "empty": "没有符合当前条件的歌曲"
+    },
+    "detail": {
+      "view": {
+        "label": "歌曲页面视图",
+        "info": "歌曲详情",
+        "simulator": "谱面模拟"
+      }
+    },
+    "songId": "歌曲 #{songId}",
+    "unknownTitle": "歌曲 #{songId}",
+    "unknownBand": "未知乐团",
+    "artworkAlt": "{title} 封面",
+    "artworkUnavailable": "暂无封面",
+    "difficultyLabel": "谱面难度",
+    "difficulties": {
+      "easy": "EASY",
+      "normal": "NORMAL",
+      "hard": "HARD",
+      "expert": "EXPERT",
+      "special": "SPECIAL"
+    },
+    "stats": {
+      "level": "等级",
+      "notes": "物量",
+      "bpm": "BPM",
+      "duration": "时长"
+    },
+    "simulator": {
+      "title": "谱面模拟器",
+      "loading": {
+        "simulator": "正在加载模拟器...",
+        "chart": "正在加载谱面...",
+        "manifest": "正在加载资源清单...",
+        "performance": "正在加载演出资源...",
+        "sound": "正在加载音效...",
+        "music": "正在加载音乐...",
+        "stage": "正在初始化模拟舞台..."
+      },
+      "retry": "重试",
+      "unavailableTitle": "当前谱面无法载入",
+      "tabs": {
+        "stage": "模拟舞台",
+        "fullChart": "完整谱面"
+      },
+      "controls": {
+        "play": "播放",
+        "pause": "暂停",
+        "restart": "回到开头",
+        "backFive": "后退 5 秒",
+        "forwardFive": "前进 5 秒",
+        "timeline": "播放时间轴",
+        "mirrorData": "镜像",
+        "playbackRate": "音乐慢放",
+        "decreasePlaybackRate": "降低音乐播放倍率 {amount}",
+        "increasePlaybackRate": "提高音乐播放倍率 {amount}",
+        "currentPlaybackRate": "当前音乐播放倍率",
+        "syncNoteSpeedSlowdown": "同步慢放谱面速度",
+        "syncNoteSpeedSlowdownOn": "开",
+        "syncNoteSpeedSlowdownOff": "关",
+        "noteSpeed": "节奏图标的速度",
+        "decreaseNoteSpeed": "降低节奏图标的速度 {amount}",
+        "increaseNoteSpeed": "提高节奏图标的速度 {amount}",
+        "currentNoteSpeed": "当前节奏图标的速度"
+      },
+      "effectControlsTitle": "演出效果设定",
+      "loopControls": {
+        "ariaLabel": "区间循环设置",
+        "title": "区间循环",
+        "timeMode": "按时间",
+        "noteMode": "按 Note",
+        "startTime": "起点（秒）",
+        "endTime": "终点（秒）",
+        "startNote": "起始 Note 编号",
+        "endNote": "结束 Note 编号",
+        "apply": "应用",
+        "reset": "重置",
+        "enabled": "自动循环",
+        "on": "开",
+        "off": "关",
+        "appliedRange": "当前区间：{start}–{end} 秒",
+        "normalizedNoteRange": "同时 Note 组已归一化为 Note {start}–{end}",
+        "invalidTimeRange": "时间区间必须满足 0 ≤ 起点 < 终点 ≤ 歌曲长度",
+        "invalidNoteRange": "Note 区间必须是谱面物量内的递增整数范围"
+      },
+      "stageAria": "谱面模拟舞台",
+      "stageResourceUnavailable": "本地缺少当前舞台需要的 JP 解包资源，未使用其它资源回退",
+      "stageNoteContractUnavailable": "该谱面含有尚未确认的 Note 组合；Note 图层已失败关闭，静态舞台仍可检查",
+      "rendererUnavailable": "当前浏览器无法启动 Pixi 舞台",
+      "fullChartDescription": "按时间展开的完整谱面结构，用于确认音符、长条与 BPM 数据",
+      "fullChartAnalysisLabel": "分析视图，不代表游戏原生舞台",
+      "fullChartAria": "完整谱面分析图",
+      "audioUnavailable": "当前歌曲没有可用音频，仍可查看完整谱面并拖动时间轴",
+      "skinControls": {
+        "ariaLabel": "演出皮肤设定",
+        "noteStyle": "节奏标志",
+        "directionalFlickStyle": "左右flick标志",
+        "fieldStyle": "按键条·判定线",
+        "backgroundStyle": "背景",
+        "backgroundSkin": {
+          "skin00": "skin00（默认）",
+          "skin02": "skin02",
+          "skin03": "skin03",
+          "practice": "练习",
+          "teamLiveJudgment": "团队演出·判定",
+          "teamLiveCombo": "团队演出·连击",
+          "teamLiveLife": "团队演出·生命"
+        },
+        "syncLine": "同时点击线",
+        "rhythmSupport": "节奏的色觉辅助",
+        "laneEffect": "判定辅助效果",
+        "allPerfectStatus": "Perfect状态显示",
+        "on": "开",
+        "off": "关",
+        "tapSeStyle": "SE",
+        "limitedPerformance": {
+          "label": "限定演出皮肤",
+          "none": "无（使用普通设置）",
+          "overriddenBy": "由 {skin} 覆盖",
+          "skin": {
+            "5th": "五周年特别舞台",
+            "april2018": "2018 愚人节",
+            "april2019": "2019 愚人节",
+            "april2021": "2021 愚人节",
+            "april2024": "2024 愚人节",
+            "bike": "《东京复仇者》联动",
+            "cafe": "《请问您今天要来点兔子吗？？》联动",
+            "coin": "《某科学的超电磁炮T》联动",
+            "collabo23_summer_g": "《链锯人》联动",
+            "collabo23_winter_d": "Hololive 联动第二弹",
+            "collabo24_autumn_i": "《【我推的孩子】》联动",
+            "collabo25_autumn_s": "三丽鸥角色联动",
+            "delta": "Hololive 联动",
+            "gbp2020": "GBP2020 特别舞台",
+            "maid": "《Re:从零开始的异世界生活》联动",
+            "miku": "初音未来联动",
+            "persona": "《女神异闻录》系列联动",
+            "satan": "《关于我转生变成史莱姆这档事》联动",
+            "stage": "《佐贺偶像是传奇 卷土重来》联动",
+            "witch": "《小魔女DoReMi》联动"
+          }
+        },
+        "fieldSkin": {
+          "1": "按键条皮肤00",
+          "2": "按键条皮肤01",
+          "3": "按键条皮肤02",
+          "4": "按键条皮肤03",
+          "5": "按键条皮肤04",
+          "6": "Poppin'Party 的按键条皮肤",
+          "7": "Afterglow 的按键条皮肤",
+          "8": "Pastel＊Palettes 的按键条皮肤",
+          "9": "Roselia 的按键条皮肤",
+          "10": "Hello, Happy World! 的按键条皮肤",
+          "11": "Morfonica 的按键条皮肤",
+          "12": "RAISE A SUILEN 的按键条皮肤",
+          "13": "按键条皮肤05",
+          "14": "按键条皮肤06",
+          "15": "MyGO!!!!! 的按键条皮肤",
+          "april2019": "April 2019 愚人节按键条皮肤",
+          "april2021": "April 2021 愚人节按键条皮肤",
+          "april2024": "April 2024 愚人节按键条皮肤",
+          "bike": "Bike 按键条皮肤",
+          "cafe": "Cafe 按键条皮肤",
+          "coin": "Coin 按键条皮肤",
+          "collabo23_summer_g": "2023 夏季联动 G 按键条皮肤",
+          "collabo24_autumn_i": "2024 秋季联动 I 按键条皮肤",
+          "collabo25_autumn_s": "2025 秋季联动 S 按键条皮肤",
+          "delta": "Delta 按键条皮肤",
+          "gbp2020": "GBP 2020 按键条皮肤",
+          "maid": "Maid 按键条皮肤",
+          "miku": "初音未来联动按键条皮肤",
+          "persona": "Persona 联动按键条皮肤",
+          "satan": "Satan 按键条皮肤",
+          "stage": "Stage 按键条皮肤",
+          "witch": "Witch 按键条皮肤"
+        }
+      },
+      "diagnostics": {
+        "mirrorOn": "镜像开启",
+        "mirrorOff": "镜像关闭"
+      }
+    }
+  },
   "teamBuilder": {
     "title": "组队计算器",
     "loadingPage": "正在读取组队计算器数据...",

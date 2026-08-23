@@ -5,6 +5,7 @@ const POSITIVE_INTEGER_ID_PATTERN = /^[1-9]\d*$/u;
 
 export const BANDORI_PUBLIC_ASSET_SERVERS = ["jp", "en", "tw", "cn"] as const;
 export const BANDORI_CARDS_INDEX_KEY = "bandori/cards/index.json";
+export const BANDORI_CHART_SIMULATOR_INDEX_KEY = "bandori/chart-simulator/index.json";
 export const BANDORI_DEGREES_INDEX_KEY = "bandori/degrees/index.json";
 export const BANDORI_EVENTS_INDEX_KEY = "bandori/events/index.json";
 export const BANDORI_MUSIC_INDEX_KEY = "bandori/music/index.json";
@@ -1145,7 +1146,7 @@ export function getBandoriPublicAssetBaseUrl(
 }
 
 export function buildBandoriPublicAssetIndexUrl(
-  kind: "cards" | "degrees" | "events" | "music" | "stamps",
+  kind: "cards" | "chartSimulator" | "degrees" | "events" | "music" | "stamps",
   baseUrl?: string | null,
 ): string | null {
   const normalizedBaseUrl = getBandoriPublicAssetBaseUrl(baseUrl);
@@ -1154,6 +1155,7 @@ export function buildBandoriPublicAssetIndexUrl(
   }
   const indexKeys = {
     cards: BANDORI_CARDS_INDEX_KEY,
+    chartSimulator: BANDORI_CHART_SIMULATOR_INDEX_KEY,
     degrees: BANDORI_DEGREES_INDEX_KEY,
     events: BANDORI_EVENTS_INDEX_KEY,
     music: BANDORI_MUSIC_INDEX_KEY,

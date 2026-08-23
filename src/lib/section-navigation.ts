@@ -47,6 +47,12 @@ export const siteNavigationGroups: SectionSidebarNavGroup[] = [
         matchMode: "prefix",
       },
       {
+        id: "songs",
+        href: "/bandori/songs",
+        labelKey: "items.songs",
+        matchMode: "prefix",
+      },
+      {
         id: "game-profiles",
         href: "/bandori/game-profiles",
         labelKey: "items.gameProfiles",

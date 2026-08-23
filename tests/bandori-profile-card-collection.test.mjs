@@ -534,8 +534,9 @@ test("profile cards and team builder use one shared collection implementation", 
       /"workbenchTitle"|"loadCardsFailed"|"loadCharactersFailed"|"loadSkillsFailed"/u,
     );
     assert.doesNotMatch(messages, /"collectionSort"/u);
-    assert.equal((messages.match(/"release_en"/gu) ?? []).length, 1);
-    assert.equal((messages.match(/"release_tw"/gu) ?? []).length, 1);
+    const parsedMessages = JSON.parse(messages);
+    assert.equal(typeof parsedMessages.cardFilters.sort.release_en, "string");
+    assert.equal(typeof parsedMessages.cardFilters.sort.release_tw, "string");
   }
   for (const messages of [JSON.parse(enMessages), JSON.parse(zhMessages)]) {
     assert.deepEqual(messages.cardFilters.attributes, {

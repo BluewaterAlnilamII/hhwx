@@ -554,6 +554,249 @@
       }
     }
   },
+  "songs": {
+    "page": {
+      "title": "Song Catalog",
+      "resultCount": "{count} songs",
+      "showMore": "Show {count} more"
+    },
+    "filters": {
+      "searchPlaceholder": "Search song title, band, or song ID",
+      "otherBand": "Other",
+      "serverAvailabilityAria": "Filter songs available on the {server} server",
+      "levelMin": "Min",
+      "levelMax": "Max",
+      "rows": {
+        "serverAvailability": "Server",
+        "band": "Band",
+        "type": "Type",
+        "difficulty": "Difficulty",
+        "level": "Song level",
+        "sort": "Sort"
+      },
+      "types": {
+        "original": "Original",
+        "cover": "Cover",
+        "extra": "EXTRA",
+        "other": "Other"
+      },
+      "difficulties": {
+        "easy": "EASY",
+        "normal": "NORMAL",
+        "hard": "HARD",
+        "expert": "EXPERT",
+        "special": "SPECIAL"
+      },
+      "sort": {
+        "id": "Song ID",
+        "title": "Song title",
+        "level": "Song level",
+        "release_jp": "Release date (JP)",
+        "release_en": "Release date (EN)",
+        "release_tw": "Release date (TW)",
+        "release_cn": "Release date (CN)"
+      },
+      "sortDirection": {
+        "desc": "Descending",
+        "asc": "Ascending",
+        "descTitle": "Currently descending, switch to ascending",
+        "ascTitle": "Currently ascending, switch to descending",
+        "descAria": "Sort direction: descending",
+        "ascAria": "Sort direction: ascending"
+      },
+      "actions": {
+        "all": "All",
+        "clear": "Clear filters",
+        "selectAll": "Select all {group}",
+        "clearAll": "Clear all {group}"
+      }
+    },
+    "states": {
+      "loading": "Loading the song catalog",
+      "loadFailed": "Failed to load song data. Please try again later",
+      "empty": "No songs match the current filters"
+    },
+    "detail": {
+      "view": {
+        "label": "Song page view",
+        "info": "Song Details",
+        "simulator": "Chart Simulator"
+      }
+    },
+    "songId": "Song #{songId}",
+    "unknownTitle": "Song #{songId}",
+    "unknownBand": "Unknown band",
+    "artworkAlt": "{title} artwork",
+    "artworkUnavailable": "Artwork unavailable",
+    "difficultyLabel": "Chart difficulty",
+    "difficulties": {
+      "easy": "EASY",
+      "normal": "NORMAL",
+      "hard": "HARD",
+      "expert": "EXPERT",
+      "special": "SPECIAL"
+    },
+    "stats": {
+      "level": "Level",
+      "notes": "Notes",
+      "bpm": "BPM",
+      "duration": "Duration"
+    },
+    "simulator": {
+      "title": "Chart Simulator",
+      "loading": {
+        "simulator": "Loading the simulator...",
+        "chart": "Loading the chart...",
+        "manifest": "Loading the resource manifest...",
+        "performance": "Loading performance resources...",
+        "sound": "Loading sound effects...",
+        "music": "Loading music...",
+        "stage": "Initializing the simulator stage..."
+      },
+      "retry": "Retry",
+      "unavailableTitle": "This chart cannot be loaded",
+      "tabs": {
+        "stage": "Simulator stage",
+        "fullChart": "Full chart"
+      },
+      "controls": {
+        "play": "Play",
+        "pause": "Pause",
+        "restart": "Restart",
+        "backFive": "Back 5 seconds",
+        "forwardFive": "Forward 5 seconds",
+        "timeline": "Playback timeline",
+        "mirrorData": "Mirror",
+        "playbackRate": "Music slow playback",
+        "decreasePlaybackRate": "Decrease music playback rate by {amount}",
+        "increasePlaybackRate": "Increase music playback rate by {amount}",
+        "currentPlaybackRate": "Current music playback rate",
+        "syncNoteSpeedSlowdown": "Synchronize note-speed slowdown",
+        "syncNoteSpeedSlowdownOn": "On",
+        "syncNoteSpeedSlowdownOff": "Off",
+        "noteSpeed": "Note speed",
+        "decreaseNoteSpeed": "Decrease note speed by {amount}",
+        "increaseNoteSpeed": "Increase note speed by {amount}",
+        "currentNoteSpeed": "Current note speed"
+      },
+      "effectControlsTitle": "Performance effect settings",
+      "loopControls": {
+        "ariaLabel": "Loop-range settings",
+        "title": "Range loop",
+        "timeMode": "By time",
+        "noteMode": "By Note",
+        "startTime": "Start (seconds)",
+        "endTime": "End (seconds)",
+        "startNote": "First Note number",
+        "endNote": "Last Note number",
+        "apply": "Apply",
+        "reset": "Reset",
+        "enabled": "Automatic loop",
+        "on": "On",
+        "off": "Off",
+        "appliedRange": "Current range: {start}–{end} seconds",
+        "normalizedNoteRange": "The simultaneous group was normalized to Notes {start}–{end}",
+        "invalidTimeRange": "The time range must satisfy 0 ≤ start < end ≤ song duration",
+        "invalidNoteRange": "The Note range must be an increasing integer range inside the chart"
+      },
+      "stageAria": "Chart simulator stage",
+      "stageResourceUnavailable": "A required unpacked JP stage resource is missing; no other resource was used as a fallback",
+      "stageNoteContractUnavailable": "This chart contains an unverified note combination; the note layer failed closed while the static stage remains available",
+      "rendererUnavailable": "This browser could not start the Pixi stage",
+      "fullChartDescription": "A time-expanded view of notes, ribbons, and BPM data for structural verification",
+      "fullChartAnalysisLabel": "Analysis view, not the native game stage",
+      "fullChartAria": "Full chart analysis view",
+      "audioUnavailable": "This song has no available audio, but the full chart and timeline remain usable",
+      "skinControls": {
+        "ariaLabel": "Performance skin settings",
+        "noteStyle": "Note style",
+        "directionalFlickStyle": "Left/right Flick style",
+        "fieldStyle": "Lane field and judgment line",
+        "backgroundStyle": "Background",
+        "backgroundSkin": {
+          "skin00": "skin00 (Default)",
+          "skin02": "skin02",
+          "skin03": "skin03",
+          "practice": "Practice",
+          "teamLiveJudgment": "Team Live · Judgment",
+          "teamLiveCombo": "Team Live · Combo",
+          "teamLiveLife": "Team Live · Life"
+        },
+        "syncLine": "Simultaneous line",
+        "rhythmSupport": "Rhythm support",
+        "laneEffect": "Lane effect",
+        "allPerfectStatus": "All Perfect status",
+        "on": "On",
+        "off": "Off",
+        "tapSeStyle": "Note SE",
+        "limitedPerformance": {
+          "label": "Limited performance skin",
+          "none": "None (use ordinary settings)",
+          "overriddenBy": "Overridden by {skin}",
+          "skin": {
+            "5th": "5th anniversary special stage",
+            "april2018": "April Fools' 2018",
+            "april2019": "April Fools' 2019",
+            "april2021": "April Fools' 2021",
+            "april2024": "April Fools' 2024",
+            "bike": "Tokyo Revengers collaboration",
+            "cafe": "Is the Order a Rabbit?? collaboration",
+            "coin": "A Certain Scientific Railgun T collaboration",
+            "collabo23_summer_g": "Chainsaw Man collaboration",
+            "collabo23_winter_d": "hololive collaboration Part 2",
+            "collabo24_autumn_i": "Oshi no Ko collaboration",
+            "collabo25_autumn_s": "Sanrio Characters collaboration",
+            "delta": "hololive collaboration",
+            "gbp2020": "GBP2020 special stage",
+            "maid": "Re:ZERO -Starting Life in Another World- collaboration",
+            "miku": "Hatsune Miku collaboration",
+            "persona": "Persona series collaboration",
+            "satan": "That Time I Got Reincarnated as a Slime collaboration",
+            "stage": "Zombie Land Saga Revenge collaboration",
+            "witch": "Ojamajo Doremi collaboration"
+          }
+        },
+        "fieldSkin": {
+          "1": "Lane skin 00",
+          "2": "Lane skin 01",
+          "3": "Lane skin 02",
+          "4": "Lane skin 03",
+          "5": "Lane skin 04",
+          "6": "Poppin'Party lane skin",
+          "7": "Afterglow lane skin",
+          "8": "Pastel＊Palettes lane skin",
+          "9": "Roselia lane skin",
+          "10": "Hello, Happy World! lane skin",
+          "11": "Morfonica lane skin",
+          "12": "RAISE A SUILEN lane skin",
+          "13": "Lane skin 05",
+          "14": "Lane skin 06",
+          "15": "MyGO!!!!! lane skin",
+          "april2019": "April 2019 April Fools' lane skin",
+          "april2021": "April 2021 April Fools' lane skin",
+          "april2024": "April 2024 April Fools' lane skin",
+          "bike": "Bike lane skin",
+          "cafe": "Cafe lane skin",
+          "coin": "Coin lane skin",
+          "collabo23_summer_g": "2023 summer collaboration G lane skin",
+          "collabo24_autumn_i": "2024 autumn collaboration I lane skin",
+          "collabo25_autumn_s": "2025 autumn collaboration S lane skin",
+          "delta": "Delta lane skin",
+          "gbp2020": "GBP 2020 lane skin",
+          "maid": "Maid lane skin",
+          "miku": "Hatsune Miku collaboration lane skin",
+          "persona": "Persona collaboration lane skin",
+          "satan": "Satan lane skin",
+          "stage": "Stage lane skin",
+          "witch": "Witch lane skin"
+        }
+      },
+      "diagnostics": {
+        "mirrorOn": "Mirror on",
+        "mirrorOff": "Mirror off"
+      }
+    }
+  },
   "teamBuilder": {
     "title": "Team Builder",
     "loadingPage": "Loading team builder data...",

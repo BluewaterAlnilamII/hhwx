@@ -6,9 +6,13 @@ export type BandoriMusicDifficulty = {
 };
 
 export type BandoriMusicMasterRecord = Record<string, unknown> & {
+  bandId?: number;
   bandName?: Array<string | null>;
+  closedAt?: Array<string | number | null>;
   difficulty?: Record<string, BandoriMusicDifficulty>;
   musicTitle?: Array<string | null>;
+  publishedAt?: Array<string | number | null>;
+  tag?: string;
 };
 
 export type BandoriMusicMasterMap = Record<

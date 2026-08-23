@@ -206,6 +206,18 @@ bandori/music/charts/{sha256}.json
 
 歌曲 ID 与难度 index 都使用按数值升序排列的数字字符串 key。难度 index `"0"` 到 `"4"` 依次表示 `easy`、`normal`、`hard`、`expert`、`special`。每个文件值都是完整的小写 SHA-256；客户端按上面的内容寻址路径推导对象 key，也可以校验收到的内容，不再需要查询参数版本。`notes`、`bpm` 与 `files.charts` 必须覆盖完全相同的难度。刻意不含音频的本地构建可以省略 `audio`，但生产就绪校验要求它存在。`bandori/music/manifests` 下的单曲提取 manifest 保留来源服务器及 bundle 溯源信息供 builder 使用，但不属于公开 index 契约。
 
+谱面模拟器演出资源：
+
+```text
+{CDN_BASE}/bandori/chart-simulator/index.json
+{CDN_BASE}/bandori/chart-simulator/manifests/{manifestSha256}.json
+{CDN_BASE}/bandori/chart-simulator/packs/{packTreeHash}/{projectionRelativePath}
+```
+
+可变 index 严格只含 `{schemaVersion, updatedAt, manifest}`，schema version 为 `1`；`manifest` 是不可变总 manifest 原字节的完整小写 SHA-256。Manifest 严格只含 `{schemaVersion, packs}`，schema 为 `hhwx-bandori-chart-simulator-assets-v1`；`packs` 把 `ingameskin/noteskin/skin00`、`sound/tapseskin/skin00` 等原游戏 bundle 名映射到一个确定性 tree hash，不包含 kind、ordinary/limited 分类、URL、size、逐文件 hash 或审计元数据。固定 APK HUD 派生资源使用唯一的合成 pack key `apk`。
+
+Pack 成员保留 `/local/chart-simulator/` 之后的既有路径以及最终 PNG、WAV、JSON 原字节，不重新编码、不预合并，也不包入 ZIP。Tree hash 覆盖一个源 bundle 完整投影中排序并规范化的成员路径与字节，因此成员目录整体不可变，无需公开逐成员描述符。浏览器校验并固定总 manifest 后，按逻辑路径与原游戏 bundle 推导成员 URL，只请求当前普通或限定背景、按键条／判定线、节奏标志、Directional、点击效果与 TapSE 设置真正需要的资源。任一条目缺失都会失败关闭，不回退本地文件、Bestdori 或其它 pack。`skin_teamlivefestival` 是规范 bundle 与逻辑目录名。
+
 Stamp 目录、静态图、语音与动画资源：
 
 ```text
