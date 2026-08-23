@@ -40,7 +40,7 @@ test("simulator loading reuses the page spinner and keeps the resource count com
 });
 
 test("the Pixi stage loads the selected stage, point-note atlases, and bounded hit effects", async () => {
-  const [stage, stageContract, noteAssets, notePresentation, hitPresentation, holdPresentation, judgmentComboPresentation, runtime, skinControls, loopControls, loopRange, compiler, worker] = await Promise.all([
+  const [stage, stageContract, noteAssets, notePresentation, hitPresentation, holdPresentation, judgmentComboPresentation, runtime, skinControls, loopControls, adjustmentControls, settingsCard, switchControl, loopRange, compiler, worker] = await Promise.all([
     read("../src/app/[locale]/bandori/songs/[songId]/NativeSimulatorStage.tsx"),
     read("../src/app/[locale]/bandori/songs/[songId]/native-stage-contract.ts"),
     read("../src/app/[locale]/bandori/songs/[songId]/native-note-assets.ts"),
@@ -51,11 +51,14 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
     read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx"),
     read("../src/app/[locale]/bandori/songs/[songId]/SimulatorSkinControls.tsx"),
     read("../src/app/[locale]/bandori/songs/[songId]/SimulatorLoopControls.tsx"),
+    read("../src/app/[locale]/bandori/songs/[songId]/SimulatorAdjustmentControl.tsx"),
+    read("../src/app/[locale]/bandori/songs/[songId]/SimulatorSettingsCard.tsx"),
+    read("../src/components/Switch.tsx"),
     read("../src/lib/bandori/chart-simulator/loop-range.ts"),
     read("../src/lib/bandori/chart-simulator/compiler.ts"),
     read("../src/lib/bandori/chart-simulator/compiler.worker.ts"),
   ]);
-  const simulatorSource = `${stage}\n${stageContract}\n${noteAssets}\n${notePresentation}\n${hitPresentation}\n${holdPresentation}\n${judgmentComboPresentation}\n${runtime}\n${skinControls}\n${loopControls}\n${loopRange}\n${compiler}\n${worker}`;
+  const simulatorSource = `${stage}\n${stageContract}\n${noteAssets}\n${notePresentation}\n${hitPresentation}\n${holdPresentation}\n${judgmentComboPresentation}\n${runtime}\n${skinControls}\n${loopControls}\n${adjustmentControls}\n${settingsCard}\n${switchControl}\n${loopRange}\n${compiler}\n${worker}`;
 
   assert.match(stage, /Application,[\s\S]*Assets,[\s\S]*Container,[\s\S]*Sprite/u);
   assert.match(stage, /Promise\.all\(\[/u);
@@ -193,6 +196,18 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(runtime, /NOTE_SPEED_INCREASES = \[0\.01, 0\.1, 0\.5\]/u);
   assert.match(runtime, /PLAYBACK_RATE_DECREASES = \[-10, -1\]/u);
   assert.match(runtime, /PLAYBACK_RATE_INCREASES = \[1, 10\]/u);
+  assert.match(runtime, /<SimulatorAdjustmentButton/u);
+  assert.match(runtime, /<SimulatorAdjustmentValue/u);
+  assert.match(runtime, /formatPlaybackTime\(presentationTime\)[\s\S]*formatPlaybackTime\(durationSeconds\)/u);
+  assert.match(runtime, /loopStartPercentage[\s\S]*loopEndPercentage/u);
+  assert.match(adjustmentControls, /level === 3\) return <ChevronsLeft/u);
+  assert.match(adjustmentControls, /level === 2\) return <ChevronLeft/u);
+  assert.match(adjustmentControls, /return <Minus/u);
+  assert.match(adjustmentControls, /level === 3\) return <ChevronsRight/u);
+  assert.match(adjustmentControls, /level === 2\) return <ChevronRight/u);
+  assert.match(adjustmentControls, /return <Plus/u);
+  assert.match(adjustmentControls, /theme-color-action-secondary-foreground/u);
+  assert.doesNotMatch(runtime, />\s*[+−]\{/u);
   assert.match(runtime, /runtime\.setMusicPlaybackRate\(nextPlaybackRate\)/u);
   assert.doesNotMatch(runtime, /defaultPlaybackRate|preservesPitch/u);
   assert.match(runtime, /getBandoriSimulatorPlaybackRate\(playbackRateHundredthsRef\.current\)/u);
@@ -204,6 +219,10 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /projectBandoriNativeRibbonPoint\([\s\S]*currentNoteApproachTimeScale/u);
   assert.match(stage, /projectBandoriNativeRibbonBody\([\s\S]*currentNoteApproachTimeScale/u);
   assert.match(runtime, /<SimulatorLoopControls/u);
+  assert.match(loopControls, /t\("reset"\)/u);
+  assert.match(loopControls, /step=\{0\.001\}/u);
+  assert.match(loopControls, /className="sr-only"/u);
+  assert.match(loopControls, /onRangeApply\(nextRange\)/u);
   assert.match(runtime, /wrapLoopAtBoundary/u);
   assert.match(runtime, /seekToLoopStart\(loopRangeRef\.current, false\)/u);
   assert.match(runtime, /const request = seekAudioAndTransport\(requested\);[\s\S]*loopSeekPromiseRef\.current = request[\s\S]*loopSeekPromiseRef\.current !== request/u);
@@ -280,6 +299,12 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stageContract, /getBandoriNativeJudgmentLineRect/u);
   assert.match(stage, /fieldSkin\.judgmentLineSpriteHeight/u);
   assert.match(skinControls, /BANDORI_NATIVE_NOTE_SKINS\.map/u);
+  assert.match(skinControls, /<SimulatorSettingsCard title=\{t\("ariaLabel"\)\}>/u);
+  assert.doesNotMatch(skinControls, /limitedPerformance\.coverage/u);
+  assert.match(settingsCard, /theme-color-surface-background/u);
+  assert.match(switchControl, /role="switch"/u);
+  assert.match(switchControl, /aria-checked=\{checked\}/u);
+  assert.match(switchControl, /theme-color-semantic-info-foreground/u);
   assert.match(skinControls, /BANDORI_NATIVE_DIRECTIONAL_FLICK_SKINS\.map/u);
   assert.match(skinControls, /BANDORI_NATIVE_TAP_SE_SKINS\.map/u);
   assert.match(skinControls, /onTapSeSkinChange\(skin\)/u);
@@ -359,7 +384,14 @@ test("localized song and simulator keys stay mirrored", async () => {
     assert.equal(Object.hasOwn(messages, "stageReady"), false);
     assert.equal(Object.hasOwn(messages.controls, "noteSpeedRange"), false);
     assert.equal(Object.hasOwn(messages.controls, "playbackRateRange"), false);
+    assert.equal(Object.hasOwn(messages.controls, "syncNoteSpeedSlowdownDescription"), false);
+    assert.equal(Object.hasOwn(messages.skinControls.limitedPerformance, "coverage"), false);
+    assert.equal(Object.hasOwn(messages.skinControls.limitedPerformance, "slot"), false);
   }
+  assert.equal(zh.songs.simulator.loopControls.apply, "应用");
+  assert.equal(zh.songs.simulator.loopControls.reset, "重置");
+  assert.equal(en.songs.simulator.loopControls.apply, "Apply");
+  assert.equal(en.songs.simulator.loopControls.reset, "Reset");
   assert.equal(zh.songs.simulator.stageAria, "谱面模拟舞台");
   assert.equal(en.songs.simulator.stageAria, "Chart simulator stage");
   assert.deepEqual(Object.values(zh.songs.simulator.loading), [

@@ -674,7 +674,6 @@
         "syncNoteSpeedSlowdown": "Synchronize note-speed slowdown",
         "syncNoteSpeedSlowdownOn": "On",
         "syncNoteSpeedSlowdownOff": "Off",
-        "syncNoteSpeedSlowdownDescription": "Off keeps Note fall speed unchanged; On slows it together with the music rate",
         "noteSpeed": "Note speed",
         "decreaseNoteSpeed": "Decrease note speed by {amount}",
         "increaseNoteSpeed": "Increase note speed by {amount}",
@@ -690,7 +689,8 @@
         "endTime": "End (seconds)",
         "startNote": "First Note number",
         "endNote": "Last Note number",
-        "apply": "Apply range",
+        "apply": "Apply",
+        "reset": "Reset",
         "enabled": "Automatic loop",
         "on": "On",
         "off": "Off",
@@ -733,8 +733,6 @@
           "label": "Limited performance skin",
           "none": "None (use ordinary settings)",
           "overriddenBy": "Overridden by {skin}",
-          "coverage": "Overrides: {slots}.",
-          "slotSeparator": ", ",
           "skin": {
             "5th": "5th anniversary special stage",
             "april2018": "April Fools' 2018",
@@ -756,16 +754,6 @@
             "satan": "That Time I Got Reincarnated as a Slime collaboration",
             "stage": "Zombie Land Saga Revenge collaboration",
             "witch": "Ojamajo Doremi collaboration"
-          },
-          "slot": {
-            "background": "background",
-            "lane": "lane field and judgment line",
-            "judgment": "judgment text",
-            "notes": "notes",
-            "directionalFlick": "left/right Flick notes",
-            "tapEffect": "tap effects",
-            "directionalFlickEffect": "left/right Flick effects",
-            "soundEffect": "Note SE"
           }
         },
         "fieldSkin": {

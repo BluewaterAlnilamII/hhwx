@@ -149,6 +149,72 @@ final result: passed
 
 ---
 
+# Chart Simulator Controls Design QA
+
+## Comparison target
+
+- Game control references:
+  - `C:/Users/bluew/AppData/Local/Temp/codex-clipboard-39a38488-2222-4cdf-aba8-908999e983fa.png`
+  - `C:/Users/bluew/AppData/Local/Temp/codex-clipboard-9fa3c9e0-70db-4832-9ec8-b0922ce8b490.png`
+- Existing HHWX product references:
+  - `C:/Users/bluew/.codex/visualizations/2026/08/23/01a02dda-1b7c-74e2-a50f-33d9b06df9f4/song-simulator-audit/05-cards-controls-reference.png`
+  - `C:/Users/bluew/.codex/visualizations/2026/08/23/01a02dda-1b7c-74e2-a50f-33d9b06df9f4/song-simulator-audit/06-events-tabs-reference.png`
+- Final full-page implementation:
+  - `C:/Users/bluew/.codex/visualizations/2026/08/23/01a02dda-1b7c-74e2-a50f-33d9b06df9f4/song-simulator-implementation/09-full-page-final.png`
+- Combined focused control comparison:
+  - `C:/Users/bluew/.codex/visualizations/2026/08/23/01a02dda-1b7c-74e2-a50f-33d9b06df9f4/song-simulator-implementation/06-focused-comparison.png`
+- Combined HHWX system comparison:
+  - `C:/Users/bluew/.codex/visualizations/2026/08/23/01a02dda-1b7c-74e2-a50f-33d9b06df9f4/song-simulator-implementation/10-system-comparison.png`
+- Mobile implementation after the responsive correction:
+  - `C:/Users/bluew/.codex/visualizations/2026/08/23/01a02dda-1b7c-74e2-a50f-33d9b06df9f4/song-simulator-implementation/08-mobile-loop-effects-final.png`
+- Local route: `http://localhost:3000/bandori/songs/359?difficulty=special&view=simulator`
+- State: Chinese locale, light theme, song 359 SPECIAL, simulator resources ready, playback paused, full-song loop range, ordinary skin settings selected
+
+## Viewport and state
+
+- Desktop captures use the in-app browser's default 1272 x 718 viewport; the final full-page capture is 1272 x 3187.
+- The responsive pass uses a temporary 390 x 844 viewport override and restores the default browser viewport after capture.
+- Reference screenshots describe the game control hierarchy and existing HHWX visual system rather than a pixel-identical complete simulator page. Fidelity is judged at the relevant controls and product-system surfaces.
+
+## Full-view comparison evidence
+
+- The simulator preserves the existing white rounded HHWX surfaces, subtle borders and shadows, orange primary action, deep-teal secondary controls, and red first-level tab emphasis.
+- The effect and skin groups remain in their approved order and stay expanded at the bottom of the page.
+- The skin choice grid uses the same compact rounded-choice language as Cards filters, including a deep-teal selected state and neutral unselected state.
+- The song-detail top tab continues the established Events-style first-level tab treatment instead of introducing a simulator-only navigation pattern.
+
+## Focused control comparison evidence
+
+- Note speed uses the requested seven-part `double chevron / chevron / minus / value / plus / chevron / double chevron` hierarchy. Playback speed uses the approved five-part subset.
+- Visible controls contain icons only; step magnitudes are exposed through accessible names and are not rendered as `+0.50`-style labels.
+- The controls retain the game reference's square rounded button rhythm while applying HHWX's deep-teal action tokens instead of copying the source's pink.
+- Switches use real `role="switch"` semantics, visible on/off text, a neutral off state, and a deep-teal active state.
+- Playback time renders to three decimal places, and the loop timeline uses fixed deep-teal boundary indicators plus a translucent selected span.
+
+## Interaction and accessibility evidence
+
+- Note-speed `+0.01` changed `10.00` to `10.01`, and the inverse control restored the original value.
+- Automatic loop and simultaneous-line switches updated both `aria-checked` and their visible state labels, then restored their original settings.
+- Applying `10.000-20.000` updated the loop range and timeline positions. Reset immediately restored `0.000-108.480` without changing the loop mode or switch state.
+- Playback advanced to `0:01.251 / 1:48.480`, the pause action returned the control to Play, and the millisecond display remained stable.
+- Browser logs contained no runtime errors, missing-message failures, or Next.js error overlay in the final state.
+
+## Comparison history
+
+### Pass 1
+
+- [P2] The seven-part note-speed control overflowed the effect card at 390 px and exposed a horizontal scrollbar.
+- Fix: reduced only the narrow-viewport button width, value width, and gap while retaining 40 px control height and the full desktop sizing.
+
+### Pass 2
+
+- The 390 x 844 recapture shows the complete seven-part control on one line without clipping or horizontal scrolling.
+- No remaining actionable P0, P1, or P2 visual, responsive, interaction, accessibility, copy, or system-alignment findings were observed.
+
+final result: passed
+
+---
+
 # Simulator Skin Controls Design QA
 
 ## Evidence

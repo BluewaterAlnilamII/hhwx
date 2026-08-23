@@ -674,7 +674,6 @@
         "syncNoteSpeedSlowdown": "同步慢放谱面速度",
         "syncNoteSpeedSlowdownOn": "开",
         "syncNoteSpeedSlowdownOff": "关",
-        "syncNoteSpeedSlowdownDescription": "关闭时 Note 下落速度保持不变；开启时随音乐倍率同步变慢",
         "noteSpeed": "节奏图标的速度",
         "decreaseNoteSpeed": "降低节奏图标的速度 {amount}",
         "increaseNoteSpeed": "提高节奏图标的速度 {amount}",
@@ -690,7 +689,8 @@
         "endTime": "终点（秒）",
         "startNote": "起始 Note 编号",
         "endNote": "结束 Note 编号",
-        "apply": "应用区间",
+        "apply": "应用",
+        "reset": "重置",
         "enabled": "自动循环",
         "on": "开",
         "off": "关",
@@ -733,8 +733,6 @@
           "label": "限定演出皮肤",
           "none": "无（使用普通设置）",
           "overriddenBy": "由 {skin} 覆盖",
-          "coverage": "覆盖范围：{slots}。",
-          "slotSeparator": "、",
           "skin": {
             "5th": "五周年特别舞台",
             "april2018": "2018 愚人节",
@@ -756,16 +754,6 @@
             "satan": "《关于我转生变成史莱姆这档事》联动",
             "stage": "《佐贺偶像是传奇 卷土重来》联动",
             "witch": "《小魔女DoReMi》联动"
-          },
-          "slot": {
-            "background": "背景",
-            "lane": "按键条与判定线",
-            "judgment": "判定文字",
-            "notes": "节奏标志",
-            "directionalFlick": "左右 Flick 标志",
-            "tapEffect": "点击特效",
-            "directionalFlickEffect": "左右 Flick 特效",
-            "soundEffect": "节奏标志 SE"
           }
         },
         "fieldSkin": {

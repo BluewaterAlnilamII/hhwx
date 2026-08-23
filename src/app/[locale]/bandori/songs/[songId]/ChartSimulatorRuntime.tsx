@@ -6,7 +6,6 @@ import { useTranslations } from "next-intl";
 import {
   ChevronLeft,
   ChevronRight,
-  FlipHorizontal2,
   Pause,
   Play,
   RotateCcw,
@@ -14,6 +13,12 @@ import {
 import BandoriFullChartView from "./BandoriFullChartView";
 import ChartSimulatorLoadingIndicator from "./ChartSimulatorLoadingIndicator";
 import SimulatorLoopControls from "./SimulatorLoopControls";
+import {
+  SimulatorAdjustmentButton,
+  SimulatorAdjustmentValue,
+  type SimulatorAdjustmentLevel,
+} from "./SimulatorAdjustmentControl";
+import SimulatorSettingsCard from "./SimulatorSettingsCard";
 import SimulatorSkinControls, {
   SimulatorBooleanControl,
   SimulatorControlRow,
@@ -194,11 +199,36 @@ function createLoopSeekTransport(
 }
 
 function controlClassName(isPrimary = false): string {
-  return `inline-flex h-10 items-center justify-center gap-2 rounded-full border px-4 text-sm font-semibold outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] disabled:cursor-not-allowed disabled:opacity-45 ${
+  return `inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-color-surface-background)] disabled:cursor-not-allowed disabled:border-[var(--theme-color-control-border-disabled)] disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] disabled:opacity-50 ${
     isPrimary
-      ? "border-[var(--theme-color-action-primary-border)] bg-[var(--theme-color-action-primary-background)] text-[var(--theme-color-action-primary-foreground)] hover:bg-[var(--theme-color-action-primary-background-hover)]"
-      : "border-[var(--theme-color-border-default)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-default)] hover:bg-[var(--theme-color-control-background-hover)]"
+      ? "border-transparent bg-[var(--theme-color-action-primary-background)] text-[var(--theme-color-action-primary-foreground)] shadow-[var(--theme-shadow-action-primary)] hover:bg-[var(--theme-color-action-primary-background-hover)]"
+      : "border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] text-[var(--theme-color-action-secondary-foreground)] shadow-xs hover:bg-[var(--theme-color-action-secondary-background-hover)]"
   }`;
+}
+
+function formatPlaybackTime(timeSeconds: number): string {
+  const totalMilliseconds = Math.max(0, Math.round(timeSeconds * 1000));
+  const minutes = Math.floor(totalMilliseconds / 60_000);
+  const remainingSeconds = (totalMilliseconds % 60_000) / 1000;
+  return `${minutes}:${remainingSeconds.toFixed(3).padStart(6, "0")}`;
+}
+
+function getTimelinePercentage(timeSeconds: number, durationSeconds: number): number {
+  if (durationSeconds <= 0) return 0;
+  return Math.min(100, Math.max(0, (timeSeconds / durationSeconds) * 100));
+}
+
+function getNoteSpeedAdjustmentLevel(adjustment: number): SimulatorAdjustmentLevel {
+  const magnitude = Math.abs(adjustment);
+  if (magnitude === 0.5) return 3;
+  if (magnitude === 0.1) return 2;
+  return 1;
+}
+
+function getPlaybackRateAdjustmentLevel(
+  adjustmentHundredths: number,
+): SimulatorAdjustmentLevel {
+  return Math.abs(adjustmentHundredths) === 10 ? 2 : 1;
 }
 
 export default function ChartSimulatorRuntime({
@@ -1181,20 +1211,32 @@ export default function ChartSimulatorRuntime({
   }
 
   const isPlaying = transport.phase === "playing";
+  const playbackPercentage = getTimelinePercentage(
+    presentationTime,
+    durationSeconds,
+  );
+  const loopStartPercentage = getTimelinePercentage(
+    loopRange.startTimeSeconds,
+    durationSeconds,
+  );
+  const loopEndPercentage = getTimelinePercentage(
+    loopRange.endTimeSeconds,
+    durationSeconds,
+  );
   return (
     <section className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700 dark:bg-[#111827]">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-black text-[var(--theme-color-text-default)]">{t("title")}</h2>
         </div>
-        <div className="inline-flex rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] p-1">
+        <div className="inline-flex rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] p-1">
           {(["stage", "fullChart"] as const).map((tab) => (
             <button
               key={tab}
               type="button"
               aria-pressed={activeTab === tab}
               onClick={() => setActiveTab(tab)}
-              className={`rounded-full px-4 py-2 text-sm font-semibold outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${activeTab === tab ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-control-foreground-pressed)]" : "text-[var(--theme-color-text-muted)]"}`}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${activeTab === tab ? "bg-[var(--theme-color-selection-subtle-background)] text-[var(--theme-color-selection-subtle-foreground)] shadow-sm ring-1 ring-inset ring-[var(--theme-color-selection-subtle-ring)]" : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)]"}`}
             >
               {t(`tabs.${tab}`)}
             </button>
@@ -1279,22 +1321,56 @@ export default function ChartSimulatorRuntime({
         )}
       </div>
 
-      <div className="mt-5 space-y-3">
-        <input
-          type="range"
-          min={0}
-          max={durationSeconds}
-          step={0.01}
-          value={presentationTime}
-          aria-label={t("controls.timeline")}
-          onPointerDown={beginScrub}
-          onKeyDown={beginScrub}
-          onChange={(event) => previewScrub(Number(event.currentTarget.value))}
-          onPointerUp={commitScrub}
-          onKeyUp={commitScrub}
-          onBlur={commitScrub}
-          className="w-full accent-[var(--theme-color-action-primary-background)]"
-        />
+      <div className="mt-5 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] p-4 shadow-sm">
+        <div className="mb-2 flex justify-end">
+          <output
+            aria-live="polite"
+            className="text-sm font-black tabular-nums text-[var(--theme-color-text-default)]"
+          >
+            {formatPlaybackTime(presentationTime)} / {formatPlaybackTime(durationSeconds)}
+          </output>
+        </div>
+        <div className="relative h-8">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 overflow-visible rounded-full bg-[var(--theme-color-control-background-disabled)]"
+          >
+            <span
+              className="absolute inset-y-0 rounded-full bg-[color-mix(in_srgb,var(--theme-color-semantic-info-foreground)_18%,transparent)]"
+              style={{
+                left: `${loopStartPercentage}%`,
+                width: `${Math.max(0, loopEndPercentage - loopStartPercentage)}%`,
+              }}
+            />
+            <span
+              className="absolute inset-y-0 left-0 rounded-full bg-[var(--theme-color-progress-indicator-background)]"
+              style={{ width: `${playbackPercentage}%` }}
+            />
+            <span
+              className="absolute top-1/2 h-5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--theme-color-semantic-info-foreground)] ring-2 ring-[var(--theme-color-surface-background)]"
+              style={{ left: `${loopStartPercentage}%` }}
+            />
+            <span
+              className="absolute top-1/2 h-5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--theme-color-semantic-info-foreground)] ring-2 ring-[var(--theme-color-surface-background)]"
+              style={{ left: `${loopEndPercentage}%` }}
+            />
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={durationSeconds}
+            step={0.001}
+            value={presentationTime}
+            aria-label={t("controls.timeline")}
+            onPointerDown={beginScrub}
+            onKeyDown={beginScrub}
+            onChange={(event) => previewScrub(Number(event.currentTarget.value))}
+            onPointerUp={commitScrub}
+            onKeyUp={commitScrub}
+            onBlur={commitScrub}
+            className="absolute inset-0 z-10 h-8 w-full cursor-pointer appearance-none rounded-full bg-transparent outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-[var(--theme-color-semantic-info-foreground)] [&::-moz-range-thumb]:shadow-md [&::-moz-range-track]:h-2 [&::-moz-range-track]:bg-transparent [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:-mt-1 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-[var(--theme-color-semantic-info-foreground)] [&::-webkit-slider-thumb]:shadow-md"
+          />
+        </div>
         <div className="flex flex-wrap items-center justify-center gap-2">
           <button type="button" className={controlClassName()} onClick={restart}>
             <RotateCcw className="h-4 w-4" aria-hidden="true" />
@@ -1330,95 +1406,79 @@ export default function ChartSimulatorRuntime({
           range={loopRange}
         />
 
-        <fieldset className="rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] px-4 pb-4 pt-2">
-          <legend className="px-2 text-sm font-semibold text-[var(--theme-color-text-default)]">
-            {t("effectControlsTitle")}
-          </legend>
-          <div className="space-y-3">
+        <SimulatorSettingsCard title={t("effectControlsTitle")}>
             <SimulatorControlRow label={t("controls.noteSpeed")}>
-              {NOTE_SPEED_DECREASES.map((adjustment) => (
-                <button
-                  key={adjustment}
-                  type="button"
-                  className={controlClassName()}
-                  disabled={noteSpeed === BANDORI_NATIVE_NOTE_SPEED_MIN}
-                  aria-label={t("controls.decreaseNoteSpeed", {
-                    amount: Math.abs(adjustment).toFixed(2),
-                  })}
-                  onClick={() => setNoteSpeed((current) => (
-                    adjustBandoriSimulatorNoteSpeed(current, adjustment)
+              <div className="flex items-center gap-1 sm:gap-2">
+                  {NOTE_SPEED_DECREASES.map((adjustment) => (
+                    <SimulatorAdjustmentButton
+                      key={adjustment}
+                      ariaLabel={t("controls.decreaseNoteSpeed", {
+                        amount: Math.abs(adjustment).toFixed(2),
+                      })}
+                      direction="decrease"
+                      disabled={noteSpeed === BANDORI_NATIVE_NOTE_SPEED_MIN}
+                      level={getNoteSpeedAdjustmentLevel(adjustment)}
+                      onClick={() => setNoteSpeed((current) => (
+                        adjustBandoriSimulatorNoteSpeed(current, adjustment)
+                      ))}
+                    />
                   ))}
-                >
-                  −{Math.abs(adjustment).toFixed(2)}
-                </button>
-              ))}
-              <output
-                aria-label={t("controls.currentNoteSpeed")}
-                aria-live="polite"
-                className="inline-flex h-10 min-w-24 items-center justify-center rounded-xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-control-background)] px-4 text-base font-black tabular-nums text-[var(--theme-color-text-default)]"
-              >
-                {noteSpeed.toFixed(2)}
-              </output>
-              {NOTE_SPEED_INCREASES.map((adjustment) => (
-                <button
-                  key={adjustment}
-                  type="button"
-                  className={controlClassName()}
-                  disabled={noteSpeed === BANDORI_NATIVE_NOTE_SPEED_MAX}
-                  aria-label={t("controls.increaseNoteSpeed", {
-                    amount: adjustment.toFixed(2),
-                  })}
-                  onClick={() => setNoteSpeed((current) => (
-                    adjustBandoriSimulatorNoteSpeed(current, adjustment)
+                  <SimulatorAdjustmentValue ariaLabel={t("controls.currentNoteSpeed")}>
+                    {noteSpeed.toFixed(2)}
+                  </SimulatorAdjustmentValue>
+                  {NOTE_SPEED_INCREASES.map((adjustment) => (
+                    <SimulatorAdjustmentButton
+                      key={adjustment}
+                      ariaLabel={t("controls.increaseNoteSpeed", {
+                        amount: adjustment.toFixed(2),
+                      })}
+                      direction="increase"
+                      disabled={noteSpeed === BANDORI_NATIVE_NOTE_SPEED_MAX}
+                      level={getNoteSpeedAdjustmentLevel(adjustment)}
+                      onClick={() => setNoteSpeed((current) => (
+                        adjustBandoriSimulatorNoteSpeed(current, adjustment)
+                      ))}
+                    />
                   ))}
-                >
-                  +{adjustment.toFixed(2)}
-                </button>
-              ))}
+              </div>
             </SimulatorControlRow>
 
             <SimulatorControlRow label={t("controls.playbackRate")}>
-              {PLAYBACK_RATE_DECREASES.map((adjustmentHundredths) => (
-                <button
-                  key={adjustmentHundredths}
-                  type="button"
-                  className={controlClassName()}
-                  disabled={
-                    playbackRateHundredths
-                    === BANDORI_SIMULATOR_PLAYBACK_RATE_MIN_HUNDREDTHS
-                  }
-                  aria-label={t("controls.decreasePlaybackRate", {
-                    amount: (Math.abs(adjustmentHundredths) / 100).toFixed(2),
-                  })}
-                  onClick={() => changePlaybackRate(adjustmentHundredths)}
-                >
-                  −{(Math.abs(adjustmentHundredths) / 100).toFixed(2)}
-                </button>
-              ))}
-              <output
-                aria-label={t("controls.currentPlaybackRate")}
-                aria-live="polite"
-                className="inline-flex h-10 min-w-24 items-center justify-center rounded-xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-control-background)] px-4 text-base font-black tabular-nums text-[var(--theme-color-text-default)]"
-              >
-                {playbackRate.toFixed(2)}×
-              </output>
-              {PLAYBACK_RATE_INCREASES.map((adjustmentHundredths) => (
-                <button
-                  key={adjustmentHundredths}
-                  type="button"
-                  className={controlClassName()}
-                  disabled={
-                    playbackRateHundredths
-                    === BANDORI_SIMULATOR_PLAYBACK_RATE_MAX_HUNDREDTHS
-                  }
-                  aria-label={t("controls.increasePlaybackRate", {
-                    amount: (adjustmentHundredths / 100).toFixed(2),
-                  })}
-                  onClick={() => changePlaybackRate(adjustmentHundredths)}
-                >
-                  +{(adjustmentHundredths / 100).toFixed(2)}
-                </button>
-              ))}
+              <div className="flex items-center gap-1 sm:gap-2">
+                  {PLAYBACK_RATE_DECREASES.map((adjustmentHundredths) => (
+                    <SimulatorAdjustmentButton
+                      key={adjustmentHundredths}
+                      ariaLabel={t("controls.decreasePlaybackRate", {
+                        amount: (Math.abs(adjustmentHundredths) / 100).toFixed(2),
+                      })}
+                      direction="decrease"
+                      disabled={
+                        playbackRateHundredths
+                        === BANDORI_SIMULATOR_PLAYBACK_RATE_MIN_HUNDREDTHS
+                      }
+                      level={getPlaybackRateAdjustmentLevel(adjustmentHundredths)}
+                      onClick={() => changePlaybackRate(adjustmentHundredths)}
+                    />
+                  ))}
+                  <SimulatorAdjustmentValue ariaLabel={t("controls.currentPlaybackRate")}>
+                    {playbackRate.toFixed(2)}×
+                  </SimulatorAdjustmentValue>
+                  {PLAYBACK_RATE_INCREASES.map((adjustmentHundredths) => (
+                    <SimulatorAdjustmentButton
+                      key={adjustmentHundredths}
+                      ariaLabel={t("controls.increasePlaybackRate", {
+                        amount: (adjustmentHundredths / 100).toFixed(2),
+                      })}
+                      direction="increase"
+                      disabled={
+                        playbackRateHundredths
+                        === BANDORI_SIMULATOR_PLAYBACK_RATE_MAX_HUNDREDTHS
+                      }
+                      level={getPlaybackRateAdjustmentLevel(adjustmentHundredths)}
+                      onClick={() => changePlaybackRate(adjustmentHundredths)}
+                    />
+                  ))}
+              </div>
               <div className="flex basis-full flex-wrap items-center gap-2">
                 <span className="text-sm font-semibold text-[var(--theme-color-text-muted)]">
                   {t("controls.syncNoteSpeedSlowdown")}
@@ -1431,9 +1491,6 @@ export default function ChartSimulatorRuntime({
                   onChange={setIsNoteSpeedSlowdownSynchronized}
                 />
               </div>
-              <p className="basis-full text-xs text-[var(--theme-color-text-muted)]">
-                {t("controls.syncNoteSpeedSlowdownDescription")}
-              </p>
             </SimulatorControlRow>
 
             <SimulatorControlRow label={t("skinControls.syncLine")}>
@@ -1457,15 +1514,13 @@ export default function ChartSimulatorRuntime({
             </SimulatorControlRow>
 
             <SimulatorControlRow label={t("controls.mirrorData")}>
-              <button
-                type="button"
-                aria-pressed={isMirrored}
-                className={controlClassName()}
-                onClick={() => setIsMirrored((value) => !value)}
-              >
-                <FlipHorizontal2 className="h-4 w-4" aria-hidden="true" />
-                {t(isMirrored ? "diagnostics.mirrorOn" : "diagnostics.mirrorOff")}
-              </button>
+              <SimulatorBooleanControl
+                disabledLabel={t("skinControls.off")}
+                enabledLabel={t("skinControls.on")}
+                isEnabled={isMirrored}
+                label={t("controls.mirrorData")}
+                onChange={setIsMirrored}
+              />
             </SimulatorControlRow>
 
             <SimulatorControlRow label={t("skinControls.laneEffect")}>
@@ -1487,8 +1542,7 @@ export default function ChartSimulatorRuntime({
                 onChange={setIsAllPerfectStatusEnabled}
               />
             </SimulatorControlRow>
-          </div>
-        </fieldset>
+        </SimulatorSettingsCard>
 
         <SimulatorSkinControls
           backgroundSkin={backgroundSkin}
