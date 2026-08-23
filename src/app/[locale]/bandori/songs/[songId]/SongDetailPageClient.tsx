@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useTransition } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { Gauge, ListMusic, Music2, Timer } from "lucide-react";
@@ -10,7 +10,7 @@ import ChartSimulatorClientShell, {
 import BandoriPageShell from "@/app/[locale]/bandori/BandoriPageShell";
 import Heading from "@/components/Heading";
 import MusicArtwork from "@/components/music-player/MusicArtwork";
-import { usePathname, useRouter } from "@/i18n/navigation";
+import { usePathname } from "@/i18n/navigation";
 import type { BandoriChartDifficulty } from "@/lib/bandori-master-contract";
 import {
   pickBandoriRegionalText,
@@ -39,7 +39,10 @@ type SongDetailPageClientProps = {
   artworkUrl: string | null;
   difficulties: SongDetailDifficultyOption[];
   selectedDifficulty: BandoriChartDifficulty;
-  simulator: ChartSimulatorClientShellProps;
+  simulator: Omit<
+    ChartSimulatorClientShellProps,
+    "difficulty" | "isActive" | "onDifficultyChange"
+  >;
 };
 
 function formatDuration(seconds: number): string {
@@ -68,10 +71,11 @@ export default function SongDetailPageClient({
   const locale = useLocale();
   const preferredTextServer: BandoriServer = locale === "en" ? 1 : 3;
   const pathname = usePathname();
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const [isDifficultyPending, startDifficultyTransition] = useTransition();
-  const activeView = searchParams.get("view") === "simulator" ? "simulator" : "info";
+  const initialView = searchParams.get("view") === "simulator" ? "simulator" : "info";
+  const [activeView, setActiveView] = useState<"info" | "simulator">(initialView);
+  const [hasOpenedSimulator, setHasOpenedSimulator] = useState(initialView === "simulator");
+  const [difficulty, setDifficulty] = useState(selectedDifficulty);
   const title = pickBandoriRegionalText(
     titleSlots,
     preferredTextServer,
@@ -82,10 +86,16 @@ export default function SongDetailPageClient({
     preferredTextServer,
     preferredTextServer,
   ) ?? t("unknownBand");
-  const selectedOption = difficulties.find((option) => option.difficulty === selectedDifficulty)
+  const selectedOption = difficulties.find((option) => option.difficulty === difficulty)
     ?? difficulties[0];
   const playLevel = selectedOption.playLevels.find((value) => value !== null)
     ?? null;
+
+  const replaceSearchParams = useCallback((next: URLSearchParams) => {
+    const query = next.toString();
+    const url = `${query ? `${pathname}?${query}` : pathname}${window.location.hash}`;
+    window.history.replaceState(window.history.state, "", url);
+  }, [pathname]);
 
   useEffect(() => {
     const rawView = searchParams.get("view");
@@ -94,26 +104,51 @@ export default function SongDetailPageClient({
     const next = new URLSearchParams(searchParams.toString());
     if (hasInvalidView) next.delete("view");
     next.delete("server");
-    const query = next.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  }, [pathname, router, searchParams]);
+    replaceSearchParams(next);
+  }, [replaceSearchParams, searchParams]);
 
-  const selectDifficulty = (difficulty: BandoriChartDifficulty) => {
-    if (difficulty === selectedDifficulty) return;
-    const next = new URLSearchParams(searchParams.toString());
-    next.set("difficulty", difficulty);
-    startDifficultyTransition(() => {
-      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
-    });
+  useEffect(() => {
+    let cancelled = false;
+    const preload = () => {
+      if (cancelled) return;
+      void import("@/lib/bandori/chart-simulator/asset-manifest-client")
+        .then(({ loadBandoriChartSimulatorAssets }) => (
+          loadBandoriChartSimulatorAssets()
+        ))
+        .catch(() => {
+          // Idle preloading is best-effort; the simulator owns visible errors and retry.
+        });
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      const requestId = window.requestIdleCallback(preload, { timeout: 2_000 });
+      return () => {
+        cancelled = true;
+        window.cancelIdleCallback(requestId);
+      };
+    }
+    const timeoutId = window.setTimeout(preload, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, []);
+
+  const selectDifficulty = (nextDifficulty: BandoriChartDifficulty) => {
+    if (nextDifficulty === difficulty) return;
+    setDifficulty(nextDifficulty);
+    const next = new URLSearchParams(window.location.search);
+    next.set("difficulty", nextDifficulty);
+    replaceSearchParams(next);
   };
 
   const selectView = (view: "info" | "simulator") => {
     if (view === activeView) return;
-    const next = new URLSearchParams(searchParams.toString());
+    setActiveView(view);
+    if (view === "simulator") setHasOpenedSimulator(true);
+    const next = new URLSearchParams(window.location.search);
     if (view === "info") next.delete("view");
     else next.set("view", view);
-    const query = next.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    replaceSearchParams(next);
   };
 
   const statistics = [
@@ -145,23 +180,6 @@ export default function SongDetailPageClient({
               <Heading as="h1" visualRole="page" className="break-words">{title}</Heading>
               <p className="mt-2 text-sm font-medium text-[var(--theme-color-text-muted)] sm:text-base">{bandName}</p>
             </div>
-            <div aria-label={t("difficultyLabel")} className="flex max-w-full gap-2 overflow-x-auto pb-1">
-              {difficulties.map((option) => {
-                const selected = option.difficulty === selectedDifficulty;
-                return (
-                  <button
-                    key={option.difficulty}
-                    type="button"
-                    aria-pressed={selected}
-                    disabled={isDifficultyPending}
-                    onClick={() => selectDifficulty(option.difficulty)}
-                    className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${selected ? "border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-control-foreground-pressed)]" : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)]"}`}
-                  >
-                    {t(`difficulties.${option.difficulty}`)}
-                  </button>
-                );
-              })}
-            </div>
           </div>
         </div>
       </article>
@@ -191,7 +209,7 @@ export default function SongDetailPageClient({
         })}
       </div>
 
-      {activeView === "info" ? (
+      <div role="tabpanel" hidden={activeView !== "info"}>
         <section className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700 dark:bg-[#111827]">
           <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {statistics.map(({ id, value, icon: Icon }) => (
@@ -205,9 +223,18 @@ export default function SongDetailPageClient({
           ))}
           </dl>
         </section>
-      ) : (
-        <ChartSimulatorClientShell {...simulator} />
-      )}
+      </div>
+
+      {hasOpenedSimulator ? (
+        <div role="tabpanel" hidden={activeView !== "simulator"}>
+          <ChartSimulatorClientShell
+            {...simulator}
+            difficulty={difficulty}
+            isActive={activeView === "simulator"}
+            onDifficultyChange={selectDifficulty}
+          />
+        </div>
+      ) : null}
     </BandoriPageShell>
   );
 }

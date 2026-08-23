@@ -232,6 +232,44 @@ test("browser loader pins one hash-verified manifest for the page lifetime", asy
   );
 });
 
+test("one caller cannot abort the shared manifest request used by another caller", async () => {
+  const manifestBody = JSON.stringify(manifestValue());
+  const manifestHash = createHash("sha256").update(manifestBody).digest("hex");
+  const baseUrl = "https://assets-shared-request.example.test";
+  let releaseIndex;
+  const indexGate = new Promise((resolve) => {
+    releaseIndex = resolve;
+  });
+  const calls = [];
+  const fetcher = async (url, init) => {
+    calls.push([String(url), init]);
+    if (String(url).endsWith("/index.json")) {
+      await indexGate;
+      return Response.json({
+        schemaVersion: 1,
+        updatedAt: "2026-08-23T00:00:00Z",
+        manifest: manifestHash,
+      });
+    }
+    return new Response(manifestBody);
+  };
+  const controller = new AbortController();
+  const first = loadBandoriChartSimulatorAssets({
+    baseUrl,
+    fetcher,
+    signal: controller.signal,
+  });
+  const second = loadBandoriChartSimulatorAssets({ baseUrl, fetcher });
+  controller.abort();
+  releaseIndex();
+
+  const [firstResult, secondResult] = await Promise.all([first, second]);
+  assert.equal(firstResult, secondResult);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0][1].signal, undefined);
+  assert.equal(calls[1][1].signal, undefined);
+});
+
 test("an older refresh cannot replace a newer verified manifest", async () => {
   const olderManifest = manifestValue();
   const newerManifest = {

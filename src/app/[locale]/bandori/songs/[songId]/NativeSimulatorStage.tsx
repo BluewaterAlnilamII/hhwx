@@ -171,6 +171,7 @@ type NativeSimulatorStageProps = {
   fieldSkin: BandoriNativeFieldSkin;
   getEffectPlaybackState: () => NativeSimulatorEffectPlaybackState;
   getPresentationTime: () => number;
+  isActive: boolean;
   isMirrored: boolean;
   laneEffectEnabled: boolean;
   limitedPerformanceSkin: BandoriLimitedPerformanceSkin | null;
@@ -1719,6 +1720,7 @@ export default function NativeSimulatorStage({
   fieldSkin,
   getEffectPlaybackState,
   getPresentationTime,
+  isActive,
   isMirrored,
   laneEffectEnabled,
   limitedPerformanceSkin,
@@ -1735,7 +1737,9 @@ export default function NativeSimulatorStage({
   syncLineEnabled,
 }: NativeSimulatorStageProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const applicationRef = useRef<Application | null>(null);
   const allPerfectStatusEnabledRef = useRef(allPerfectStatusEnabled);
+  const isActiveRef = useRef(isActive);
   const isMirroredRef = useRef(isMirrored);
   const laneEffectEnabledRef = useRef(laneEffectEnabled);
   const noteApproachTimeScaleRef = useRef(noteApproachTimeScale);
@@ -1747,6 +1751,14 @@ export default function NativeSimulatorStage({
   useEffect(() => {
     allPerfectStatusEnabledRef.current = allPerfectStatusEnabled;
   }, [allPerfectStatusEnabled]);
+
+  useEffect(() => {
+    isActiveRef.current = isActive;
+    const application = applicationRef.current;
+    if (!application) return;
+    if (isActive) application.start();
+    else application.stop();
+  }, [isActive]);
 
   useEffect(() => {
     isMirroredRef.current = isMirrored;
@@ -1798,6 +1810,7 @@ export default function NativeSimulatorStage({
       }
       for (const shader of localShaders.splice(0)) shader.destroy();
       for (const texture of localFrameTextures.splice(0)) texture.destroy(false);
+      if (applicationRef.current === app) applicationRef.current = null;
     };
     const failStage = (
       failureStatus: Exclude<StageStatus, "loading" | "ready">,
@@ -3237,9 +3250,10 @@ export default function NativeSimulatorStage({
         lastEffectTimeSeconds = presentationTime;
       };
 
+      applicationRef.current = app;
       renderNotes();
       app.ticker.add(renderNotes);
-      app.start();
+      if (isActiveRef.current) app.start();
       setStatus("ready");
       onLoadProgress({
         completedResources: loadedResourceTotal ?? 0,

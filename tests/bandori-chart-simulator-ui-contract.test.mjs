@@ -14,18 +14,28 @@ test("song detail composes existing master and music-index contracts in parallel
   assert.doesNotMatch(source, /multiRange|chartFeatures|local override/iu);
 });
 
-test("the heavy runtime and renderer stay outside the default song-detail view", async () => {
+test("the heavy runtime stays lazy and remains mounted after the simulator opens", async () => {
   const detail = await read("../src/app/[locale]/bandori/songs/[songId]/SongDetailPageClient.tsx");
   const shell = await read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorClientShell.tsx");
   const runtime = await read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx");
 
-  assert.match(detail, /activeView === "info"[\s\S]*<ChartSimulatorClientShell \{\.\.\.simulator\} \/>/u);
+  assert.match(detail, /hasOpenedSimulator[\s\S]*hidden=\{activeView !== "simulator"\}[\s\S]*<ChartSimulatorClientShell/u);
+  assert.match(detail, /isActive=\{activeView === "simulator"\}/u);
+  assert.match(detail, /loadBandoriChartSimulatorAssets/u);
+  assert.match(detail, /requestIdleCallback/u);
+  assert.match(detail, /window\.history\.replaceState/u);
+  assert.doesNotMatch(detail, /router\.replace|useRouter/u);
   assert.match(shell, /dynamic\(\(\) => import\("\.\/ChartSimulatorRuntime"\)/u);
   assert.match(shell, /ssr: false/u);
   assert.match(shell, /ChartSimulatorLoadingIndicator/u);
   assert.match(shell, /t\("loading\.simulator"\)/u);
-  assert.match(runtime, /dynamic\(\(\) => import\("\.\/NativeSimulatorStage"\)/u);
+  assert.match(runtime, /loadNativeSimulatorStageModule = \(\) => import\("\.\/NativeSimulatorStage"\)/u);
+  assert.match(runtime, /dynamic\(loadNativeSimulatorStageModule/u);
+  assert.match(runtime, /void loadNativeSimulatorStageModule\(\)/u);
   assert.match(runtime, /compileBandoriChartInWorker/u);
+  assert.match(runtime, /compiledChartsRef/u);
+  assert.match(runtime, /cache: chartLoadAttempt > 0 \? "reload" : "default"/u);
+  assert.doesNotMatch(runtime, /cache: "no-store"/u);
 });
 
 test("simulator loading reuses the page spinner and keeps the resource count compact", async () => {
@@ -81,7 +91,9 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /app\.stage\.addChild\([\s\S]*directionalLineLayer,[\s\S]*judgmentLine,[\s\S]*laneEffectLayer,[\s\S]*lowHitEffectLayer,[\s\S]*highHitEffectLayer,[\s\S]*ribbonLayer,[\s\S]*noteLayer/u);
   assert.match(stage, /app\.ticker\.add\(renderNotes\)/u);
   assert.match(stage, /autoStart: false/u);
-  assert.match(stage, /app\.ticker\.add\(renderNotes\);[\s\S]*app\.start\(\)/u);
+  assert.match(stage, /app\.ticker\.add\(renderNotes\);[\s\S]*if \(isActiveRef\.current\) app\.start\(\)/u);
+  assert.match(stage, /if \(isActive\) application\.start\(\);[\s\S]*else application\.stop\(\)/u);
+  assert.match(runtime, /isActive=\{isActive && activeTab === "stage" && isSelectedChartReady\}/u);
   assert.match(stage, /void initialize\(\)\.catch/u);
   assert.match(stage, /resourceAbortController\.abort\(\)/u);
   assert.match(stage, /prepareBandoriNativeChartVisuals\(compiled, false\)/u);
@@ -150,7 +162,7 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(runtime, /runtime\.prepareMusic\(audioUrl, controller\.signal\)/u);
   assert.match(runtime, /runtime\.prepareCueBank\(cueBank, \(url\) =>/u);
   assert.match(runtime, /currentStageLoadProgress\.completedResources[\s\S]*currentSoundLoadProgress\.completedResources[\s\S]*currentMusicLoadProgress\?\.completedResources/u);
-  assert.match(runtime, /<ChartSimulatorLoadingIndicator[\s\S]*completedResources=\{completedResources\}[\s\S]*totalResources=\{totalResources\}/u);
+  assert.match(runtime, /<ChartSimulatorLoadingIndicator[\s\S]*completedResources=\{isSelectedChartReady \? completedResources : null\}[\s\S]*totalResources=\{isSelectedChartReady \? totalResources : null\}/u);
   assert.match(runtime, /disabled=\{!audioUrl \|\| \(!isPlaying && !isSimulatorReady\)\}/u);
   const performanceLoadingIndex = runtime.indexOf('t("loading.performance")');
   const soundLoadingIndex = runtime.indexOf('t("loading.sound")');

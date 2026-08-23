@@ -9,9 +9,16 @@ import type { BandoriChartDifficulty } from "@/lib/bandori-master-contract";
 export type ChartSimulatorClientShellProps = {
   songId: number;
   difficulty: BandoriChartDifficulty;
-  chartUrl: string;
+  difficulties: readonly ChartSimulatorDifficultyOption[];
   audioUrl: string | null;
   durationSeconds: number;
+  isActive: boolean;
+  onDifficultyChange: (difficulty: BandoriChartDifficulty) => void;
+};
+
+export type ChartSimulatorDifficultyOption = {
+  difficulty: BandoriChartDifficulty;
+  chartUrl: string;
   expectedCombo: number;
 };
 

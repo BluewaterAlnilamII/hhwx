@@ -29,7 +29,6 @@ export async function loadBandoriChartSimulatorAssets(options?: {
   readonly baseUrl?: string | null;
   readonly fetcher?: typeof fetch;
   readonly refresh?: boolean;
-  readonly signal?: AbortSignal;
 }): Promise<LoadedBandoriChartSimulatorAssets> {
   const indexUrl = buildBandoriPublicAssetIndexUrl(
     "chartSimulator",
@@ -50,7 +49,6 @@ export async function loadBandoriChartSimulatorAssets(options?: {
     const indexResponse = await fetcher(indexUrl, {
       cache: options?.refresh ? "no-cache" : "default",
       credentials: "omit",
-      signal: options?.signal,
     });
     if (!indexResponse.ok) {
       throw new Error(
@@ -66,7 +64,6 @@ export async function loadBandoriChartSimulatorAssets(options?: {
     const manifestResponse = await fetcher(manifestUrl, {
       cache: "force-cache",
       credentials: "omit",
-      signal: options?.signal,
     });
     if (!manifestResponse.ok) {
       throw new Error(
