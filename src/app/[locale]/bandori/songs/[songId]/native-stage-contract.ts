@@ -23,6 +23,7 @@ export const BANDORI_NATIVE_BACKGROUND_RECT = {
 } as const;
 
 export type BandoriNativeBackgroundSkinId =
+  | "off"
   | "skin00"
   | "skin02"
   | "skin03"
@@ -116,7 +117,7 @@ function createTeamLiveBackground(
   };
 }
 
-/** Statically verified normal-play and team-live background compositions. */
+/** Verified native backgrounds plus the product-level black-background option. */
 export const BANDORI_NATIVE_BACKGROUND_SKINS = [
   {
     id: "skin00",
@@ -151,6 +152,9 @@ export const BANDORI_NATIVE_BACKGROUND_SKINS = [
       ),
     ],
   },
+  createTeamLiveBackground("teamLiveJudgment", "perfectstage"),
+  createTeamLiveBackground("teamLiveCombo", "combostage"),
+  createTeamLiveBackground("teamLiveLife", "lifestage"),
   {
     id: "practice",
     layers: [
@@ -159,9 +163,10 @@ export const BANDORI_NATIVE_BACKGROUND_SKINS = [
       ),
     ],
   },
-  createTeamLiveBackground("teamLiveJudgment", "perfectstage"),
-  createTeamLiveBackground("teamLiveCombo", "combostage"),
-  createTeamLiveBackground("teamLiveLife", "lifestage"),
+  {
+    id: "off",
+    layers: [],
+  },
 ] as const satisfies readonly BandoriNativeBackgroundSkin[];
 
 export const BANDORI_NATIVE_BACKGROUND_SKIN = BANDORI_NATIVE_BACKGROUND_SKINS[0];
@@ -214,6 +219,14 @@ export const BANDORI_NATIVE_FIELD_SKINS = [
   createFieldSkin(13, "skin12", 56, "normal"),
   createFieldSkin(14, "skin13", 40, "normal"),
   createFieldSkin(15, "skin14", 56, "mission"),
+] as const satisfies readonly BandoriNativeFieldSkin[];
+
+/** UI order: the seven ordinary Types first, followed by the band themes. */
+export const BANDORI_NATIVE_FIELD_SKIN_CHOICES = [
+  ...BANDORI_NATIVE_FIELD_SKINS.slice(0, 5),
+  ...BANDORI_NATIVE_FIELD_SKINS.slice(12, 14),
+  ...BANDORI_NATIVE_FIELD_SKINS.slice(5, 12),
+  BANDORI_NATIVE_FIELD_SKINS[14],
 ] as const satisfies readonly BandoriNativeFieldSkin[];
 
 /** User-approved simulator default: Hello, Happy World! (master ID 10). */

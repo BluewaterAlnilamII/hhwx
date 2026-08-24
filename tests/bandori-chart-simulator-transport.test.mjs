@@ -17,7 +17,6 @@ import {
   BANDORI_SIMULATOR_PLAYBACK_RATE_DEFAULT_HUNDREDTHS,
   BANDORI_SIMULATOR_PLAYBACK_RATE_MAX_HUNDREDTHS,
   BANDORI_SIMULATOR_PLAYBACK_RATE_MIN_HUNDREDTHS,
-  BANDORI_SIMULATOR_SYNC_NOTE_SPEED_SLOWDOWN_DEFAULT,
   getBandoriSimulatorNoteApproachTimeScale,
   getBandoriSimulatorPlaybackRate,
 } from "../src/lib/bandori/chart-simulator/playback-rate.ts";
@@ -26,13 +25,10 @@ test("approved slow-play control uses integer hundredths and stops at its bounda
   assert.equal(BANDORI_SIMULATOR_PLAYBACK_RATE_MIN_HUNDREDTHS, 50);
   assert.equal(BANDORI_SIMULATOR_PLAYBACK_RATE_MAX_HUNDREDTHS, 100);
   assert.equal(BANDORI_SIMULATOR_PLAYBACK_RATE_DEFAULT_HUNDREDTHS, 100);
-  assert.equal(BANDORI_SIMULATOR_SYNC_NOTE_SPEED_SLOWDOWN_DEFAULT, false);
   assert.equal(getBandoriSimulatorPlaybackRate(50), 0.5);
   assert.equal(getBandoriSimulatorPlaybackRate(100), 1);
-  assert.equal(getBandoriSimulatorNoteApproachTimeScale(50, false), 0.5);
-  assert.equal(getBandoriSimulatorNoteApproachTimeScale(50, true), 1);
-  assert.equal(getBandoriSimulatorNoteApproachTimeScale(100, false), 1);
-  assert.equal(getBandoriSimulatorNoteApproachTimeScale(100, true), 1);
+  assert.equal(getBandoriSimulatorNoteApproachTimeScale(50), 0.5);
+  assert.equal(getBandoriSimulatorNoteApproachTimeScale(100), 1);
   assert.equal(adjustBandoriSimulatorPlaybackRate(100, -10), 90);
   assert.equal(adjustBandoriSimulatorPlaybackRate(90, -1), 89);
   assert.equal(adjustBandoriSimulatorPlaybackRate(99, 10), 100);

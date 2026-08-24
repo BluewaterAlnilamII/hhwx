@@ -1,7 +1,6 @@
 export const BANDORI_SIMULATOR_PLAYBACK_RATE_MIN_HUNDREDTHS = 50;
 export const BANDORI_SIMULATOR_PLAYBACK_RATE_MAX_HUNDREDTHS = 100;
 export const BANDORI_SIMULATOR_PLAYBACK_RATE_DEFAULT_HUNDREDTHS = 100;
-export const BANDORI_SIMULATOR_SYNC_NOTE_SPEED_SLOWDOWN_DEFAULT = false;
 
 const PLAYBACK_RATE_ADJUSTMENTS = new Set([-10, -1, 1, 10]);
 
@@ -24,10 +23,8 @@ export function getBandoriSimulatorPlaybackRate(
 
 export function getBandoriSimulatorNoteApproachTimeScale(
   playbackRateHundredths: number,
-  isNoteSpeedSlowdownSynchronized: boolean,
 ): number {
-  const playbackRate = getBandoriSimulatorPlaybackRate(playbackRateHundredths);
-  return isNoteSpeedSlowdownSynchronized ? 1 : playbackRate;
+  return getBandoriSimulatorPlaybackRate(playbackRateHundredths);
 }
 
 export function adjustBandoriSimulatorPlaybackRate(

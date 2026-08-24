@@ -5,7 +5,6 @@ import test from "node:test";
 import { compileBandoriChart } from "../src/lib/bandori/chart-simulator/compiler.ts";
 import {
   BANDORI_NATIVE_LONG_KEEP_FADE_SECONDS,
-  BANDORI_NATIVE_NOTE_SOUND_VOLUME,
   BANDORI_NATIVE_TAP_SE_SKIN,
   BANDORI_NATIVE_TAP_SE_SKINS,
   collectBandoriNativeNoteSoundEvents,
@@ -23,10 +22,9 @@ import {
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-test("skin00 remains the default while all four JP TapSE packs are selectable at 100 percent", () => {
+test("skin00 remains the default while all four JP TapSE packs are selectable", () => {
   assert.deepEqual(BANDORI_NATIVE_TAP_SE_SKINS.map(({ id }) => id), [0, 1, 2, 3]);
   assert.equal(BANDORI_NATIVE_TAP_SE_SKIN.id, 0);
-  assert.equal(BANDORI_NATIVE_NOTE_SOUND_VOLUME, 1);
   assert.deepEqual(getBandoriNativeNoteSoundCueUrls(BANDORI_NATIVE_TAP_SE_SKIN), {
     "directional-1": "/local/chart-simulator/sound/tapseskin/directionalflickskin00/DirectionalFlickSE/directional_fl.wav",
     "directional-2": "/local/chart-simulator/sound/tapseskin/directionalflickskin00/DirectionalFlickSE/directional_fl_2.wav",
@@ -213,6 +211,23 @@ test("the shared AudioContext uses the output clock while render time owns conti
     }
   }
 
+  class FakeGain {
+    connectCalls = [];
+    gain = {
+      cancelScheduledValues() {},
+      linearRampToValueAtTime() {},
+      setValueAtTimeCalls: [],
+      setValueAtTime(value, when) {
+        this.setValueAtTimeCalls.push([value, when]);
+      },
+      value: 0,
+    };
+
+    connect(destination) {
+      this.connectCalls.push(destination);
+    }
+  }
+
   class FakeAudioContext extends EventTarget {
     static created = null;
 
@@ -221,6 +236,7 @@ test("the shared AudioContext uses the output clock while render time owns conti
     currentTime = 12;
     decodeCalls = 0;
     destination = {};
+    gains = [];
     outputContextTime = 11.6;
     outputLatency = 0.3;
     resumeCalls = 0;
@@ -239,15 +255,9 @@ test("the shared AudioContext uses the output clock while render time owns conti
     }
 
     createGain() {
-      return {
-        connect() {},
-        gain: {
-          cancelScheduledValues() {},
-          linearRampToValueAtTime() {},
-          setValueAtTime() {},
-          value: 0,
-        },
-      };
+      const gain = new FakeGain();
+      this.gains.push(gain);
+      return gain;
     }
 
     createBufferSource() {
@@ -294,7 +304,10 @@ test("the shared AudioContext uses the output clock while render time owns conti
       cueUrls: getBandoriNativeNoteSoundCueUrls(BANDORI_NATIVE_TAP_SE_SKIN),
       id: "test",
     };
-    const runtime = createBandoriNativeAudioRuntime([cueBank], cueBank.id, 1);
+    const runtime = createBandoriNativeAudioRuntime([cueBank], cueBank.id, {
+      bgmVolume: 0.7,
+      seVolume: 0.7,
+    });
     assert.equal(runtime.getContextState(), null);
     assert.equal(runtime.isMusicPrepared, false);
     assert.equal(runtime.isMusicPlaying, false);
@@ -334,6 +347,15 @@ test("the shared AudioContext uses the output clock while render time owns conti
     assert.equal(context.resumeCalls, 1);
     assert.equal(runtime.getContextState(), "running");
     assert.deepEqual(contextStates, ["suspended", "running"]);
+    const [musicGain, seGain] = context.gains;
+    assert.equal(musicGain.gain.value, 0.7);
+    assert.equal(seGain.gain.value, 0.7);
+    assert.deepEqual(musicGain.connectCalls, [context.destination]);
+    assert.deepEqual(seGain.connectCalls, [context.destination]);
+    runtime.setBgmVolume(0.25);
+    runtime.setSeVolume(0.4);
+    assert.deepEqual(musicGain.gain.setValueAtTimeCalls, [[0.25, 12]]);
+    assert.deepEqual(seGain.gain.setValueAtTimeCalls, [[0.4, 12]]);
 
     await assert.rejects(
       runtime.startMusic(Number.NaN, 1),
@@ -352,7 +374,7 @@ test("the shared AudioContext uses the output clock while render time owns conti
     const firstSource = context.sources[0];
     assert.deepEqual(firstSource.startCalls, [[12, 30]]);
     assert.deepEqual(firstSource.playbackRate.calls, [[1, 12]]);
-    assert.deepEqual(firstSource.connectCalls, [context.destination]);
+    assert.deepEqual(firstSource.connectCalls, [musicGain]);
     context.currentTime = 13;
     context.outputContextTime = 12.6;
     assert.ok(Math.abs(runtime.getMusicTime() - 30.6) < 1e-12);
@@ -367,6 +389,7 @@ test("the shared AudioContext uses the output clock while render time owns conti
       voiceKey: null,
     }], 30.6, 1);
     const scheduledNoteSource = context.sources[1];
+    assert.deepEqual(scheduledNoteSource.connectCalls, [seGain]);
     assert.deepEqual(scheduledNoteSource.startCalls, [[13]]);
     context.currentTime = 16;
     context.outputContextTime = 15.6;
@@ -476,7 +499,11 @@ test("the simulator owns one shared music and polyphonic Note SE AudioContext", 
   assert.match(runtime, /prepareCueBank\([\s\S]*cueBank/u);
   assert.match(runtime, /selectCueBank\(cueBankId/u);
   assert.match(runtime, /prepareMusic\(url: string, signal\?: AbortSignal\)/u);
-  assert.match(runtime, /source\.connect\(context\.destination\)/u);
+  assert.match(runtime, /source\.connect\(musicGain\)/u);
+  assert.match(runtime, /prepared\.node\.connect\(musicGain\)/u);
+  assert.match(runtime, /source\.connect\(seGain\)/u);
+  assert.match(runtime, /gain\.connect\(seGain\)/u);
+  assert.doesNotMatch(runtime, /source\.connect\(context\.destination\)/u);
   assert.match(runtime, /source\.start\(contextStartTimeSeconds, startTimeSeconds\)/u);
   assert.match(runtime, /activeMusic\.contextStartTimeSeconds/u);
   assert.match(runtime, /activeMusic\.mediaStartTimeSeconds/u);

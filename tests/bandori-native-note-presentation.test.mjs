@@ -1972,6 +1972,68 @@ test("bounded effects evaluate verified lifetime velocity and built-in Quad mesh
   assert.ok(averageY(april) < averageY(baseline));
 });
 
+test("ordinary Tap Effect evaluates the frozen skin01 spin and skin02 local force", () => {
+  const hierarchyPath = "effect_tap_swipe/glow";
+  const constant = (value, unit) => ({
+    domain: "normalized-particle-lifetime",
+    mode: "constant",
+    unit,
+    value,
+  });
+  const sample = (mutate, timeSeconds) => {
+    const recipe = structuredClone(nativeSwipeEffectRecipes.flick);
+    const target = recipe.root.children.find(
+      (node) => node.hierarchyPath === hierarchyPath,
+    );
+    assert.ok(target?.particleSystem);
+    mutate(target.particleSystem.modules);
+    const runtime = createBandoriEffectRecipeRuntime(recipe, {
+      buttonIndex: 3,
+      seed: 27,
+    });
+    runtime.play(0, 27);
+    return runtime.sample(timeSeconds).instances
+      .slice(0, runtime.frame.count)
+      .filter((instance) => instance.hierarchyPath === hierarchyPath);
+  };
+
+  const baselineAt50ms = sample(() => {}, 0.05);
+  const spinning = sample((modules) => {
+    modules.rotationBySpeed = {
+      separateAxes: false,
+      speedRange: { minimum: 0, maximum: 1 },
+      z: constant(10.471975326538086, "radians-per-second"),
+    };
+  }, 0.05);
+  assert.equal(spinning.length, baselineAt50ms.length);
+  assert.ok(spinning.length > 0);
+  assert.ok(
+    Math.abs(
+      spinning[0].rotationRadians
+      - baselineAt50ms[0].rotationRadians
+      - 10.471975326538086 * 0.05,
+    ) < 1e-5,
+  );
+
+  const baselineAt100ms = sample(() => {}, 0.1);
+  const accelerated = sample((modules) => {
+    modules.forceOverLifetime = {
+      randomizePerFrame: false,
+      space: "local",
+      x: constant(0, "world-units-per-second-squared"),
+      y: constant(5, "world-units-per-second-squared"),
+      z: constant(0, "world-units-per-second-squared"),
+    };
+  }, 0.1);
+  assert.equal(accelerated.length, baselineAt100ms.length);
+  assert.ok(accelerated.length > 0);
+  const averageY = (instances) => instances.reduce(
+    (sum, instance) => sum + instance.screenY,
+    0,
+  ) / instances.length;
+  assert.ok(averageY(accelerated) < averageY(baselineAt100ms));
+});
+
 test("effect recipes fail closed for ignored Unity lifecycle and direction fields", () => {
   const findNode = (node, predicate) => {
     if (predicate(node)) return node;
@@ -2013,6 +2075,35 @@ test("effect recipes fail closed for ignored Unity lifecycle and direction field
     assert.ok(node);
     node.particleSystem.modules.shape.direction.alignToDirection = true;
   }, /alignToDirection.*unsupported/u);
+  assertRejected((recipe) => {
+    const node = findNode(
+      recipe.root,
+      (candidate) => candidate.particleSystem !== null,
+    );
+    assert.ok(node?.particleSystem);
+    node.particleSystem.modules.forceOverLifetime = {
+      randomizePerFrame: false,
+      space: "local",
+      x: {
+        domain: "normalized-particle-lifetime",
+        mode: "constant",
+        unit: "world-units-per-second-squared",
+        value: 0,
+      },
+      y: {
+        domain: "normalized-particle-lifetime",
+        mode: "constant",
+        unit: "world-units-per-second-squared",
+        value: 6,
+      },
+      z: {
+        domain: "normalized-particle-lifetime",
+        mode: "constant",
+        unit: "world-units-per-second-squared",
+        value: 0,
+      },
+    };
+  }, /only the frozen skin02 local force/u);
 });
 
 test("compiled effect recipes validate once while keeping runtime state isolated", () => {

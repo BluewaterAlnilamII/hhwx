@@ -10,15 +10,15 @@
 
 当前产品契约包括：
 
-- 普通 JP 背景 `skin00`、分层的 `skin02` 与 `skin03`、`practice`，以及来自 `skin_teamlivefestival` 的判定／Combo／Life 三种固定团队演出背景；
+- 普通 JP 背景 `skin00`、分层的 `skin02` 与 `skin03`、`practice`，以及来自 `skin_teamlivefestival` 的判定／Combo／Life 三种固定团队演出背景，并可选择纯黑的“关”背景；
 - 全部 15 种普通按键条与判定线样式；
 - 7 种普通节奏标志／Note 样式及 5 种普通 Directional Flick 样式；
 - 普通及 Habahiro 多轨 Point、Skill、Flick、Directional、Long、Slide 演出，包括连接带、曲线节点、节奏辅助、同时线与镜像行为；
 - `1.00...12.00` 的 Note Speed，产品默认值为 `10.00`；
 - `10%...200%` 的节奏图标大小；Habahiro 谱面保留选择值，但实际渲染大小限制在 `80%...150%`；
 - `0...100` 的节奏图标出现位置，并可独立选择是否同步隐藏边界上方的按键条；
-- 5 种普通样式及 Persona 限定覆盖均支持大／小两种 Directional 效果；
-- 自动 Perfect 的按键闪光、判定、Combo、点击／Flick／Directional／保持效果，以及按需加载的 TapSE／Web Audio；
+- 5 种普通样式及 Persona 限定覆盖均支持大／小／关三种 Directional 效果选择；
+- 自动 Perfect 的按键闪光、判定、Combo、点击／Flick／Directional／保持效果，其中普通点击特效可单独关闭，以及按需加载的 TapSE／Web Audio；
 - 与原生演出舞台彼此独立的完整谱面分析视图。
 
 当前实现与测试没有列入的能力一律禁用。交互失败与断 Hold、非 Perfect 判定、非 AutoPerfect 音效路由、Fever 与动态舞台切换、角色承载组件、MV／Live2D／3D 背景及未经确认的设置都不会静默回退到猜测行为。
@@ -58,6 +58,8 @@ bandori/chart-simulator/packs/{packTreeHash}/{logicalPath}
 ## 普通控件与限定覆盖
 
 背景、按键条／判定线、节奏标志／Note、Directional Flick、点击效果与 TapSE 是彼此独立的普通控件。Habahiro 不是另一种皮肤控件：谱面级 `laneChange=true` 标志启用其多轨演出，之后每个 Note 或连接带节点仍使用自身编译后的覆盖范围。当一个点提供 `lanes` 时，这段连续范围就是完整的位置合同：编译器不会读取旧的标量 `lane`，而会直接从范围派生画面中心和原生整数按键位。Long 或 Slide 可以让连续覆盖范围横向移动，但同一次按压中的覆盖宽度保持不变。
+
+BGM 与 SE 音量条、各自的静音状态，以及“演出效果设定”和“演出皮肤设定”内的全部控件会作为一份浏览器本地偏好共同保存。持久层只保存经过校验的基础值与皮肤 ID；过期或不存在的选项会分别回退到当前默认值。循环开关与循环区间仍是当前歌曲会话状态。
 
 限定演出皮肤是单独的稀疏覆盖层。选择后会保留普通选项，只覆盖该家族实际拥有的槽位；清除后立即恢复之前保留的普通选项。
 

@@ -154,7 +154,10 @@ import {
   type BandoriNativeNoteFrameId,
   type BandoriNativeNoteSkin,
 } from "./native-note-assets";
-import type { BandoriLimitedPerformanceSkin } from "./limited-performance-skins";
+import type {
+  BandoriLimitedPerformanceSkin,
+  BandoriTapEffectAssetContract,
+} from "./limited-performance-skins";
 import type {
   BandoriChartSimulatorAssetResolver,
 } from "@/lib/bandori/chart-simulator/asset-manifest";
@@ -181,10 +184,10 @@ import {
 } from "./native-live-settings";
 
 type NativeSimulatorStageProps = {
-  allPerfectStatusEnabled: boolean;
   ariaLabel: string;
   backgroundSkin: BandoriNativeBackgroundSkin;
   compiled: CompiledBandoriChart;
+  directionalEffectEnabled: boolean;
   directionalFlickSkin: BandoriNativeDirectionalFlickSkin;
   directionalEffectVariant: BandoriNativeDirectionalEffectVariant;
   fieldSkin: BandoriNativeFieldSkin;
@@ -208,6 +211,8 @@ type NativeSimulatorStageProps = {
   syncLineEnabled: boolean;
   suddenLaneEnabled: boolean;
   suddenRate: number;
+  tapEffectContract: BandoriTapEffectAssetContract | null;
+  tapEffectEnabled: boolean;
 };
 
 type StageStatus =
@@ -398,7 +403,7 @@ type HoldEffectDisplay = {
   renderables: ParticleEffectRenderable[];
 };
 
-type LoadedLimitedPerformanceEffects = {
+type LoadedTapEffects = {
   animatedVerticalBeam: Readonly<{
     hierarchyPath: string;
     recipeKey: string;
@@ -406,7 +411,6 @@ type LoadedLimitedPerformanceEffects = {
   }> | null;
   recipes: ReadonlyMap<string, BandoriCompiledEffectRecipe>;
   textures: ReadonlyMap<string, Texture>;
-  usesTapEffect: boolean;
 };
 
 type LoadedDirectionalEffects = {
@@ -812,13 +816,12 @@ function effectTint(red: number, green: number, blue: number): number {
   return (channel(red) << 16) | (channel(green) << 8) | channel(blue);
 }
 
-async function loadLimitedPerformanceEffects(
-  skin: BandoriLimitedPerformanceSkin | null,
+async function loadTapEffects(
+  effects: BandoriTapEffectAssetContract | null,
   loadJson: (logicalUrl: string) => Promise<unknown>,
   loadTexture: (logicalUrl: string) => Promise<Texture>,
-): Promise<LoadedLimitedPerformanceEffects | null> {
-  if (!skin?.effects) return null;
-  const effects = skin.effects;
+): Promise<LoadedTapEffects | null> {
+  if (!effects) return null;
   const recipeUrls = Object.fromEntries(
     Object.entries(effects.recipes).map(([key, url]) => [`tap:${key}`, url]),
   );
@@ -840,12 +843,11 @@ async function loadLimitedPerformanceEffects(
       : null,
     recipes: new Map(recipeEntries),
     textures: new Map(textureEntries),
-    usesTapEffect: skin.coverage.includes("tapEffect"),
   };
 }
 
 function getDirectionalEffectRecipeMapKey(
-  variant: BandoriNativeDirectionalEffectVariant,
+  variant: Exclude<BandoriNativeDirectionalEffectVariant, "off">,
   recipe: BandoriNativeDirectionalEffectRecipeKey,
 ): string {
   return `${variant}:${recipe}`;
@@ -1010,7 +1012,7 @@ function createHitEffectDisplay(
 
 function createLimitedEffectDisplay(
   recipe: BandoriCompiledEffectRecipe,
-  animatedVerticalBeam: LoadedLimitedPerformanceEffects["animatedVerticalBeam"],
+  animatedVerticalBeam: LoadedTapEffects["animatedVerticalBeam"],
   buttonLane: number,
   rangeWidth: number,
   lowLayer: Container,
@@ -1782,10 +1784,10 @@ function updateSyncLine(
 
 /** Owns the fixed native coordinate space and its explicitly verified sprites. */
 export default function NativeSimulatorStage({
-  allPerfectStatusEnabled,
   ariaLabel,
   backgroundSkin,
   compiled,
+  directionalEffectEnabled,
   directionalEffectVariant,
   directionalFlickSkin,
   fieldSkin,
@@ -1809,10 +1811,11 @@ export default function NativeSimulatorStage({
   syncLineEnabled,
   suddenLaneEnabled,
   suddenRate,
+  tapEffectContract,
+  tapEffectEnabled,
 }: NativeSimulatorStageProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const applicationRef = useRef<Application | null>(null);
-  const allPerfectStatusEnabledRef = useRef(allPerfectStatusEnabled);
   const isActiveRef = useRef(isActive);
   const isMirroredRef = useRef(isMirrored);
   const laneEffectEnabledRef = useRef(laneEffectEnabled);
@@ -1825,10 +1828,6 @@ export default function NativeSimulatorStage({
   const suddenRateRef = useRef(suddenRate);
   const directionalEffectVariantRef = useRef(directionalEffectVariant);
   const [status, setStatus] = useState<StageStatus>("loading");
-
-  useEffect(() => {
-    allPerfectStatusEnabledRef.current = allPerfectStatusEnabled;
-  }, [allPerfectStatusEnabled]);
 
   useEffect(() => {
     isActiveRef.current = isActive;
@@ -1933,7 +1932,8 @@ export default function NativeSimulatorStage({
         await app.init({
           width: BANDORI_NATIVE_STAGE_SIZE.width,
           height: BANDORI_NATIVE_STAGE_SIZE.height,
-          backgroundAlpha: 0,
+          backgroundAlpha: backgroundSkin.id === "off" ? 1 : 0,
+          backgroundColor: 0x000000,
           antialias: true,
           autoStart: false,
           autoDensity: true,
@@ -1987,15 +1987,17 @@ export default function NativeSimulatorStage({
               }
             }
           }
-          for (const ribbon of preparedVisuals.ribbons) {
-            if (ribbon.rangeWidth > 1) {
-              for (let firstLane = 0; firstLane <= 7 - ribbon.rangeWidth; firstLane += 1) {
-                habahiroSpriteNames.add(getBandoriHabahiroLongFlashSpriteName(
-                  Array.from(
-                    { length: ribbon.rangeWidth },
-                    (_, laneOffset) => firstLane + laneOffset,
-                  ),
-                ));
+          if (tapEffectEnabled) {
+            for (const ribbon of preparedVisuals.ribbons) {
+              if (ribbon.rangeWidth > 1) {
+                for (let firstLane = 0; firstLane <= 7 - ribbon.rangeWidth; firstLane += 1) {
+                  habahiroSpriteNames.add(getBandoriHabahiroLongFlashSpriteName(
+                    Array.from(
+                      { length: ribbon.rangeWidth },
+                      (_, laneOffset) => firstLane + laneOffset,
+                    ),
+                  ));
+                }
               }
             }
           }
@@ -2020,16 +2022,14 @@ export default function NativeSimulatorStage({
       }
       let habahiroTextures = new Map<BandoriHabahiroSpriteName, HabahiroTexture>();
       let noteSpriteAnchors = new Map<string, NativeSpriteAnchor>();
-      let limitedEffects: LoadedLimitedPerformanceEffects | null = null;
+      let tapEffects: LoadedTapEffects | null = null;
       let directionalEffects: LoadedDirectionalEffects | null = null;
       let spriteFrameTextures = new Map<BandoriNativeNoteFrameId, Texture>();
       try {
-        const usesLimitedTapEffect = limitedPerformanceSkin?.coverage.includes(
-          "tapEffect",
-        ) === true;
-        const usesDirectionalEffects = compiled.notes.directions.some(
-          (direction) => direction !== 0,
-        );
+        const usesRecipeTapEffect = tapEffectEnabled && tapEffectContract !== null;
+        const usesDefaultTapEffect = tapEffectEnabled && !usesRecipeTapEffect;
+        const usesDirectionalEffects = directionalEffectEnabled
+          && compiled.notes.directions.some((direction) => direction !== 0);
         const directionalEffectAssets = usesDirectionalEffects
           ? getBandoriNativeDirectionalEffectAssetContract(directionalFlickSkin)
           : null;
@@ -2037,9 +2037,11 @@ export default function NativeSimulatorStage({
           { length: 7 },
           (_, lane) => getBandoriNativeRhythmSupportNoteUrl(noteSkin, lane),
         );
-        const longFlashUrls = Array.from(
+        const longFlashUrls: Array<string | null> = Array.from(
           { length: 7 },
-          (_, lane) => getBandoriNativeLongFlashUrl(noteSkin, lane),
+          (_, lane) => tapEffectEnabled
+            ? getBandoriNativeLongFlashUrl(noteSkin, lane)
+            : null,
         );
         const laneEffectUrls = [
           getBandoriNativeLaneEffectUrl("NoteLaneEffect_1.png"),
@@ -2061,17 +2063,17 @@ export default function NativeSimulatorStage({
           noteSkin.syncLineUrl,
           directionalFlickSkin.lineLeftUrl,
           directionalFlickSkin.lineRightUrl,
-          usesLimitedTapEffect ? null : BANDORI_NATIVE_TAP_EFFECT_ATLAS_1_URL,
-          usesLimitedTapEffect ? null : BANDORI_NATIVE_TAP_EFFECT_ATLAS_2_URL,
-          usesLimitedTapEffect
-            ? null
-            : BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS["tap-light"],
-          usesLimitedTapEffect
-            ? null
-            : BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS["tap-circle"],
-          usesLimitedTapEffect
-            ? null
-            : BANDORI_NATIVE_HOLD_EFFECT_TEXTURE_URLS["tap-default-particle"],
+          usesDefaultTapEffect ? BANDORI_NATIVE_TAP_EFFECT_ATLAS_1_URL : null,
+          usesDefaultTapEffect ? BANDORI_NATIVE_TAP_EFFECT_ATLAS_2_URL : null,
+          usesDefaultTapEffect
+            ? BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS["tap-light"]
+            : null,
+          usesDefaultTapEffect
+            ? BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS["tap-circle"]
+            : null,
+          usesDefaultTapEffect
+            ? BANDORI_NATIVE_HOLD_EFFECT_TEXTURE_URLS["tap-default-particle"]
+            : null,
           limitedPerformanceSkin?.judgmentPerfectTextureUrl
             ?? BANDORI_NATIVE_PERFECT_JUDGMENT_URL,
           BANDORI_NATIVE_COMBO_UNIT_URL,
@@ -2093,11 +2095,11 @@ export default function NativeSimulatorStage({
         const habahiroUrls = [...habahiroSpriteNames].map(
           getBandoriHabahiroSpriteUrl,
         );
-        const effectRecipeUrls = limitedPerformanceSkin?.effects
-          ? Object.values(limitedPerformanceSkin.effects.recipes)
+        const effectRecipeUrls = tapEffectContract
+          ? Object.values(tapEffectContract.recipes)
           : [];
-        const effectTextureUrls = limitedPerformanceSkin?.effects
-          ? Object.values(limitedPerformanceSkin.effects.resources)
+        const effectTextureUrls = tapEffectContract
+          ? Object.values(tapEffectContract.resources)
           : [];
         const directionalEffectRecipeUrls = directionalEffectAssets
           ? BANDORI_NATIVE_DIRECTIONAL_EFFECT_VARIANTS.flatMap(
@@ -2165,7 +2167,7 @@ export default function NativeSimulatorStage({
         };
         const [
           loadedResources,
-          loadedLimitedEffects,
+          loadedTapEffects,
           loadedDirectionalEffects,
           loadedSpriteFrames,
           loadedNoteSpriteAnchors,
@@ -2174,8 +2176,8 @@ export default function NativeSimulatorStage({
           Promise.all(mainTextureUrls.map(
             (url) => url ? loadTexture(url) : Promise.resolve(Texture.EMPTY),
           )),
-          loadLimitedPerformanceEffects(
-            limitedPerformanceSkin,
+          loadTapEffects(
+            tapEffectEnabled ? tapEffectContract : null,
             loadJson,
             loadTexture,
           ),
@@ -2211,7 +2213,7 @@ export default function NativeSimulatorStage({
           throw new Error("Simulator resource plan did not complete");
         }
         resources = loadedResources;
-        limitedEffects = loadedLimitedEffects;
+        tapEffects = loadedTapEffects;
         directionalEffects = loadedDirectionalEffects;
         noteSpriteAnchors = new Map(loadedNoteSpriteAnchors);
         spriteFrameTextures = new Map(
@@ -2290,7 +2292,7 @@ export default function NativeSimulatorStage({
         laneEffectTexture4,
       ] = resources.slice(backgroundSkin.layers.length);
       for (const texture of resources) texture.source.scaleMode = "linear";
-      for (const texture of limitedEffects?.textures.values() ?? []) {
+      for (const texture of tapEffects?.textures.values() ?? []) {
         texture.source.scaleMode = "linear";
       }
       for (const texture of directionalEffects?.textures.values() ?? []) {
@@ -2386,20 +2388,22 @@ export default function NativeSimulatorStage({
       }
 
       const hitEffectTextures = new Map<string, Texture>();
-      for (const effect of Object.values(BANDORI_NATIVE_APPROXIMATE_HIT_EFFECTS)) {
-        const frameContracts = [
-          ...effect.staticLayers.map((layer) => ({ atlas: layer.atlas, frame: layer.frame })),
-          { atlas: effect.kira.atlas, frame: effect.kira.frame },
-        ];
-        for (const frameContract of frameContracts) {
-          const key = `${frameContract.atlas}:${frameContract.frame}`;
-          if (hitEffectTextures.has(key)) continue;
-          const texture = createTapEffectFrameTexture(
-            frameContract.atlas === "set1" ? tapEffectAtlas1 : tapEffectAtlas2,
-            frameContract.frame,
-          );
-          hitEffectTextures.set(key, texture);
-          localFrameTextures.push(texture);
+      if (tapEffectEnabled) {
+        for (const effect of Object.values(BANDORI_NATIVE_APPROXIMATE_HIT_EFFECTS)) {
+          const frameContracts = [
+            ...effect.staticLayers.map((layer) => ({ atlas: layer.atlas, frame: layer.frame })),
+            { atlas: effect.kira.atlas, frame: effect.kira.frame },
+          ];
+          for (const frameContract of frameContracts) {
+            const key = `${frameContract.atlas}:${frameContract.frame}`;
+            if (hitEffectTextures.has(key)) continue;
+            const texture = createTapEffectFrameTexture(
+              frameContract.atlas === "set1" ? tapEffectAtlas1 : tapEffectAtlas2,
+              frameContract.frame,
+            );
+            hitEffectTextures.set(key, texture);
+            localFrameTextures.push(texture);
+          }
         }
       }
       const swipeEffectTextures = new Map<string, Texture>([
@@ -2408,7 +2412,7 @@ export default function NativeSimulatorStage({
         ["tap-light", tapEffectLight],
         ["tap-circle", tapEffectCircle],
         ["tap-default-particle", tapEffectDefaultParticle],
-        ...(limitedEffects?.textures.entries() ?? []),
+        ...(tapEffects?.textures.entries() ?? []),
         ...(directionalEffects?.textures.entries() ?? []),
       ]);
       const longFlashTextures = [
@@ -2901,7 +2905,7 @@ export default function NativeSimulatorStage({
         );
 
         const activeHoldIndexes = new Set<number>();
-        for (const state of holdStates) {
+        for (const state of tapEffectEnabled ? holdStates : []) {
           if (state.ribbon.points.length === 0) continue;
           const projection = projectBandoriNativeHoldState(
             state,
@@ -2955,7 +2959,7 @@ export default function NativeSimulatorStage({
               flashTexture,
               flashAnchorX,
               flashAnchorY,
-              limitedEffects?.recipes.get("tap:hold") ?? null,
+              tapEffects?.recipes.get("tap:hold") ?? null,
               seed,
               state.ribbon.kind,
               holdRangeWidth,
@@ -3263,6 +3267,7 @@ export default function NativeSimulatorStage({
 
             if (event.kind.startsWith("directional-")) {
               const variant = directionalEffectVariantRef.current;
+              if (variant === "off") continue;
               const recipeKey = getDirectionalEffectRecipeKey(event.kind);
               const semantic = getDirectionalEffectRecipeMapKey(variant, recipeKey);
               const recipe = directionalEffects?.recipes.get(semantic);
@@ -3344,12 +3349,14 @@ export default function NativeSimulatorStage({
               continue;
             }
 
-            if (limitedEffects?.usesTapEffect) {
+            if (!tapEffectEnabled) continue;
+
+            if (tapEffects) {
               const semantic = getLimitedMainEffectRecipeKey(event.kind);
-              const recipe = limitedEffects.recipes.get(semantic);
+              const recipe = tapEffects.recipes.get(semantic);
               if (!recipe) {
                 throw new BandoriNativeNoteContractError(
-                  `Limited performance effect recipe is absent: ${semantic}`,
+                  `Tap effect recipe is absent: ${semantic}`,
                 );
               }
               const key = `limited:${semantic}:${event.buttonLane}:${event.rangeWidth}`;
@@ -3357,8 +3364,8 @@ export default function NativeSimulatorStage({
               if (!display) {
                 display = createLimitedEffectDisplay(
                   recipe,
-                  limitedEffects.animatedVerticalBeam?.recipeKey === semantic
-                    ? limitedEffects.animatedVerticalBeam
+                  tapEffects.animatedVerticalBeam?.recipeKey === semantic
+                    ? tapEffects.animatedVerticalBeam
                     : null,
                   event.buttonLane,
                   event.rangeWidth,
@@ -3463,8 +3470,7 @@ export default function NativeSimulatorStage({
           effectAnimationTimeSeconds,
           evaluateBandoriNativeAllPerfectComboAlpha(effectAnimationTimeSeconds),
         );
-        allPerfectCombo.root.visible = currentCombo > 0
-          && allPerfectStatusEnabledRef.current;
+        allPerfectCombo.root.visible = currentCombo > 0;
         updatePerfectJudgment(perfectJudgment, effectAnimationTimeSeconds);
         lastEffectTimeSeconds = presentationTime;
       };
@@ -3498,6 +3504,7 @@ export default function NativeSimulatorStage({
   }, [
     backgroundSkin,
     compiled,
+    directionalEffectEnabled,
     directionalFlickSkin,
     fieldSkin,
     getEffectPlaybackState,
@@ -3507,6 +3514,8 @@ export default function NativeSimulatorStage({
     noteSkin,
     onLoadProgress,
     resolveAssetUrl,
+    tapEffectContract,
+    tapEffectEnabled,
   ]);
 
   const statusLabel: string | null = status === "rendererError"

@@ -11,10 +11,20 @@ import {
   BANDORI_LIMITED_PERFORMANCE_SKINS,
 } from "../src/app/[locale]/bandori/songs/[songId]/limited-performance-skins.ts";
 import {
+  BANDORI_CHART_SIMULATOR_PREFERENCES_STORAGE_KEY,
+  createDefaultBandoriChartSimulatorPreferences,
+  normalizeBandoriChartSimulatorPreferences,
+  readBandoriChartSimulatorPreferences,
+  writeBandoriChartSimulatorPreferences,
+} from "../src/app/[locale]/bandori/songs/[songId]/chart-simulator-preferences.ts";
+import {
   BANDORI_NATIVE_SUDDEN_LINE_BORDER_PIXELS,
+  BANDORI_NATIVE_VOLUME_DEFAULT,
   adjustBandoriNativeNoteSize,
   adjustBandoriNativeSuddenRate,
+  getBandoriNativeBgmGain,
   getBandoriNativeNoteScale,
+  getBandoriNativeSeGain,
   getBandoriNativeSuddenLineScreenY,
   getBandoriNativeSuddenLineSize,
   getBandoriNativeSuddenRatio,
@@ -28,6 +38,95 @@ test("native live-setting ranges clamp to the verified JP controls", () => {
   assert.equal(adjustBandoriNativeNoteSize(200, 10), 200);
   assert.equal(adjustBandoriNativeSuddenRate(0, -5), 0);
   assert.equal(adjustBandoriNativeSuddenRate(99, 5), 100);
+  assert.equal(BANDORI_NATIVE_VOLUME_DEFAULT, 70);
+  assert.equal(getBandoriNativeBgmGain(70), 0.7);
+  assert.equal(getBandoriNativeBgmGain(0), 0.0001);
+  assert.equal(getBandoriNativeSeGain(70), 0.7);
+  assert.equal(getBandoriNativeSeGain(0), 0);
+});
+
+test("chart simulator preferences persist every effect, skin, and volume control", () => {
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+  };
+  const preferences = {
+    backgroundSkinId: "off",
+    bgmVolume: 31,
+    directionalEffectVariant: "off",
+    directionalFlickSkinId: 5,
+    fieldSkinId: 15,
+    isBgmMuted: true,
+    isLaneEffectEnabled: false,
+    isMirrored: true,
+    isRhythmSupportEnabled: false,
+    isSeMuted: true,
+    isSuddenLaneEnabled: true,
+    isSyncLineEnabled: false,
+    limitedPerformanceSkinId: "witch",
+    noteSize: 130,
+    noteSkinId: 7,
+    noteSpeed: 8.75,
+    playbackRateHundredths: 73,
+    seVolume: 42,
+    suddenRate: 64,
+    tapEffectSkinId: "off",
+    tapSeSkinId: 3,
+  };
+
+  writeBandoriChartSimulatorPreferences(storage, preferences);
+
+  assert.deepEqual(readBandoriChartSimulatorPreferences(storage), preferences);
+  assert.deepEqual(
+    JSON.parse(values.get(BANDORI_CHART_SIMULATOR_PREFERENCES_STORAGE_KEY)),
+    preferences,
+  );
+});
+
+test("chart simulator preferences safely normalize stale or invalid stored values", () => {
+  const defaults = createDefaultBandoriChartSimulatorPreferences();
+  assert.deepEqual(normalizeBandoriChartSimulatorPreferences({
+    backgroundSkinId: "unknown",
+    bgmVolume: 101,
+    directionalEffectVariant: "future",
+    directionalFlickSkinId: 99,
+    fieldSkinId: "retired",
+    isBgmMuted: "true",
+    isLaneEffectEnabled: false,
+    isMirrored: true,
+    isRhythmSupportEnabled: false,
+    isSeMuted: true,
+    isSuddenLaneEnabled: true,
+    isSyncLineEnabled: false,
+    limitedPerformanceSkinId: "unknown",
+    noteSize: 207,
+    noteSkinId: 99,
+    noteSpeed: 10.126,
+    playbackRateHundredths: 20,
+    seVolume: -4,
+    suddenRate: 105,
+    tapEffectSkinId: "future",
+    tapSeSkinId: 99,
+  }), {
+    ...defaults,
+    bgmVolume: 100,
+    isLaneEffectEnabled: false,
+    isMirrored: true,
+    isRhythmSupportEnabled: false,
+    isSeMuted: true,
+    isSuddenLaneEnabled: true,
+    isSyncLineEnabled: false,
+    noteSize: 200,
+    noteSpeed: 10.13,
+    playbackRateHundredths: 50,
+    seVolume: 0,
+    suddenRate: 100,
+  });
+  assert.deepEqual(readBandoriChartSimulatorPreferences({
+    getItem: () => "not JSON",
+    setItem: () => {},
+  }), defaults);
 });
 
 test("Habahiro charts clamp the effective note scale without changing the stored value", () => {
@@ -61,8 +160,8 @@ test("Sudden uses the native nonzero minimum and field projection", () => {
   assert.ok(Math.abs(getBandoriNativeSuddenLineScreenY(1) - 42.809264587402344) < 1e-12);
   assert.ok(Math.abs(getBandoriNativeSuddenLineScreenY(50) - 326.01527099609376) < 1e-12);
   assert.ok(Math.abs(getBandoriNativeSuddenLineScreenY(100) - 615.0009918212891) < 1e-12);
-  assert.ok(Math.abs(getBandoriNativeSuddenLineSize(1).width - 30.367) < 1e-12);
-  assert.ok(Math.abs(getBandoriNativeSuddenLineSize(50).width - 548.15) < 1e-12);
+  assert.ok(Math.abs(getBandoriNativeSuddenLineSize(1).width - 82.67365) < 1e-12);
+  assert.ok(Math.abs(getBandoriNativeSuddenLineSize(50).width - 574.5675) < 1e-12);
   assert.equal(getBandoriNativeSuddenLineSize(100).width, 1076.5);
   assert.equal(getBandoriNativeSuddenLineSize(100).height, 3);
   assert.deepEqual(BANDORI_NATIVE_SUDDEN_LINE_BORDER_PIXELS, {
