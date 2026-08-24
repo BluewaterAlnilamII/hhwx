@@ -204,6 +204,7 @@ type NativeSimulatorStageProps = {
   noteSkin: BandoriNativeNoteSkin;
   noteContractErrorLabel: string;
   onLoadProgress: (progress: NativeSimulatorStageLoadProgress) => void;
+  onRenderFpsChange: (framesPerSecond: number | null) => void;
   rendererErrorLabel: string;
   resourceErrorLabel: string;
   resolveAssetUrl: BandoriChartSimulatorAssetResolver;
@@ -213,6 +214,13 @@ type NativeSimulatorStageProps = {
   suddenRate: number;
   tapEffectContract: BandoriTapEffectAssetContract | null;
   tapEffectEnabled: boolean;
+};
+
+const RENDER_FPS_SAMPLE_INTERVAL_MS = 1000;
+
+type RenderFpsSample = {
+  frameCount: number;
+  startedAtMs: number | null;
 };
 
 type StageStatus =
@@ -1804,6 +1812,7 @@ export default function NativeSimulatorStage({
   noteSkin,
   noteContractErrorLabel,
   onLoadProgress,
+  onRenderFpsChange,
   rendererErrorLabel,
   resourceErrorLabel,
   resolveAssetUrl,
@@ -1816,6 +1825,10 @@ export default function NativeSimulatorStage({
 }: NativeSimulatorStageProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const applicationRef = useRef<Application | null>(null);
+  const renderFpsSampleRef = useRef<RenderFpsSample>({
+    frameCount: 0,
+    startedAtMs: null,
+  });
   const isActiveRef = useRef(isActive);
   const isMirroredRef = useRef(isMirrored);
   const laneEffectEnabledRef = useRef(laneEffectEnabled);
@@ -1832,10 +1845,25 @@ export default function NativeSimulatorStage({
   useEffect(() => {
     isActiveRef.current = isActive;
     const application = applicationRef.current;
-    if (!application) return;
-    if (isActive) application.start();
-    else application.stop();
-  }, [isActive]);
+    if (!application) {
+      if (!isActive) onRenderFpsChange(null);
+      return;
+    }
+    if (isActive) {
+      renderFpsSampleRef.current = {
+        frameCount: 0,
+        startedAtMs: performance.now(),
+      };
+      application.start();
+      return;
+    }
+    application.stop();
+    renderFpsSampleRef.current = {
+      frameCount: 0,
+      startedAtMs: null,
+    };
+    onRenderFpsChange(null);
+  }, [isActive, onRenderFpsChange]);
 
   useEffect(() => {
     isMirroredRef.current = isMirrored;
@@ -1882,6 +1910,7 @@ export default function NativeSimulatorStage({
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    onRenderFpsChange(null);
 
     const app = new Application();
     const resourceAbortController = new AbortController();
@@ -3475,10 +3504,33 @@ export default function NativeSimulatorStage({
         lastEffectTimeSeconds = presentationTime;
       };
 
+      const renderStageFrame = () => {
+        renderNotes();
+        const nowMs = performance.now();
+        const sample = renderFpsSampleRef.current;
+        if (sample.startedAtMs === null) {
+          sample.startedAtMs = nowMs;
+          sample.frameCount = 1;
+          return;
+        }
+        sample.frameCount += 1;
+        const elapsedMs = nowMs - sample.startedAtMs;
+        if (elapsedMs < RENDER_FPS_SAMPLE_INTERVAL_MS) return;
+        onRenderFpsChange(Math.round(sample.frameCount * 1000 / elapsedMs));
+        sample.frameCount = 0;
+        sample.startedAtMs = nowMs;
+      };
+
       applicationRef.current = app;
       renderNotes();
-      app.ticker.add(renderNotes);
-      if (isActiveRef.current) app.start();
+      app.ticker.add(renderStageFrame);
+      if (isActiveRef.current) {
+        renderFpsSampleRef.current = {
+          frameCount: 0,
+          startedAtMs: performance.now(),
+        };
+        app.start();
+      }
       setStatus("ready");
       onLoadProgress({
         completedResources: loadedResourceTotal ?? 0,
@@ -3513,6 +3565,7 @@ export default function NativeSimulatorStage({
     loadId,
     noteSkin,
     onLoadProgress,
+    onRenderFpsChange,
     resolveAssetUrl,
     tapEffectContract,
     tapEffectEnabled,

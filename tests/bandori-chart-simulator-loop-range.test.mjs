@@ -1,58 +1,75 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { compileBandoriChart } from "../src/lib/bandori/chart-simulator/compiler.ts";
 import {
-  createBandoriFullSongLoopRange,
+  clearBandoriChartLoopPoint,
+  createBandoriChartLoopPoints,
   createBandoriTimeLoopRange,
-  isBandoriTimeInsideLoopRange,
-  resolveBandoriNoteLoopRange,
+  getBandoriChartLoopRange,
+  setBandoriChartLoopPoint,
 } from "../src/lib/bandori/chart-simulator/loop-range.ts";
 
-const compiled = compileBandoriChart([
-  { type: "BPM", beat: 0, bpm: 60 },
-  { type: "Single", beat: 1, lane: 0 },
-  { type: "Single", beat: 2, lane: 1 },
-  { type: "Single", beat: 2, lane: 5 },
-  { type: "Single", beat: 3, lane: 2 },
-  { type: "Single", beat: 4, lane: 3 },
-], { mediaDurationSeconds: 8 });
+test("clearing one loop point preserves the other and disables the range", () => {
+  const complete = { endTimeSeconds: 6, startTimeSeconds: 2 };
+  const withoutA = clearBandoriChartLoopPoint(complete, "start");
+  assert.deepEqual(withoutA, { endTimeSeconds: 6, startTimeSeconds: null });
+  assert.equal(getBandoriChartLoopRange(withoutA), null);
 
-test("time loop ranges preserve exact user media times and use half-open membership", () => {
+  const withoutB = clearBandoriChartLoopPoint(complete, "end");
+  assert.deepEqual(withoutB, { endTimeSeconds: null, startTimeSeconds: 2 });
+  assert.equal(getBandoriChartLoopRange(withoutB), null);
+  assert.equal(clearBandoriChartLoopPoint(withoutB, "end"), withoutB);
+});
+
+test("loop points stay incomplete until both A and B are set", () => {
+  const empty = createBandoriChartLoopPoints();
+  assert.deepEqual(empty, { endTimeSeconds: null, startTimeSeconds: null });
+  assert.equal(getBandoriChartLoopRange(empty), null);
+
+  const onlyA = setBandoriChartLoopPoint(empty, 8, "start", 1.125);
+  assert.deepEqual(onlyA, { endTimeSeconds: null, startTimeSeconds: 1.125 });
+  assert.equal(getBandoriChartLoopRange(onlyA), null);
+
+  const complete = setBandoriChartLoopPoint(onlyA, 8, "end", 6.875);
+  assert.deepEqual(getBandoriChartLoopRange(complete), {
+    endTimeSeconds: 6.875,
+    startTimeSeconds: 1.125,
+  });
+});
+
+test("setting either loop point across the opposite point sorts the range", () => {
+  const empty = createBandoriChartLoopPoints();
+  const onlyA = setBandoriChartLoopPoint(empty, 8, "start", 5);
+  assert.deepEqual(setBandoriChartLoopPoint(onlyA, 8, "end", 2), {
+    endTimeSeconds: 5,
+    startTimeSeconds: 2,
+  });
+
+  const onlyB = setBandoriChartLoopPoint(empty, 8, "end", 2);
+  assert.deepEqual(setBandoriChartLoopPoint(onlyB, 8, "start", 5), {
+    endTimeSeconds: 5,
+    startTimeSeconds: 2,
+  });
+});
+
+test("equal loop points expand to one reference frame with an end-of-song fallback", () => {
+  const empty = createBandoriChartLoopPoints();
+  const onlyA = setBandoriChartLoopPoint(empty, 8, "start", 3);
+  const middleRange = setBandoriChartLoopPoint(onlyA, 8, "end", 3);
+  assert.equal(middleRange.startTimeSeconds, 3);
+  assert.ok(Math.abs(middleRange.endTimeSeconds - (3 + 1 / 60)) < 1e-12);
+
+  const onlyBAtEnd = setBandoriChartLoopPoint(empty, 8, "end", 8);
+  const endRange = setBandoriChartLoopPoint(onlyBAtEnd, 8, "start", 8);
+  assert.equal(endRange.endTimeSeconds, 8);
+  assert.ok(Math.abs(endRange.startTimeSeconds - (8 - 1 / 60)) < 1e-12);
+});
+
+test("explicit loop ranges still reject invalid external values", () => {
   assert.deepEqual(createBandoriTimeLoopRange(8, 1.125, 6.875), {
     endTimeSeconds: 6.875,
     startTimeSeconds: 1.125,
   });
-  assert.deepEqual(createBandoriFullSongLoopRange(8), {
-    endTimeSeconds: 8,
-    startTimeSeconds: 0,
-  });
-  assert.equal(isBandoriTimeInsideLoopRange({ startTimeSeconds: 1, endTimeSeconds: 2 }, 1), true);
-  assert.equal(isBandoriTimeInsideLoopRange({ startTimeSeconds: 1, endTimeSeconds: 2 }, 2), false);
   assert.throws(() => createBandoriTimeLoopRange(8, 3, 3), RangeError);
   assert.throws(() => createBandoriTimeLoopRange(8, -1, 3), RangeError);
   assert.throws(() => createBandoriTimeLoopRange(8, 1, 9), RangeError);
-});
-
-test("Note loop ranges expand simultaneous groups and derive judgment-free boundaries", () => {
-  assert.deepEqual(resolveBandoriNoteLoopRange(compiled, 3, 4), {
-    endTimeSeconds: 4,
-    normalizedEndNoteNumber: 4,
-    normalizedStartNoteNumber: 2,
-    startTimeSeconds: 1.5,
-  });
-  assert.deepEqual(resolveBandoriNoteLoopRange(compiled, 2, 3), {
-    endTimeSeconds: 3,
-    normalizedEndNoteNumber: 3,
-    normalizedStartNoteNumber: 2,
-    startTimeSeconds: 1.5,
-  });
-  assert.deepEqual(resolveBandoriNoteLoopRange(compiled, 1, 5), {
-    endTimeSeconds: 8,
-    normalizedEndNoteNumber: 5,
-    normalizedStartNoteNumber: 1,
-    startTimeSeconds: 0,
-  });
-  assert.throws(() => resolveBandoriNoteLoopRange(compiled, 0, 2), RangeError);
-  assert.throws(() => resolveBandoriNoteLoopRange(compiled, 4, 3), RangeError);
-  assert.throws(() => resolveBandoriNoteLoopRange(compiled, 1, 6), RangeError);
 });

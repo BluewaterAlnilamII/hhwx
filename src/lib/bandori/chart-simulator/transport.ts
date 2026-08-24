@@ -13,6 +13,10 @@ export type BandoriChartTransportState = {
   shouldResumeAfterInteraction: boolean;
 };
 
+export const BANDORI_CHART_REFERENCE_FRAME_RATE = 60;
+
+const BANDORI_CHART_FRAME_BOUNDARY_EPSILON = 1e-7;
+
 function clampTime(durationSeconds: number, timeSeconds: number): number {
   return Math.max(0, Math.min(durationSeconds, timeSeconds));
 }
@@ -133,6 +137,31 @@ export function jumpBandoriChartTransport(
       ? "ended"
       : state.phase === "playing" ? "playing" : "paused",
     currentTimeSeconds,
+  };
+}
+
+export function stepBandoriChartTransport(
+  state: BandoriChartTransportState,
+  direction: -1 | 1,
+): BandoriChartTransportState {
+  if (state.phase === "scrubbing") return state;
+  const framePosition = state.currentTimeSeconds * BANDORI_CHART_REFERENCE_FRAME_RATE;
+  const nearestFrameIndex = Math.round(framePosition);
+  const isOnFrameBoundary = Math.abs(framePosition - nearestFrameIndex)
+    <= BANDORI_CHART_FRAME_BOUNDARY_EPSILON;
+  const adjacentFrameIndex = direction === -1
+    ? isOnFrameBoundary ? nearestFrameIndex - 1 : Math.floor(framePosition)
+    : isOnFrameBoundary ? nearestFrameIndex + 1 : Math.ceil(framePosition);
+  const currentTimeSeconds = clampTime(
+    state.durationSeconds,
+    adjacentFrameIndex / BANDORI_CHART_REFERENCE_FRAME_RATE,
+  );
+  return {
+    ...state,
+    phase: currentTimeSeconds >= state.durationSeconds ? "ended" : "paused",
+    currentTimeSeconds,
+    previewTimeSeconds: null,
+    shouldResumeAfterInteraction: false,
   };
 }
 

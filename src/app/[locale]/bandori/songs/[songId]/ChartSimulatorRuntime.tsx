@@ -1,20 +1,32 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 import {
-  ChevronLeft,
-  ChevronRight,
+  FastForward,
+  Maximize,
+  Minimize,
   Pause,
   Play,
+  Rewind,
   RotateCcw,
+  StepBack,
+  StepForward,
   Volume2,
   VolumeX,
 } from "lucide-react";
 import BandoriFullChartView from "./BandoriFullChartView";
 import ChartSimulatorLoadingIndicator from "./ChartSimulatorLoadingIndicator";
-import SimulatorLoopControls from "./SimulatorLoopControls";
 import {
   SimulatorAdjustmentButton,
   SimulatorAdjustmentValue,
@@ -25,6 +37,10 @@ import SimulatorSkinControls, {
   SimulatorBooleanControl,
   SimulatorControlRow,
 } from "./SimulatorSkinControls";
+import {
+  MUSIC_PLAYER_PLAYBACK_BUTTON_CLASS_NAME,
+  MUSIC_PLAYER_SEEK_BUTTON_CLASS_NAME,
+} from "@/components/music-player/transport-control-styles";
 import {
   BANDORI_NATIVE_BACKGROUND_SKIN,
   BANDORI_NATIVE_BACKGROUND_SKINS,
@@ -78,8 +94,12 @@ import {
   createBandoriMediaOperationSequencer,
 } from "@/lib/bandori/chart-simulator/media-operation-sequencer";
 import {
-  createBandoriFullSongLoopRange,
-  isBandoriTimeInsideLoopRange,
+  clearBandoriChartLoopPoint,
+  createBandoriChartLoopPoints,
+  getBandoriChartLoopRange,
+  setBandoriChartLoopPoint,
+  type BandoriChartLoopPointKind,
+  type BandoriChartLoopPoints,
   type BandoriChartLoopRange,
 } from "@/lib/bandori/chart-simulator/loop-range";
 import {
@@ -98,7 +118,7 @@ import {
   pauseBandoriChartTransport,
   playBandoriChartTransport,
   previewBandoriChartScrub,
-  restartBandoriChartTransport,
+  stepBandoriChartTransport,
   syncBandoriChartMediaTime,
   type BandoriChartTransportState,
 } from "@/lib/bandori/chart-simulator/transport";
@@ -143,6 +163,7 @@ import {
   readBandoriChartSimulatorPreferences,
   writeBandoriChartSimulatorPreferences,
 } from "./chart-simulator-preferences";
+import { cn } from "@/lib/utils";
 
 const loadNativeSimulatorStageModule = () => import("./NativeSimulatorStage");
 const NativeSimulatorStage = dynamic(loadNativeSimulatorStageModule, {
@@ -159,7 +180,54 @@ const PLAYBACK_RATE_INCREASES = [1, 10] as const;
 const NOTE_SPEED_DECREASES = [-0.5, -0.1, -0.01] as const;
 const NOTE_SPEED_INCREASES = [0.01, 0.1, 0.5] as const;
 const NOTE_SIZE_ADJUSTMENTS = [BANDORI_NATIVE_NOTE_SIZE_STEP] as const;
-const TRANSPORT_UI_UPDATE_INTERVAL_MS = 100;
+const TRANSPORT_UI_UPDATE_RATE_PER_SECOND = 30;
+const TRANSPORT_UI_UPDATE_INTERVAL_MS = 1000 / TRANSPORT_UI_UPDATE_RATE_PER_SECOND;
+const FULLSCREEN_STAGE_WIDTH_DVH = BANDORI_NATIVE_STAGE_SIZE.width
+  / BANDORI_NATIVE_STAGE_SIZE.height
+  * 100;
+const FULLSCREEN_STAGE_HEIGHT_DVW = BANDORI_NATIVE_STAGE_SIZE.height
+  / BANDORI_NATIVE_STAGE_SIZE.width
+  * 100;
+const FULLSCREEN_OVERLAY_BUTTON_CLASS_NAME =
+  "pointer-events-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-slate-950/65 text-white shadow-lg outline-hidden backdrop-blur-sm transition hover:bg-slate-950/80 focus-visible:ring-2 focus-visible:ring-white/85 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-slate-950/65";
+const FULLSCREEN_OVERLAY_ACTIVE_BUTTON_CLASS_NAME =
+  "bg-[var(--theme-color-progress-indicator-background)] text-white hover:bg-[var(--theme-color-progress-indicator-background)]";
+// Frame stepping follows a stable simulator clock instead of the display's
+// variable refresh rate, while hold repetition stays slow enough for inspection.
+const FRAME_STEP_HOLD_DELAY_MS = 350;
+const FRAME_STEP_REPEAT_RATE_PER_SECOND = 15;
+const FRAME_STEP_REPEAT_INTERVAL_MS = 1000 / FRAME_STEP_REPEAT_RATE_PER_SECOND;
+const LOOP_POINT_CLEAR_HOLD_DELAY_MS = 500;
+const NATIVE_RANGE_NAVIGATION_KEYS = new Set([
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "End",
+  "Home",
+  "PageDown",
+  "PageUp",
+]);
+
+type FrameStepDirection = -1 | 1;
+
+type ActiveFrameStepHold = {
+  source: string;
+  delayTimer: number;
+  repeatTimer: number | null;
+};
+
+type ActiveLoopPointClearHold = {
+  delayTimer: number;
+  didClear: boolean;
+  kind: BandoriChartLoopPointKind;
+  source: string;
+};
+
+function isSimulatorShortcutInput(target: EventTarget | null): boolean {
+  return target instanceof Element
+    && target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false']), [role='textbox'], [role='slider']") !== null;
+}
 
 function getBandoriChartSimulatorPreferenceStorage(): Storage | null {
   if (typeof window === "undefined") return null;
@@ -263,12 +331,8 @@ function createLoopSeekTransport(
   };
 }
 
-function controlClassName(isPrimary = false): string {
-  return `inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-color-surface-background)] disabled:cursor-not-allowed disabled:border-[var(--theme-color-control-border-disabled)] disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] disabled:opacity-50 ${
-    isPrimary
-      ? "border-transparent bg-[var(--theme-color-action-primary-background)] text-[var(--theme-color-action-primary-foreground)] shadow-[var(--theme-shadow-action-primary)] hover:bg-[var(--theme-color-action-primary-background-hover)]"
-      : "border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] text-[var(--theme-color-action-secondary-foreground)] shadow-xs hover:bg-[var(--theme-color-action-secondary-background-hover)]"
-  }`;
+function controlClassName(): string {
+  return "inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] px-4 text-sm font-semibold text-[var(--theme-color-action-secondary-foreground)] shadow-xs outline-hidden transition hover:bg-[var(--theme-color-action-secondary-background-hover)] focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-color-surface-background)] disabled:cursor-not-allowed disabled:border-[var(--theme-color-control-border-disabled)] disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] disabled:opacity-50";
 }
 
 function formatPlaybackTime(timeSeconds: number): string {
@@ -370,14 +434,14 @@ function SimulatorVolumeControl({
   value,
 }: SimulatorVolumeControlProps) {
   return (
-    <div className="grid grid-cols-[max-content_2.25rem_minmax(4rem,1fr)_2rem] items-center gap-x-2 text-sm font-semibold text-[var(--theme-color-text-muted)]">
+    <div className="grid grid-cols-[max-content_2.25rem_5rem] items-center gap-x-1 text-sm font-semibold text-[var(--theme-color-text-muted)]">
       <label htmlFor={inputId}>{label}</label>
       <button
         type="button"
         onClick={onMuteToggle}
         aria-label={isMuted ? unmuteLabel : muteLabel}
         aria-pressed={isMuted}
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${isMuted ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-progress-foreground)]" : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)]"}`}
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${isMuted ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-progress-foreground)]" : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-pressed)]"}`}
       >
         {isMuted ? <VolumeX className="h-4 w-4" aria-hidden="true" /> : <Volume2 className="h-4 w-4" aria-hidden="true" />}
       </button>
@@ -391,9 +455,6 @@ function SimulatorVolumeControl({
         onChange={(event) => onChange(Number(event.currentTarget.value))}
         className="min-w-0 accent-[var(--theme-color-progress-indicator-background)]"
       />
-      <output htmlFor={inputId} className="text-right font-black tabular-nums text-[var(--theme-color-text-default)]">
-        {value}
-      </output>
     </div>
   );
 }
@@ -421,6 +482,10 @@ export default function ChartSimulatorRuntime({
   > | null>(null);
   playbackAudioSessionRef.current ??= createMusicPlaybackBrowserAudioSession();
   const transportRef = useRef(createBandoriChartTransportState(durationSeconds));
+  const fullscreenRootRef = useRef<HTMLDivElement | null>(null);
+  const frameStepHoldRef = useRef<ActiveFrameStepHold | null>(null);
+  const loopPointClearHoldRef = useRef<ActiveLoopPointClearHold | null>(null);
+  const suppressedLoopPointClickRef = useRef<BandoriChartLoopPointKind | null>(null);
   const effectTimelineVersionRef = useRef(0);
   const nativeAudioRuntimeRef = useRef<BandoriNativeAudioRuntime | null>(null);
   const bgmVolumeRef = useRef(initialPreferences.bgmVolume);
@@ -434,8 +499,9 @@ export default function ChartSimulatorRuntime({
   const isMediaPlaybackReadyRef = useRef(false);
   const shouldMediaPlayRef = useRef(false);
   const pendingPlaybackResumeRef = useRef(false);
-  const loopRangeRef = useRef(createBandoriFullSongLoopRange(durationSeconds));
-  const isLoopEnabledRef = useRef(false);
+  const loopPointsRef = useRef<BandoriChartLoopPoints>(
+    createBandoriChartLoopPoints(),
+  );
   const loopSeekPendingRef = useRef(false);
   const loopSeekPromiseRef = useRef<Promise<unknown> | null>(null);
   const coordinatorRef = useRef<ReturnType<typeof createMusicPlayerPlaybackCoordinator> | null>(null);
@@ -457,15 +523,17 @@ export default function ChartSimulatorRuntime({
   });
   const [transport, setTransport] = useState(transportRef.current);
   const [activeTab, setActiveTab] = useState<SimulatorTab>("stage");
+  const [isStageFullscreen, setIsStageFullscreen] = useState(false);
+  const [isFullscreenSupported, setIsFullscreenSupported] = useState(false);
+  const [stageRenderFps, setStageRenderFps] = useState<number | null>(null);
   const [hasOpenedFullChart, setHasOpenedFullChart] = useState(false);
   const [isMirrored, setIsMirrored] = useState(initialPreferences.isMirrored);
   const [playbackRateHundredths, setPlaybackRateHundredths] = useState(
     initialPreferences.playbackRateHundredths,
   );
-  const [loopRange, setLoopRange] = useState<BandoriChartLoopRange>(
-    () => createBandoriFullSongLoopRange(durationSeconds),
+  const [loopPoints, setLoopPoints] = useState<BandoriChartLoopPoints>(
+    createBandoriChartLoopPoints,
   );
-  const [isLoopEnabled, setIsLoopEnabled] = useState(false);
   const [noteSpeed, setNoteSpeed] = useState(initialPreferences.noteSpeed);
   const [noteSize, setNoteSize] = useState(initialPreferences.noteSize);
   const [suddenRate, setSuddenRate] = useState(initialPreferences.suddenRate);
@@ -546,6 +614,20 @@ export default function ChartSimulatorRuntime({
   const [musicLoadProgress, setMusicLoadProgress] =
     useState<AudioResourceLoadProgress | null>(null);
   const [hasPlaybackError, setHasPlaybackError] = useState(false);
+  useEffect(() => {
+    const updateFullscreenState = () => {
+      const fullscreenRoot = fullscreenRootRef.current;
+      setIsStageFullscreen(
+        fullscreenRoot !== null && document.fullscreenElement === fullscreenRoot,
+      );
+    };
+    setIsFullscreenSupported(document.fullscreenEnabled);
+    document.addEventListener("fullscreenchange", updateFullscreenState);
+    updateFullscreenState();
+    return () => {
+      document.removeEventListener("fullscreenchange", updateFullscreenState);
+    };
+  }, []);
   useEffect(() => {
     writeBandoriChartSimulatorPreferences(
       getBandoriChartSimulatorPreferenceStorage(),
@@ -794,11 +876,10 @@ export default function ChartSimulatorRuntime({
     const currentPlaybackRate = getBandoriSimulatorPlaybackRate(
       playbackRateHundredthsRef.current,
     );
+    const loopRange = getBandoriChartLoopRange(loopPointsRef.current);
     const scheduledThroughTimeSeconds = Math.min(
       transportRef.current.durationSeconds,
-      isLoopEnabledRef.current
-        ? loopRangeRef.current.endTimeSeconds
-        : transportRef.current.durationSeconds,
+      loopRange?.endTimeSeconds ?? transportRef.current.durationSeconds,
       currentTimeSeconds
         + runtime.getNoteSoundScheduleAheadMediaSeconds(currentPlaybackRate),
     );
@@ -808,8 +889,8 @@ export default function ChartSimulatorRuntime({
       scheduledThroughTimeSeconds,
     );
     runtime.dispatch(
-      isLoopEnabledRef.current
-        ? pendingEvents.filter((event) => event.timeSeconds < loopRangeRef.current.endTimeSeconds)
+      loopRange
+        ? pendingEvents.filter((event) => event.timeSeconds < loopRange.endTimeSeconds)
         : pendingEvents,
       currentTimeSeconds,
       currentPlaybackRate,
@@ -1017,14 +1098,8 @@ export default function ChartSimulatorRuntime({
     updateTransport,
   ]);
 
-  const seekToLoopStart = useCallback((
-    range: BandoriChartLoopRange,
-    onlyWhenOutside: boolean,
-  ) => {
+  const seekToLoopStart = useCallback((range: BandoriChartLoopRange) => {
     const current = snapshotTransportAtAudioTime();
-    const currentTimeSeconds = getBandoriChartPresentationTime(current);
-    if (onlyWhenOutside && isBandoriTimeInsideLoopRange(range, currentTimeSeconds)) return;
-
     const requested = createLoopSeekTransport(
       current,
       range.startTimeSeconds,
@@ -1047,32 +1122,58 @@ export default function ChartSimulatorRuntime({
     snapshotTransportAtAudioTime,
   ]);
 
-  const applyLoopRange = useCallback((range: BandoriChartLoopRange) => {
-    loopRangeRef.current = range;
-    setLoopRange(range);
-    if (isLoopEnabledRef.current) seekToLoopStart(range, true);
-  }, [seekToLoopStart]);
+  const setLoopPointAtPresentationTime = useCallback((
+    kind: BandoriChartLoopPointKind,
+  ) => {
+    const current = snapshotTransportAtAudioTime();
+    const currentTimeSeconds = getBandoriChartPresentationTime(current);
+    const nextPoints = setBandoriChartLoopPoint(
+      loopPointsRef.current,
+      durationSeconds,
+      kind,
+      currentTimeSeconds,
+    );
+    loopPointsRef.current = nextPoints;
+    setLoopPoints(nextPoints);
 
-  const changeLoopEnabled = useCallback((isEnabled: boolean) => {
-    isLoopEnabledRef.current = isEnabled;
-    setIsLoopEnabled(isEnabled);
-    if (isEnabled) seekToLoopStart(loopRangeRef.current, true);
-  }, [seekToLoopStart]);
+    const range = getBandoriChartLoopRange(nextPoints);
+    if (
+      range
+      && current.phase === "playing"
+      && currentTimeSeconds >= range.endTimeSeconds
+    ) {
+      seekToLoopStart(range);
+    }
+  }, [durationSeconds, seekToLoopStart, snapshotTransportAtAudioTime]);
+
+  const resetLoopPoints = useCallback(() => {
+    const nextPoints = createBandoriChartLoopPoints();
+    loopPointsRef.current = nextPoints;
+    setLoopPoints(nextPoints);
+  }, []);
+
+  const clearLoopPoint = useCallback((kind: BandoriChartLoopPointKind) => {
+    const nextPoints = clearBandoriChartLoopPoint(loopPointsRef.current, kind);
+    if (nextPoints === loopPointsRef.current) return;
+    loopPointsRef.current = nextPoints;
+    setLoopPoints(nextPoints);
+  }, []);
 
   const wrapLoopAfterBoundary = useCallback((): boolean => {
+    const range = getBandoriChartLoopRange(loopPointsRef.current);
     const presentationTimeSeconds = getStagePresentationTime();
     if (
-      !isLoopEnabledRef.current
+      !range
       || loopSeekPendingRef.current
       || transportRef.current.phase !== "playing"
-      || presentationTimeSeconds < loopRangeRef.current.endTimeSeconds
+      || presentationTimeSeconds < range.endTimeSeconds
     ) {
       return false;
     }
     // Range looping intentionally uses the serialized seek handoff. The old
     // device-queued tail finishes first, then the chart and Note SE restart
     // together at the range start; a short gap is preferable to clock drift.
-    seekToLoopStart(loopRangeRef.current, false);
+    seekToLoopStart(range);
     return true;
   }, [getStagePresentationTime, seekToLoopStart]);
 
@@ -1081,9 +1182,10 @@ export default function ChartSimulatorRuntime({
       !shouldMediaPlayRef.current
       || transportRef.current.phase !== "playing"
     ) return;
-    if (isLoopEnabledRef.current) {
+    const range = getBandoriChartLoopRange(loopPointsRef.current);
+    if (range) {
       if (!loopSeekPendingRef.current) {
-        seekToLoopStart(loopRangeRef.current, false);
+        seekToLoopStart(range);
       }
       return;
     }
@@ -1304,10 +1406,9 @@ export default function ChartSimulatorRuntime({
   useEffect(() => {
     cancelPendingMediaOperation();
     const next = createBandoriChartTransportState(durationSeconds);
-    const nextLoopRange = createBandoriFullSongLoopRange(durationSeconds);
+    const nextLoopPoints = createBandoriChartLoopPoints();
     transportRef.current = next;
-    loopRangeRef.current = nextLoopRange;
-    isLoopEnabledRef.current = false;
+    loopPointsRef.current = nextLoopPoints;
     loopSeekPendingRef.current = false;
     loopSeekPromiseRef.current = null;
     isMediaPlaybackReadyRef.current = false;
@@ -1317,8 +1418,7 @@ export default function ChartSimulatorRuntime({
     stopAndResetNoteSounds(0, false, true);
     nativeAudioRuntimeRef.current?.stopAll();
     setTransport(next);
-    setLoopRange(nextLoopRange);
-    setIsLoopEnabled(false);
+    setLoopPoints(nextLoopPoints);
     setHasPlaybackError(false);
     playbackAudioSessionRef.current?.setActive(false);
   }, [
@@ -1515,7 +1615,7 @@ export default function ChartSimulatorRuntime({
   ]);
 
   const presentationTime = getBandoriChartPresentationTime(transport);
-  const play = async () => {
+  const play = useCallback(async () => {
     if (
       !audioUrl
       || musicLoadProgress?.loadId !== musicLoadId
@@ -1528,24 +1628,305 @@ export default function ChartSimulatorRuntime({
       || nativeAudioRuntimeRef.current?.isPrepared !== true
       || !isSelectedChartReady
     ) return;
-    const next = playBandoriChartTransport(transportRef.current);
+    const current = transportRef.current;
+    const loopRange = getBandoriChartLoopRange(loopPointsRef.current);
+    const playableTransport = loopRange
+      && getBandoriChartPresentationTime(current) >= loopRange.endTimeSeconds
+      ? createLoopSeekTransport(current, loopRange.startTimeSeconds, false)
+      : current;
+    const next = playBandoriChartTransport(playableTransport);
     useMusicPlayerStore.getState().requestPause();
     coordinatorRef.current?.claimPlayback();
     await seekAudioAndTransport(next);
-  };
+  }, [
+    audioUrl,
+    isSelectedChartReady,
+    musicLoadId,
+    musicLoadProgress,
+    seekAudioAndTransport,
+    soundLoadId,
+    soundLoadProgress,
+    stageLoadId,
+    stageLoadProgress,
+  ]);
 
-  const pause = () => {
+  const pause = useCallback(() => {
     pauseAudioAndTransport();
-  };
+  }, [pauseAudioAndTransport]);
 
-  const restart = () => {
-    const next = restartBandoriChartTransport(transportRef.current);
-    void seekAudioAndTransport(next);
-  };
-
-  const jump = (delta: -5 | 5) => {
+  const jump = useCallback((delta: -5 | 5) => {
     const next = jumpBandoriChartTransport(snapshotTransportAtAudioTime(), delta);
     void seekAudioAndTransport(next);
+  }, [seekAudioAndTransport, snapshotTransportAtAudioTime]);
+
+  const stepFrame = useCallback((direction: FrameStepDirection) => {
+    if (transportRef.current.phase === "scrubbing") return false;
+    if (transportRef.current.phase === "playing") pauseAudioAndTransport();
+    const next = stepBandoriChartTransport(transportRef.current, direction);
+    void seekAudioAndTransport(next);
+    return direction === -1
+      ? next.currentTimeSeconds > 0
+      : next.currentTimeSeconds < next.durationSeconds;
+  }, [pauseAudioAndTransport, seekAudioAndTransport]);
+
+  const stopFrameStepHold = useCallback((source?: string) => {
+    const activeHold = frameStepHoldRef.current;
+    if (!activeHold || (source !== undefined && activeHold.source !== source)) return;
+    window.clearTimeout(activeHold.delayTimer);
+    if (activeHold.repeatTimer !== null) {
+      window.clearInterval(activeHold.repeatTimer);
+    }
+    frameStepHoldRef.current = null;
+  }, []);
+
+  const startFrameStepHold = useCallback((
+    direction: FrameStepDirection,
+    source: string,
+  ) => {
+    stopFrameStepHold();
+    if (!stepFrame(direction)) return;
+    const activeHold: ActiveFrameStepHold = {
+      source,
+      delayTimer: 0,
+      repeatTimer: null,
+    };
+    frameStepHoldRef.current = activeHold;
+    activeHold.delayTimer = window.setTimeout(() => {
+      if (frameStepHoldRef.current !== activeHold) return;
+      if (!stepFrame(direction)) {
+        stopFrameStepHold(source);
+        return;
+      }
+      activeHold.repeatTimer = window.setInterval(
+        () => {
+          if (!stepFrame(direction)) stopFrameStepHold(source);
+        },
+        FRAME_STEP_REPEAT_INTERVAL_MS,
+      );
+    }, FRAME_STEP_HOLD_DELAY_MS);
+  }, [stepFrame, stopFrameStepHold]);
+
+  const stopLoopPointClearHold = useCallback((source?: string) => {
+    const activeHold = loopPointClearHoldRef.current;
+    if (!activeHold || (source !== undefined && activeHold.source !== source)) return;
+    window.clearTimeout(activeHold.delayTimer);
+    loopPointClearHoldRef.current = null;
+  }, []);
+
+  const startLoopPointClearHold = useCallback((
+    kind: BandoriChartLoopPointKind,
+    source: string,
+  ) => {
+    stopLoopPointClearHold();
+    suppressedLoopPointClickRef.current = null;
+    const activeHold: ActiveLoopPointClearHold = {
+      delayTimer: 0,
+      didClear: false,
+      kind,
+      source,
+    };
+    loopPointClearHoldRef.current = activeHold;
+    activeHold.delayTimer = window.setTimeout(() => {
+      if (loopPointClearHoldRef.current !== activeHold) return;
+      activeHold.didClear = true;
+      suppressedLoopPointClickRef.current = kind;
+      clearLoopPoint(kind);
+    }, LOOP_POINT_CLEAR_HOLD_DELAY_MS);
+  }, [clearLoopPoint, stopLoopPointClearHold]);
+
+  const togglePlayback = useCallback(() => {
+    if (transportRef.current.phase === "playing") {
+      pause();
+      return;
+    }
+    void play();
+  }, [pause, play]);
+
+  const handleSimulatorShortcutKeyDown = useCallback((
+    event: KeyboardEvent,
+    allowInputTarget = false,
+  ): boolean => {
+    if (
+      event.defaultPrevented
+      || event.isComposing
+      || event.altKey
+      || event.ctrlKey
+      || event.metaKey
+      || (!allowInputTarget && isSimulatorShortcutInput(event.target))
+    ) return false;
+
+    if (event.shiftKey) {
+      if (event.code !== "BracketLeft" && event.code !== "BracketRight") {
+        return false;
+      }
+      event.preventDefault();
+      if (!event.repeat) {
+        clearLoopPoint(event.code === "BracketLeft" ? "start" : "end");
+      }
+      return true;
+    }
+
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      if (!event.repeat) jump(event.key === "ArrowLeft" ? -5 : 5);
+      return true;
+    }
+
+    if (event.code === "KeyD" || event.code === "KeyF") {
+      event.preventDefault();
+      if (!event.repeat) {
+        startFrameStepHold(
+          event.code === "KeyD" ? -1 : 1,
+          `keyboard:${event.code}`,
+        );
+      }
+      return true;
+    }
+
+    if (event.code === "BracketLeft" || event.code === "BracketRight") {
+      event.preventDefault();
+      if (!event.repeat) {
+        setLoopPointAtPresentationTime(
+          event.code === "BracketLeft" ? "start" : "end",
+        );
+      }
+      return true;
+    }
+
+    if (event.code === "KeyR") {
+      event.preventDefault();
+      if (!event.repeat) resetLoopPoints();
+      return true;
+    }
+
+    if (event.code === "Space") {
+      event.preventDefault();
+      if (!event.repeat) togglePlayback();
+      return true;
+    }
+
+    return false;
+  }, [
+    clearLoopPoint,
+    jump,
+    resetLoopPoints,
+    setLoopPointAtPresentationTime,
+    startFrameStepHold,
+    togglePlayback,
+  ]);
+
+  const handleTimelineKeyDown = useCallback((
+    event: ReactKeyboardEvent<HTMLInputElement>,
+  ) => {
+    if (handleSimulatorShortcutKeyDown(event.nativeEvent, true)) return;
+    if (NATIVE_RANGE_NAVIGATION_KEYS.has(event.key)) event.preventDefault();
+  }, [handleSimulatorShortcutKeyDown]);
+
+  useEffect(() => {
+    if (!isActive) {
+      stopFrameStepHold();
+      stopLoopPointClearHold();
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      handleSimulatorShortcutKeyDown(event);
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.code === "KeyD" || event.code === "KeyF") {
+        stopFrameStepHold(`keyboard:${event.code}`);
+      }
+    };
+
+    const stopActiveHold = () => {
+      stopFrameStepHold();
+      stopLoopPointClearHold();
+    };
+    const stopHiddenHold = () => {
+      if (document.visibilityState !== "visible") stopActiveHold();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", stopActiveHold);
+    document.addEventListener("visibilitychange", stopHiddenHold);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", stopActiveHold);
+      document.removeEventListener("visibilitychange", stopHiddenHold);
+      stopFrameStepHold();
+      stopLoopPointClearHold();
+    };
+  }, [
+    handleSimulatorShortcutKeyDown,
+    isActive,
+    stopFrameStepHold,
+    stopLoopPointClearHold,
+  ]);
+
+  const startFrameStepPointerHold = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    direction: FrameStepDirection,
+  ) => {
+    if (event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    startFrameStepHold(direction, `pointer:${event.pointerId}`);
+  };
+
+  const stopFrameStepPointerHold = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => {
+    stopFrameStepHold(`pointer:${event.pointerId}`);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const startLoopPointClearPointerHold = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    kind: BandoriChartLoopPointKind,
+  ) => {
+    if (event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    startLoopPointClearHold(kind, `pointer:${event.pointerId}`);
+  };
+
+  const stopLoopPointClearPointerHold = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => {
+    stopLoopPointClearHold(`pointer:${event.pointerId}`);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const cancelLoopPointClearPointerHold = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => {
+    const activeHold = loopPointClearHoldRef.current;
+    const didClear = activeHold?.source === `pointer:${event.pointerId}`
+      && activeHold.didClear;
+    stopLoopPointClearPointerHold(event);
+    if (didClear) suppressedLoopPointClickRef.current = null;
+  };
+
+  const handleLoopPointClick = (kind: BandoriChartLoopPointKind) => {
+    if (suppressedLoopPointClickRef.current === kind) {
+      suppressedLoopPointClickRef.current = null;
+      return;
+    }
+    setLoopPointAtPresentationTime(kind);
+  };
+
+  const handleLoopPointContextMenu = (
+    event: ReactMouseEvent<HTMLButtonElement>,
+    kind: BandoriChartLoopPointKind,
+  ) => {
+    event.preventDefault();
+    stopLoopPointClearHold();
+    clearLoopPoint(kind);
   };
 
   const beginScrub = () => {
@@ -1595,6 +1976,40 @@ export default function ChartSimulatorRuntime({
     if (tab === "fullChart") setHasOpenedFullChart(true);
     setActiveTab(tab);
   };
+
+  const enterStageFullscreen = useCallback(async () => {
+    const fullscreenRoot = fullscreenRootRef.current;
+    if (
+      !fullscreenRoot
+      || !document.fullscreenEnabled
+      || document.fullscreenElement !== null
+    ) return;
+    try {
+      await fullscreenRoot.requestFullscreen({ navigationUI: "hide" });
+    } catch {
+      return;
+    }
+    if (document.fullscreenElement !== fullscreenRoot) return;
+    const orientation = window.screen.orientation as ScreenOrientation & {
+      lock?: (orientation: "landscape") => Promise<void>;
+    };
+    if (typeof orientation.lock !== "function") return;
+    try {
+      await orientation.lock("landscape");
+    } catch {
+      // Orientation locking is a preference: keep fullscreen in the user's
+      // current orientation when the browser or operating system rejects it.
+    }
+  }, []);
+
+  const exitStageFullscreen = useCallback(async () => {
+    if (document.fullscreenElement !== fullscreenRootRef.current) return;
+    try {
+      await document.exitFullscreen();
+    } catch {
+      // The browser may already be completing an Escape-initiated exit.
+    }
+  }, []);
 
   const changePlaybackRate = (adjustmentHundredths: number) => {
     const nextHundredths = adjustBandoriSimulatorPlaybackRate(
@@ -1752,14 +2167,18 @@ export default function ChartSimulatorRuntime({
     presentationTime,
     durationSeconds,
   );
-  const loopStartPercentage = getTimelinePercentage(
-    loopRange.startTimeSeconds,
-    durationSeconds,
-  );
-  const loopEndPercentage = getTimelinePercentage(
-    loopRange.endTimeSeconds,
-    durationSeconds,
-  );
+  const loopStartPercentage = loopPoints.startTimeSeconds === null
+    ? null
+    : getTimelinePercentage(loopPoints.startTimeSeconds, durationSeconds);
+  const loopEndPercentage = loopPoints.endTimeSeconds === null
+    ? null
+    : getTimelinePercentage(loopPoints.endTimeSeconds, durationSeconds);
+  const stageRenderFpsText = stageRenderFps === null
+    ? "—"
+    : String(stageRenderFps);
+  const stageRenderFpsAriaLabel = t("controls.renderFps", {
+    fps: stageRenderFpsText,
+  });
   return (
     <section className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700 dark:bg-[#111827]">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1782,101 +2201,369 @@ export default function ChartSimulatorRuntime({
         </div>
       </div>
 
-      <div
-        aria-label={songsT("difficultyLabel")}
-        className="mt-4 flex max-w-full gap-2 overflow-x-auto pb-1"
-      >
-        {difficulties.map((option) => {
-          const selected = option.difficulty === difficulty;
-          return (
-            <button
-              key={option.difficulty}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => changeDifficulty(option.difficulty)}
-              className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${selected ? "border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-control-foreground-pressed)]" : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)]"}`}
-            >
-              {songsT(`difficulties.${option.difficulty}`)}
-            </button>
-          );
-        })}
+      <div className="mt-4 flex max-w-full items-center gap-2">
+        <div
+          aria-label={songsT("difficultyLabel")}
+          className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1"
+        >
+          {difficulties.map((option) => {
+            const selected = option.difficulty === difficulty;
+            return (
+              <button
+                key={option.difficulty}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => changeDifficulty(option.difficulty)}
+                className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${selected ? "border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-control-foreground-pressed)]" : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)]"}`}
+              >
+                {songsT(`difficulties.${option.difficulty}`)}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          aria-label={t("controls.enterFullscreen")}
+          title={t("controls.enterFullscreen")}
+          className={cn(
+            MUSIC_PLAYER_SEEK_BUTTON_CLASS_NAME,
+            "border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] text-[var(--theme-color-action-secondary-foreground)] hover:bg-[var(--theme-color-action-secondary-background-hover)] disabled:cursor-not-allowed disabled:border-[var(--theme-color-control-border-disabled)] disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] disabled:hover:bg-[var(--theme-color-control-background-disabled)]",
+          )}
+          disabled={!isFullscreenSupported || activeTab !== "stage"}
+          onClick={() => void enterStageFullscreen()}
+        >
+          <Maximize className="h-5 w-5" aria-hidden="true" />
+        </button>
       </div>
 
       <div className="mt-5">
         <div
-          className="relative"
+          ref={fullscreenRootRef}
+          data-chart-simulator-fullscreen-root
+          className={cn(
+            "relative",
+            isStageFullscreen
+              ? "flex h-full w-full items-center justify-center overflow-hidden bg-black"
+              : null,
+          )}
           aria-busy={simulatorLoadingLabel !== null}
           hidden={activeTab !== "stage"}
         >
-          <NativeSimulatorStage
-            key={stageLoadId}
-            ariaLabel={t("stageAria")}
-            backgroundSkin={effectiveBackgroundSkin}
-            compiled={displayedChart.compiled}
-            directionalEffectEnabled={isDirectionalEffectEnabled}
-            directionalEffectVariant={directionalEffectVariant}
-            directionalFlickSkin={effectiveDirectionalFlickSkin}
-            fieldSkin={effectiveFieldSkin}
-            getEffectPlaybackState={getStageEffectPlaybackState}
-            getPresentationTime={getStagePresentationTime}
-            isActive={isActive && activeTab === "stage" && isSelectedChartReady}
-            isMirrored={isMirrored}
-            laneEffectEnabled={isLaneEffectEnabled}
-            limitedPerformanceSkin={limitedPerformanceSkin}
-            loadId={stageLoadId}
-            noteApproachTimeScale={noteApproachTimeScale}
-            noteSpeed={noteSpeed}
-            noteSize={noteSize}
-            noteSkin={effectiveNoteSkin}
-            noteContractErrorLabel={t("stageNoteContractUnavailable")}
-            onLoadProgress={handleStageLoadProgress}
-            rendererErrorLabel={t("rendererUnavailable")}
-            resourceErrorLabel={t("stageResourceUnavailable")}
-            resolveAssetUrl={assetLoadState.resolveAssetUrl}
-            rhythmSupportEnabled={isRhythmSupportEnabled}
-            syncLineEnabled={isSyncLineEnabled}
-            suddenLaneEnabled={isSuddenLaneEnabled}
-            suddenRate={suddenRate}
-            tapEffectContract={effectiveTapEffectContract}
-            tapEffectEnabled={isTapEffectEnabled}
-          />
-          {chartLoadingError || audioLoadingError ? (
-            <div
-              className="absolute inset-x-0 top-0 z-20 flex items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--theme-color-surface-background)_94%,transparent)] p-6 text-center backdrop-blur-sm"
-              style={{
-                aspectRatio: `${BANDORI_NATIVE_STAGE_SIZE.width} / ${BANDORI_NATIVE_STAGE_SIZE.height}`,
-              }}
-            >
-              <div>
-                <h3 className="text-base font-bold text-[var(--theme-color-semantic-danger-foreground)]">
-                  {t("unavailableTitle")}
-                </h3>
-                <p className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">
-                  {chartLoadingError ?? audioLoadingError}
-                </p>
-                <button
-                  type="button"
-                  className={`${controlClassName()} mt-4`}
-                  onClick={chartLoadingError ? retryChartLoading : retryLoading}
-                >
-                  {t("retry")}
-                </button>
+          <div
+            className={cn(
+              "relative w-full",
+              isStageFullscreen
+                ? "shrink-0 [&_[role=img]]:rounded-none [&_[role=img]]:ring-0"
+                : null,
+            )}
+            style={isStageFullscreen ? {
+              aspectRatio: `${BANDORI_NATIVE_STAGE_SIZE.width} / ${BANDORI_NATIVE_STAGE_SIZE.height}`,
+              height: `min(100dvh, ${FULLSCREEN_STAGE_HEIGHT_DVW}dvw)`,
+              width: `min(100vw, ${FULLSCREEN_STAGE_WIDTH_DVH}dvh)`,
+            } : undefined}
+          >
+            <NativeSimulatorStage
+              key={stageLoadId}
+              ariaLabel={t("stageAria")}
+              backgroundSkin={effectiveBackgroundSkin}
+              compiled={displayedChart.compiled}
+              directionalEffectEnabled={isDirectionalEffectEnabled}
+              directionalEffectVariant={directionalEffectVariant}
+              directionalFlickSkin={effectiveDirectionalFlickSkin}
+              fieldSkin={effectiveFieldSkin}
+              getEffectPlaybackState={getStageEffectPlaybackState}
+              getPresentationTime={getStagePresentationTime}
+              isActive={isActive && activeTab === "stage" && isSelectedChartReady}
+              isMirrored={isMirrored}
+              laneEffectEnabled={isLaneEffectEnabled}
+              limitedPerformanceSkin={limitedPerformanceSkin}
+              loadId={stageLoadId}
+              noteApproachTimeScale={noteApproachTimeScale}
+              noteSpeed={noteSpeed}
+              noteSize={noteSize}
+              noteSkin={effectiveNoteSkin}
+              noteContractErrorLabel={t("stageNoteContractUnavailable")}
+              onLoadProgress={handleStageLoadProgress}
+              onRenderFpsChange={setStageRenderFps}
+              rendererErrorLabel={t("rendererUnavailable")}
+              resourceErrorLabel={t("stageResourceUnavailable")}
+              resolveAssetUrl={assetLoadState.resolveAssetUrl}
+              rhythmSupportEnabled={isRhythmSupportEnabled}
+              syncLineEnabled={isSyncLineEnabled}
+              suddenLaneEnabled={isSuddenLaneEnabled}
+              suddenRate={suddenRate}
+              tapEffectContract={effectiveTapEffectContract}
+              tapEffectEnabled={isTapEffectEnabled}
+            />
+            {chartLoadingError || audioLoadingError ? (
+              <div
+                className={cn(
+                  "absolute inset-x-0 top-0 z-20 flex items-center justify-center bg-[color-mix(in_srgb,var(--theme-color-surface-background)_94%,transparent)] p-6 text-center backdrop-blur-sm",
+                  isStageFullscreen ? null : "rounded-2xl",
+                )}
+                style={{
+                  aspectRatio: `${BANDORI_NATIVE_STAGE_SIZE.width} / ${BANDORI_NATIVE_STAGE_SIZE.height}`,
+                }}
+              >
+                <div>
+                  <h3 className="text-base font-bold text-[var(--theme-color-semantic-danger-foreground)]">
+                    {t("unavailableTitle")}
+                  </h3>
+                  <p className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">
+                    {chartLoadingError ?? audioLoadingError}
+                  </p>
+                  <button
+                    type="button"
+                    className={`${controlClassName()} mt-4`}
+                    onClick={chartLoadingError ? retryChartLoading : retryLoading}
+                  >
+                    {t("retry")}
+                  </button>
+                </div>
               </div>
-            </div>
-          ) : simulatorLoadingLabel ? (
-            <div
-              className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--theme-color-surface-background)_90%,transparent)] p-6 backdrop-blur-sm"
-              style={{
-                aspectRatio: `${BANDORI_NATIVE_STAGE_SIZE.width} / ${BANDORI_NATIVE_STAGE_SIZE.height}`,
-              }}
-            >
-              <ChartSimulatorLoadingIndicator
-                completedResources={isSelectedChartReady ? completedResources : null}
-                label={simulatorLoadingLabel}
-                totalResources={isSelectedChartReady ? totalResources : null}
-              />
-            </div>
-          ) : null}
+            ) : simulatorLoadingLabel ? (
+              <div
+                className={cn(
+                  "pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-center bg-[color-mix(in_srgb,var(--theme-color-surface-background)_90%,transparent)] p-6 backdrop-blur-sm",
+                  isStageFullscreen ? null : "rounded-2xl",
+                )}
+                style={{
+                  aspectRatio: `${BANDORI_NATIVE_STAGE_SIZE.width} / ${BANDORI_NATIVE_STAGE_SIZE.height}`,
+                }}
+              >
+                <ChartSimulatorLoadingIndicator
+                  completedResources={isSelectedChartReady ? completedResources : null}
+                  label={simulatorLoadingLabel}
+                  totalResources={isSelectedChartReady ? totalResources : null}
+                />
+              </div>
+            ) : null}
+            {isStageFullscreen ? (
+              <div
+                data-chart-simulator-fullscreen-controls
+                className="pointer-events-none absolute inset-0 z-30 select-none portrait:fixed portrait:grid portrait:grid-cols-1"
+                style={{
+                  gridTemplateRows: `minmax(0, 1fr) min(100dvh, ${FULLSCREEN_STAGE_HEIGHT_DVW}dvw) minmax(0, 1fr)`,
+                }}
+              >
+                <div className="absolute left-[max(0.75rem,env(safe-area-inset-left))] top-[max(0.75rem,env(safe-area-inset-top))] flex flex-col items-start gap-1.5 portrait:static portrait:col-start-1 portrait:row-start-1 portrait:mb-3 portrait:ml-[max(0.75rem,env(safe-area-inset-left))] portrait:self-end portrait:justify-self-start">
+                  <div
+                    role="group"
+                    aria-label={t("loopControls.ariaLabel")}
+                    className="pointer-events-auto flex items-center gap-1"
+                  >
+                  <button
+                    type="button"
+                    aria-label={t("loopControls.setStart")}
+                    aria-keyshortcuts="[ Shift+["
+                    aria-pressed={loopPoints.startTimeSeconds !== null}
+                    title={t("controls.shortcutHint", {
+                      action: t("loopControls.setStart"),
+                      shortcut: "[",
+                    })}
+                    className={cn(
+                      FULLSCREEN_OVERLAY_BUTTON_CLASS_NAME,
+                      "text-sm font-black",
+                      loopPoints.startTimeSeconds !== null
+                        ? FULLSCREEN_OVERLAY_ACTIVE_BUTTON_CLASS_NAME
+                        : null,
+                    )}
+                    onPointerDown={(event) => startLoopPointClearPointerHold(event, "start")}
+                    onPointerUp={stopLoopPointClearPointerHold}
+                    onPointerCancel={cancelLoopPointClearPointerHold}
+                    onPointerLeave={cancelLoopPointClearPointerHold}
+                    onLostPointerCapture={(event) => stopLoopPointClearHold(`pointer:${event.pointerId}`)}
+                    onContextMenu={(event) => handleLoopPointContextMenu(event, "start")}
+                    onClick={() => handleLoopPointClick("start")}
+                  >
+                    A
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t("loopControls.setEnd")}
+                    aria-keyshortcuts="] Shift+]"
+                    aria-pressed={loopPoints.endTimeSeconds !== null}
+                    title={t("controls.shortcutHint", {
+                      action: t("loopControls.setEnd"),
+                      shortcut: "]",
+                    })}
+                    className={cn(
+                      FULLSCREEN_OVERLAY_BUTTON_CLASS_NAME,
+                      "text-sm font-black",
+                      loopPoints.endTimeSeconds !== null
+                        ? FULLSCREEN_OVERLAY_ACTIVE_BUTTON_CLASS_NAME
+                        : null,
+                    )}
+                    onPointerDown={(event) => startLoopPointClearPointerHold(event, "end")}
+                    onPointerUp={stopLoopPointClearPointerHold}
+                    onPointerCancel={cancelLoopPointClearPointerHold}
+                    onPointerLeave={cancelLoopPointClearPointerHold}
+                    onLostPointerCapture={(event) => stopLoopPointClearHold(`pointer:${event.pointerId}`)}
+                    onContextMenu={(event) => handleLoopPointContextMenu(event, "end")}
+                    onClick={() => handleLoopPointClick("end")}
+                  >
+                    B
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t("loopControls.reset")}
+                    aria-keyshortcuts="r"
+                    title={t("controls.shortcutHint", {
+                      action: t("loopControls.reset"),
+                      shortcut: "R",
+                    })}
+                    className={FULLSCREEN_OVERLAY_BUTTON_CLASS_NAME}
+                    disabled={
+                      loopPoints.startTimeSeconds === null
+                      && loopPoints.endTimeSeconds === null
+                    }
+                    onClick={resetLoopPoints}
+                  >
+                    <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                  </div>
+                  <output
+                    aria-label={stageRenderFpsAriaLabel}
+                    title={stageRenderFpsAriaLabel}
+                    className="inline-flex min-w-[7ch] justify-center rounded-xl bg-slate-950/65 px-2.5 py-1.5 font-mono text-xs font-bold tabular-nums text-white shadow-lg backdrop-blur-sm"
+                  >
+                    {stageRenderFpsText} FPS
+                  </output>
+                </div>
+
+                <div className="absolute right-[max(0.75rem,env(safe-area-inset-right))] top-[max(0.75rem,env(safe-area-inset-top))] flex flex-col items-end gap-1.5 portrait:static portrait:col-start-1 portrait:row-start-1 portrait:mb-3 portrait:mr-[max(0.75rem,env(safe-area-inset-right))] portrait:self-end portrait:justify-self-end">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      aria-label={t(isPlaying ? "controls.pause" : "controls.play")}
+                      aria-keyshortcuts="Space"
+                      title={t("controls.shortcutHint", {
+                        action: t(isPlaying ? "controls.pause" : "controls.play"),
+                        shortcut: t("controls.spaceKey"),
+                      })}
+                      className={FULLSCREEN_OVERLAY_BUTTON_CLASS_NAME}
+                      disabled={!audioUrl || (!isPlaying && !isSimulatorReady)}
+                      onClick={isPlaying ? pause : () => void play()}
+                    >
+                      {isPlaying ? (
+                        <Pause className="h-5 w-5" aria-hidden="true" />
+                      ) : (
+                        <Play className="ml-0.5 h-5 w-5" aria-hidden="true" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={t("controls.exitFullscreen")}
+                      aria-keyshortcuts="Escape"
+                      title={t("controls.exitFullscreen")}
+                      className={FULLSCREEN_OVERLAY_BUTTON_CLASS_NAME}
+                      onClick={() => void exitStageFullscreen()}
+                    >
+                      <Minimize className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                  </div>
+                  <output
+                    aria-label={`${formatPlaybackTime(presentationTime)} / ${formatPlaybackTime(durationSeconds)}`}
+                    className="grid grid-cols-[9ch_auto_9ch] items-center gap-1 rounded-xl bg-slate-950/65 px-2.5 py-1.5 font-mono text-xs font-black tabular-nums text-white shadow-lg backdrop-blur-sm portrait:px-2 portrait:text-[10px] sm:text-sm"
+                  >
+                    <span className="text-right">
+                      {formatPlaybackTime(presentationTime)}
+                    </span>
+                    <span>/</span>
+                    <span className="text-left">
+                      {formatPlaybackTime(durationSeconds)}
+                    </span>
+                  </output>
+                </div>
+
+                <div
+                  data-chart-simulator-fullscreen-backward-controls
+                  className="absolute left-[max(0.75rem,env(safe-area-inset-left))] top-[42%] flex -translate-y-1/2 flex-col gap-1.5 portrait:static portrait:col-start-1 portrait:row-start-3 portrait:mt-3 portrait:ml-[max(0.75rem,env(safe-area-inset-left))] portrait:translate-y-0 portrait:self-start portrait:justify-self-start"
+                >
+                  <button
+                    type="button"
+                    aria-label={t("controls.backOneFrame")}
+                    aria-keyshortcuts="d"
+                    title={t("controls.shortcutHint", {
+                      action: t("controls.backOneFrame"),
+                      shortcut: "D",
+                    })}
+                    className={cn(
+                      FULLSCREEN_OVERLAY_BUTTON_CLASS_NAME,
+                      "touch-manipulation",
+                    )}
+                    onPointerDown={(event) => startFrameStepPointerHold(event, -1)}
+                    onPointerUp={stopFrameStepPointerHold}
+                    onPointerCancel={stopFrameStepPointerHold}
+                    onPointerLeave={stopFrameStepPointerHold}
+                    onLostPointerCapture={(event) => stopFrameStepHold(`pointer:${event.pointerId}`)}
+                    onContextMenu={(event) => event.preventDefault()}
+                    onClick={(event) => {
+                      if (event.detail === 0) stepFrame(-1);
+                    }}
+                  >
+                    <StepBack className="h-[18px] w-[18px]" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t("controls.backFive")}
+                    aria-keyshortcuts="ArrowLeft"
+                    title={t("controls.shortcutHint", {
+                      action: t("controls.backFive"),
+                      shortcut: "←",
+                    })}
+                    className={FULLSCREEN_OVERLAY_BUTTON_CLASS_NAME}
+                    onClick={() => jump(-5)}
+                  >
+                    <Rewind className="h-5 w-5" aria-hidden="true" />
+                  </button>
+                </div>
+
+                <div
+                  data-chart-simulator-fullscreen-forward-controls
+                  className="absolute right-[max(0.75rem,env(safe-area-inset-right))] top-[42%] flex -translate-y-1/2 flex-col gap-1.5 portrait:static portrait:col-start-1 portrait:row-start-3 portrait:mt-3 portrait:mr-[max(0.75rem,env(safe-area-inset-right))] portrait:translate-y-0 portrait:self-start portrait:justify-self-end"
+                >
+                  <button
+                    type="button"
+                    aria-label={t("controls.forwardOneFrame")}
+                    aria-keyshortcuts="f"
+                    title={t("controls.shortcutHint", {
+                      action: t("controls.forwardOneFrame"),
+                      shortcut: "F",
+                    })}
+                    className={cn(
+                      FULLSCREEN_OVERLAY_BUTTON_CLASS_NAME,
+                      "touch-manipulation",
+                    )}
+                    onPointerDown={(event) => startFrameStepPointerHold(event, 1)}
+                    onPointerUp={stopFrameStepPointerHold}
+                    onPointerCancel={stopFrameStepPointerHold}
+                    onPointerLeave={stopFrameStepPointerHold}
+                    onLostPointerCapture={(event) => stopFrameStepHold(`pointer:${event.pointerId}`)}
+                    onContextMenu={(event) => event.preventDefault()}
+                    onClick={(event) => {
+                      if (event.detail === 0) stepFrame(1);
+                    }}
+                  >
+                    <StepForward className="h-[18px] w-[18px]" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t("controls.forwardFive")}
+                    aria-keyshortcuts="ArrowRight"
+                    title={t("controls.shortcutHint", {
+                      action: t("controls.forwardFive"),
+                      shortcut: "→",
+                    })}
+                    className={FULLSCREEN_OVERLAY_BUTTON_CLASS_NAME}
+                    onClick={() => jump(5)}
+                  >
+                    <FastForward className="h-5 w-5" aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
         {hasOpenedFullChart ? (
           <div hidden={activeTab !== "fullChart"}>
@@ -1892,38 +2579,40 @@ export default function ChartSimulatorRuntime({
       </div>
 
       <div className="mt-5 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] p-4 shadow-sm">
-        <div className="mb-2 flex justify-end">
-          <output
-            aria-live="polite"
-            className="text-sm font-black tabular-nums text-[var(--theme-color-text-default)]"
-          >
-            {formatPlaybackTime(presentationTime)} / {formatPlaybackTime(durationSeconds)}
-          </output>
-        </div>
         <div className="relative h-8">
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 overflow-visible rounded-full bg-[var(--theme-color-control-background-disabled)]"
           >
-            <span
-              className="absolute inset-y-0 rounded-full bg-[color-mix(in_srgb,var(--theme-color-semantic-info-foreground)_18%,transparent)]"
-              style={{
-                left: `${loopStartPercentage}%`,
-                width: `${Math.max(0, loopEndPercentage - loopStartPercentage)}%`,
-              }}
-            />
-            <span
-              className="absolute inset-y-0 left-0 rounded-full bg-[var(--theme-color-progress-indicator-background)]"
-              style={{ width: `${playbackPercentage}%` }}
-            />
-            <span
-              className="absolute top-1/2 h-5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--theme-color-semantic-info-foreground)] ring-2 ring-[var(--theme-color-surface-background)]"
-              style={{ left: `${loopStartPercentage}%` }}
-            />
-            <span
-              className="absolute top-1/2 h-5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--theme-color-semantic-info-foreground)] ring-2 ring-[var(--theme-color-surface-background)]"
-              style={{ left: `${loopEndPercentage}%` }}
-            />
+            {/* The native 16px range thumb travels between centers inset 8px
+                from each edge. Keep every time-based overlay on that axis. */}
+            <div className="absolute inset-y-0 left-2 right-2">
+              {loopStartPercentage !== null && loopEndPercentage !== null ? (
+                <span
+                  className="absolute inset-y-0 rounded-full bg-[color-mix(in_srgb,var(--theme-color-semantic-info-foreground)_18%,transparent)]"
+                  style={{
+                    left: `${loopStartPercentage}%`,
+                    width: `${Math.max(0, loopEndPercentage - loopStartPercentage)}%`,
+                  }}
+                />
+              ) : null}
+              <span
+                className="absolute inset-y-0 left-0 rounded-full bg-[var(--theme-color-progress-indicator-background)]"
+                style={{ width: `${playbackPercentage}%` }}
+              />
+              {loopStartPercentage !== null ? (
+                <span
+                  className="absolute top-1/2 h-5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--theme-color-semantic-info-foreground)] ring-2 ring-[var(--theme-color-surface-background)]"
+                  style={{ left: `${loopStartPercentage}%` }}
+                />
+              ) : null}
+              {loopEndPercentage !== null ? (
+                <span
+                  className="absolute top-1/2 h-5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--theme-color-semantic-info-foreground)] ring-2 ring-[var(--theme-color-surface-background)]"
+                  style={{ left: `${loopEndPercentage}%` }}
+                />
+              ) : null}
+            </div>
           </div>
           <input
             type="range"
@@ -1932,72 +2621,225 @@ export default function ChartSimulatorRuntime({
             step={0.001}
             value={presentationTime}
             aria-label={t("controls.timeline")}
+            aria-keyshortcuts="ArrowLeft ArrowRight d f [ ] Shift+[ Shift+] Space r"
             onPointerDown={beginScrub}
-            onKeyDown={beginScrub}
+            onKeyDown={handleTimelineKeyDown}
             onChange={(event) => previewScrub(Number(event.currentTarget.value))}
             onPointerUp={commitScrub}
-            onKeyUp={commitScrub}
             onBlur={commitScrub}
             className="absolute inset-0 z-10 h-8 w-full cursor-pointer appearance-none rounded-full bg-transparent outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-[var(--theme-color-semantic-info-foreground)] [&::-moz-range-thumb]:shadow-md [&::-moz-range-track]:h-2 [&::-moz-range-track]:bg-transparent [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:-mt-1 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-[var(--theme-color-semantic-info-foreground)] [&::-webkit-slider-thumb]:shadow-md"
           />
         </div>
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <button type="button" className={controlClassName()} onClick={restart}>
-            <RotateCcw className="h-4 w-4" aria-hidden="true" />
-            {t("controls.restart")}
-          </button>
-          <button type="button" className={controlClassName()} onClick={() => jump(-5)}>
-            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-            {t("controls.backFive")}
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
+          <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+            <output
+              aria-live="polite"
+              className="grid shrink-0 grid-cols-[9ch_auto_9ch] items-center gap-1 whitespace-nowrap font-mono text-sm font-black tabular-nums text-[var(--theme-color-text-default)]"
+            >
+              <span className="text-right">
+                {formatPlaybackTime(presentationTime)}
+              </span>
+              <span>/</span>
+              <span className="text-left">
+                {formatPlaybackTime(durationSeconds)}
+              </span>
+            </output>
+            <output
+              aria-label={stageRenderFpsAriaLabel}
+              title={stageRenderFpsAriaLabel}
+              className="inline-flex w-[7ch] shrink-0 justify-end whitespace-nowrap font-mono text-sm font-bold tabular-nums text-[var(--theme-color-text-muted)]"
+            >
+              {stageRenderFpsText} FPS
+            </output>
+            <div
+              role="group"
+              aria-label={t("loopControls.ariaLabel")}
+              className="flex items-center gap-0"
+            >
+            <button
+              type="button"
+              aria-label={t("loopControls.setStart")}
+              aria-keyshortcuts="[ Shift+["
+              aria-pressed={loopPoints.startTimeSeconds !== null}
+              title={t("controls.shortcutHint", {
+                action: t("loopControls.setStart"),
+                shortcut: "[",
+              })}
+              className={cn(
+                MUSIC_PLAYER_SEEK_BUTTON_CLASS_NAME,
+                "touch-manipulation select-none text-sm font-black",
+                loopPoints.startTimeSeconds !== null
+                  ? "bg-[var(--theme-color-selection-subtle-background)] text-[var(--theme-color-selection-subtle-foreground)]"
+                  : null,
+              )}
+              onPointerDown={(event) => startLoopPointClearPointerHold(event, "start")}
+              onPointerUp={stopLoopPointClearPointerHold}
+              onPointerCancel={cancelLoopPointClearPointerHold}
+              onPointerLeave={cancelLoopPointClearPointerHold}
+              onLostPointerCapture={(event) => stopLoopPointClearHold(`pointer:${event.pointerId}`)}
+              onContextMenu={(event) => handleLoopPointContextMenu(event, "start")}
+              onClick={() => handleLoopPointClick("start")}
+            >
+              A
+            </button>
+            <button
+              type="button"
+              aria-label={t("loopControls.setEnd")}
+              aria-keyshortcuts="] Shift+]"
+              aria-pressed={loopPoints.endTimeSeconds !== null}
+              title={t("controls.shortcutHint", {
+                action: t("loopControls.setEnd"),
+                shortcut: "]",
+              })}
+              className={cn(
+                MUSIC_PLAYER_SEEK_BUTTON_CLASS_NAME,
+                "touch-manipulation select-none text-sm font-black",
+                loopPoints.endTimeSeconds !== null
+                  ? "bg-[var(--theme-color-selection-subtle-background)] text-[var(--theme-color-selection-subtle-foreground)]"
+                  : null,
+              )}
+              onPointerDown={(event) => startLoopPointClearPointerHold(event, "end")}
+              onPointerUp={stopLoopPointClearPointerHold}
+              onPointerCancel={cancelLoopPointClearPointerHold}
+              onPointerLeave={cancelLoopPointClearPointerHold}
+              onLostPointerCapture={(event) => stopLoopPointClearHold(`pointer:${event.pointerId}`)}
+              onContextMenu={(event) => handleLoopPointContextMenu(event, "end")}
+              onClick={() => handleLoopPointClick("end")}
+            >
+              B
+            </button>
+            <button
+              type="button"
+              aria-label={t("loopControls.reset")}
+              aria-keyshortcuts="r"
+              title={t("controls.shortcutHint", {
+                action: t("loopControls.reset"),
+                shortcut: "R",
+              })}
+              className={cn(
+                MUSIC_PLAYER_SEEK_BUTTON_CLASS_NAME,
+                "disabled:cursor-not-allowed disabled:text-[var(--theme-color-control-foreground-disabled)] disabled:hover:bg-transparent",
+              )}
+              disabled={
+                loopPoints.startTimeSeconds === null
+                && loopPoints.endTimeSeconds === null
+              }
+              onClick={resetLoopPoints}
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+            </button>
+            </div>
+          </div>
+          <div className="flex items-center justify-center gap-1.5 sm:col-start-2 sm:row-start-1">
+          <button
+            type="button"
+            aria-label={t("controls.backFive")}
+            aria-keyshortcuts="ArrowLeft"
+            title={t("controls.shortcutHint", {
+              action: t("controls.backFive"),
+              shortcut: "←",
+            })}
+            className={MUSIC_PLAYER_SEEK_BUTTON_CLASS_NAME}
+            onClick={() => jump(-5)}
+          >
+            <Rewind className="h-5 w-5" aria-hidden="true" />
           </button>
           <button
             type="button"
-            className={controlClassName(true)}
+            aria-label={t("controls.backOneFrame")}
+            aria-keyshortcuts="d"
+            title={t("controls.shortcutHint", {
+              action: t("controls.backOneFrame"),
+              shortcut: "D",
+            })}
+            className={`${MUSIC_PLAYER_SEEK_BUTTON_CLASS_NAME} touch-manipulation select-none`}
+            onPointerDown={(event) => startFrameStepPointerHold(event, -1)}
+            onPointerUp={stopFrameStepPointerHold}
+            onPointerCancel={stopFrameStepPointerHold}
+            onPointerLeave={stopFrameStepPointerHold}
+            onLostPointerCapture={(event) => stopFrameStepHold(`pointer:${event.pointerId}`)}
+            onContextMenu={(event) => event.preventDefault()}
+            onClick={(event) => {
+              if (event.detail === 0) stepFrame(-1);
+            }}
+          >
+            <StepBack className="h-[18px] w-[18px]" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            aria-label={t(isPlaying ? "controls.pause" : "controls.play")}
+            aria-keyshortcuts="Space"
+            title={t("controls.shortcutHint", {
+              action: t(isPlaying ? "controls.pause" : "controls.play"),
+              shortcut: t("controls.spaceKey"),
+            })}
+            className={MUSIC_PLAYER_PLAYBACK_BUTTON_CLASS_NAME}
             disabled={!audioUrl || (!isPlaying && !isSimulatorReady)}
             onClick={isPlaying ? pause : () => void play()}
           >
-            {isPlaying ? <Pause className="h-4 w-4" aria-hidden="true" /> : <Play className="h-4 w-4" aria-hidden="true" />}
-            {t(isPlaying ? "controls.pause" : "controls.play")}
+            {isPlaying ? <Pause className="h-5 w-5" aria-hidden="true" /> : <Play className="ml-0.5 h-5 w-5" aria-hidden="true" />}
           </button>
-          <button type="button" className={controlClassName()} onClick={() => jump(5)}>
-            {t("controls.forwardFive")}
-            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          <button
+            type="button"
+            aria-label={t("controls.forwardOneFrame")}
+            aria-keyshortcuts="f"
+            title={t("controls.shortcutHint", {
+              action: t("controls.forwardOneFrame"),
+              shortcut: "F",
+            })}
+            className={`${MUSIC_PLAYER_SEEK_BUTTON_CLASS_NAME} touch-manipulation select-none`}
+            onPointerDown={(event) => startFrameStepPointerHold(event, 1)}
+            onPointerUp={stopFrameStepPointerHold}
+            onPointerCancel={stopFrameStepPointerHold}
+            onPointerLeave={stopFrameStepPointerHold}
+            onLostPointerCapture={(event) => stopFrameStepHold(`pointer:${event.pointerId}`)}
+            onContextMenu={(event) => event.preventDefault()}
+            onClick={(event) => {
+              if (event.detail === 0) stepFrame(1);
+            }}
+          >
+            <StepForward className="h-[18px] w-[18px]" aria-hidden="true" />
           </button>
-        </div>
-        <div className="mt-4 grid gap-y-3 border-t border-[var(--theme-color-border-subtle)] px-2 pt-4 sm:grid-cols-2 sm:gap-x-12 sm:px-4">
-          <SimulatorVolumeControl
-            inputId="bandori-simulator-bgm-volume"
-            isMuted={isBgmMuted}
-            label={t("controls.bgmVolume")}
-            muteLabel={playerT("mute")}
-            onChange={changeBgmVolume}
-            onMuteToggle={toggleBgmMuted}
-            unmuteLabel={playerT("unmute")}
-            value={bgmVolume}
-          />
-          <SimulatorVolumeControl
-            inputId="bandori-simulator-se-volume"
-            isMuted={isSeMuted}
-            label={t("controls.seVolume")}
-            muteLabel={playerT("mute")}
-            onChange={changeSeVolume}
-            onMuteToggle={toggleSeMuted}
-            unmuteLabel={playerT("unmute")}
-            value={seVolume}
-          />
+          <button
+            type="button"
+            aria-label={t("controls.forwardFive")}
+            aria-keyshortcuts="ArrowRight"
+            title={t("controls.shortcutHint", {
+              action: t("controls.forwardFive"),
+              shortcut: "→",
+            })}
+            className={MUSIC_PLAYER_SEEK_BUTTON_CLASS_NAME}
+            onClick={() => jump(5)}
+          >
+            <FastForward className="h-5 w-5" aria-hidden="true" />
+          </button>
+          </div>
+          <div className="grid justify-center gap-y-1 sm:col-start-3 sm:row-start-1 sm:justify-self-end lg:grid-cols-2 lg:gap-x-6">
+            <SimulatorVolumeControl
+              inputId="bandori-simulator-bgm-volume"
+              isMuted={isBgmMuted}
+              label={t("controls.bgmVolume")}
+              muteLabel={playerT("mute")}
+              onChange={changeBgmVolume}
+              onMuteToggle={toggleBgmMuted}
+              unmuteLabel={playerT("unmute")}
+              value={bgmVolume}
+            />
+            <SimulatorVolumeControl
+              inputId="bandori-simulator-se-volume"
+              isMuted={isSeMuted}
+              label={t("controls.seVolume")}
+              muteLabel={playerT("mute")}
+              onChange={changeSeVolume}
+              onMuteToggle={toggleSeMuted}
+              unmuteLabel={playerT("unmute")}
+              value={seVolume}
+            />
+          </div>
         </div>
       </div>
 
       <div className="mt-5 space-y-4">
-        <SimulatorLoopControls
-          key={`${songId}:${displayedChart.difficulty}:${durationSeconds}`}
-          compiled={displayedChart.compiled}
-          isEnabled={isLoopEnabled}
-          onEnabledChange={changeLoopEnabled}
-          onRangeApply={applyLoopRange}
-          range={loopRange}
-        />
-
         <SimulatorSettingsCard title={t("effectControlsTitle")}>
             <SimulatorControlRow label={t("controls.playbackRate")}>
               <div className="flex items-center gap-1 sm:gap-2">
