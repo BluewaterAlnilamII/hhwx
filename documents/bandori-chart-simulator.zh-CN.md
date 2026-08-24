@@ -4,7 +4,7 @@
 
 谱面模拟器是 `/bandori/songs/{songId}` 下仅供开发使用的歌曲详情界面。它在不改变现有 Music API、谱面与音频契约的前提下，显示完整源谱面及由音频计时的演出舞台。
 
-模拟器内部使用固定的 `1334 x 750` 舞台，再整体等比缩放。音乐音频是演出时间的唯一时钟。播放、暂停、重新开始、固定跳转、拖动、音乐慢放、精确时间循环、Note 范围循环、镜像及 seek 重建都复用同一条 transport 路径。
+模拟器内部使用固定的 `1334 x 750` 舞台，再整体等比缩放。音乐音频是演出时间的唯一时钟。播放、暂停、重新开始、固定跳转、拖动、音乐慢放、镜像、seek 重建及区间循环回卷都复用同一条 transport 路径。
 
 ## 已支持演出
 
@@ -22,6 +22,22 @@
 - 与原生演出舞台彼此独立的完整谱面分析视图。
 
 当前实现与测试没有列入的能力一律禁用。交互失败与断 Hold、非 Perfect 判定、非 AutoPerfect 音效路由、Fever 与动态舞台切换、角色承载组件、MV／Live2D／3D 背景及未经确认的设置都不会静默回退到猜测行为。
+
+## 不变调慢放
+
+播放会自动选择音频路径。恰好 `1.00x` 时使用原生 `AudioBufferSourceNode`，保留确定性的 seek 与调度；低于 `1.00x` 时自动使用 Signalsmith Stretch 保持音高，不再提供手动后端选择器。Signalsmith 初始化或处理失败时会暂停 transport 并显示明确错误，不会静默回退到会改变音高的原生慢放。首次启用慢放时，模块与整曲 PCM 副本准备期间可能会短暂显示“准备中”。
+
+区间循环不承诺无缝或采样级精确的边界。输出呈现时钟到达区间终点后，模拟器会复用手动跳转的串行 seek 交接：先让已经进入设备队列的旧音频播放完，谱面跟随这段尾音并在区间起点等待，然后让音乐与 Note SE 从同一个新映射重新开始。因此缓冲输出、蓝牙设备或 Signalsmith 准备可能在每轮边界产生短暂停顿，但每轮都会重新同步，不会累计漂移。
+
+音乐、谱面与 Note SE 调度共用同一个按 generation 隔离的映射：
+
+```text
+mediaTime = M0 + max(0, outputContextTime - C0) * playbackRate
+```
+
+在未来输出锚点 `C0` 之前，谱面固定在 `M0`。两条活动路径都在可用时读取 `AudioContext.getOutputTimestamp()`，使画面时钟跟随到达输出设备的 context 时间。暂停、跳转与倍率重建则单独保存基于 `AudioContext.currentTime` 的较后渲染游标，避免重放已经渲染进设备队列的音频。Note SE 仍在同一 AudioContext 的精确调度坐标上触发，其预排窗口在原生路径也会纳入实测或浏览器报告的输出设备渲染领先量。
+
+Signalsmith 接收整曲 PCM 副本，报告处理延迟，并接受明确的输入／输出／倍率调度点；适配层从同源、带版本且不可变的 URL 加载原样 `1.3.2` 模块，不依赖运行时生成的 Blob 自举，并使用文档公开的未来 `output` 锚点。缓冲模式保留一个未连接的输入槽（Chrome 会把它暴露为空声道数组），使 `1.3.2` 从 `addBuffers()` 读取 PCM。每一代只提交活动段；暂停、跳转和自然结束才提交非活动 FIFO 栅栏，因为提前排入结束段会让 `1.3.2` 过早推进时间映射。DSP 初始化、PCM 传输与调度 RPC 均设有 10 秒有界等待，让失效 Worklet 明确报错，而不是使 transport 永久停在准备状态。已准备的 Signalsmith 节点只在慢放活动期间连接；停止或回到 `1.00x` 时会断开连接以避免空转，同时可保留解码后的 PCM 与节点供之后复用。节点重新连接前必须等待非活动 FIFO 栅栏确认；栅栏失败或超时就丢弃该节点，避免旧 generation 的时间映射泄漏到下一次启动。按 generation 绑定的 `processorerror` 会冻结 transport，并在之后重试前丢弃失效节点。每次跳转或倍率变化都会捕获同一个渲染截止点，但旧代的呈现映射会一直保留到该截止点真正到达输出设备；Signalsmith 可在旧输出尾排空期间并行准备，之后只允许用户最后一次请求的 generation 启动。画面先跟随旧尾，到 DSP 启动空隙时停在续播点，再按新映射继续，因此快速连续切换不会堆积多代未听见的音频，原生／Signalsmith 在蓝牙等高延迟输出上也能保持交接同步。
 
 ## 资源加载
 
@@ -65,7 +81,7 @@ Hololive 联动第二弹使用新的 `skin_collabo23_winter_d` 背景，并复�
 
 ## 架构与校验
 
-- `src/lib/bandori/chart-simulator/` 负责纯编译、transport、演出计算、效果、音效及 CDN manifest 解析；
+- `src/lib/bandori/chart-simulator/` 负责纯编译、transport、演出计算、效果、音效、不变调变速适配及 CDN manifest 解析；
 - `src/app/[locale]/bandori/songs/[songId]/` 负责开发路由、控件、固定 Pixi 舞台及渲染生命周期；
 - 私有 assets-builder 负责发布已审查的资源投影并保存逆向证据；公开 Web 仓库只保留产品行为与加载契约。
 
@@ -74,6 +90,7 @@ Hololive 联动第二弹使用新的 `skin_collabo23_winter_d` 背景，并复�
 ```bash
 npm run test:bandori-chart-simulator
 npm run typecheck
+npm run i18n:check
 ```
 
 如需校验临时准备的资源投影，可在运行模拟器测试前把 `HHWX_CHART_SIMULATOR_PROJECTION_ROOT` 指向明确的临时投影目录。普通开发与测试不再需要实体 `public/local/chart-simulator` 目录。

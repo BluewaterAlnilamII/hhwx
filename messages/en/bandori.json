@@ -716,6 +716,8 @@
       "fullChartAnalysisLabel": "Analysis view, not the native game stage",
       "fullChartAria": "Full chart analysis view",
       "audioUnavailable": "This song has no available audio, but the full chart and timeline remain usable",
+      "audioLoadingFailed": "Audio resources failed to load — try again",
+      "audioPlaybackFailed": "Music playback failed — try again",
       "skinControls": {
         "ariaLabel": "Performance skin settings",
         "noteStyle": "Note style",

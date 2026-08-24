@@ -716,6 +716,8 @@
       "fullChartAnalysisLabel": "分析视图，不代表游戏原生舞台",
       "fullChartAria": "完整谱面分析图",
       "audioUnavailable": "当前歌曲没有可用音频，仍可查看完整谱面并拖动时间轴",
+      "audioLoadingFailed": "音频资源加载失败，请重试",
+      "audioPlaybackFailed": "音乐播放失败，请重试",
       "skinControls": {
         "ariaLabel": "演出皮肤设定",
         "noteStyle": "节奏标志",

@@ -49,8 +49,23 @@ test("simulator loading reuses the page spinner and keeps the resource count com
   assert.doesNotMatch(indicator, /已准备|Loading resources/iu);
 });
 
+test("range looping reuses the serialized seek handoff without claiming a gapless boundary", async () => {
+  const [runtime, loopControls] = await Promise.all([
+    read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx"),
+    read("../src/app/[locale]/bandori/songs/[songId]/SimulatorLoopControls.tsx"),
+  ]);
+
+  assert.match(runtime, /const seekToLoopStart = useCallback/u);
+  assert.match(runtime, /seekAudioAndTransport\([\s\S]*includeStartBoundary: true/u);
+  assert.match(runtime, /const wrapLoopAfterBoundary = useCallback\([\s\S]*presentationTimeSeconds < loopRangeRef\.current\.endTimeSeconds[\s\S]*seekToLoopStart\(loopRangeRef\.current, false\)/u);
+  assert.match(runtime, /loopSeekPendingRef\.current = true[\s\S]*request\.then\(finish, finish\)/u);
+  assert.match(runtime, /isMusicPresentationTransitioning \|\| pendingPlaybackResumeRef\.current/u);
+  assert.doesNotMatch(runtime, /isBandoriSimulatorLoopAvailable|isLoopUnavailable/u);
+  assert.doesNotMatch(loopControls, /isUnavailable|t\("unavailable"\)/u);
+});
+
 test("the Pixi stage loads the selected stage, point-note atlases, and bounded hit effects", async () => {
-  const [stage, stageContract, noteAssets, notePresentation, hitPresentation, holdPresentation, judgmentComboPresentation, runtime, skinControls, loopControls, adjustmentControls, settingsCard, switchControl, loopRange, compiler, worker] = await Promise.all([
+  const [stage, stageContract, noteAssets, notePresentation, hitPresentation, holdPresentation, judgmentComboPresentation, runtime, skinControls, loopControls, adjustmentControls, settingsCard, switchControl, loopRange, compiler, worker, musicBackends] = await Promise.all([
     read("../src/app/[locale]/bandori/songs/[songId]/NativeSimulatorStage.tsx"),
     read("../src/app/[locale]/bandori/songs/[songId]/native-stage-contract.ts"),
     read("../src/app/[locale]/bandori/songs/[songId]/native-note-assets.ts"),
@@ -67,6 +82,7 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
     read("../src/lib/bandori/chart-simulator/loop-range.ts"),
     read("../src/lib/bandori/chart-simulator/compiler.ts"),
     read("../src/lib/bandori/chart-simulator/compiler.worker.ts"),
+    read("../src/lib/bandori/chart-simulator/music-playback-backends.ts"),
   ]);
   const simulatorSource = `${stage}\n${stageContract}\n${noteAssets}\n${notePresentation}\n${hitPresentation}\n${holdPresentation}\n${judgmentComboPresentation}\n${runtime}\n${skinControls}\n${loopControls}\n${adjustmentControls}\n${settingsCard}\n${switchControl}\n${loopRange}\n${compiler}\n${worker}`;
 
@@ -103,6 +119,21 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /renderedMirror !== isMirroredRef\.current/u);
   assert.match(stage, /atlasHeight - frame\.y - frame\.height/u);
   assert.match(runtime, /currentTransport\.phase === "playing"[\s\S]*runtime\?\.isMusicPlaying[\s\S]*runtime\.getMusicTime\(\)/u);
+  assert.doesNotMatch(runtime, /BANDORI_MUSIC_PLAYBACK_BACKEND|musicPlaybackBackendRef|changeMusicPlaybackBackend/u);
+  assert.doesNotMatch(runtime, /SimulatorChoiceButton|controls\.musicBackend/u);
+  assert.match(runtime, /const shouldResume = currentTransport\.phase === "playing"[\s\S]*pendingPlaybackResumeRef\.current[\s\S]*if \(shouldResume\) \{[\s\S]*runtime\?\.pauseMusic\(\)[\s\S]*seekAudioAndTransport\(\s*\{[\s\S]*phase: "playing"/u);
+  assert.match(runtime, /await runtime\.startMusic/u);
+  assert.match(runtime, /runtime\.subscribeMusicPlaybackError/u);
+  assert.match(runtime, /phase: shouldResume[\s\S]*\? "playing"/u);
+  assert.match(runtime, /isMediaPlaybackReadyRef\.current = isPresentationTailDraining/u);
+  assert.match(runtime, /runtime\.isMusicPresentationTransitioning \|\| pendingPlaybackResumeRef\.current[\s\S]*!scheduleDuringPresentationTransition/u);
+  assert.match(runtime, /changePlaybackRate[\s\S]*includeStartBoundary: true/u);
+  assert.ok(runtime.includes(
+    "${loadAttempt}:${assetLoadState.manifestSha256}:${audioUrl}",
+  ));
+  assert.match(musicBackends, /await import\("signalsmith-stretch"\)/u);
+  assert.match(musicBackends, /signalsmith-stretch-1\.3\.2\.mjs/u);
+  assert.doesNotMatch(musicBackends, /soundtouch/iu);
   assert.match(notePresentation, /BANDORI_NATIVE_NOTE_SPEED_MIN = 1/u);
   assert.match(notePresentation, /BANDORI_NATIVE_NOTE_SPEED_MAX = 12/u);
   assert.match(notePresentation, /BANDORI_NATIVE_NOTE_SPEED_STEP = 0\.01/u);
@@ -163,7 +194,7 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(runtime, /createBandoriNativeAudioRuntime/u);
   assert.match(runtime, /collectBandoriNativeNoteSoundEvents/u);
   assert.doesNotMatch(runtime, /<audio|crossOrigin="anonymous"/u);
-  assert.match(runtime, /BANDORI_NATIVE_NOTE_SOUND_SCHEDULE_AHEAD_SECONDS/u);
+  assert.match(runtime, /runtime\.getNoteSoundScheduleAheadMediaSeconds\(currentPlaybackRate\)/u);
   assert.match(runtime, /runtime\.prepareMusic\(audioUrl, controller\.signal\)/u);
   assert.match(runtime, /runtime\.prepareCueBank\(cueBank, \(url\) =>/u);
   assert.match(runtime, /currentStageLoadProgress\.completedResources[\s\S]*currentSoundLoadProgress\.completedResources[\s\S]*currentMusicLoadProgress\?\.completedResources/u);
@@ -234,7 +265,8 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(adjustmentControls, /return <Plus/u);
   assert.match(adjustmentControls, /theme-color-action-secondary-foreground/u);
   assert.doesNotMatch(runtime, />\s*[+−]\{/u);
-  assert.match(runtime, /runtime\.setMusicPlaybackRate\(nextPlaybackRate\)/u);
+  assert.doesNotMatch(runtime, /setMusicPlaybackRate/u);
+  assert.match(runtime, /const continuationTimeSeconds = runtime\?\.pauseMusic\(\);[\s\S]*void seekAudioAndTransport/u);
   assert.doesNotMatch(runtime, /defaultPlaybackRate|preservesPitch/u);
   assert.match(runtime, /getBandoriSimulatorPlaybackRate\(playbackRateHundredthsRef\.current\)/u);
   assert.match(runtime, /useState\(BANDORI_SIMULATOR_SYNC_NOTE_SPEED_SLOWDOWN_DEFAULT\)/u);
@@ -249,11 +281,8 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(loopControls, /step=\{0\.001\}/u);
   assert.match(loopControls, /className="sr-only"/u);
   assert.match(loopControls, /onRangeApply\(nextRange\)/u);
-  assert.match(runtime, /wrapLoopAtBoundary/u);
-  assert.match(runtime, /seekToLoopStart\(loopRangeRef\.current, false\)/u);
-  assert.match(runtime, /const request = seekAudioAndTransport\(requested\);[\s\S]*loopSeekPromiseRef\.current = request[\s\S]*loopSeekPromiseRef\.current !== request/u);
   assert.match(runtime, /event\.timeSeconds < loopRangeRef\.current\.endTimeSeconds/u);
-  assert.match(runtime, /wrapLoopAtBoundary\(\)[\s\S]*requestAnimationFrame\(updatePlayback\)/u);
+  assert.match(runtime, /wrapLoopAfterBoundary\(\)[\s\S]*flushNoteSoundsThrough\(presentationTimeSeconds\)[\s\S]*requestAnimationFrame\(updatePlayback\)/u);
   assert.match(loopControls, /createBandoriTimeLoopRange/u);
   assert.match(loopControls, /resolveBandoriNoteLoopRange/u);
   assert.match(loopControls, /mode === "time"/u);
@@ -369,6 +398,10 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.ok(noteSpeedIndex > effectControlsIndex);
   assert.ok(playbackRateIndex > noteSpeedIndex);
   assert.ok(syncLineIndex > playbackRateIndex);
+  assert.doesNotMatch(
+    runtime,
+    /musicPlaybackStatusLabel|controls\.playbackStatus|subscribeMusicPlaybackState|setPlaybackError/u,
+  );
   assert.ok(rhythmSupportIndex > syncLineIndex);
   assert.ok(mirrorIndex > rhythmSupportIndex);
   assert.ok(laneEffectIndex > mirrorIndex);
@@ -410,6 +443,14 @@ test("localized song and simulator keys stay mirrored", async () => {
     assert.equal(Object.hasOwn(messages.controls, "noteSpeedRange"), false);
     assert.equal(Object.hasOwn(messages.controls, "playbackRateRange"), false);
     assert.equal(Object.hasOwn(messages.controls, "syncNoteSpeedSlowdownDescription"), false);
+    assert.equal(Object.hasOwn(messages.controls, "musicBackend"), false);
+    assert.equal(Object.hasOwn(messages.controls, "musicBackendOption"), false);
+    assert.equal(Object.hasOwn(messages.controls, "musicBackendStatus"), false);
+    assert.equal(Object.hasOwn(messages.controls, "playbackStatus"), false);
+    assert.doesNotMatch(
+      JSON.stringify(messages),
+      /Signalsmith|AudioBufferSourceNode|原生精确|处理延迟|精确输出时钟|exact native|processing latency|precise output clock/iu,
+    );
     assert.equal(Object.hasOwn(messages.skinControls.limitedPerformance, "coverage"), false);
     assert.equal(Object.hasOwn(messages.skinControls.limitedPerformance, "slot"), false);
   }
@@ -417,6 +458,18 @@ test("localized song and simulator keys stay mirrored", async () => {
   assert.equal(zh.songs.simulator.loopControls.reset, "重置");
   assert.equal(en.songs.simulator.loopControls.apply, "Apply");
   assert.equal(en.songs.simulator.loopControls.reset, "Reset");
+  assert.equal(zh.songs.simulator.audioLoadingFailed, "音频资源加载失败，请重试");
+  assert.equal(zh.songs.simulator.audioPlaybackFailed, "音乐播放失败，请重试");
+  assert.equal(
+    en.songs.simulator.audioLoadingFailed,
+    "Audio resources failed to load — try again",
+  );
+  assert.equal(
+    en.songs.simulator.audioPlaybackFailed,
+    "Music playback failed — try again",
+  );
+  assert.equal(Object.hasOwn(zh.songs.simulator.loopControls, "unavailable"), false);
+  assert.equal(Object.hasOwn(en.songs.simulator.loopControls, "unavailable"), false);
   assert.equal(zh.songs.simulator.stageAria, "谱面模拟舞台");
   assert.equal(en.songs.simulator.stageAria, "Chart simulator stage");
   assert.deepEqual(Object.values(zh.songs.simulator.loading), [

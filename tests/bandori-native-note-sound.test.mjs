@@ -18,6 +18,7 @@ import {
   BANDORI_NATIVE_NOTE_SOUND_SCHEDULE_AHEAD_SECONDS,
   createBandoriNativeAudioRuntime,
   getBandoriNativeNoteSoundContextTime,
+  getBandoriNativeNoteSoundScheduleAheadMediaSeconds,
 } from "../src/lib/bandori/chart-simulator/native-audio-runtime.ts";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
@@ -151,6 +152,13 @@ test("same-position base cues coalesce while different cues stay polyphonic", ()
 
 test("future note sounds use exact shared AudioContext timestamps without a manual offset", () => {
   assert.equal(BANDORI_NATIVE_NOTE_SOUND_SCHEDULE_AHEAD_SECONDS, 0.1);
+  assert.equal(getBandoriNativeNoteSoundScheduleAheadMediaSeconds(0, 0.5), 0.05);
+  assert.ok(Math.abs(
+    getBandoriNativeNoteSoundScheduleAheadMediaSeconds(0.2, 0.5) - 0.15,
+  ) < 1e-12);
+  assert.ok(Math.abs(
+    getBandoriNativeNoteSoundScheduleAheadMediaSeconds(0.2, 1) - 0.3,
+  ) < 1e-12);
   assert.equal(getBandoriNativeNoteSoundContextTime(20, 7.25, 7.33, 1), 20.08);
   assert.equal(getBandoriNativeNoteSoundContextTime(20, 7.25, 7.33, 0.5), 20.16);
   assert.equal(getBandoriNativeNoteSoundContextTime(20, 7.25, 7.2, 0.5), 20);
@@ -162,9 +170,13 @@ test("future note sounds use exact shared AudioContext timestamps without a manu
     () => getBandoriNativeNoteSoundContextTime(20, 7.25, 7.2, 0),
     /schedule times and playback rate must be valid/u,
   );
+  assert.throws(
+    () => getBandoriNativeNoteSoundScheduleAheadMediaSeconds(-0.1, 1),
+    /look-ahead values must be valid/u,
+  );
 });
 
-test("the shared AudioContext owns decoded music, exact anchors, rate changes, and stale endings", async () => {
+test("the shared AudioContext uses the output clock while render time owns continuation", async () => {
   const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
   const originalFetch = Object.getOwnPropertyDescriptor(globalThis, "fetch");
   class FakeBufferSource {
@@ -181,6 +193,7 @@ test("the shared AudioContext owns decoded music, exact anchors, rate changes, a
     };
     startCalls = [];
     stopCalls = 0;
+    stopCallTimes = [];
 
     connect(destination) {
       this.connectCalls.push(destination);
@@ -194,18 +207,22 @@ test("the shared AudioContext owns decoded music, exact anchors, rate changes, a
       this.startCalls.push(args);
     }
 
-    stop() {
+    stop(...args) {
       this.stopCalls += 1;
+      this.stopCallTimes.push(args);
     }
   }
 
   class FakeAudioContext extends EventTarget {
     static created = null;
 
+    baseLatency = 0.1;
     closeCalls = 0;
     currentTime = 12;
     decodeCalls = 0;
     destination = {};
+    outputContextTime = 11.6;
+    outputLatency = 0.3;
     resumeCalls = 0;
     sources = [];
     state = "suspended";
@@ -242,6 +259,10 @@ test("the shared AudioContext owns decoded music, exact anchors, rate changes, a
     decodeAudioData() {
       this.decodeCalls += 1;
       return Promise.resolve({ duration: 120 });
+    }
+
+    getOutputTimestamp() {
+      return { contextTime: this.outputContextTime, performanceTime: 0 };
     }
 
     resume() {
@@ -314,53 +335,94 @@ test("the shared AudioContext owns decoded music, exact anchors, rate changes, a
     assert.equal(runtime.getContextState(), "running");
     assert.deepEqual(contextStates, ["suspended", "running"]);
 
-    assert.throws(
-      () => runtime.startMusic(Number.NaN, 1),
+    await assert.rejects(
+      runtime.startMusic(Number.NaN, 1),
       /music offset must be finite/u,
     );
-    assert.equal(runtime.startMusic(30, 0.5), 30);
+    await assert.rejects(
+      runtime.startMusic(0, 1.01),
+      /at most 1/u,
+    );
+    assert.deepEqual(await runtime.startMusic(30, 1), {
+      contextTimeSeconds: 12,
+      effectiveBackend: "native",
+      latencySeconds: 0,
+      mediaTimeSeconds: 30,
+    });
     const firstSource = context.sources[0];
     assert.deepEqual(firstSource.startCalls, [[12, 30]]);
-    assert.deepEqual(firstSource.playbackRate.calls, [[0.5, 12]]);
+    assert.deepEqual(firstSource.playbackRate.calls, [[1, 12]]);
     assert.deepEqual(firstSource.connectCalls, [context.destination]);
     context.currentTime = 13;
+    context.outputContextTime = 12.6;
+    assert.ok(Math.abs(runtime.getMusicTime() - 30.6) < 1e-12);
+    assert.ok(Math.abs(
+      runtime.getNoteSoundScheduleAheadMediaSeconds(1) - 0.5,
+    ) < 1e-12);
     runtime.dispatch([{
       action: "play-one-shot",
       cue: "perfect",
       fadeSeconds: 0,
       timeSeconds: 31,
       voiceKey: null,
-    }], 30.5, 0.5);
+    }], 30.6, 1);
     const scheduledNoteSource = context.sources[1];
-    assert.deepEqual(scheduledNoteSource.startCalls, [[14]]);
+    assert.deepEqual(scheduledNoteSource.startCalls, [[13]]);
     context.currentTime = 16;
-    assert.equal(runtime.getMusicTime(), 32);
-    assert.equal(runtime.setMusicPlaybackRate(0.75), 32);
-    assert.deepEqual(firstSource.playbackRate.calls.at(-1), [0.75, 16]);
-    context.currentTime = 20;
-    assert.equal(runtime.getMusicTime(), 35);
+    context.outputContextTime = 15.6;
+    assert.ok(Math.abs(runtime.getMusicTime() - 33.6) < 1e-12);
     const firstEnded = firstSource.onended;
-    assert.equal(runtime.pauseMusic(), 35);
+    assert.equal(runtime.pauseMusic(), 34);
     assert.equal(firstSource.stopCalls, 1);
-    assert.equal(runtime.isMusicPlaying, false);
+    assert.deepEqual(firstSource.stopCallTimes, [[16]]);
+    assert.equal(runtime.isMusicPlaying, true);
+    assert.equal(runtime.isMusicPresentationTransitioning, true);
     firstEnded?.();
     assert.equal(musicEndedCount, 0);
-    assert.equal(runtime.getMusicTime(), 35);
+    assert.ok(Math.abs(runtime.getMusicTime() - 33.6) < 1e-12);
+    assert.equal(runtime.pauseMusic(), 34);
+    assert.equal(runtime.isMusicPresentationTransitioning, true);
+    assert.ok(Math.abs(runtime.getMusicTime() - 33.6) < 1e-12);
+    context.outputContextTime = 15.8;
+    assert.ok(Math.abs(runtime.getMusicTime() - 33.8) < 1e-12);
+    context.outputContextTime = 15.999;
+    assert.ok(Math.abs(runtime.getMusicTime() - 33.999) < 1e-12);
+    context.outputContextTime = 16;
+    assert.equal(runtime.getMusicTime(), 34);
     assert.equal(context.state, "running");
 
-    assert.equal(runtime.startMusic(40, 1), 40);
+    const supersededStart = runtime.startMusic(40, 1);
+    const latestStart = runtime.startMusic(50, 1);
+    assert.equal(context.sources.length, 2);
+    await assert.rejects(supersededStart, /superseded/u);
+    assert.equal((await latestStart).mediaTimeSeconds, 50);
+    assert.equal(runtime.isMusicPresentationTransitioning, false);
     const staleSource = context.sources.at(-1);
     const staleEnded = staleSource.onended;
-    assert.equal(runtime.startMusic(50, 1), 50);
+    assert.equal((await runtime.startMusic(60, 1)).mediaTimeSeconds, 60);
     const finalSource = context.sources.at(-1);
     staleEnded?.();
     assert.equal(runtime.isMusicPlaying, true);
-    assert.equal(runtime.getMusicTime(), 50);
+    assert.equal(runtime.getMusicTime(), 60);
     assert.equal(musicEndedCount, 0);
+    context.currentTime = 76;
+    context.outputContextTime = 75.6;
     finalSource.onended?.();
-    assert.equal(runtime.isMusicPlaying, false);
+    assert.equal(runtime.isMusicPlaying, true);
+    assert.ok(Math.abs(runtime.getMusicTime() - 119.6) < 1e-12);
+    assert.equal(musicEndedCount, 0);
+    context.outputContextTime = 76;
     assert.equal(runtime.getMusicTime(), 120);
+    assert.equal(runtime.isMusicPlaying, false);
     assert.equal(musicEndedCount, 1);
+
+    context.getOutputTimestamp = undefined;
+    context.currentTime = 100;
+    assert.equal((await runtime.startMusic(10, 1)).mediaTimeSeconds, 10);
+    assert.equal(runtime.getMusicTime(), 10);
+    context.currentTime = 100.5;
+    assert.ok(Math.abs(runtime.getMusicTime() - 10.1) < 1e-12);
+    assert.ok(Math.abs(runtime.pauseMusic() - 10.5) < 1e-12);
 
     await runtime.resume();
     assert.equal(context.resumeCalls, 1);
@@ -419,17 +481,20 @@ test("the simulator owns one shared music and polyphonic Note SE AudioContext", 
   assert.match(runtime, /activeMusic\.contextStartTimeSeconds/u);
   assert.match(runtime, /activeMusic\.mediaStartTimeSeconds/u);
   assert.match(runtime, /activeMusic\.playbackRate/u);
-  assert.match(runtime, /this\.activeMusic\?\.source !== source/u);
+  assert.match(runtime, /this\.activeMusic\?\.token !== token/u);
   assert.match(runtime, /subscribeMusicEnded\(listener/u);
   assert.doesNotMatch(runtime, /createMediaElementSource|MediaElementAudioSourceNode/u);
   assert.match(runtime, /source\.start\(when\)/u);
   assert.match(runtime, /linearRampToValueAtTime\(0, startTime \+ fade\)/u);
   assert.doesNotMatch(runtime, /context\.suspend\(\)/u);
   assert.match(runtime, /pauseMusic\(\): number/u);
+  assert.match(runtime, /waitForMusicPresentationTail/u);
+  assert.match(runtime, /isMusicPresentationTransitioning/u);
   assert.doesNotMatch(pageRuntime, /<audio|crossOrigin="anonymous"/u);
-  assert.match(pageRuntime, /BANDORI_NATIVE_NOTE_SOUND_SCHEDULE_AHEAD_SECONDS/u);
-  assert.match(pageRuntime, /BANDORI_NATIVE_NOTE_SOUND_SCHEDULE_AHEAD_SECONDS \* currentPlaybackRate/u);
-  assert.match(pageRuntime, /runtime\.setMusicPlaybackRate\(nextPlaybackRate\)/u);
+  assert.match(pageRuntime, /runtime\.getNoteSoundScheduleAheadMediaSeconds\(currentPlaybackRate\)/u);
+  assert.doesNotMatch(pageRuntime, /musicPlaybackBackendRef|setMusicPlaybackRate/u);
+  assert.match(pageRuntime, /runtime\.pauseMusic\(\)/u);
+  assert.match(pageRuntime, /await runtime\.startMusic/u);
   assert.doesNotMatch(pageRuntime, /preservesPitch/u);
   assert.match(runtime, /source\.playbackRate\.setValueAtTime/u);
   assert.match(pageRuntime, /createResolvedNoteSoundCueBank/u);
