@@ -1802,18 +1802,21 @@ export default function ChartSimulatorRuntime({
                 onAdjust={(adjustment) => setSuddenRate((current) => (
                   adjustBandoriNativeSuddenRate(current, adjustment)
                 ))}
+                suffix="%"
                 value={suddenRate}
               />
-            </SimulatorControlRow>
-
-            <SimulatorControlRow label={t("controls.suddenLane")}>
-              <SimulatorBooleanControl
-                disabledLabel={t("skinControls.off")}
-                enabledLabel={t("skinControls.on")}
-                isEnabled={isSuddenLaneEnabled}
-                label={t("controls.suddenLane")}
-                onChange={setIsSuddenLaneEnabled}
-              />
+              <div className="flex basis-full flex-wrap items-center gap-2">
+                <span className="text-sm font-semibold text-[var(--theme-color-text-muted)]">
+                  {t("controls.suddenLane")}
+                </span>
+                <SimulatorBooleanControl
+                  disabledLabel={t("skinControls.off")}
+                  enabledLabel={t("skinControls.on")}
+                  isEnabled={isSuddenLaneEnabled}
+                  label={t("controls.suddenLane")}
+                  onChange={setIsSuddenLaneEnabled}
+                />
+              </div>
             </SimulatorControlRow>
 
             <SimulatorControlRow label={t("controls.playbackRate")}>

@@ -16,11 +16,19 @@ export const BANDORI_NATIVE_DIRECTIONAL_EFFECT_VARIANT_DEFAULT = "normal";
 
 export const BANDORI_NATIVE_SUDDEN_LINE_URL =
   "/local/chart-simulator/apk/textures/sudden_line.png";
+export const BANDORI_NATIVE_SUDDEN_LINE_BORDER_PIXELS = {
+  bottom: 0,
+  left: 26,
+  right: 26,
+  top: 0,
+} as const;
 
-const BANDORI_NATIVE_SUDDEN_LINE_FULL_WIDTH = 107.65;
 const BANDORI_NATIVE_SUDDEN_LINE_BASE_WIDTH = 1.98;
 const BANDORI_NATIVE_SUDDEN_LINE_EXPANDING_WIDTH = 105.67;
 const BANDORI_NATIVE_SUDDEN_LINE_HEIGHT = 0.3;
+const BANDORI_NATIVE_SUDDEN_LINE_SCALE = 10;
+const BANDORI_NATIVE_SUDDEN_LINE_TOP_CENTER_Y = 6.6100006103515625;
+const BANDORI_NATIVE_SUDDEN_LINE_TRAVEL_Y = 608.3909912109375;
 
 function clampAndAlign(
   value: number,
@@ -80,12 +88,16 @@ export function getBandoriNativeNoteScale(
   return size / 100;
 }
 
-export function getBandoriNativeSuddenRatio(rate: number): number {
-  const clamped = Math.max(
+function getBandoriNativeSuddenRawRatio(rate: number): number {
+  return Math.max(
     BANDORI_NATIVE_SUDDEN_RATE_MIN,
     Math.min(BANDORI_NATIVE_SUDDEN_RATE_MAX, rate),
-  );
-  return clamped === 0 ? 0 : 0.05 + 0.95 * clamped / 100;
+  ) / 100;
+}
+
+export function getBandoriNativeSuddenRatio(rate: number): number {
+  const rawRatio = getBandoriNativeSuddenRawRatio(rate);
+  return rawRatio === 0 ? 0 : 0.05 + 0.95 * rawRatio;
 }
 
 export function getBandoriNativeSuddenScreenY(rate: number): number {
@@ -93,16 +105,22 @@ export function getBandoriNativeSuddenScreenY(rate: number): number {
     + BANDORI_NATIVE_FIELD_RECT.height * getBandoriNativeSuddenRatio(rate);
 }
 
+export function getBandoriNativeSuddenLineScreenY(rate: number): number {
+  return BANDORI_NATIVE_SUDDEN_LINE_TOP_CENTER_Y
+    + BANDORI_NATIVE_SUDDEN_LINE_TRAVEL_Y * getBandoriNativeSuddenRatio(rate);
+}
+
 export function getBandoriNativeSuddenLineSize(rate: number): Readonly<{
   height: number;
   width: number;
 }> {
+  // The APK applies the nonzero-biased ratio only to vertical travel; the
+  // SpriteRenderer width is driven by the raw setting and its authored scale.
   const nativeWidth = BANDORI_NATIVE_SUDDEN_LINE_BASE_WIDTH
-    + BANDORI_NATIVE_SUDDEN_LINE_EXPANDING_WIDTH * getBandoriNativeSuddenRatio(rate);
-  const pixelsPerNativeUnit = BANDORI_NATIVE_FIELD_RECT.width
-    / BANDORI_NATIVE_SUDDEN_LINE_FULL_WIDTH;
+    + BANDORI_NATIVE_SUDDEN_LINE_EXPANDING_WIDTH
+    * getBandoriNativeSuddenRawRatio(rate);
   return {
-    height: BANDORI_NATIVE_SUDDEN_LINE_HEIGHT * pixelsPerNativeUnit,
-    width: nativeWidth * pixelsPerNativeUnit,
+    height: BANDORI_NATIVE_SUDDEN_LINE_HEIGHT * BANDORI_NATIVE_SUDDEN_LINE_SCALE,
+    width: nativeWidth * BANDORI_NATIVE_SUDDEN_LINE_SCALE,
   };
 }

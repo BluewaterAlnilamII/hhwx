@@ -87,6 +87,11 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   const simulatorSource = `${stage}\n${stageContract}\n${noteAssets}\n${notePresentation}\n${hitPresentation}\n${holdPresentation}\n${judgmentComboPresentation}\n${runtime}\n${skinControls}\n${loopControls}\n${adjustmentControls}\n${settingsCard}\n${switchControl}\n${loopRange}\n${compiler}\n${worker}`;
 
   assert.match(stage, /Application,[\s\S]*Assets,[\s\S]*Container,[\s\S]*Sprite/u);
+  assert.match(stage, /const suddenLine = new NineSliceSprite/u);
+  assert.match(stage, /leftWidth: BANDORI_NATIVE_SUDDEN_LINE_BORDER_PIXELS\.left/u);
+  assert.match(stage, /suddenLine\.setSize\([\s\S]*size\.width \/ sourcePixelScale/u);
+  assert.match(stage, /getBandoriNativeSuddenLineScreenY\(rate\)/u);
+  assert.doesNotMatch(stage, /const suddenLine = new Sprite/u);
   assert.match(stage, /Promise\.all\(\[/u);
   assert.match(stage, /const loadTexture = async \(logicalUrl: string\)[\s\S]*const resolvedUrl = resolveAssetUrl\(logicalUrl\)[\s\S]*Assets\.load<Texture>\(resolvedUrl\)/u);
   assert.match(stage, /plannedResourceUrls = new Set\([\s\S]*requiredLogicalUrls\.map\(resolveAssetUrl\)/u);
@@ -112,6 +117,9 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /app\.ticker\.add\(renderNotes\);[\s\S]*if \(isActiveRef\.current\) app\.start\(\)/u);
   assert.match(stage, /if \(isActive\) application\.start\(\);[\s\S]*else application\.stop\(\)/u);
   assert.match(runtime, /isActive=\{isActive && activeTab === "stage" && isSelectedChartReady\}/u);
+  assert.match(runtime, /<SimulatorControlRow label=\{t\("controls\.suddenRate"\)\}>[\s\S]*suffix="%"[\s\S]*\{t\("controls\.suddenLane"\)\}[\s\S]*label=\{t\("controls\.suddenLane"\)\}[\s\S]*<\/SimulatorControlRow>/u);
+  assert.doesNotMatch(runtime, /<SimulatorControlRow label=\{t\("controls\.suddenLane"\)\}>/u);
+  assert.doesNotMatch(skinControls, /overriddenLabel|limitedPerformance\.overriddenBy/u);
   assert.match(stage, /void initialize\(\)\.catch/u);
   assert.match(stage, /resourceAbortController\.abort\(\)/u);
   assert.match(stage, /prepareBandoriNativeChartVisuals\(compiled, false\)/u);
@@ -147,7 +155,8 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /const terminalScreenX = event\.terminalVisualLane === null[\s\S]*event\.kind\.startsWith\("directional-"\)[\s\S]*triggerSwipeEffect\([\s\S]*terminalScreenX/u);
   assert.match(stage, /getBandoriNativeNoteScale\([\s\S]*noteSizeRef\.current,[\s\S]*isMultiRangeChart/u);
   assert.match(stage, /directionalLineLayer\.mask = mask[\s\S]*syncLineLayer\.mask = mask[\s\S]*ribbonLayer\.mask = mask[\s\S]*noteLayer\.mask = mask/u);
-  assert.match(stage, /fieldDisplayTexture\.frame\.height[\s\S]*fieldDisplayTexture\.updateUvs\(\)/u);
+  assert.match(stage, /field\.mask = isLaneHidden \? mask : null/u);
+  assert.doesNotMatch(stage, /fieldDisplayTexture|fieldBaseFrame/u);
   assert.match(stage, /limitedPerformanceSkin\?\.judgmentPerfectTextureUrl[\s\S]*BANDORI_NATIVE_PERFECT_JUDGMENT_URL/u);
   assert.match(stage, /loadNativeSpriteAnchors\([\s\S]*noteSkin\.spriteAnchorsUrl/u);
   assert.match(stage, /BANDORI_NATIVE_JUDGMENT_LANE_SPACING_PIXELS/u);

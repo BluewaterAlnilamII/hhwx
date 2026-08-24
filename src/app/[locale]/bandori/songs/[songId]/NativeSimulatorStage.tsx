@@ -10,6 +10,7 @@ import {
   GpuProgram,
   Matrix,
   MeshSimple,
+  NineSliceSprite,
   Rectangle,
   Shader,
   Sprite,
@@ -168,8 +169,10 @@ import {
   type BandoriNativeDirectionalEffectRecipeKey,
 } from "./native-directional-effect-assets";
 import {
+  BANDORI_NATIVE_SUDDEN_LINE_BORDER_PIXELS,
   BANDORI_NATIVE_SUDDEN_LINE_URL,
   getBandoriNativeNoteScale,
+  getBandoriNativeSuddenLineScreenY,
   getBandoriNativeSuddenLineSize,
   getBandoriNativeSuddenRatio,
   getBandoriNativeSuddenScreenY,
@@ -2323,30 +2326,20 @@ export default function NativeSimulatorStage({
         return background;
       });
 
-      const fieldBaseFrame = new Rectangle(
-        fieldTexture.frame.x,
-        fieldTexture.frame.y,
-        fieldTexture.frame.width,
-        fieldTexture.frame.height,
-      );
-      const fieldDisplayTexture = new Texture({
-        source: fieldTexture.source,
-        frame: new Rectangle(
-          fieldBaseFrame.x,
-          fieldBaseFrame.y,
-          fieldBaseFrame.width,
-          fieldBaseFrame.height,
-        ),
-      });
-      localFrameTextures.push(fieldDisplayTexture);
-      const field = new Sprite(fieldDisplayTexture);
+      const field = new Sprite(fieldTexture);
       field.eventMode = "none";
       field.position.set(BANDORI_NATIVE_FIELD_RECT.left, BANDORI_NATIVE_FIELD_RECT.top);
       field.width = BANDORI_NATIVE_FIELD_RECT.width;
       field.height = BANDORI_NATIVE_FIELD_RECT.height;
 
-      const suddenLine = new Sprite(suddenLineTexture);
-      suddenLine.anchor.set(0.5);
+      const suddenLine = new NineSliceSprite({
+        anchor: 0.5,
+        bottomHeight: BANDORI_NATIVE_SUDDEN_LINE_BORDER_PIXELS.bottom,
+        leftWidth: BANDORI_NATIVE_SUDDEN_LINE_BORDER_PIXELS.left,
+        rightWidth: BANDORI_NATIVE_SUDDEN_LINE_BORDER_PIXELS.right,
+        texture: suddenLineTexture,
+        topHeight: BANDORI_NATIVE_SUDDEN_LINE_BORDER_PIXELS.top,
+      });
       suddenLine.alpha = 0.6980392;
       suddenLine.eventMode = "none";
       suddenLine.visible = false;
@@ -2714,32 +2707,19 @@ export default function NativeSimulatorStage({
         suddenLine.visible = ratio > 0;
         if (ratio > 0) {
           const size = getBandoriNativeSuddenLineSize(rate);
+          const sourcePixelScale = size.height / suddenLineTexture.height;
           suddenLine.position.set(
             BANDORI_NATIVE_FIELD_RECT.left + BANDORI_NATIVE_FIELD_RECT.width / 2,
-            thresholdY,
+            getBandoriNativeSuddenLineScreenY(rate),
           );
-          suddenLine.width = size.width;
-          suddenLine.height = size.height;
+          suddenLine.setSize(
+            size.width / sourcePixelScale,
+            suddenLineTexture.height,
+          );
+          suddenLine.scale.set(sourcePixelScale);
         }
 
-        const shouldCropField = isLaneHidden && ratio > 0;
-        field.visible = !shouldCropField || ratio < 1;
-        const frameRatio = shouldCropField ? ratio : 0;
-        fieldDisplayTexture.frame.x = fieldBaseFrame.x;
-        fieldDisplayTexture.frame.y =
-          fieldBaseFrame.y + fieldBaseFrame.height * frameRatio;
-        fieldDisplayTexture.frame.width = fieldBaseFrame.width;
-        fieldDisplayTexture.frame.height = Math.max(
-          0.001,
-          fieldBaseFrame.height * (1 - frameRatio),
-        );
-        fieldDisplayTexture.updateUvs();
-        field.position.set(
-          BANDORI_NATIVE_FIELD_RECT.left,
-          BANDORI_NATIVE_FIELD_RECT.top + BANDORI_NATIVE_FIELD_RECT.height * frameRatio,
-        );
-        field.width = BANDORI_NATIVE_FIELD_RECT.width;
-        field.height = BANDORI_NATIVE_FIELD_RECT.height * (1 - frameRatio);
+        field.mask = isLaneHidden ? mask : null;
       };
       applySuddenDisplay();
       let nextRibbonStartIndex = 0;

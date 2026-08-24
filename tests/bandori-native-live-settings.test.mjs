@@ -11,9 +11,11 @@ import {
   BANDORI_LIMITED_PERFORMANCE_SKINS,
 } from "../src/app/[locale]/bandori/songs/[songId]/limited-performance-skins.ts";
 import {
+  BANDORI_NATIVE_SUDDEN_LINE_BORDER_PIXELS,
   adjustBandoriNativeNoteSize,
   adjustBandoriNativeSuddenRate,
   getBandoriNativeNoteScale,
+  getBandoriNativeSuddenLineScreenY,
   getBandoriNativeSuddenLineSize,
   getBandoriNativeSuddenRatio,
   getBandoriNativeSuddenScreenY,
@@ -56,8 +58,19 @@ test("Sudden uses the native nonzero minimum and field projection", () => {
   assert.equal(getBandoriNativeSuddenRatio(100), 1);
   assert.equal(getBandoriNativeSuddenScreenY(0), 5);
   assert.equal(getBandoriNativeSuddenScreenY(100), 615);
-  assert.equal(getBandoriNativeSuddenLineSize(100).width, 1160);
-  assert.ok(getBandoriNativeSuddenLineSize(1).width > 0);
+  assert.ok(Math.abs(getBandoriNativeSuddenLineScreenY(1) - 42.809264587402344) < 1e-12);
+  assert.ok(Math.abs(getBandoriNativeSuddenLineScreenY(50) - 326.01527099609376) < 1e-12);
+  assert.ok(Math.abs(getBandoriNativeSuddenLineScreenY(100) - 615.0009918212891) < 1e-12);
+  assert.ok(Math.abs(getBandoriNativeSuddenLineSize(1).width - 30.367) < 1e-12);
+  assert.ok(Math.abs(getBandoriNativeSuddenLineSize(50).width - 548.15) < 1e-12);
+  assert.equal(getBandoriNativeSuddenLineSize(100).width, 1076.5);
+  assert.equal(getBandoriNativeSuddenLineSize(100).height, 3);
+  assert.deepEqual(BANDORI_NATIVE_SUDDEN_LINE_BORDER_PIXELS, {
+    bottom: 0,
+    left: 26,
+    right: 26,
+    top: 0,
+  });
 });
 
 test("all six directional families expose both exact eight-recipe variants", () => {
