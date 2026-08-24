@@ -67,7 +67,6 @@ import {
   type BandoriNativeTapSeSkin,
 } from "@/lib/bandori/chart-simulator/native-note-sound-presentation";
 import {
-  BANDORI_NATIVE_NOTE_SOUND_SCHEDULE_AHEAD_SECONDS,
   createBandoriNativeAudioRuntime,
   type BandoriNativeNoteSoundCueBank,
   type BandoriNativeAudioRuntime,
@@ -190,7 +189,6 @@ type AssetLoadState =
 type AudioResourceLoadProgress = {
   readonly completedResources: number;
   readonly loadId: string;
-  readonly message?: string;
   readonly status: "loading" | "ready" | "error";
   readonly totalResources: number;
 };
@@ -343,6 +341,7 @@ export default function ChartSimulatorRuntime({
   const noteSoundNeedsLoopSyncRef = useRef(false);
   const isMediaPlaybackReadyRef = useRef(false);
   const shouldMediaPlayRef = useRef(false);
+  const pendingPlaybackResumeRef = useRef(false);
   const loopRangeRef = useRef(createBandoriFullSongLoopRange(durationSeconds));
   const isLoopEnabledRef = useRef(false);
   const loopSeekPendingRef = useRef(false);
@@ -414,7 +413,7 @@ export default function ChartSimulatorRuntime({
     useState<AudioResourceLoadProgress | null>(null);
   const [musicLoadProgress, setMusicLoadProgress] =
     useState<AudioResourceLoadProgress | null>(null);
-  const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [hasPlaybackError, setHasPlaybackError] = useState(false);
   const playbackRate = getBandoriSimulatorPlaybackRate(playbackRateHundredths);
   const noteApproachTimeScale = getBandoriSimulatorNoteApproachTimeScale(
     playbackRateHundredths,
@@ -475,6 +474,7 @@ export default function ChartSimulatorRuntime({
   }, []);
 
   const cancelPendingMediaOperation = useCallback(() => {
+    pendingPlaybackResumeRef.current = false;
     mediaOperationSequencer.cancel();
   }, [mediaOperationSequencer]);
 
@@ -489,7 +489,8 @@ export default function ChartSimulatorRuntime({
     if (
       currentTransport.phase === "playing"
       && isMediaPlaybackReadyRef.current
-      && runtime?.isMusicPlaying
+      && runtime
+      && (runtime.isMusicPlaying || pendingPlaybackResumeRef.current)
     ) {
       return Math.max(
         0,
@@ -524,7 +525,10 @@ export default function ChartSimulatorRuntime({
     noteSoundNeedsLoopSyncRef.current = rebuildActiveLoops;
   }, []);
 
-  const flushNoteSoundsThrough = useCallback((timeSeconds: number) => {
+  const flushNoteSoundsThrough = useCallback((
+    timeSeconds: number,
+    scheduleDuringPresentationTransition = false,
+  ) => {
     const runtime = nativeAudioRuntimeRef.current;
     const timeline = noteSoundTimelineRef.current;
     const currentTimeSeconds = Math.max(0, timeSeconds);
@@ -533,6 +537,10 @@ export default function ChartSimulatorRuntime({
       noteSoundLastMediaTimeRef.current = currentTimeSeconds;
       return;
     }
+    if (
+      (runtime.isMusicPresentationTransitioning || pendingPlaybackResumeRef.current)
+      && !scheduleDuringPresentationTransition
+    ) return;
     if (currentTimeSeconds < noteSoundLastMediaTimeRef.current - 1e-7) {
       runtime.stopAll();
       noteSoundCursorRef.current = currentTimeSeconds;
@@ -551,6 +559,7 @@ export default function ChartSimulatorRuntime({
           loop.voiceKey,
           loop.cue,
           loop.offsetSeconds / currentPlaybackRate,
+          runtime.getMusicContextTime(currentTimeSeconds) ?? undefined,
         );
       }
       noteSoundNeedsLoopSyncRef.current = false;
@@ -564,7 +573,7 @@ export default function ChartSimulatorRuntime({
         ? loopRangeRef.current.endTimeSeconds
         : transportRef.current.durationSeconds,
       currentTimeSeconds
-        + BANDORI_NATIVE_NOTE_SOUND_SCHEDULE_AHEAD_SECONDS * currentPlaybackRate,
+        + runtime.getNoteSoundScheduleAheadMediaSeconds(currentPlaybackRate),
     );
     const pendingEvents = collectBandoriNativeNoteSoundEvents(
       timeline,
@@ -599,11 +608,17 @@ export default function ChartSimulatorRuntime({
 
   const pauseAudioAndTransport = useCallback(() => {
     cancelPendingMediaOperation();
-    const snapshot = snapshotTransportAtAudioTime();
+    const presentationSnapshot = snapshotTransportAtAudioTime();
+    const continuationTimeSeconds = pauseAudioInternally();
+    const snapshot = continuationTimeSeconds === null
+      ? presentationSnapshot
+      : syncBandoriChartMediaTime(
+          presentationSnapshot,
+          continuationTimeSeconds,
+        );
     isMediaPlaybackReadyRef.current = false;
     const next = pauseBandoriChartTransport(snapshot);
     updateTransport(next);
-    pauseAudioInternally();
     stopAndResetNoteSounds(
       snapshot.currentTimeSeconds,
       snapshot.currentTimeSeconds > 0,
@@ -620,33 +635,53 @@ export default function ChartSimulatorRuntime({
 
   const seekAudioAndTransport = useCallback(async (
     requestedTransport: BandoriChartTransportState,
+    { includeStartBoundary = false }: { includeStartBoundary?: boolean } = {},
   ) => {
     const shouldResume = requestedTransport.phase === "playing";
     const requestedTimeSeconds = requestedTransport.currentTimeSeconds;
+    const runtime = nativeAudioRuntimeRef.current;
+    const previousPresentationTimeSeconds = shouldResume && runtime?.isMusicPlaying
+      ? runtime.getMusicTime()
+      : getBandoriChartPresentationTime(transportRef.current);
+
+    pauseAudioInternally();
+    const isPresentationTailDraining = shouldResume
+      && runtime?.isMusicPlaying === true;
     const pendingTransport: BandoriChartTransportState = {
       ...requestedTransport,
-      phase: requestedTransport.phase === "ready" ? "ready" : "paused",
+      phase: shouldResume
+        ? "playing"
+        : requestedTransport.phase === "ready" ? "ready" : "paused",
+      currentTimeSeconds: isPresentationTailDraining
+        ? previousPresentationTimeSeconds
+        : requestedTimeSeconds,
       previewTimeSeconds: null,
       shouldResumeAfterInteraction: false,
     };
 
-    isMediaPlaybackReadyRef.current = false;
-    pauseAudioInternally();
+    isMediaPlaybackReadyRef.current = isPresentationTailDraining;
+    pendingPlaybackResumeRef.current = shouldResume;
+    shouldMediaPlayRef.current = shouldResume;
     playbackAudioSessionRef.current?.setActive(false);
     invalidateStageEffects();
     stopAndResetNoteSounds(
       requestedTimeSeconds,
       requestedTimeSeconds > 0,
-      requestedTimeSeconds === 0,
+      requestedTimeSeconds === 0 || includeStartBoundary,
     );
     updateTransport(pendingTransport);
 
-    const runtime = nativeAudioRuntimeRef.current;
     if (!runtime?.isMusicPrepared) {
-      if (shouldResume) setPlaybackError("Native music is not prepared");
+      pendingPlaybackResumeRef.current = false;
+      shouldMediaPlayRef.current = false;
+      isMediaPlaybackReadyRef.current = false;
+      if (shouldResume) {
+        updateTransport({ ...pendingTransport, phase: "paused" });
+        setHasPlaybackError(true);
+      }
       return;
     }
-    setPlaybackError(null);
+    setHasPlaybackError(false);
 
     return mediaOperationSequencer.runLatest(async (operation) => {
       const settledTimeSeconds = Math.max(
@@ -669,10 +704,15 @@ export default function ChartSimulatorRuntime({
       if (nativeAudioRuntimeRef.current !== runtime) {
         throw new Error("Native audio runtime changed during playback start");
       }
-      const startedMediaTime = runtime.startMusic(
+      const started = await runtime.startMusic(
         settledTimeSeconds,
         getBandoriSimulatorPlaybackRate(playbackRateHundredthsRef.current),
       );
+      operation.throwIfSuperseded();
+      if (nativeAudioRuntimeRef.current !== runtime) {
+        runtime.pauseMusic();
+        throw new Error("Native audio runtime changed during playback start");
+      }
       if (runtime.getContextState() !== "running" || !runtime.isMusicPlaying) {
         throw new Error("Audio output is not running");
       }
@@ -680,11 +720,12 @@ export default function ChartSimulatorRuntime({
         settledTransport,
         startedTimeSeconds: Math.max(
           0,
-          Math.min(requestedTransport.durationSeconds, startedMediaTime),
+          Math.min(requestedTransport.durationSeconds, started.mediaTimeSeconds),
         ),
       };
     }, {
       commit: ({ settledTransport, startedTimeSeconds }) => {
+        pendingPlaybackResumeRef.current = false;
         const settledTimeSeconds = settledTransport.currentTimeSeconds;
         invalidateStageEffects();
         if (startedTimeSeconds === null) {
@@ -704,17 +745,19 @@ export default function ChartSimulatorRuntime({
         stopAndResetNoteSounds(
           startedTimeSeconds,
           startedTimeSeconds > 0,
-          startedTimeSeconds === 0,
+          startedTimeSeconds === 0 || includeStartBoundary,
         );
-        flushNoteSoundsThrough(runtime.getMusicTime());
+        flushNoteSoundsThrough(startedTimeSeconds, true);
+        const presentationTimeSeconds = runtime.getMusicTime();
         updateTransport({
           ...settledTransport,
           phase: "playing",
-          currentTimeSeconds: settledTimeSeconds,
+          currentTimeSeconds: presentationTimeSeconds,
         });
         playbackAudioSessionRef.current?.setActive(true);
       },
-      reportError: (error) => {
+      reportError: () => {
+        pendingPlaybackResumeRef.current = false;
         shouldMediaPlayRef.current = false;
         isMediaPlaybackReadyRef.current = false;
         const fallbackTimeSeconds = Math.max(
@@ -735,7 +778,7 @@ export default function ChartSimulatorRuntime({
         );
         runtime.stopAll();
         playbackAudioSessionRef.current?.setActive(false);
-        setPlaybackError(error instanceof Error ? error.message : String(error));
+        setHasPlaybackError(true);
       },
     });
   }, [
@@ -761,13 +804,17 @@ export default function ChartSimulatorRuntime({
       shouldMediaPlayRef.current,
     );
     loopSeekPendingRef.current = true;
-    const request = seekAudioAndTransport(requested);
+    const request = seekAudioAndTransport(
+      requested,
+      { includeStartBoundary: true },
+    );
     loopSeekPromiseRef.current = request;
-    void request.finally(() => {
+    const finish = () => {
       if (loopSeekPromiseRef.current !== request) return;
       loopSeekPromiseRef.current = null;
       loopSeekPendingRef.current = false;
-    });
+    };
+    void request.then(finish, finish);
   }, [
     seekAudioAndTransport,
     snapshotTransportAtAudioTime,
@@ -785,7 +832,7 @@ export default function ChartSimulatorRuntime({
     if (isEnabled) seekToLoopStart(loopRangeRef.current, true);
   }, [seekToLoopStart]);
 
-  const wrapLoopAtBoundary = useCallback((): boolean => {
+  const wrapLoopAfterBoundary = useCallback((): boolean => {
     const presentationTimeSeconds = getStagePresentationTime();
     if (
       !isLoopEnabledRef.current
@@ -795,6 +842,9 @@ export default function ChartSimulatorRuntime({
     ) {
       return false;
     }
+    // Range looping intentionally uses the serialized seek handoff. The old
+    // device-queued tail finishes first, then the chart and Note SE restart
+    // together at the range start; a short gap is preferable to clock drift.
     seekToLoopStart(loopRangeRef.current, false);
     return true;
   }, [getStagePresentationTime, seekToLoopStart]);
@@ -830,6 +880,41 @@ export default function ChartSimulatorRuntime({
     updateTransport,
   ]);
 
+  const handleMusicPlaybackError = useCallback((
+    _error: Error,
+    continuationTimeSeconds: number,
+  ) => {
+    cancelPendingMediaOperation();
+    shouldMediaPlayRef.current = false;
+    isMediaPlaybackReadyRef.current = false;
+    invalidateStageEffects();
+    const current = transportRef.current;
+    const settledTimeSeconds = Math.max(
+      0,
+      Math.min(current.durationSeconds, continuationTimeSeconds),
+    );
+    updateTransport({
+      ...current,
+      phase: settledTimeSeconds >= current.durationSeconds ? "ended" : "paused",
+      currentTimeSeconds: settledTimeSeconds,
+      previewTimeSeconds: null,
+      shouldResumeAfterInteraction: false,
+    });
+    stopAndResetNoteSounds(
+      settledTimeSeconds,
+      settledTimeSeconds > 0,
+      settledTimeSeconds === 0,
+    );
+    nativeAudioRuntimeRef.current?.stopAll();
+    playbackAudioSessionRef.current?.setActive(false);
+    setHasPlaybackError(true);
+  }, [
+    cancelPendingMediaOperation,
+    invalidateStageEffects,
+    stopAndResetNoteSounds,
+    updateTransport,
+  ]);
+
   useEffect(() => {
     if (assetLoadState.status !== "ready") return;
     const controller = new AbortController();
@@ -851,9 +936,12 @@ export default function ChartSimulatorRuntime({
         || !shouldMediaPlayRef.current
       ) return;
       pauseAudioAndTransport();
-      if (state === "closed") setPlaybackError("Audio output became unavailable");
+      if (state === "closed") setHasPlaybackError(true);
     });
     const unsubscribeMusicEnded = runtime.subscribeMusicEnded(handleMusicEnded);
+    const unsubscribeMusicPlaybackError = runtime.subscribeMusicPlaybackError(
+      handleMusicPlaybackError,
+    );
     if (audioUrl) {
       setMusicLoadProgress({
         completedResources: 0,
@@ -869,21 +957,19 @@ export default function ChartSimulatorRuntime({
           status: "ready",
           totalResources: 1,
         });
-      }).catch((error: unknown) => {
+      }).catch(() => {
         if (
           controller.signal.aborted
           || !isCurrent
           || nativeAudioRuntimeRef.current !== runtime
         ) return;
-        const message = error instanceof Error ? error.message : String(error);
         setMusicLoadProgress({
           completedResources: 0,
           loadId: musicLoadId,
-          message,
           status: "error",
           totalResources: 1,
         });
-        setPlaybackError(message);
+        setHasPlaybackError(true);
       });
     } else {
       setMusicLoadProgress(null);
@@ -894,6 +980,7 @@ export default function ChartSimulatorRuntime({
       cancelPendingMediaOperation();
       unsubscribeContextState();
       unsubscribeMusicEnded();
+      unsubscribeMusicPlaybackError();
       runtime.dispose();
       if (nativeAudioRuntimeRef.current === runtime) nativeAudioRuntimeRef.current = null;
     };
@@ -902,6 +989,7 @@ export default function ChartSimulatorRuntime({
     audioUrl,
     cancelPendingMediaOperation,
     handleMusicEnded,
+    handleMusicPlaybackError,
     musicLoadId,
     pauseAudioAndTransport,
   ]);
@@ -952,21 +1040,19 @@ export default function ChartSimulatorRuntime({
         currentTimeSeconds > 0,
         currentTimeSeconds === 0,
       );
-    }).catch((error: unknown) => {
+    }).catch(() => {
       if (
         !controller.signal.aborted
         && isCurrent
         && nativeAudioRuntimeRef.current === runtime
       ) {
-        const message = error instanceof Error ? error.message : String(error);
         setSoundLoadProgress({
           completedResources: completedResourceUrls.size,
           loadId: soundLoadId,
-          message,
           status: "error",
           totalResources: resourceUrls.size,
         });
-        setPlaybackError(message);
+        setHasPlaybackError(true);
       }
     });
     return () => {
@@ -999,7 +1085,7 @@ export default function ChartSimulatorRuntime({
     setTransport(next);
     setLoopRange(nextLoopRange);
     setIsLoopEnabled(false);
-    setPlaybackError(null);
+    setHasPlaybackError(false);
     playbackAudioSessionRef.current?.setActive(false);
   }, [
     cancelPendingMediaOperation,
@@ -1166,9 +1252,10 @@ export default function ChartSimulatorRuntime({
       if (
         transportRef.current.phase === "playing"
         && isMediaPlaybackReadyRef.current
-        && runtime?.isMusicPlaying
+        && runtime
+        && (runtime.isMusicPlaying || pendingPlaybackResumeRef.current)
       ) {
-        if (!wrapLoopAtBoundary()) {
+        if (!wrapLoopAfterBoundary()) {
           const presentationTimeSeconds = getStagePresentationTime();
           if (noteSoundTimeline) flushNoteSoundsThrough(presentationTimeSeconds);
           if (nowMs - lastUiUpdateMs >= TRANSPORT_UI_UPDATE_INTERVAL_MS) {
@@ -1190,7 +1277,7 @@ export default function ChartSimulatorRuntime({
     isActive,
     noteSoundTimeline,
     updateTransport,
-    wrapLoopAtBoundary,
+    wrapLoopAfterBoundary,
   ]);
 
   const presentationTime = getBandoriChartPresentationTime(transport);
@@ -1282,25 +1369,25 @@ export default function ChartSimulatorRuntime({
     if (nextHundredths === playbackRateHundredthsRef.current) return;
     const currentTransport = snapshotTransportAtAudioTime();
     const runtime = nativeAudioRuntimeRef.current;
+    const shouldResume = currentTransport.phase === "playing"
+      || pendingPlaybackResumeRef.current;
     playbackRateHundredthsRef.current = nextHundredths;
     setPlaybackRateHundredths(nextHundredths);
-    const nextPlaybackRate = getBandoriSimulatorPlaybackRate(nextHundredths);
-    const noteSoundTimeSeconds = currentTransport.phase === "playing"
-      && runtime?.isMusicPlaying
-      ? runtime.setMusicPlaybackRate(nextPlaybackRate)
-      : getBandoriChartPresentationTime(currentTransport);
-    if (currentTransport.phase === "playing") {
-      updateTransport(syncBandoriChartMediaTime(currentTransport, noteSoundTimeSeconds));
-    }
-    // Future triggers need new real-time timestamps. Active keep SE is rebuilt
-    // at its 1x sample phase while the chart/media clock stays untouched.
-    stopAndResetNoteSounds(
-      noteSoundTimeSeconds,
-      noteSoundTimeSeconds > 0,
-      noteSoundTimeSeconds === 0,
-    );
-    if (currentTransport.phase === "playing") {
-      flushNoteSoundsThrough(noteSoundTimeSeconds);
+    if (shouldResume) {
+      // Native and Signalsmith use different playback nodes, and Signalsmith
+      // keeps rate-dependent history. Rebuild every live rate change from one
+      // continuation point so music, chart, effects, and Note SE share one anchor.
+      const continuationTimeSeconds = runtime?.pauseMusic();
+      void seekAudioAndTransport(
+        {
+          ...currentTransport,
+          ...(continuationTimeSeconds === undefined
+            ? {}
+            : { currentTimeSeconds: continuationTimeSeconds }),
+          phase: "playing",
+        },
+        { includeStartBoundary: true },
+      );
     }
   };
 
@@ -1321,9 +1408,9 @@ export default function ChartSimulatorRuntime({
     ? loadState.message
     : null;
   const audioLoadingError = currentSoundLoadProgress?.status === "error"
-    ? currentSoundLoadProgress.message ?? t("unavailableTitle")
+    ? t("audioLoadingFailed")
     : currentMusicLoadProgress?.status === "error"
-      ? currentMusicLoadProgress.message ?? t("unavailableTitle")
+      ? t("audioLoadingFailed")
       : null;
   const simulatorLoadingLabel = currentStageLoadProgress?.phase === "error"
     || audioLoadingError
@@ -1362,13 +1449,13 @@ export default function ChartSimulatorRuntime({
     && isMusicReady;
   const retryChartLoading = () => {
     pauseAudioAndTransport();
-    setPlaybackError(null);
+    setHasPlaybackError(false);
     setChartLoadAttempt((value) => value + 1);
   };
   const retryLoading = () => {
     pauseAudioAndTransport();
     nativeAudioRuntimeRef.current?.stopAll();
-    setPlaybackError(null);
+    setHasPlaybackError(false);
     setStageLoadProgress(null);
     setSoundLoadProgress(null);
     setMusicLoadProgress(null);
@@ -1851,7 +1938,11 @@ export default function ChartSimulatorRuntime({
       </div>
 
       {!audioUrl ? <p className="mt-2 text-sm text-[var(--theme-color-semantic-warning-foreground)]">{t("audioUnavailable")}</p> : null}
-      {playbackError ? <p className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{playbackError}</p> : null}
+      {hasPlaybackError ? (
+        <p className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">
+          {t("audioPlaybackFailed")}
+        </p>
+      ) : null}
     </section>
   );
 }

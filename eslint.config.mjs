@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "temp/**",
+    // Exact, versioned upstream AudioWorklet artifacts; lint the typed adapters instead.
+    "public/res/bandori/chart-simulator/signalsmith-stretch-1.3.2.mjs",
   ]),
 ]);
 

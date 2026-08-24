@@ -85,7 +85,9 @@ function buildContentSecurityPolicyReportOnly() {
         ["media-src", ["'self'", ...buildImageSources()]],
         ["font-src", ["'self'", "data:"]],
         ["style-src", ["'self'", "'unsafe-inline'"]],
-        ["script-src", ["'self'", "'unsafe-inline'", CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN]],
+        // Signalsmith performs WebAssembly compilation inside its same-origin
+        // AudioWorklet. Keep eval disallowed while permitting WASM explicitly.
+        ["script-src", ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'", CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN]],
         ["connect-src", ["'self'", ...buildSupabaseConnectSources(), ...buildImageSources()]],
         ["report-uri", [CSP_REPORT_ENDPOINT]],
     ];
