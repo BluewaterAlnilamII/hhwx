@@ -91,7 +91,6 @@ export const BANDORI_NATIVE_TAP_SE_SKINS = [
 ] as const;
 
 export const BANDORI_NATIVE_TAP_SE_SKIN = BANDORI_NATIVE_TAP_SE_SKINS[0];
-export const BANDORI_NATIVE_NOTE_SOUND_VOLUME = 1;
 export const BANDORI_NATIVE_LONG_KEEP_FADE_SECONDS = 0.3000000119;
 
 export function getBandoriNativeTapSeCueBankId(

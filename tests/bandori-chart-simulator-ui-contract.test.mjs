@@ -38,6 +38,55 @@ test("the heavy runtime stays lazy and remains mounted after the simulator opens
   assert.doesNotMatch(runtime, /cache: "no-store"/u);
 });
 
+test("effect, skin, and volume controls share one validated browser preference", async () => {
+  const [runtime, preferences] = await Promise.all([
+    read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx"),
+    read("../src/app/[locale]/bandori/songs/[songId]/chart-simulator-preferences.ts"),
+  ]);
+
+  assert.match(runtime, /readBandoriChartSimulatorPreferences/u);
+  assert.match(runtime, /writeBandoriChartSimulatorPreferences/u);
+  for (const field of [
+    "backgroundSkinId",
+    "bgmVolume",
+    "directionalEffectVariant",
+    "directionalFlickSkinId",
+    "fieldSkinId",
+    "isBgmMuted",
+    "isLaneEffectEnabled",
+    "isMirrored",
+    "isRhythmSupportEnabled",
+    "isSeMuted",
+    "isSuddenLaneEnabled",
+    "isSyncLineEnabled",
+    "limitedPerformanceSkinId",
+    "noteSize",
+    "noteSkinId",
+    "noteSpeed",
+    "playbackRateHundredths",
+    "seVolume",
+    "suddenRate",
+    "tapEffectSkinId",
+    "tapSeSkinId",
+  ]) {
+    assert.match(runtime, new RegExp(`${field}:?`, "u"));
+    assert.match(preferences, new RegExp(`${field}:`, "u"));
+  }
+  assert.doesNotMatch(preferences, /isLoopEnabled|loopRange/u);
+  assert.match(preferences, /hhwx-bandori-chart-simulator-preferences:v1/u);
+});
+
+test("the full-chart view stays present but temporarily disabled", async () => {
+  const runtime = await read(
+    "../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx",
+  );
+
+  assert.match(runtime, /IS_FULL_CHART_VIEW_ENABLED: boolean = false/u);
+  assert.match(runtime, /if \(tab === "fullChart" && !IS_FULL_CHART_VIEW_ENABLED\) return/u);
+  assert.match(runtime, /disabled=\{tab === "fullChart" && !IS_FULL_CHART_VIEW_ENABLED\}/u);
+  assert.match(runtime, /hasOpenedFullChart \? \(/u);
+});
+
 test("simulator loading reuses the page spinner and keeps the resource count compact", async () => {
   const indicator = await read(
     "../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorLoadingIndicator.tsx",
@@ -65,10 +114,11 @@ test("range looping reuses the serialized seek handoff without claiming a gaples
 });
 
 test("the Pixi stage loads the selected stage, point-note atlases, and bounded hit effects", async () => {
-  const [stage, stageContract, noteAssets, notePresentation, hitPresentation, holdPresentation, judgmentComboPresentation, runtime, skinControls, loopControls, adjustmentControls, settingsCard, switchControl, loopRange, compiler, worker, musicBackends] = await Promise.all([
+  const [stage, stageContract, noteAssets, tapEffectAssets, notePresentation, hitPresentation, holdPresentation, judgmentComboPresentation, runtime, skinControls, loopControls, adjustmentControls, settingsCard, switchControl, loopRange, compiler, worker, musicBackends] = await Promise.all([
     read("../src/app/[locale]/bandori/songs/[songId]/NativeSimulatorStage.tsx"),
     read("../src/app/[locale]/bandori/songs/[songId]/native-stage-contract.ts"),
     read("../src/app/[locale]/bandori/songs/[songId]/native-note-assets.ts"),
+    read("../src/app/[locale]/bandori/songs/[songId]/native-tap-effect-assets.ts"),
     read("../src/lib/bandori/chart-simulator/native-note-presentation.ts"),
     read("../src/lib/bandori/chart-simulator/native-hit-effect-presentation.ts"),
     read("../src/lib/bandori/chart-simulator/native-hold-effect-presentation.ts"),
@@ -84,7 +134,7 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
     read("../src/lib/bandori/chart-simulator/compiler.worker.ts"),
     read("../src/lib/bandori/chart-simulator/music-playback-backends.ts"),
   ]);
-  const simulatorSource = `${stage}\n${stageContract}\n${noteAssets}\n${notePresentation}\n${hitPresentation}\n${holdPresentation}\n${judgmentComboPresentation}\n${runtime}\n${skinControls}\n${loopControls}\n${adjustmentControls}\n${settingsCard}\n${switchControl}\n${loopRange}\n${compiler}\n${worker}`;
+  const simulatorSource = `${stage}\n${stageContract}\n${noteAssets}\n${tapEffectAssets}\n${notePresentation}\n${hitPresentation}\n${holdPresentation}\n${judgmentComboPresentation}\n${runtime}\n${skinControls}\n${loopControls}\n${adjustmentControls}\n${settingsCard}\n${switchControl}\n${loopRange}\n${compiler}\n${worker}`;
 
   assert.match(stage, /Application,[\s\S]*Assets,[\s\S]*Container,[\s\S]*Sprite/u);
   assert.match(stage, /const suddenLine = new NineSliceSprite/u);
@@ -106,8 +156,9 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /getBandoriNativeRhythmSupportNoteUrl\(noteSkin, lane\)/u);
   assert.match(stage, /directionalFlickSkin\.atlasUrl/u);
   assert.match(stage, /Promise\.all\(mainTextureUrls\.map\([\s\S]*loadTexture\(url\)/u);
-  assert.match(stage, /usesLimitedTapEffect \? null : BANDORI_NATIVE_TAP_EFFECT_ATLAS_1_URL/u);
-  assert.match(stage, /usesLimitedTapEffect \? null : BANDORI_NATIVE_TAP_EFFECT_ATLAS_2_URL/u);
+  assert.match(stage, /usesDefaultTapEffect \? BANDORI_NATIVE_TAP_EFFECT_ATLAS_1_URL : null/u);
+  assert.match(stage, /usesDefaultTapEffect \? BANDORI_NATIVE_TAP_EFFECT_ATLAS_2_URL : null/u);
+  assert.match(stage, /loadTapEffects\([\s\S]*tapEffectEnabled \? tapEffectContract : null,[\s\S]*loadJson,[\s\S]*loadTexture/u);
   assert.match(stage, /getBandoriNativeDirectionalEffectAssetContract\(directionalFlickSkin\)/u);
   assert.match(stage, /loadDirectionalEffects\([\s\S]*directionalFlickSkin,[\s\S]*loadJson,[\s\S]*loadTexture/u);
   assert.match(stage, /BANDORI_NATIVE_DIRECTIONAL_EFFECT_VARIANTS[\s\S]*BANDORI_NATIVE_DIRECTIONAL_EFFECT_RECIPE_KEYS/u);
@@ -209,6 +260,11 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(runtime, /currentStageLoadProgress\.completedResources[\s\S]*currentSoundLoadProgress\.completedResources[\s\S]*currentMusicLoadProgress\?\.completedResources/u);
   assert.match(runtime, /<ChartSimulatorLoadingIndicator[\s\S]*completedResources=\{isSelectedChartReady \? completedResources : null\}[\s\S]*totalResources=\{isSelectedChartReady \? totalResources : null\}/u);
   assert.match(runtime, /disabled=\{!audioUrl \|\| \(!isPlaying && !isSimulatorReady\)\}/u);
+  assert.match(runtime, /aria-pressed=\{isMuted\}/u);
+  assert.match(runtime, /isMuted \? <VolumeX[\s\S]*: <Volume2/u);
+  assert.match(runtime, /const toggleBgmMuted = \(\) => \{[\s\S]*nextMuted \? 0 : getBandoriNativeBgmGain\(bgmVolumeRef\.current\)/u);
+  assert.match(runtime, /const toggleSeMuted = \(\) => \{[\s\S]*nextMuted \? 0 : getBandoriNativeSeGain\(seVolumeRef\.current\)/u);
+  assert.match(runtime, /bgmVolume: isBgmMutedRef\.current[\s\S]*seVolume: isSeMutedRef\.current/u);
   const performanceLoadingIndex = runtime.indexOf('t("loading.performance")');
   const soundLoadingIndex = runtime.indexOf('t("loading.sound")');
   const musicLoadingIndex = runtime.indexOf('t("loading.music")');
@@ -250,12 +306,11 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /createPerfectJudgmentDisplay\(perfectJudgmentTexture\)/u);
   assert.match(stage, /triggerPerfectJudgment\(perfectJudgment, effectAnimationTimeSeconds\)/u);
   assert.match(stage, /upperBoundBandoriNoteTime\([\s\S]*compiled\.notes\.times,[\s\S]*presentationTime/u);
-  assert.match(stage, /allPerfectStatusEnabledRef\.current/u);
+  assert.match(stage, /allPerfectCombo\.root\.visible = currentCombo > 0;/u);
+  assert.doesNotMatch(stage, /allPerfectStatusEnabled/u);
   assert.match(judgmentComboPresentation, /judge_perfect\.png/u);
   assert.match(judgmentComboPresentation, /combo_AP\.png/u);
-  assert.match(runtime, /\[isAllPerfectStatusEnabled, setIsAllPerfectStatusEnabled\] = useState\(true\)/u);
-  assert.match(runtime, /allPerfectStatusEnabled=\{isAllPerfectStatusEnabled\}/u);
-  assert.match(runtime, /label=\{t\("skinControls\.allPerfectStatus"\)\}/u);
+  assert.doesNotMatch(runtime, /allPerfectStatusEnabled|skinControls\.allPerfectStatus/u);
   assert.match(stage, /event\.rangeWidth/u);
   assert.match(noteAssets, /note_long_flash_\$\{lane\}\.png/u);
   assert.match(runtime, /NOTE_SPEED_DECREASES = \[-0\.5, -0\.1, -0\.01\]/u);
@@ -278,10 +333,9 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(runtime, /const continuationTimeSeconds = runtime\?\.pauseMusic\(\);[\s\S]*void seekAudioAndTransport/u);
   assert.doesNotMatch(runtime, /defaultPlaybackRate|preservesPitch/u);
   assert.match(runtime, /getBandoriSimulatorPlaybackRate\(playbackRateHundredthsRef\.current\)/u);
-  assert.match(runtime, /useState\(BANDORI_SIMULATOR_SYNC_NOTE_SPEED_SLOWDOWN_DEFAULT\)/u);
-  assert.match(runtime, /getBandoriSimulatorNoteApproachTimeScale\([\s\S]*playbackRateHundredths,[\s\S]*isNoteSpeedSlowdownSynchronized/u);
+  assert.match(runtime, /getBandoriSimulatorNoteApproachTimeScale\(\s*playbackRateHundredths,\s*\)/u);
   assert.match(runtime, /noteApproachTimeScale=\{noteApproachTimeScale\}/u);
-  assert.match(runtime, /SimulatorBooleanControl[\s\S]*syncNoteSpeedSlowdown/u);
+  assert.doesNotMatch(runtime, /syncNoteSpeedSlowdown|isNoteSpeedSlowdownSynchronized/u);
   assert.match(stage, /projectBandoriNativeNote\([\s\S]*currentNoteApproachTimeScale/u);
   assert.match(stage, /projectBandoriNativeRibbonPoint\([\s\S]*currentNoteApproachTimeScale/u);
   assert.match(stage, /projectBandoriNativeRibbonBody\([\s\S]*currentNoteApproachTimeScale/u);
@@ -306,9 +360,9 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /updateHitEffect\(display, effectAnimationTimeSeconds, currentNoteScale\)/u);
   assert.match(stage, /display\.animationElapsedSeconds \+= effectAnimationDeltaSeconds/u);
   assert.doesNotMatch(stage, /app\.ticker\.deltaMS/u);
-  assert.match(runtime, /\[isSyncLineEnabled, setIsSyncLineEnabled\] = useState\(true\)/u);
-  assert.match(runtime, /\[isRhythmSupportEnabled, setIsRhythmSupportEnabled\] = useState\(true\)/u);
-  assert.match(runtime, /\[isLaneEffectEnabled, setIsLaneEffectEnabled\] = useState\(true\)/u);
+  assert.match(runtime, /\[isSyncLineEnabled, setIsSyncLineEnabled\] = useState\(\s*initialPreferences\.isSyncLineEnabled/u);
+  assert.match(runtime, /\[isRhythmSupportEnabled, setIsRhythmSupportEnabled\] = useState\(\s*initialPreferences\.isRhythmSupportEnabled/u);
+  assert.match(runtime, /\[isLaneEffectEnabled, setIsLaneEffectEnabled\] = useState\(\s*initialPreferences\.isLaneEffectEnabled/u);
   assert.match(runtime, /isEnabled=\{isSyncLineEnabled\}/u);
   assert.match(runtime, /isEnabled=\{isRhythmSupportEnabled\}/u);
   assert.match(runtime, /isEnabled=\{isLaneEffectEnabled\}/u);
@@ -335,7 +389,8 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /createRibbonMeshDisplay\(texture, "ordinary"\)/u);
   assert.match(stage, /createRibbonMeshDisplay\(texture, "advanced"\)/u);
   assert.match(stage, /source\.alphaMode = "no-premultiply-alpha"/u);
-  assert.match(stage, /backgroundAlpha: 0/u);
+  assert.match(stage, /backgroundAlpha: backgroundSkin\.id === "off" \? 1 : 0/u);
+  assert.match(stage, /backgroundColor: 0x000000/u);
   assert.match(stage, /app\.canvas\.style\.width = "100%"/u);
   assert.match(stage, /app\.canvas\.style\.height = "100%"/u);
   assert.doesNotMatch(stage, /ResizeObserver|renderer\.resize/u);
@@ -371,18 +426,36 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(skinControls, /BANDORI_NATIVE_DIRECTIONAL_FLICK_SKINS\.map/u);
   assert.match(skinControls, /BANDORI_NATIVE_TAP_SE_SKINS\.map/u);
   assert.match(skinControls, /onTapSeSkinChange\(skin\)/u);
+  assert.match(skinControls, /BANDORI_NATIVE_TAP_EFFECT_SKINS\.map/u);
+  assert.match(skinControls, /onTapEffectSkinChange\(skin\)/u);
+  assert.match(skinControls, /overrides\.has\("tapEffect"\)/u);
+  assert.match(skinControls, /return `TYPE\$\{id \+ 1\}`/u);
+  assert.equal((skinControls.match(/getTypeLabel\(skin\.id\)/gu) ?? []).length, 2);
+  assert.match(skinControls, /skin\.id === "off" \? t\("off"\) : getTypeLabel\(skin\.id\)/u);
+  assert.match(tapEffectAssets, /assetBundleName: "skin00"[\s\S]*assetBundleName: "skin01"[\s\S]*assetBundleName: "skin02"[\s\S]*assetBundleName: "skin03"[\s\S]*assetBundleName: "skin04"[\s\S]*assetBundleName: null,[\s\S]*id: "off"/u);
+  assert.match(runtime, /tapEffectContract=\{effectiveTapEffectContract\}/u);
+  assert.match(runtime, /tapEffectEnabled=\{isTapEffectEnabled\}/u);
+  assert.match(stage, /tapEffectEnabled \? tapEffectContract : null/u);
+  assert.match(stage, /if \(!tapEffectEnabled\) continue;/u);
   assert.match(runtime, /onChange=\{setIsSyncLineEnabled\}/u);
   assert.match(runtime, /onChange=\{setIsRhythmSupportEnabled\}/u);
   assert.match(runtime, /onChange=\{setIsLaneEffectEnabled\}/u);
   assert.match(skinControls, /fieldSkins\.map/u);
+  assert.match(runtime, /fieldSkins=\{BANDORI_NATIVE_FIELD_SKIN_CHOICES\}/u);
   assert.match(skinControls, /backgroundSkins\.map/u);
   assert.match(skinControls, /onBackgroundSkinChange\(skin\)/u);
   assert.match(skinControls, /overrides\.has\("background"\)/u);
   assert.match(skinControls, /disabled=\{overrides\.has\("background"\)\}/u);
+  assert.match(skinControls, /skin\.id === "off" \? t\("off"\) : t\(`backgroundSkin\.\$\{skin\.id\}`\)/u);
   assert.match(runtime, /useState<BandoriNativeBackgroundSkin>\([\s\S]*BANDORI_NATIVE_BACKGROUND_SKIN/u);
   assert.match(runtime, /limitedPerformanceSkin\?\.backgroundSkin \?\? backgroundSkin/u);
   assert.match(runtime, /backgroundSkin=\{effectiveBackgroundSkin\}/u);
   assert.match(stage, /app\.stage\.addChild\(\s*\.\.\.backgroundLayers,\s*field,/u);
+  assert.match(skinControls, /\["normal", "light", "off"\]/u);
+  assert.match(runtime, /const isDirectionalEffectEnabled = directionalEffectVariant !== "off"/u);
+  assert.match(runtime, /directionalEffectEnabled=\{isDirectionalEffectEnabled\}/u);
+  assert.match(stage, /const usesDirectionalEffects = directionalEffectEnabled/u);
+  assert.match(stage, /if \(variant === "off"\) continue;/u);
   assert.doesNotMatch(`${stageContract}\n${runtime}`, /isMultiRangeNotes/u);
   assert.doesNotMatch(stageContract, /\/local\/chart-simulator\/(?:jp|cn)\//iu);
   assert.doesNotMatch(simulatorSource, /assetPack|resourceManifest|fallbackSource/iu);
@@ -392,6 +465,8 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
 
   const timelineIndex = runtime.indexOf('aria-label={t("controls.timeline")}');
   const playbackControlsIndex = runtime.indexOf('onClick={restart}');
+  const bgmVolumeIndex = runtime.indexOf('label={t("controls.bgmVolume")}');
+  const seVolumeIndex = runtime.indexOf('label={t("controls.seVolume")}');
   const effectControlsIndex = runtime.indexOf('{t("effectControlsTitle")}');
   const noteSpeedIndex = runtime.indexOf('label={t("controls.noteSpeed")}');
   const playbackRateIndex = runtime.indexOf('label={t("controls.playbackRate")}');
@@ -399,14 +474,15 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   const rhythmSupportIndex = runtime.indexOf('label={t("skinControls.rhythmSupport")}');
   const mirrorIndex = runtime.indexOf('label={t("controls.mirrorData")}');
   const laneEffectIndex = runtime.indexOf('label={t("skinControls.laneEffect")}');
-  const allPerfectStatusIndex = runtime.indexOf('label={t("skinControls.allPerfectStatus")}');
   const skinControlsIndex = runtime.indexOf('<SimulatorSkinControls');
   assert.ok(timelineIndex >= 0);
   assert.ok(playbackControlsIndex > timelineIndex);
-  assert.ok(effectControlsIndex > playbackControlsIndex);
-  assert.ok(noteSpeedIndex > effectControlsIndex);
-  assert.ok(playbackRateIndex > noteSpeedIndex);
-  assert.ok(syncLineIndex > playbackRateIndex);
+  assert.ok(bgmVolumeIndex > playbackControlsIndex);
+  assert.ok(seVolumeIndex > bgmVolumeIndex);
+  assert.ok(effectControlsIndex > seVolumeIndex);
+  assert.ok(playbackRateIndex > effectControlsIndex);
+  assert.ok(noteSpeedIndex > playbackRateIndex);
+  assert.ok(syncLineIndex > noteSpeedIndex);
   assert.doesNotMatch(
     runtime,
     /musicPlaybackStatusLabel|controls\.playbackStatus|subscribeMusicPlaybackState|setPlaybackError/u,
@@ -414,19 +490,20 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.ok(rhythmSupportIndex > syncLineIndex);
   assert.ok(mirrorIndex > rhythmSupportIndex);
   assert.ok(laneEffectIndex > mirrorIndex);
-  assert.ok(allPerfectStatusIndex > laneEffectIndex);
-  assert.ok(skinControlsIndex > allPerfectStatusIndex);
+  assert.ok(skinControlsIndex > laneEffectIndex);
 
   const limitedSkinIndex = skinControls.indexOf('label={t("limitedPerformance.label")}');
   const backgroundSkinIndex = skinControls.indexOf('label={t("backgroundStyle")}');
   const fieldSkinIndex = skinControls.indexOf('label={t("fieldStyle")}');
+  const tapEffectSkinIndex = skinControls.indexOf('label={t("tapEffectStyle")}');
   const noteSkinIndex = skinControls.indexOf('label={t("noteStyle")}');
   const tapSeSkinIndex = skinControls.indexOf('label={t("tapSeStyle")}');
   const directionalSkinIndex = skinControls.indexOf('label={t("directionalFlickStyle")}');
   assert.ok(limitedSkinIndex >= 0);
   assert.ok(backgroundSkinIndex > limitedSkinIndex);
   assert.ok(fieldSkinIndex > backgroundSkinIndex);
-  assert.ok(noteSkinIndex > fieldSkinIndex);
+  assert.ok(tapEffectSkinIndex > fieldSkinIndex);
+  assert.ok(noteSkinIndex > tapEffectSkinIndex);
   assert.ok(tapSeSkinIndex > noteSkinIndex);
   assert.ok(directionalSkinIndex > tapSeSkinIndex);
 });
@@ -451,6 +528,9 @@ test("localized song and simulator keys stay mirrored", async () => {
     assert.equal(Object.hasOwn(messages, "stageReady"), false);
     assert.equal(Object.hasOwn(messages.controls, "noteSpeedRange"), false);
     assert.equal(Object.hasOwn(messages.controls, "playbackRateRange"), false);
+    assert.equal(Object.hasOwn(messages.controls, "syncNoteSpeedSlowdown"), false);
+    assert.equal(Object.hasOwn(messages.controls, "syncNoteSpeedSlowdownOn"), false);
+    assert.equal(Object.hasOwn(messages.controls, "syncNoteSpeedSlowdownOff"), false);
     assert.equal(Object.hasOwn(messages.controls, "syncNoteSpeedSlowdownDescription"), false);
     assert.equal(Object.hasOwn(messages.controls, "musicBackend"), false);
     assert.equal(Object.hasOwn(messages.controls, "musicBackendOption"), false);
@@ -462,11 +542,53 @@ test("localized song and simulator keys stay mirrored", async () => {
     );
     assert.equal(Object.hasOwn(messages.skinControls.limitedPerformance, "coverage"), false);
     assert.equal(Object.hasOwn(messages.skinControls.limitedPerformance, "slot"), false);
+    assert.equal(Object.hasOwn(messages.skinControls, "allPerfectStatus"), false);
   }
   assert.equal(zh.songs.simulator.loopControls.apply, "应用");
   assert.equal(zh.songs.simulator.loopControls.reset, "重置");
   assert.equal(en.songs.simulator.loopControls.apply, "Apply");
   assert.equal(en.songs.simulator.loopControls.reset, "Reset");
+  assert.equal(zh.songs.simulator.controls.bgmVolume, "BGM音量");
+  assert.equal(zh.songs.simulator.controls.seVolume, "SE音量");
+  assert.equal(en.songs.simulator.controls.bgmVolume, "BGM volume");
+  assert.equal(en.songs.simulator.controls.seVolume, "SE volume");
+  assert.equal(zh.songs.simulator.skinControls.tapEffectStyle, "TAP EFFECT");
+  assert.equal(en.songs.simulator.skinControls.tapEffectStyle, "TAP EFFECT");
+  assert.equal(zh.songs.simulator.skinControls.limitedPerformance.none, "关");
+  assert.equal(en.songs.simulator.skinControls.limitedPerformance.none, "Off");
+  assert.deepEqual(
+    [1, 2, 3, 4, 5, 13, 14].map(
+      (id) => zh.songs.simulator.skinControls.fieldSkin[id],
+    ),
+    ["TYPE1", "TYPE2", "TYPE3", "TYPE4", "TYPE5", "TYPE6", "TYPE7"],
+  );
+  assert.deepEqual(
+    [1, 2, 3, 4, 5, 13, 14].map(
+      (id) => en.songs.simulator.skinControls.fieldSkin[id],
+    ),
+    ["TYPE1", "TYPE2", "TYPE3", "TYPE4", "TYPE5", "TYPE6", "TYPE7"],
+  );
+  assert.deepEqual(
+    [6, 7, 8, 9, 10, 11, 12, 15].map(
+      (id) => zh.songs.simulator.skinControls.fieldSkin[id],
+    ),
+    [
+      "Poppin'Party",
+      "Afterglow",
+      "Pastel＊Palettes",
+      "Roselia",
+      "Hello, Happy World!",
+      "Morfonica",
+      "RAISE A SUILEN",
+      "MyGO!!!!!",
+    ],
+  );
+  assert.deepEqual(
+    ["april2018", "april2019", "april2021", "april2024"].map(
+      (id) => zh.songs.simulator.skinControls.limitedPerformance.skin[id],
+    ),
+    ["愚人节2018", "愚人节2019", "愚人节2021", "愚人节2024"],
+  );
   assert.equal(zh.songs.simulator.audioLoadingFailed, "音频资源加载失败，请重试");
   assert.equal(zh.songs.simulator.audioPlaybackFailed, "音乐播放失败，请重试");
   assert.equal(

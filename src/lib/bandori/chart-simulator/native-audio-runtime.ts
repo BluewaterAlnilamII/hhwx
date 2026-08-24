@@ -125,7 +125,8 @@ export type BandoriNativeAudioRuntime = {
   prepareMusic(url: string, signal?: AbortSignal): Promise<void>;
   resume(): Promise<void>;
   selectCueBank(cueBankId: string): void;
-  setVolume(volume: number): void;
+  setBgmVolume(volume: number): void;
+  setSeVolume(volume: number): void;
   startMusic(
     offsetSeconds: number,
     playbackRate: number,
@@ -151,7 +152,8 @@ export type BandoriNativeAudioRuntime = {
 
 class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
   private context: AudioContext | null = null;
-  private masterGain: GainNode | null = null;
+  private musicGain: GainNode | null = null;
+  private seGain: GainNode | null = null;
   private readonly cueBanks = new Map<string, CueUrls>();
   private readonly buffersByCueBank = new Map<
     string,
@@ -197,9 +199,11 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
   constructor(
     cueBanks: readonly BandoriNativeNoteSoundCueBank[],
     private activeCueBankId: string,
-    private volume: number,
+    private bgmVolume: number,
+    private seVolume: number,
   ) {
-    this.assertVolume(volume);
+    this.assertVolume(bgmVolume);
+    this.assertVolume(seVolume);
     for (const cueBank of cueBanks) {
       if (this.cueBanks.has(cueBank.id)) {
         throw new Error(`Duplicate native note sound cue bank: ${cueBank.id}`);
@@ -282,11 +286,15 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
       ?? (window as WebAudioWindow).webkitAudioContext;
     if (!AudioContextCtor) throw new Error("Web Audio API is not available");
     const context = new AudioContextCtor();
-    const masterGain = context.createGain();
-    masterGain.gain.value = this.volume;
-    masterGain.connect(context.destination);
+    const musicGain = context.createGain();
+    const seGain = context.createGain();
+    musicGain.gain.value = this.bgmVolume;
+    seGain.gain.value = this.seVolume;
+    musicGain.connect(context.destination);
+    seGain.connect(context.destination);
     this.context = context;
-    this.masterGain = masterGain;
+    this.musicGain = musicGain;
+    this.seGain = seGain;
     context.addEventListener("statechange", this.handleContextStateChange);
     this.handleContextStateChange();
     return context;
@@ -814,7 +822,9 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
     const contextStartTimeSeconds = context.currentTime;
     source.buffer = musicBuffer;
     source.playbackRate.setValueAtTime(playbackRate, contextStartTimeSeconds);
-    source.connect(context.destination);
+    const musicGain = this.musicGain;
+    if (!musicGain) throw new Error("Native music gain is unavailable");
+    source.connect(musicGain);
     const cleanup = (contextStopTimeSeconds?: number) => {
       source.onended = null;
       try {
@@ -875,7 +885,7 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
     if (this.musicToken !== token) {
       throw new Error("Signalsmith playback start was superseded");
     }
-    this.connectSignalsmithPlayback(prepared, context);
+    this.connectSignalsmithPlayback(prepared);
     const safetySeconds = Math.max(0.05, 2 * 128 / context.sampleRate);
     const contextStartTimeSeconds = context.currentTime
       + prepared.latencySeconds
@@ -913,13 +923,14 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
 
   private connectSignalsmithPlayback(
     prepared: PreparedSignalsmithPlayback,
-    context: AudioContext,
   ): void {
     if (this.preparedSignalsmith !== prepared) {
       throw new Error("Signalsmith playback is no longer prepared");
     }
     if (this.isSignalsmithConnected) return;
-    prepared.node.connect(context.destination);
+    const musicGain = this.musicGain;
+    if (!musicGain) throw new Error("Native music gain is unavailable");
+    prepared.node.connect(musicGain);
     this.isSignalsmithConnected = true;
   }
 
@@ -967,11 +978,19 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
     this.activeCueBankId = cueBankId;
   }
 
-  setVolume(volume: number): void {
+  setBgmVolume(volume: number): void {
     this.assertVolume(volume);
-    this.volume = volume;
-    if (this.masterGain && this.context) {
-      this.masterGain.gain.setValueAtTime(volume, this.context.currentTime);
+    this.bgmVolume = volume;
+    if (this.musicGain && this.context) {
+      this.musicGain.gain.setValueAtTime(volume, this.context.currentTime);
+    }
+  }
+
+  setSeVolume(volume: number): void {
+    this.assertVolume(volume);
+    this.seVolume = volume;
+    if (this.seGain && this.context) {
+      this.seGain.gain.setValueAtTime(volume, this.context.currentTime);
     }
   }
 
@@ -987,12 +1006,12 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
 
   private playOneShot(cue: BandoriNativeNoteSoundCue, when: number): void {
     const context = this.context;
-    const masterGain = this.masterGain;
+    const seGain = this.seGain;
     const buffer = this.buffersByCueBank.get(this.activeCueBankId)?.get(cue);
-    if (!context || !masterGain || !buffer) return;
+    if (!context || !seGain || !buffer) return;
     const source = context.createBufferSource();
     source.buffer = buffer;
-    source.connect(masterGain);
+    source.connect(seGain);
     this.attachSource(source);
     source.start(when);
   }
@@ -1005,15 +1024,15 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
   ): void {
     if (this.activeLoops.has(voiceKey)) return;
     const context = this.context;
-    const masterGain = this.masterGain;
+    const seGain = this.seGain;
     const buffer = this.buffersByCueBank.get(this.activeCueBankId)?.get(cue);
-    if (!context || !masterGain || !buffer || buffer.duration <= 0) return;
+    if (!context || !seGain || !buffer || buffer.duration <= 0) return;
     const source = context.createBufferSource();
     const gain = context.createGain();
     source.buffer = buffer;
     source.loop = true;
     source.connect(gain);
-    gain.connect(masterGain);
+    gain.connect(seGain);
     this.attachSource(source);
     this.activeLoops.set(voiceKey, { gain, source });
     source.start(
@@ -1145,7 +1164,8 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
       preparedSignalsmith.node.port.close();
     }
     this.context = null;
-    this.masterGain = null;
+    this.musicGain = null;
+    this.seGain = null;
     this.musicBuffer = null;
     this.musicBufferUrl = null;
     this.preparedSignalsmith = null;
@@ -1167,11 +1187,15 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
 export function createBandoriNativeAudioRuntime(
   cueBanks: readonly BandoriNativeNoteSoundCueBank[],
   activeCueBankId: string,
-  volume: number,
+  volumes: Readonly<{
+    bgmVolume: number;
+    seVolume: number;
+  }>,
 ): BandoriNativeAudioRuntime {
   return new WebAudioBandoriNativeAudioRuntime(
     cueBanks,
     activeCueBankId,
-    volume,
+    volumes.bgmVolume,
+    volumes.seVolume,
   );
 }

@@ -18,17 +18,20 @@ export type BandoriLimitedPerformanceSkinSlot =
   | "directionalFlickEffect"
   | "soundEffect";
 
-type LimitedTapEffectRecipe = "flick" | "hold" | "normal" | "skill";
+export type BandoriTapEffectRecipe = "flick" | "hold" | "normal" | "skill";
 
-export type BandoriLimitedPerformanceEffectContract = Readonly<{
+export type BandoriTapEffectAssetContract = Readonly<{
   animatedVerticalBeam: Readonly<{
     hierarchyPath: string;
-    recipe: LimitedTapEffectRecipe;
+    recipe: BandoriTapEffectRecipe;
     travelSpeedMultiplier: number;
   }> | null;
-  recipes: Readonly<Record<LimitedTapEffectRecipe, string>>;
+  recipes: Readonly<Record<BandoriTapEffectRecipe, string>>;
   resources: Readonly<Record<string, string>>;
 }>;
+
+export type BandoriLimitedPerformanceEffectContract =
+  BandoriTapEffectAssetContract;
 
 export type BandoriLimitedPerformanceSkin = Readonly<{
   backgroundSkin: BandoriNativeBackgroundSkin | null;

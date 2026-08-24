@@ -18,7 +18,7 @@ The current product contract includes:
 
 - ordinary JP background choices `skin00`, layered `skin02` and `skin03`,
   `practice`, and three fixed team-live judgment/combo/life backgrounds from
-  `skin_teamlivefestival`;
+  `skin_teamlivefestival`, plus a black Off background;
 - all 15 ordinary field and judgment-line styles;
 - seven ordinary rhythm-marker/Note styles and five ordinary Directional Flick
   styles;
@@ -30,10 +30,11 @@ The current product contract includes:
   while clamping the effective rendered size to `80%...150%`;
 - selectable Note appearance position `0...100`, with an independent option to
   hide the lane field above the same boundary;
-- large and small Directional effect variants for all five ordinary families
-  and the Persona limited overlay;
+- large, small, and Off Directional effect choices for all five ordinary
+  families and the Persona limited overlay;
 - automatic Perfect lane flash, judgment, Combo, tap/Flick/Directional/hold
-  effects, and on-demand TapSE/Web Audio playback; and
+  effects, with ordinary tap effects independently switchable Off, and
+  on-demand TapSE/Web Audio playback; and
 - a complete-chart analysis view that remains separate from native playfield
   presentation.
 
@@ -142,6 +143,12 @@ complete position contract: the compiler does not read its legacy scalar
 `lane`, and derives both the visual center and native integer button from the
 range. A Long or Slide may move its contiguous range, but its range width
 remains fixed for the complete hold.
+
+The BGM and SE volume sliders, their mute states, and every effect and skin
+control are stored together as one browser-local preference. Only validated
+primitive values and skin IDs are persisted; unavailable or stale choices fall
+back independently to current defaults. Loop enablement and loop ranges remain
+per-song session state.
 
 Limited performance skins are a separate sparse overlay. Selecting one retains
 the ordinary choices and overrides only the slots owned by that family.

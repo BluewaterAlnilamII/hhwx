@@ -21,6 +21,10 @@ import {
   BANDORI_LIMITED_PERFORMANCE_SKINS,
   type BandoriLimitedPerformanceSkin,
 } from "./limited-performance-skins";
+import {
+  BANDORI_NATIVE_TAP_EFFECT_SKINS,
+  type BandoriNativeTapEffectSkin,
+} from "./native-tap-effect-assets";
 import Switch from "@/components/Switch";
 import type { BandoriNativeDirectionalEffectVariant } from "./native-live-settings";
 
@@ -43,7 +47,9 @@ type SimulatorSkinControlsProps = {
     skin: BandoriLimitedPerformanceSkin | null,
   ) => void;
   onNoteSkinChange: (skin: BandoriNativeNoteSkin) => void;
+  onTapEffectSkinChange: (skin: BandoriNativeTapEffectSkin) => void;
   onTapSeSkinChange: (skin: BandoriNativeTapSeSkin) => void;
+  tapEffectSkin: BandoriNativeTapEffectSkin;
   tapSeSkin: BandoriNativeTapSeSkin;
 };
 
@@ -76,6 +82,13 @@ function choiceClassName(isSelected: boolean, isDisabled = false): string {
         ? "border-[var(--theme-color-selection-subtle-ring)] bg-[var(--theme-color-selection-subtle-background)] text-[var(--theme-color-selection-subtle-foreground)] shadow-[var(--theme-shadow-selection-subtle)] ring-1 ring-inset ring-[var(--theme-color-selection-subtle-ring)]"
         : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] shadow-xs hover:border-[var(--theme-color-action-secondary-border)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)]"
   }`;
+}
+
+function getTypeLabel(id: number | string): string {
+  if (typeof id !== "number") {
+    throw new Error(`Ordinary skin Type requires a numeric ID: ${id}`);
+  }
+  return `TYPE${id + 1}`;
 }
 
 type SimulatorBooleanControlProps = {
@@ -120,7 +133,9 @@ export default function SimulatorSkinControls({
   onFieldSkinChange,
   onLimitedPerformanceSkinChange,
   onNoteSkinChange,
+  onTapEffectSkinChange,
   onTapSeSkinChange,
+  tapEffectSkin,
   tapSeSkin,
 }: SimulatorSkinControlsProps) {
   const t = useTranslations("bandori.songs.simulator.skinControls");
@@ -163,7 +178,7 @@ export default function SimulatorSkinControls({
               disabled={overrides.has("background")}
               onClick={() => onBackgroundSkinChange(skin)}
             >
-              {t(`backgroundSkin.${skin.id}`)}
+              {skin.id === "off" ? t("off") : t(`backgroundSkin.${skin.id}`)}
             </button>
           ))}
         </SimulatorControlRow>
@@ -179,6 +194,24 @@ export default function SimulatorSkinControls({
               onClick={() => onFieldSkinChange(skin)}
             >
               {t(`fieldSkin.${skin.id}`)}
+            </button>
+          ))}
+        </SimulatorControlRow>
+
+        <SimulatorControlRow label={t("tapEffectStyle")}>
+          {BANDORI_NATIVE_TAP_EFFECT_SKINS.map((skin) => (
+            <button
+              key={skin.id}
+              type="button"
+              aria-pressed={tapEffectSkin.id === skin.id}
+              className={choiceClassName(
+                tapEffectSkin.id === skin.id,
+                overrides.has("tapEffect"),
+              )}
+              disabled={overrides.has("tapEffect")}
+              onClick={() => onTapEffectSkinChange(skin)}
+            >
+              {skin.id === "off" ? t("off") : getTypeLabel(skin.id)}
             </button>
           ))}
         </SimulatorControlRow>
@@ -211,7 +244,7 @@ export default function SimulatorSkinControls({
               disabled={overrides.has("soundEffect")}
               onClick={() => onTapSeSkinChange(skin)}
             >
-              SE skin0{skin.id}
+              {getTypeLabel(skin.id)}
             </button>
           ))}
         </SimulatorControlRow>
@@ -235,7 +268,7 @@ export default function SimulatorSkinControls({
         </SimulatorControlRow>
 
         <SimulatorControlRow label={t("directionalEffectVariant.label")}>
-          {(["normal", "light"] as const).map((variant) => (
+          {(["normal", "light", "off"] as const).map((variant) => (
             <button
               key={variant}
               type="button"
@@ -243,7 +276,7 @@ export default function SimulatorSkinControls({
               className={choiceClassName(directionalEffectVariant === variant)}
               onClick={() => onDirectionalEffectVariantChange(variant)}
             >
-              {t(`directionalEffectVariant.${variant}`)}
+              {variant === "off" ? t("off") : t(`directionalEffectVariant.${variant}`)}
             </button>
           ))}
         </SimulatorControlRow>

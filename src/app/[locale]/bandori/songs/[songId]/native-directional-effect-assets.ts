@@ -28,11 +28,17 @@ export type BandoriNativeDirectionalEffectRecipeKey =
 export const BANDORI_NATIVE_DIRECTIONAL_EFFECT_VARIANTS = [
   "normal",
   "light",
-] as const satisfies readonly BandoriNativeDirectionalEffectVariant[];
+] as const satisfies readonly Exclude<
+  BandoriNativeDirectionalEffectVariant,
+  "off"
+>[];
+
+type BandoriNativeDirectionalEffectRecipeVariant =
+  (typeof BANDORI_NATIVE_DIRECTIONAL_EFFECT_VARIANTS)[number];
 
 export type BandoriNativeDirectionalEffectAssetContract = Readonly<{
   recipes: Readonly<Record<
-    BandoriNativeDirectionalEffectVariant,
+    BandoriNativeDirectionalEffectRecipeVariant,
     Readonly<Record<BandoriNativeDirectionalEffectRecipeKey, string>>
   >>;
   resources: Readonly<Record<string, string>>;
@@ -40,14 +46,14 @@ export type BandoriNativeDirectionalEffectAssetContract = Readonly<{
 
 function getDirectionalEffectRoot(
   assetBundleName: string,
-  variant: BandoriNativeDirectionalEffectVariant,
+  variant: BandoriNativeDirectionalEffectRecipeVariant,
 ): string {
   return `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/ingameskin/tapeffect/directionalflick${assetBundleName}${variant}`;
 }
 
 function createRecipeUrls(
   assetBundleName: string,
-  variant: BandoriNativeDirectionalEffectVariant,
+  variant: BandoriNativeDirectionalEffectRecipeVariant,
 ): Readonly<Record<BandoriNativeDirectionalEffectRecipeKey, string>> {
   const root = getDirectionalEffectRoot(assetBundleName, variant);
   return Object.fromEntries(BANDORI_NATIVE_DIRECTIONAL_EFFECT_RECIPE_KEYS.map(

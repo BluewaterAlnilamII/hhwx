@@ -7,6 +7,7 @@ import {
   BANDORI_NATIVE_BACKGROUND_SKINS,
   BANDORI_NATIVE_FIELD_RECT,
   BANDORI_NATIVE_FIELD_SKIN,
+  BANDORI_NATIVE_FIELD_SKIN_CHOICES,
   BANDORI_NATIVE_FIELD_SKINS,
   BANDORI_NATIVE_STAGE_SIZE,
   getBandoriNativeJudgmentLineRect,
@@ -27,7 +28,7 @@ test("native stage and field geometry stay fixed to APK evidence", () => {
   });
 });
 
-test("ordinary background skins preserve their verified native compositions", () => {
+test("ordinary backgrounds preserve native compositions and end with black Off", () => {
   assert.deepEqual(BANDORI_NATIVE_BACKGROUND_RECT, {
     left: -216.2,
     top: -131,
@@ -45,10 +46,11 @@ test("ordinary background skins preserve their verified native compositions", ()
       ["skin00", 1],
       ["skin02", 2],
       ["skin03", 3],
-      ["practice", 1],
       ["teamLiveJudgment", 1],
       ["teamLiveCombo", 1],
       ["teamLiveLife", 1],
+      ["practice", 1],
+      ["off", 0],
     ],
   );
 
@@ -66,11 +68,15 @@ test("ordinary background skins preserve their verified native compositions", ()
   closeTo(skin03.layers[2].rect.top, -346.28);
   closeTo(skin03.layers[2].rect.height, 437.92);
 
-  const practice = BANDORI_NATIVE_BACKGROUND_SKINS[3];
+  const practice = BANDORI_NATIVE_BACKGROUND_SKINS[6];
   assert.match(practice.layers[0].textureUrl, /\/skinpractice\/livebg_normal\.png$/u);
   assert.deepEqual(practice.layers[0].rect, BANDORI_NATIVE_BACKGROUND_RECT);
+  assert.deepEqual(BANDORI_NATIVE_BACKGROUND_SKINS[7], {
+    id: "off",
+    layers: [],
+  });
 
-  for (const teamLive of BANDORI_NATIVE_BACKGROUND_SKINS.slice(4)) {
+  for (const teamLive of BANDORI_NATIVE_BACKGROUND_SKINS.slice(3, 6)) {
     assert.match(teamLive.layers[0].textureUrl, /\/(?:perfect|combo|life)stage\.png$/u);
     assert.deepEqual(teamLive.layers[0].rect, BANDORI_NATIVE_BACKGROUND_RECT);
   }
@@ -113,6 +119,10 @@ test("all master lane skins keep their exact paired JP field and judgment-line r
     assert.match(skin.textureUrl, new RegExp(`/fieldskin/${skin.assetBundleName}/bg_line_rhythm\\.png$`, "u"));
     assert.match(skin.judgmentLineTextureUrl, new RegExp(`/fieldskin/${skin.assetBundleName}/game_play_line\\.png$`, "u"));
   }
+  assert.deepEqual(
+    BANDORI_NATIVE_FIELD_SKIN_CHOICES.map((skin) => skin.id),
+    [1, 2, 3, 4, 5, 13, 14, 6, 7, 8, 9, 10, 11, 12, 15],
+  );
 });
 
 test("judgment-line Sprite dimensions select native Button4 geometry without changing its carrier", () => {

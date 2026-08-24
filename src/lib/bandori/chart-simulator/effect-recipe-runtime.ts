@@ -339,6 +339,15 @@ interface VelocityModule {
   orbitalZ: MinMaxCurve | null;
 }
 
+interface ForceOverLifetimeModule {
+  space: "local";
+  acceleration: Vec3;
+}
+
+interface RotationBySpeedModule {
+  angularVelocityZ: number;
+}
+
 interface MaterialSpec {
   id: string;
   textureResource: string;
@@ -399,6 +408,8 @@ interface CompiledSystem {
   textureSheet: TextureSheetModule | null;
   velocityOverLifetime: VelocityModule | null;
   limitVelocity: LimitVelocityModule | null;
+  forceOverLifetime: ForceOverLifetimeModule | null;
+  rotationBySpeed: RotationBySpeedModule | null;
   customDataVector0W: MinMaxCurve | null;
   renderer: RendererSpec;
   worldPosition: Vec3;
@@ -1382,6 +1393,69 @@ function velocityModule(value: unknown, path: string): VelocityModule {
   };
 }
 
+function forceOverLifetimeModule(
+  value: unknown,
+  path: string,
+): ForceOverLifetimeModule {
+  const source = record(value, path);
+  exactKeys(source, path, ["randomizePerFrame", "space", "x", "y", "z"]);
+  if (source.space !== "local") {
+    fail(`${path}.space`, "only the frozen skin02 local-force profile is supported");
+  }
+  if (bool(source.randomizePerFrame, `${path}.randomizePerFrame`)) {
+    fail(
+      `${path}.randomizePerFrame`,
+      "the frozen skin02 force does not randomize per frame",
+    );
+  }
+  const x = minMaxCurve(source.x, `${path}.x`);
+  const y = minMaxCurve(source.y, `${path}.y`);
+  const z = minMaxCurve(source.z, `${path}.z`);
+  if (
+    x.mode !== "constant"
+    || y.mode !== "constant"
+    || z.mode !== "constant"
+    || Math.abs(x.value) > EPSILON
+    || Math.abs(y.value - 5) > EPSILON
+    || Math.abs(z.value) > EPSILON
+  ) {
+    fail(path, "only the frozen skin02 local force (0, 5, 0) is supported");
+  }
+  return {
+    space: "local",
+    acceleration: { x: x.value, y: y.value, z: z.value },
+  };
+}
+
+function rotationBySpeedModule(
+  value: unknown,
+  path: string,
+): RotationBySpeedModule {
+  const source = record(value, path);
+  exactKeys(source, path, ["separateAxes", "speedRange", "z"]);
+  if (bool(source.separateAxes, `${path}.separateAxes`)) {
+    fail(`${path}.separateAxes`, "only the frozen skin01 Z-axis profile is supported");
+  }
+  const speedRange = record(source.speedRange, `${path}.speedRange`);
+  exactKeys(speedRange, `${path}.speedRange`, ["maximum", "minimum"]);
+  if (
+    Math.abs(finite(speedRange.minimum, `${path}.speedRange.minimum`)) > EPSILON
+    || Math.abs(
+      finite(speedRange.maximum, `${path}.speedRange.maximum`) - 1,
+    ) > EPSILON
+  ) {
+    fail(`${path}.speedRange`, "only the frozen skin01 speed range [0, 1] is supported");
+  }
+  const z = minMaxCurve(source.z, `${path}.z`);
+  if (
+    z.mode !== "constant"
+    || Math.abs(z.value - 10.471975326538086) > EPSILON
+  ) {
+    fail(`${path}.z`, "only the frozen skin01 angular velocity is supported");
+  }
+  return { angularVelocityZ: z.value };
+}
+
 function particlePool(capacity: number): ParticlePool {
   return {
     alive: new Uint8Array(capacity),
@@ -1873,8 +1947,10 @@ function parseNode(
       "colorOverLifetime",
       "customData",
       "emission",
+      "forceOverLifetime",
       "initial",
       "limitVelocityOverLifetime",
+      "rotationBySpeed",
       "rotationOverLifetime",
       "shape",
       "sizeOverLifetime",
@@ -1945,6 +2021,18 @@ function parseNode(
           modules.limitVelocityOverLifetime,
           `${particlePath}.modules.limitVelocityOverLifetime`,
         );
+    const forceOverLifetime = modules.forceOverLifetime === undefined
+      ? null
+      : forceOverLifetimeModule(
+          modules.forceOverLifetime,
+          `${particlePath}.modules.forceOverLifetime`,
+        );
+    const rotationBySpeed = modules.rotationBySpeed === undefined
+      ? null
+      : rotationBySpeedModule(
+          modules.rotationBySpeed,
+          `${particlePath}.modules.rotationBySpeed`,
+        );
     let customDataVector0W: MinMaxCurve | null = null;
     if (modules.customData !== undefined) {
       const customDataPath = `${particlePath}.modules.customData`;
@@ -2014,6 +2102,8 @@ function parseNode(
               ),
         velocityOverLifetime,
         limitVelocity,
+        forceOverLifetime,
+        rotationBySpeed,
         customDataVector0W,
         renderer,
         worldPosition: world.position,
@@ -2710,6 +2800,15 @@ function updateParticles(
       keyedRandom(seed, ordinal, 120),
     );
     pool.vy[slot] -= 9.81 * gravity * activeDt;
+    if (system.forceOverLifetime) {
+      const acceleration = rotateVector(
+        system.worldRotation,
+        system.forceOverLifetime.acceleration,
+      );
+      pool.vx[slot] += acceleration.x * activeDt;
+      pool.vy[slot] += acceleration.y * activeDt;
+      pool.vz[slot] += acceleration.z * activeDt;
+    }
     if (system.limitVelocity) {
       const limit = Math.max(
         0,
@@ -2791,6 +2890,14 @@ function updateParticles(
           normalizedAge,
           keyedRandom(seed, ordinal, 125),
         ) * activeDt;
+    }
+    if (system.rotationBySpeed) {
+      /*
+       * The frozen skin01 curve is a constant. Unity applies Speed Range only
+       * to curve modes, so this authored value remains a constant angular
+       * velocity even though the serialized module is named Rotation by Speed.
+       */
+      pool.rotationZ[slot] += system.rotationBySpeed.angularVelocityZ * activeDt;
     }
   }
 }

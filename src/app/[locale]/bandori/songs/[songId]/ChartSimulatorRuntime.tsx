@@ -9,6 +9,8 @@ import {
   Pause,
   Play,
   RotateCcw,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import BandoriFullChartView from "./BandoriFullChartView";
 import ChartSimulatorLoadingIndicator from "./ChartSimulatorLoadingIndicator";
@@ -27,14 +29,16 @@ import {
   BANDORI_NATIVE_BACKGROUND_SKIN,
   BANDORI_NATIVE_BACKGROUND_SKINS,
   BANDORI_NATIVE_FIELD_SKIN,
-  BANDORI_NATIVE_FIELD_SKINS,
+  BANDORI_NATIVE_FIELD_SKIN_CHOICES,
   BANDORI_NATIVE_STAGE_SIZE,
   type BandoriNativeBackgroundSkin,
   type BandoriNativeFieldSkin,
 } from "./native-stage-contract";
 import {
   BANDORI_NATIVE_DIRECTIONAL_FLICK_SKIN,
+  BANDORI_NATIVE_DIRECTIONAL_FLICK_SKINS,
   BANDORI_NATIVE_NOTE_SKIN,
+  BANDORI_NATIVE_NOTE_SKINS,
   type BandoriNativeDirectionalFlickSkin,
   type BandoriNativeNoteSkin,
 } from "./native-note-assets";
@@ -51,7 +55,6 @@ import {
 import { compileBandoriChartInWorker } from "@/lib/bandori/chart-simulator/compiler-client";
 import {
   adjustBandoriSimulatorNoteSpeed,
-  BANDORI_NATIVE_NOTE_SPEED_DEFAULT,
   BANDORI_NATIVE_NOTE_SPEED_MAX,
   BANDORI_NATIVE_NOTE_SPEED_MIN,
 } from "@/lib/bandori/chart-simulator/native-note-presentation";
@@ -61,8 +64,8 @@ import {
   getBandoriNativeActiveNoteSoundLoops,
   getBandoriNativeNoteSoundCueUrls,
   getBandoriNativeTapSeCueBankId,
-  BANDORI_NATIVE_NOTE_SOUND_VOLUME,
   BANDORI_NATIVE_TAP_SE_SKIN,
+  BANDORI_NATIVE_TAP_SE_SKINS,
   type BandoriNativeNoteSoundTimeline,
   type BandoriNativeTapSeSkin,
 } from "@/lib/bandori/chart-simulator/native-note-sound-presentation";
@@ -81,10 +84,8 @@ import {
 } from "@/lib/bandori/chart-simulator/loop-range";
 import {
   adjustBandoriSimulatorPlaybackRate,
-  BANDORI_SIMULATOR_PLAYBACK_RATE_DEFAULT_HUNDREDTHS,
   BANDORI_SIMULATOR_PLAYBACK_RATE_MAX_HUNDREDTHS,
   BANDORI_SIMULATOR_PLAYBACK_RATE_MIN_HUNDREDTHS,
-  BANDORI_SIMULATOR_SYNC_NOTE_SPEED_SLOWDOWN_DEFAULT,
   getBandoriSimulatorNoteApproachTimeScale,
   getBandoriSimulatorPlaybackRate,
 } from "@/lib/bandori/chart-simulator/playback-rate";
@@ -110,24 +111,38 @@ import { loadBandoriChartSimulatorAssets } from "@/lib/bandori/chart-simulator/a
 import type {
   BandoriChartSimulatorAssetResolver,
 } from "@/lib/bandori/chart-simulator/asset-manifest";
-import type { BandoriLimitedPerformanceSkin } from "./limited-performance-skins";
+import {
+  BANDORI_LIMITED_PERFORMANCE_SKINS,
+  type BandoriLimitedPerformanceSkin,
+} from "./limited-performance-skins";
+import {
+  BANDORI_NATIVE_TAP_EFFECT_SKIN,
+  BANDORI_NATIVE_TAP_EFFECT_SKINS,
+  type BandoriNativeTapEffectSkin,
+} from "./native-tap-effect-assets";
 import type {
   NativeSimulatorStageLoadProgress,
 } from "./NativeSimulatorStage";
 import {
-  BANDORI_NATIVE_DIRECTIONAL_EFFECT_VARIANT_DEFAULT,
-  BANDORI_NATIVE_NOTE_SIZE_DEFAULT,
   BANDORI_NATIVE_NOTE_SIZE_MAX,
   BANDORI_NATIVE_NOTE_SIZE_MIN,
   BANDORI_NATIVE_NOTE_SIZE_STEP,
   BANDORI_NATIVE_SUDDEN_RATE_ADJUSTMENTS,
-  BANDORI_NATIVE_SUDDEN_RATE_DEFAULT,
   BANDORI_NATIVE_SUDDEN_RATE_MAX,
   BANDORI_NATIVE_SUDDEN_RATE_MIN,
+  BANDORI_NATIVE_VOLUME_MAX,
+  BANDORI_NATIVE_VOLUME_MIN,
+  BANDORI_NATIVE_VOLUME_STEP,
   adjustBandoriNativeNoteSize,
   adjustBandoriNativeSuddenRate,
+  getBandoriNativeBgmGain,
+  getBandoriNativeSeGain,
   type BandoriNativeDirectionalEffectVariant,
 } from "./native-live-settings";
+import {
+  readBandoriChartSimulatorPreferences,
+  writeBandoriChartSimulatorPreferences,
+} from "./chart-simulator-preferences";
 
 const loadNativeSimulatorStageModule = () => import("./NativeSimulatorStage");
 const NativeSimulatorStage = dynamic(loadNativeSimulatorStageModule, {
@@ -138,12 +153,31 @@ const NativeSimulatorStage = dynamic(loadNativeSimulatorStageModule, {
 void loadNativeSimulatorStageModule();
 
 type SimulatorTab = "stage" | "fullChart";
+const IS_FULL_CHART_VIEW_ENABLED: boolean = false;
 const PLAYBACK_RATE_DECREASES = [-10, -1] as const;
 const PLAYBACK_RATE_INCREASES = [1, 10] as const;
 const NOTE_SPEED_DECREASES = [-0.5, -0.1, -0.01] as const;
 const NOTE_SPEED_INCREASES = [0.01, 0.1, 0.5] as const;
 const NOTE_SIZE_ADJUSTMENTS = [BANDORI_NATIVE_NOTE_SIZE_STEP] as const;
 const TRANSPORT_UI_UPDATE_INTERVAL_MS = 100;
+
+function getBandoriChartSimulatorPreferenceStorage(): Storage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function findSkinById<TSkin extends Readonly<{ id: number | string }>>(
+  skins: readonly TSkin[],
+  id: number | string,
+  fallback: TSkin,
+): TSkin {
+  return skins.find((skin) => skin.id === id) ?? fallback;
+}
+
 function createResolvedNoteSoundCueBank(
   skin: BandoriNativeTapSeSkin,
   resolveAssetUrl: BandoriChartSimulatorAssetResolver,
@@ -314,6 +348,56 @@ function SimulatorIntegerAdjustmentControl({
   );
 }
 
+type SimulatorVolumeControlProps = {
+  inputId: string;
+  isMuted: boolean;
+  label: string;
+  muteLabel: string;
+  onChange: (value: number) => void;
+  onMuteToggle: () => void;
+  unmuteLabel: string;
+  value: number;
+};
+
+function SimulatorVolumeControl({
+  inputId,
+  isMuted,
+  label,
+  muteLabel,
+  onChange,
+  onMuteToggle,
+  unmuteLabel,
+  value,
+}: SimulatorVolumeControlProps) {
+  return (
+    <div className="grid grid-cols-[max-content_2.25rem_minmax(4rem,1fr)_2rem] items-center gap-x-2 text-sm font-semibold text-[var(--theme-color-text-muted)]">
+      <label htmlFor={inputId}>{label}</label>
+      <button
+        type="button"
+        onClick={onMuteToggle}
+        aria-label={isMuted ? unmuteLabel : muteLabel}
+        aria-pressed={isMuted}
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${isMuted ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-progress-foreground)]" : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)]"}`}
+      >
+        {isMuted ? <VolumeX className="h-4 w-4" aria-hidden="true" /> : <Volume2 className="h-4 w-4" aria-hidden="true" />}
+      </button>
+      <input
+        id={inputId}
+        type="range"
+        min={BANDORI_NATIVE_VOLUME_MIN}
+        max={BANDORI_NATIVE_VOLUME_MAX}
+        step={BANDORI_NATIVE_VOLUME_STEP}
+        value={value}
+        onChange={(event) => onChange(Number(event.currentTarget.value))}
+        className="min-w-0 accent-[var(--theme-color-progress-indicator-background)]"
+      />
+      <output htmlFor={inputId} className="text-right font-black tabular-nums text-[var(--theme-color-text-default)]">
+        {value}
+      </output>
+    </div>
+  );
+}
+
 export default function ChartSimulatorRuntime({
   songId,
   difficulty,
@@ -325,8 +409,12 @@ export default function ChartSimulatorRuntime({
 }: ChartSimulatorClientShellProps) {
   const t = useTranslations("bandori.songs.simulator");
   const songsT = useTranslations("bandori.songs");
+  const playerT = useTranslations("navigation.toolbar.player");
+  const [initialPreferences] = useState(() => readBandoriChartSimulatorPreferences(
+    getBandoriChartSimulatorPreferenceStorage(),
+  ));
   const playbackRateHundredthsRef = useRef(
-    BANDORI_SIMULATOR_PLAYBACK_RATE_DEFAULT_HUNDREDTHS,
+    initialPreferences.playbackRateHundredths,
   );
   const playbackAudioSessionRef = useRef<ReturnType<
     typeof createMusicPlaybackBrowserAudioSession
@@ -335,6 +423,10 @@ export default function ChartSimulatorRuntime({
   const transportRef = useRef(createBandoriChartTransportState(durationSeconds));
   const effectTimelineVersionRef = useRef(0);
   const nativeAudioRuntimeRef = useRef<BandoriNativeAudioRuntime | null>(null);
+  const bgmVolumeRef = useRef(initialPreferences.bgmVolume);
+  const seVolumeRef = useRef(initialPreferences.seVolume);
+  const isBgmMutedRef = useRef(initialPreferences.isBgmMuted);
+  const isSeMutedRef = useRef(initialPreferences.isSeMuted);
   const noteSoundTimelineRef = useRef<BandoriNativeNoteSoundTimeline | null>(null);
   const noteSoundCursorRef = useRef(-1e-7);
   const noteSoundLastMediaTimeRef = useRef(0);
@@ -366,47 +458,87 @@ export default function ChartSimulatorRuntime({
   const [transport, setTransport] = useState(transportRef.current);
   const [activeTab, setActiveTab] = useState<SimulatorTab>("stage");
   const [hasOpenedFullChart, setHasOpenedFullChart] = useState(false);
-  const [isMirrored, setIsMirrored] = useState(false);
+  const [isMirrored, setIsMirrored] = useState(initialPreferences.isMirrored);
   const [playbackRateHundredths, setPlaybackRateHundredths] = useState(
-    BANDORI_SIMULATOR_PLAYBACK_RATE_DEFAULT_HUNDREDTHS,
+    initialPreferences.playbackRateHundredths,
   );
   const [loopRange, setLoopRange] = useState<BandoriChartLoopRange>(
     () => createBandoriFullSongLoopRange(durationSeconds),
   );
   const [isLoopEnabled, setIsLoopEnabled] = useState(false);
-  const [isNoteSpeedSlowdownSynchronized, setIsNoteSpeedSlowdownSynchronized] =
-    useState(BANDORI_SIMULATOR_SYNC_NOTE_SPEED_SLOWDOWN_DEFAULT);
-  const [noteSpeed, setNoteSpeed] = useState(BANDORI_NATIVE_NOTE_SPEED_DEFAULT);
-  const [noteSize, setNoteSize] = useState(BANDORI_NATIVE_NOTE_SIZE_DEFAULT);
-  const [suddenRate, setSuddenRate] = useState(BANDORI_NATIVE_SUDDEN_RATE_DEFAULT);
-  const [isSuddenLaneEnabled, setIsSuddenLaneEnabled] = useState(false);
+  const [noteSpeed, setNoteSpeed] = useState(initialPreferences.noteSpeed);
+  const [noteSize, setNoteSize] = useState(initialPreferences.noteSize);
+  const [suddenRate, setSuddenRate] = useState(initialPreferences.suddenRate);
+  const [isSuddenLaneEnabled, setIsSuddenLaneEnabled] = useState(
+    initialPreferences.isSuddenLaneEnabled,
+  );
+  const [bgmVolume, setBgmVolume] = useState(initialPreferences.bgmVolume);
+  const [seVolume, setSeVolume] = useState(initialPreferences.seVolume);
+  const [isBgmMuted, setIsBgmMuted] = useState(initialPreferences.isBgmMuted);
+  const [isSeMuted, setIsSeMuted] = useState(initialPreferences.isSeMuted);
   const [directionalEffectVariant, setDirectionalEffectVariant] = useState<
     BandoriNativeDirectionalEffectVariant
   >(
-    BANDORI_NATIVE_DIRECTIONAL_EFFECT_VARIANT_DEFAULT,
+    initialPreferences.directionalEffectVariant,
   );
   const [backgroundSkin, setBackgroundSkin] = useState<BandoriNativeBackgroundSkin>(
-    BANDORI_NATIVE_BACKGROUND_SKIN,
+    () => findSkinById(
+      BANDORI_NATIVE_BACKGROUND_SKINS,
+      initialPreferences.backgroundSkinId,
+      BANDORI_NATIVE_BACKGROUND_SKIN,
+    ),
   );
   const [fieldSkin, setFieldSkin] = useState<BandoriNativeFieldSkin>(
-    BANDORI_NATIVE_FIELD_SKIN,
+    () => findSkinById(
+      BANDORI_NATIVE_FIELD_SKIN_CHOICES,
+      initialPreferences.fieldSkinId,
+      BANDORI_NATIVE_FIELD_SKIN,
+    ),
   );
   const [noteSkin, setNoteSkin] = useState<BandoriNativeNoteSkin>(
-    BANDORI_NATIVE_NOTE_SKIN,
+    () => findSkinById(
+      BANDORI_NATIVE_NOTE_SKINS,
+      initialPreferences.noteSkinId,
+      BANDORI_NATIVE_NOTE_SKIN,
+    ),
   );
   const [directionalFlickSkin, setDirectionalFlickSkin] =
     useState<BandoriNativeDirectionalFlickSkin>(
-      BANDORI_NATIVE_DIRECTIONAL_FLICK_SKIN,
+      () => findSkinById(
+        BANDORI_NATIVE_DIRECTIONAL_FLICK_SKINS,
+        initialPreferences.directionalFlickSkinId,
+        BANDORI_NATIVE_DIRECTIONAL_FLICK_SKIN,
+      ),
     );
   const [tapSeSkin, setTapSeSkin] = useState<BandoriNativeTapSeSkin>(
-    BANDORI_NATIVE_TAP_SE_SKIN,
+    () => findSkinById(
+      BANDORI_NATIVE_TAP_SE_SKINS,
+      initialPreferences.tapSeSkinId,
+      BANDORI_NATIVE_TAP_SE_SKIN,
+    ),
+  );
+  const [tapEffectSkin, setTapEffectSkin] = useState<BandoriNativeTapEffectSkin>(
+    () => findSkinById(
+      BANDORI_NATIVE_TAP_EFFECT_SKINS,
+      initialPreferences.tapEffectSkinId,
+      BANDORI_NATIVE_TAP_EFFECT_SKIN,
+    ),
   );
   const [limitedPerformanceSkin, setLimitedPerformanceSkin] =
-    useState<BandoriLimitedPerformanceSkin | null>(null);
-  const [isSyncLineEnabled, setIsSyncLineEnabled] = useState(true);
-  const [isRhythmSupportEnabled, setIsRhythmSupportEnabled] = useState(true);
-  const [isLaneEffectEnabled, setIsLaneEffectEnabled] = useState(true);
-  const [isAllPerfectStatusEnabled, setIsAllPerfectStatusEnabled] = useState(true);
+    useState<BandoriLimitedPerformanceSkin | null>(() => (
+      BANDORI_LIMITED_PERFORMANCE_SKINS.find(
+        (skin) => skin.id === initialPreferences.limitedPerformanceSkinId,
+      ) ?? null
+    ));
+  const [isSyncLineEnabled, setIsSyncLineEnabled] = useState(
+    initialPreferences.isSyncLineEnabled,
+  );
+  const [isRhythmSupportEnabled, setIsRhythmSupportEnabled] = useState(
+    initialPreferences.isRhythmSupportEnabled,
+  );
+  const [isLaneEffectEnabled, setIsLaneEffectEnabled] = useState(
+    initialPreferences.isLaneEffectEnabled,
+  );
   const [stageLoadProgress, setStageLoadProgress] =
     useState<NativeSimulatorStageLoadProgress | null>(null);
   const [soundLoadProgress, setSoundLoadProgress] =
@@ -414,10 +546,59 @@ export default function ChartSimulatorRuntime({
   const [musicLoadProgress, setMusicLoadProgress] =
     useState<AudioResourceLoadProgress | null>(null);
   const [hasPlaybackError, setHasPlaybackError] = useState(false);
+  useEffect(() => {
+    writeBandoriChartSimulatorPreferences(
+      getBandoriChartSimulatorPreferenceStorage(),
+      {
+        backgroundSkinId: backgroundSkin.id,
+        bgmVolume,
+        directionalEffectVariant,
+        directionalFlickSkinId: directionalFlickSkin.id,
+        fieldSkinId: fieldSkin.id,
+        isBgmMuted,
+        isLaneEffectEnabled,
+        isMirrored,
+        isRhythmSupportEnabled,
+        isSeMuted,
+        isSuddenLaneEnabled,
+        isSyncLineEnabled,
+        limitedPerformanceSkinId: limitedPerformanceSkin?.id ?? null,
+        noteSize,
+        noteSkinId: noteSkin.id,
+        noteSpeed,
+        playbackRateHundredths,
+        seVolume,
+        suddenRate,
+        tapEffectSkinId: tapEffectSkin.id,
+        tapSeSkinId: tapSeSkin.id,
+      },
+    );
+  }, [
+    backgroundSkin,
+    bgmVolume,
+    directionalEffectVariant,
+    directionalFlickSkin,
+    fieldSkin,
+    isBgmMuted,
+    isLaneEffectEnabled,
+    isMirrored,
+    isRhythmSupportEnabled,
+    isSeMuted,
+    isSuddenLaneEnabled,
+    isSyncLineEnabled,
+    limitedPerformanceSkin,
+    noteSize,
+    noteSkin,
+    noteSpeed,
+    playbackRateHundredths,
+    seVolume,
+    suddenRate,
+    tapEffectSkin,
+    tapSeSkin,
+  ]);
   const playbackRate = getBandoriSimulatorPlaybackRate(playbackRateHundredths);
   const noteApproachTimeScale = getBandoriSimulatorNoteApproachTimeScale(
     playbackRateHundredths,
-    isNoteSpeedSlowdownSynchronized,
   );
   const effectiveBackgroundSkin =
     limitedPerformanceSkin?.backgroundSkin ?? backgroundSkin;
@@ -426,6 +607,18 @@ export default function ChartSimulatorRuntime({
   const effectiveDirectionalFlickSkin =
     limitedPerformanceSkin?.directionalFlickSkin ?? directionalFlickSkin;
   const effectiveTapSeSkin = limitedPerformanceSkin?.tapSeSkin ?? tapSeSkin;
+  const isLimitedTapEffectOverridden = limitedPerformanceSkin?.coverage.includes(
+    "tapEffect",
+  ) === true;
+  if (isLimitedTapEffectOverridden && !limitedPerformanceSkin.effects) {
+    throw new Error("Limited performance tap-effect contract is absent");
+  }
+  const effectiveTapEffectContract = isLimitedTapEffectOverridden
+    ? limitedPerformanceSkin.effects
+    : tapEffectSkin.effects;
+  const isTapEffectEnabled = isLimitedTapEffectOverridden
+    || tapEffectSkin.id !== "off";
+  const isDirectionalEffectEnabled = directionalEffectVariant !== "off";
   const selectedDifficultyOption = difficulties.find(
     (option) => option.difficulty === difficulty,
   );
@@ -439,7 +632,7 @@ export default function ChartSimulatorRuntime({
     && loadState.difficulty === difficulty;
   const stageLoadId = assetLoadState.status === "ready"
     && displayedChart
-    ? `${loadAttempt}:${assetLoadState.manifestSha256}:${songId}:${effectiveBackgroundSkin.id}:${effectiveFieldSkin.id}:${effectiveNoteSkin.id}:${effectiveDirectionalFlickSkin.id}:${limitedPerformanceSkin?.id ?? "ordinary"}:${displayedChart.difficulty}`
+    ? `${loadAttempt}:${assetLoadState.manifestSha256}:${songId}:${effectiveBackgroundSkin.id}:${effectiveFieldSkin.id}:${effectiveNoteSkin.id}:${effectiveDirectionalFlickSkin.id}:${tapEffectSkin.id}:${isDirectionalEffectEnabled ? "directional-on" : "directional-off"}:${limitedPerformanceSkin?.id ?? "ordinary"}:${displayedChart.difficulty}`
     : "unavailable";
   const musicLoadId = assetLoadState.status === "ready" && audioUrl
     ? `${loadAttempt}:${assetLoadState.manifestSha256}:${audioUrl}`
@@ -472,6 +665,40 @@ export default function ChartSimulatorRuntime({
     transportRef.current = next;
     setTransport(next);
   }, []);
+
+  const changeBgmVolume = (volume: number) => {
+    bgmVolumeRef.current = volume;
+    setBgmVolume(volume);
+    nativeAudioRuntimeRef.current?.setBgmVolume(
+      isBgmMutedRef.current ? 0 : getBandoriNativeBgmGain(volume),
+    );
+  };
+
+  const changeSeVolume = (volume: number) => {
+    seVolumeRef.current = volume;
+    setSeVolume(volume);
+    nativeAudioRuntimeRef.current?.setSeVolume(
+      isSeMutedRef.current ? 0 : getBandoriNativeSeGain(volume),
+    );
+  };
+
+  const toggleBgmMuted = () => {
+    const nextMuted = !isBgmMutedRef.current;
+    isBgmMutedRef.current = nextMuted;
+    setIsBgmMuted(nextMuted);
+    nativeAudioRuntimeRef.current?.setBgmVolume(
+      nextMuted ? 0 : getBandoriNativeBgmGain(bgmVolumeRef.current),
+    );
+  };
+
+  const toggleSeMuted = () => {
+    const nextMuted = !isSeMutedRef.current;
+    isSeMutedRef.current = nextMuted;
+    setIsSeMuted(nextMuted);
+    nativeAudioRuntimeRef.current?.setSeVolume(
+      nextMuted ? 0 : getBandoriNativeSeGain(seVolumeRef.current),
+    );
+  };
 
   const cancelPendingMediaOperation = useCallback(() => {
     pendingPlaybackResumeRef.current = false;
@@ -926,7 +1153,14 @@ export default function ChartSimulatorRuntime({
     const runtime = createBandoriNativeAudioRuntime(
       [initialCueBank],
       initialCueBank.id,
-      BANDORI_NATIVE_NOTE_SOUND_VOLUME,
+      {
+        bgmVolume: isBgmMutedRef.current
+          ? 0
+          : getBandoriNativeBgmGain(bgmVolumeRef.current),
+        seVolume: isSeMutedRef.current
+          ? 0
+          : getBandoriNativeSeGain(seVolumeRef.current),
+      },
     );
     nativeAudioRuntimeRef.current = runtime;
     const unsubscribeContextState = runtime.subscribeContextState((state) => {
@@ -1357,6 +1591,7 @@ export default function ChartSimulatorRuntime({
   };
 
   const changeTab = (tab: SimulatorTab) => {
+    if (tab === "fullChart" && !IS_FULL_CHART_VIEW_ENABLED) return;
     if (tab === "fullChart") setHasOpenedFullChart(true);
     setActiveTab(tab);
   };
@@ -1537,8 +1772,9 @@ export default function ChartSimulatorRuntime({
               key={tab}
               type="button"
               aria-pressed={activeTab === tab}
+              disabled={tab === "fullChart" && !IS_FULL_CHART_VIEW_ENABLED}
               onClick={() => changeTab(tab)}
-              className={`rounded-lg px-4 py-2 text-sm font-semibold outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${activeTab === tab ? "bg-[var(--theme-color-selection-subtle-background)] text-[var(--theme-color-selection-subtle-foreground)] shadow-sm ring-1 ring-inset ring-[var(--theme-color-selection-subtle-ring)]" : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)]"}`}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] disabled:cursor-not-allowed disabled:text-[var(--theme-color-control-foreground-disabled)] disabled:opacity-60 ${activeTab === tab ? "bg-[var(--theme-color-selection-subtle-background)] text-[var(--theme-color-selection-subtle-foreground)] shadow-sm ring-1 ring-inset ring-[var(--theme-color-selection-subtle-ring)]" : "text-[var(--theme-color-text-muted)] enabled:hover:bg-[var(--theme-color-control-background-hover)] enabled:hover:text-[var(--theme-color-text-default)]"}`}
             >
               {t(`tabs.${tab}`)}
             </button>
@@ -1574,10 +1810,10 @@ export default function ChartSimulatorRuntime({
         >
           <NativeSimulatorStage
             key={stageLoadId}
-            allPerfectStatusEnabled={isAllPerfectStatusEnabled}
             ariaLabel={t("stageAria")}
             backgroundSkin={effectiveBackgroundSkin}
             compiled={displayedChart.compiled}
+            directionalEffectEnabled={isDirectionalEffectEnabled}
             directionalEffectVariant={directionalEffectVariant}
             directionalFlickSkin={effectiveDirectionalFlickSkin}
             fieldSkin={effectiveFieldSkin}
@@ -1601,6 +1837,8 @@ export default function ChartSimulatorRuntime({
             syncLineEnabled={isSyncLineEnabled}
             suddenLaneEnabled={isSuddenLaneEnabled}
             suddenRate={suddenRate}
+            tapEffectContract={effectiveTapEffectContract}
+            tapEffectEnabled={isTapEffectEnabled}
           />
           {chartLoadingError || audioLoadingError ? (
             <div
@@ -1726,6 +1964,28 @@ export default function ChartSimulatorRuntime({
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
+        <div className="mt-4 grid gap-y-3 border-t border-[var(--theme-color-border-subtle)] px-2 pt-4 sm:grid-cols-2 sm:gap-x-12 sm:px-4">
+          <SimulatorVolumeControl
+            inputId="bandori-simulator-bgm-volume"
+            isMuted={isBgmMuted}
+            label={t("controls.bgmVolume")}
+            muteLabel={playerT("mute")}
+            onChange={changeBgmVolume}
+            onMuteToggle={toggleBgmMuted}
+            unmuteLabel={playerT("unmute")}
+            value={bgmVolume}
+          />
+          <SimulatorVolumeControl
+            inputId="bandori-simulator-se-volume"
+            isMuted={isSeMuted}
+            label={t("controls.seVolume")}
+            muteLabel={playerT("mute")}
+            onChange={changeSeVolume}
+            onMuteToggle={toggleSeMuted}
+            unmuteLabel={playerT("unmute")}
+            value={seVolume}
+          />
+        </div>
       </div>
 
       <div className="mt-5 space-y-4">
@@ -1739,6 +1999,44 @@ export default function ChartSimulatorRuntime({
         />
 
         <SimulatorSettingsCard title={t("effectControlsTitle")}>
+            <SimulatorControlRow label={t("controls.playbackRate")}>
+              <div className="flex items-center gap-1 sm:gap-2">
+                  {PLAYBACK_RATE_DECREASES.map((adjustmentHundredths) => (
+                    <SimulatorAdjustmentButton
+                      key={adjustmentHundredths}
+                      ariaLabel={t("controls.decreasePlaybackRate", {
+                        amount: (Math.abs(adjustmentHundredths) / 100).toFixed(2),
+                      })}
+                      direction="decrease"
+                      disabled={
+                        playbackRateHundredths
+                        === BANDORI_SIMULATOR_PLAYBACK_RATE_MIN_HUNDREDTHS
+                      }
+                      level={getPlaybackRateAdjustmentLevel(adjustmentHundredths)}
+                      onClick={() => changePlaybackRate(adjustmentHundredths)}
+                    />
+                  ))}
+                  <SimulatorAdjustmentValue ariaLabel={t("controls.currentPlaybackRate")}>
+                    {playbackRate.toFixed(2)}×
+                  </SimulatorAdjustmentValue>
+                  {PLAYBACK_RATE_INCREASES.map((adjustmentHundredths) => (
+                    <SimulatorAdjustmentButton
+                      key={adjustmentHundredths}
+                      ariaLabel={t("controls.increasePlaybackRate", {
+                        amount: (adjustmentHundredths / 100).toFixed(2),
+                      })}
+                      direction="increase"
+                      disabled={
+                        playbackRateHundredths
+                        === BANDORI_SIMULATOR_PLAYBACK_RATE_MAX_HUNDREDTHS
+                      }
+                      level={getPlaybackRateAdjustmentLevel(adjustmentHundredths)}
+                      onClick={() => changePlaybackRate(adjustmentHundredths)}
+                    />
+                  ))}
+              </div>
+            </SimulatorControlRow>
+
             <SimulatorControlRow label={t("controls.noteSpeed")}>
               <div className="flex items-center gap-1 sm:gap-2">
                   {NOTE_SPEED_DECREASES.map((adjustment) => (
@@ -1819,56 +2117,6 @@ export default function ChartSimulatorRuntime({
               </div>
             </SimulatorControlRow>
 
-            <SimulatorControlRow label={t("controls.playbackRate")}>
-              <div className="flex items-center gap-1 sm:gap-2">
-                  {PLAYBACK_RATE_DECREASES.map((adjustmentHundredths) => (
-                    <SimulatorAdjustmentButton
-                      key={adjustmentHundredths}
-                      ariaLabel={t("controls.decreasePlaybackRate", {
-                        amount: (Math.abs(adjustmentHundredths) / 100).toFixed(2),
-                      })}
-                      direction="decrease"
-                      disabled={
-                        playbackRateHundredths
-                        === BANDORI_SIMULATOR_PLAYBACK_RATE_MIN_HUNDREDTHS
-                      }
-                      level={getPlaybackRateAdjustmentLevel(adjustmentHundredths)}
-                      onClick={() => changePlaybackRate(adjustmentHundredths)}
-                    />
-                  ))}
-                  <SimulatorAdjustmentValue ariaLabel={t("controls.currentPlaybackRate")}>
-                    {playbackRate.toFixed(2)}×
-                  </SimulatorAdjustmentValue>
-                  {PLAYBACK_RATE_INCREASES.map((adjustmentHundredths) => (
-                    <SimulatorAdjustmentButton
-                      key={adjustmentHundredths}
-                      ariaLabel={t("controls.increasePlaybackRate", {
-                        amount: (adjustmentHundredths / 100).toFixed(2),
-                      })}
-                      direction="increase"
-                      disabled={
-                        playbackRateHundredths
-                        === BANDORI_SIMULATOR_PLAYBACK_RATE_MAX_HUNDREDTHS
-                      }
-                      level={getPlaybackRateAdjustmentLevel(adjustmentHundredths)}
-                      onClick={() => changePlaybackRate(adjustmentHundredths)}
-                    />
-                  ))}
-              </div>
-              <div className="flex basis-full flex-wrap items-center gap-2">
-                <span className="text-sm font-semibold text-[var(--theme-color-text-muted)]">
-                  {t("controls.syncNoteSpeedSlowdown")}
-                </span>
-                <SimulatorBooleanControl
-                  disabledLabel={t("controls.syncNoteSpeedSlowdownOff")}
-                  enabledLabel={t("controls.syncNoteSpeedSlowdownOn")}
-                  isEnabled={isNoteSpeedSlowdownSynchronized}
-                  label={t("controls.syncNoteSpeedSlowdown")}
-                  onChange={setIsNoteSpeedSlowdownSynchronized}
-                />
-              </div>
-            </SimulatorControlRow>
-
             <SimulatorControlRow label={t("skinControls.syncLine")}>
               <SimulatorBooleanControl
                 disabledLabel={t("skinControls.off")}
@@ -1909,15 +2157,6 @@ export default function ChartSimulatorRuntime({
               />
             </SimulatorControlRow>
 
-            <SimulatorControlRow label={t("skinControls.allPerfectStatus")}>
-              <SimulatorBooleanControl
-                disabledLabel={t("skinControls.off")}
-                enabledLabel={t("skinControls.on")}
-                isEnabled={isAllPerfectStatusEnabled}
-                label={t("skinControls.allPerfectStatus")}
-                onChange={setIsAllPerfectStatusEnabled}
-              />
-            </SimulatorControlRow>
         </SimulatorSettingsCard>
 
         <SimulatorSkinControls
@@ -1926,7 +2165,7 @@ export default function ChartSimulatorRuntime({
           directionalFlickSkin={directionalFlickSkin}
           directionalEffectVariant={directionalEffectVariant}
           fieldSkin={fieldSkin}
-          fieldSkins={BANDORI_NATIVE_FIELD_SKINS}
+          fieldSkins={BANDORI_NATIVE_FIELD_SKIN_CHOICES}
           limitedPerformanceSkin={limitedPerformanceSkin}
           noteSkin={noteSkin}
           onBackgroundSkinChange={setBackgroundSkin}
@@ -1935,7 +2174,9 @@ export default function ChartSimulatorRuntime({
           onFieldSkinChange={setFieldSkin}
           onLimitedPerformanceSkinChange={changeLimitedPerformanceSkin}
           onNoteSkinChange={setNoteSkin}
+          onTapEffectSkinChange={setTapEffectSkin}
           onTapSeSkinChange={changeTapSeSkin}
+          tapEffectSkin={tapEffectSkin}
           tapSeSkin={tapSeSkin}
         />
       </div>

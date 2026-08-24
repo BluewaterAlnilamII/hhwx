@@ -11,7 +11,12 @@ export const BANDORI_NATIVE_SUDDEN_RATE_MAX = 100;
 export const BANDORI_NATIVE_SUDDEN_RATE_DEFAULT = 0;
 export const BANDORI_NATIVE_SUDDEN_RATE_ADJUSTMENTS = [1, 5] as const;
 
-export type BandoriNativeDirectionalEffectVariant = "normal" | "light";
+export const BANDORI_NATIVE_VOLUME_MIN = 0;
+export const BANDORI_NATIVE_VOLUME_MAX = 100;
+export const BANDORI_NATIVE_VOLUME_DEFAULT = 70;
+export const BANDORI_NATIVE_VOLUME_STEP = 1;
+
+export type BandoriNativeDirectionalEffectVariant = "normal" | "light" | "off";
 export const BANDORI_NATIVE_DIRECTIONAL_EFFECT_VARIANT_DEFAULT = "normal";
 
 export const BANDORI_NATIVE_SUDDEN_LINE_URL =
@@ -65,6 +70,25 @@ export function adjustBandoriNativeSuddenRate(
   );
 }
 
+export function getBandoriNativeBgmGain(volume: number): number {
+  const normalized = clampAndAlign(
+    volume,
+    BANDORI_NATIVE_VOLUME_MIN,
+    BANDORI_NATIVE_VOLUME_MAX,
+    BANDORI_NATIVE_VOLUME_STEP,
+  ) / 100;
+  return Math.max(0.0001, normalized);
+}
+
+export function getBandoriNativeSeGain(volume: number): number {
+  return clampAndAlign(
+    volume,
+    BANDORI_NATIVE_VOLUME_MIN,
+    BANDORI_NATIVE_VOLUME_MAX,
+    BANDORI_NATIVE_VOLUME_STEP,
+  ) / 100;
+}
+
 export function isBandoriNativeMultiRangeChart(
   compiled: CompiledBandoriChart,
 ): boolean {
@@ -114,11 +138,11 @@ export function getBandoriNativeSuddenLineSize(rate: number): Readonly<{
   height: number;
   width: number;
 }> {
-  // The APK applies the nonzero-biased ratio only to vertical travel; the
-  // SpriteRenderer width is driven by the raw setting and its authored scale.
+  // The visible bar follows the same nonzero-biased stage position as the
+  // Sudden boundary; its authored scale converts the native size to pixels.
   const nativeWidth = BANDORI_NATIVE_SUDDEN_LINE_BASE_WIDTH
     + BANDORI_NATIVE_SUDDEN_LINE_EXPANDING_WIDTH
-    * getBandoriNativeSuddenRawRatio(rate);
+    * getBandoriNativeSuddenRatio(rate);
   return {
     height: BANDORI_NATIVE_SUDDEN_LINE_HEIGHT * BANDORI_NATIVE_SUDDEN_LINE_SCALE,
     width: nativeWidth * BANDORI_NATIVE_SUDDEN_LINE_SCALE,

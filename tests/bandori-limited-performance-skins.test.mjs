@@ -4,6 +4,7 @@ import { resolve, sep } from "node:path";
 import test from "node:test";
 
 import { BANDORI_LIMITED_PERFORMANCE_SKINS } from "../src/app/[locale]/bandori/songs/[songId]/limited-performance-skins.ts";
+import { BANDORI_NATIVE_TAP_EFFECT_SKINS } from "../src/app/[locale]/bandori/songs/[songId]/native-tap-effect-assets.ts";
 import {
   getBandoriNativeNoteFrameUrl,
 } from "../src/app/[locale]/bandori/songs/[songId]/native-note-assets.ts";
@@ -30,6 +31,56 @@ function getProjectionFilePath(logicalUrl) {
   assert.ok(file.startsWith(`${root}${sep}`));
   return file;
 }
+
+test("ordinary Tap Effect exposes five complete JP skins plus Off", () => {
+  assert.deepEqual(
+    BANDORI_NATIVE_TAP_EFFECT_SKINS.map(({ assetBundleName, id }) => ({
+      assetBundleName,
+      id,
+    })),
+    [
+      { assetBundleName: "skin00", id: 0 },
+      { assetBundleName: "skin01", id: 1 },
+      { assetBundleName: "skin02", id: 2 },
+      { assetBundleName: "skin03", id: 3 },
+      { assetBundleName: "skin04", id: 4 },
+      { assetBundleName: null, id: "off" },
+    ],
+  );
+  assert.equal(BANDORI_NATIVE_TAP_EFFECT_SKINS[0].effects, null);
+  assert.equal(BANDORI_NATIVE_TAP_EFFECT_SKINS.at(-1).effects, null);
+  for (const skin of BANDORI_NATIVE_TAP_EFFECT_SKINS.filter((skin) => skin.effects)) {
+    assert.deepEqual(Object.keys(skin.effects.recipes).sort(), [
+      "flick",
+      "hold",
+      "normal",
+      "skill",
+    ]);
+    assert.equal(
+      Object.keys(skin.effects.resources).length,
+      skin.id <= 2 ? 2 : 3,
+    );
+  }
+});
+
+test("a prepared projection closes every ordinary Tap Effect recipe", {
+  skip: chartSimulatorProjectionRoot === null,
+}, () => {
+  for (const skin of BANDORI_NATIVE_TAP_EFFECT_SKINS.filter((skin) => skin.effects)) {
+    for (const recipeUrl of Object.values(skin.effects.recipes)) {
+      const recipe = JSON.parse(readFileSync(getProjectionFilePath(recipeUrl), "utf8"));
+      const runtime = createBandoriEffectRecipeRuntime(recipe, {
+        buttonIndex: 3,
+        seed: 27,
+      });
+      runtime.play(0, 27);
+      runtime.sample(0.05);
+    }
+    for (const resourceUrl of Object.values(skin.effects.resources)) {
+      assert.ok(readFileSync(getProjectionFilePath(resourceUrl)).byteLength > 0);
+    }
+  }
+});
 
 test("the selector exposes exactly the approved limited performance skins", () => {
   assert.deepEqual(BANDORI_LIMITED_PERFORMANCE_SKINS.map(({ id }) => id), [
