@@ -677,7 +677,16 @@
         "noteSpeed": "节奏图标的速度",
         "decreaseNoteSpeed": "降低节奏图标的速度 {amount}",
         "increaseNoteSpeed": "提高节奏图标的速度 {amount}",
-        "currentNoteSpeed": "当前节奏图标的速度"
+        "currentNoteSpeed": "当前节奏图标的速度",
+        "noteSize": "节奏图标的大小",
+        "decreaseNoteSize": "缩小节奏图标 {amount}%",
+        "increaseNoteSize": "放大节奏图标 {amount}%",
+        "currentNoteSize": "当前节奏图标的大小",
+        "suddenRate": "节奏图标的出现位置",
+        "decreaseSuddenRate": "降低节奏图标的出现位置 {amount}",
+        "increaseSuddenRate": "提高节奏图标的出现位置 {amount}",
+        "currentSuddenRate": "当前节奏图标的出现位置",
+        "suddenLane": "同步隐藏按键条"
       },
       "effectControlsTitle": "演出效果设定",
       "loopControls": {
@@ -711,6 +720,11 @@
         "ariaLabel": "演出皮肤设定",
         "noteStyle": "节奏标志",
         "directionalFlickStyle": "左右flick标志",
+        "directionalEffectVariant": {
+          "label": "左右flick标志效果",
+          "normal": "大",
+          "light": "小"
+        },
         "fieldStyle": "按键条·判定线",
         "backgroundStyle": "背景",
         "backgroundSkin": {

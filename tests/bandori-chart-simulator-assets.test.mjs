@@ -47,9 +47,14 @@ import {
   BANDORI_NATIVE_TAP_SE_SKINS,
 } from "../src/lib/bandori/chart-simulator/native-note-sound-presentation.ts";
 import {
-  BANDORI_NATIVE_DIRECTIONAL_EFFECT_FRAME_URLS,
   BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS,
 } from "../src/lib/bandori/chart-simulator/native-swipe-effect-presentation.ts";
+import {
+  getBandoriNativeDirectionalEffectAssetContract,
+} from "../src/app/[locale]/bandori/songs/[songId]/native-directional-effect-assets.ts";
+import {
+  BANDORI_NATIVE_SUDDEN_LINE_URL,
+} from "../src/app/[locale]/bandori/songs/[songId]/native-live-settings.ts";
 
 const notePackHash = "a".repeat(64);
 const backgroundPackHash = "b".repeat(64);
@@ -152,6 +157,14 @@ test("logical paths resolve through the original game bundle pack", () => {
 });
 
 test("every declared simulator asset maps to one game bundle pack", () => {
+  const personaDirectionalSkin = BANDORI_LIMITED_PERFORMANCE_SKINS.find(
+    (skin) => skin.id === "persona",
+  )?.directionalFlickSkin;
+  assert.ok(personaDirectionalSkin);
+  const directionalEffectAssets = [
+    ...BANDORI_NATIVE_DIRECTIONAL_FLICK_SKINS,
+    personaDirectionalSkin,
+  ].map(getBandoriNativeDirectionalEffectAssetContract);
   const generatedUrls = [
     ...BANDORI_NATIVE_NOTE_SKINS.flatMap((skin) => [
       ...Array.from({ length: 7 }, (_, lane) => (
@@ -170,7 +183,8 @@ test("every declared simulator asset maps to one game bundle pack", () => {
   const urls = collectLogicalAssetUrls([
     BANDORI_LIMITED_PERFORMANCE_SKINS,
     BANDORI_NATIVE_BACKGROUND_SKINS,
-    BANDORI_NATIVE_DIRECTIONAL_EFFECT_FRAME_URLS,
+    BANDORI_NATIVE_SUDDEN_LINE_URL,
+    directionalEffectAssets,
     BANDORI_NATIVE_DIRECTIONAL_FLICK_SKINS,
     BANDORI_NATIVE_FIELD_SKINS,
     BANDORI_NATIVE_HOLD_EFFECT_TEXTURE_URLS,

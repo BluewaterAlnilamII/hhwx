@@ -14,14 +14,6 @@ export const BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS = {
   "tap-set2": "/local/chart-simulator/ingameskin/tapeffect/skin00/textures/Tex_parSet_2.png",
 } as const;
 
-const DIRECTIONAL_EFFECT_SPRITE_ROOT =
-  "/local/chart-simulator/ingameskin/tapeffect/directionalflickskin00normal/sprites";
-
-export const BANDORI_NATIVE_DIRECTIONAL_EFFECT_FRAME_URLS = Array.from(
-  { length: 16 },
-  (_, frame) => `${DIRECTIONAL_EFFECT_SPRITE_ROOT}/Tex_parSet_1_${frame}.png`,
-);
-
 export type BandoriNativeSwipeEffectKind = keyof typeof recipes;
 
 export const BANDORI_APPROVED_MANUAL_VERTICAL_BEAM_ABOVE_JUDGMENT_RATIO = 1 / 3;

@@ -677,7 +677,16 @@
         "noteSpeed": "Note speed",
         "decreaseNoteSpeed": "Decrease note speed by {amount}",
         "increaseNoteSpeed": "Increase note speed by {amount}",
-        "currentNoteSpeed": "Current note speed"
+        "currentNoteSpeed": "Current note speed",
+        "noteSize": "Note size",
+        "decreaseNoteSize": "Decrease note size by {amount}%",
+        "increaseNoteSize": "Increase note size by {amount}%",
+        "currentNoteSize": "Current note size",
+        "suddenRate": "Note appearance position",
+        "decreaseSuddenRate": "Decrease note appearance position by {amount}",
+        "increaseSuddenRate": "Increase note appearance position by {amount}",
+        "currentSuddenRate": "Current note appearance position",
+        "suddenLane": "Hide lane field together"
       },
       "effectControlsTitle": "Performance effect settings",
       "loopControls": {
@@ -711,6 +720,11 @@
         "ariaLabel": "Performance skin settings",
         "noteStyle": "Note style",
         "directionalFlickStyle": "Left/right Flick style",
+        "directionalEffectVariant": {
+          "label": "Left/right Flick effect",
+          "normal": "Large",
+          "light": "Small"
+        },
         "fieldStyle": "Lane field and judgment line",
         "backgroundStyle": "Background",
         "backgroundSkin": {

@@ -22,17 +22,22 @@ import {
   type BandoriLimitedPerformanceSkin,
 } from "./limited-performance-skins";
 import Switch from "@/components/Switch";
+import type { BandoriNativeDirectionalEffectVariant } from "./native-live-settings";
 
 type SimulatorSkinControlsProps = {
   backgroundSkin: BandoriNativeBackgroundSkin;
   backgroundSkins: readonly BandoriNativeBackgroundSkin[];
   directionalFlickSkin: BandoriNativeDirectionalFlickSkin;
+  directionalEffectVariant: BandoriNativeDirectionalEffectVariant;
   fieldSkin: BandoriNativeFieldSkin;
   fieldSkins: readonly BandoriNativeFieldSkin[];
   limitedPerformanceSkin: BandoriLimitedPerformanceSkin | null;
   noteSkin: BandoriNativeNoteSkin;
   onBackgroundSkinChange: (skin: BandoriNativeBackgroundSkin) => void;
   onDirectionalFlickSkinChange: (skin: BandoriNativeDirectionalFlickSkin) => void;
+  onDirectionalEffectVariantChange: (
+    variant: BandoriNativeDirectionalEffectVariant,
+  ) => void;
   onFieldSkinChange: (skin: BandoriNativeFieldSkin) => void;
   onLimitedPerformanceSkinChange: (
     skin: BandoriLimitedPerformanceSkin | null,
@@ -113,12 +118,14 @@ export function SimulatorBooleanControl({
 export default function SimulatorSkinControls({
   backgroundSkin,
   backgroundSkins,
+  directionalEffectVariant,
   directionalFlickSkin,
   fieldSkin,
   fieldSkins,
   limitedPerformanceSkin,
   noteSkin,
   onBackgroundSkinChange,
+  onDirectionalEffectVariantChange,
   onDirectionalFlickSkinChange,
   onFieldSkinChange,
   onLimitedPerformanceSkinChange,
@@ -253,6 +260,20 @@ export default function SimulatorSkinControls({
               onClick={() => onDirectionalFlickSkinChange(skin)}
             >
               TYPE{skin.id}
+            </button>
+          ))}
+        </SimulatorControlRow>
+
+        <SimulatorControlRow label={t("directionalEffectVariant.label")}>
+          {(["normal", "light"] as const).map((variant) => (
+            <button
+              key={variant}
+              type="button"
+              aria-pressed={directionalEffectVariant === variant}
+              className={choiceClassName(directionalEffectVariant === variant)}
+              onClick={() => onDirectionalEffectVariantChange(variant)}
+            >
+              {t(`directionalEffectVariant.${variant}`)}
             </button>
           ))}
         </SimulatorControlRow>

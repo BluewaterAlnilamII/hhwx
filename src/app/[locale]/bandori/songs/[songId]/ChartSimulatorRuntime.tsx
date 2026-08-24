@@ -115,6 +115,20 @@ import type { BandoriLimitedPerformanceSkin } from "./limited-performance-skins"
 import type {
   NativeSimulatorStageLoadProgress,
 } from "./NativeSimulatorStage";
+import {
+  BANDORI_NATIVE_DIRECTIONAL_EFFECT_VARIANT_DEFAULT,
+  BANDORI_NATIVE_NOTE_SIZE_DEFAULT,
+  BANDORI_NATIVE_NOTE_SIZE_MAX,
+  BANDORI_NATIVE_NOTE_SIZE_MIN,
+  BANDORI_NATIVE_NOTE_SIZE_STEP,
+  BANDORI_NATIVE_SUDDEN_RATE_ADJUSTMENTS,
+  BANDORI_NATIVE_SUDDEN_RATE_DEFAULT,
+  BANDORI_NATIVE_SUDDEN_RATE_MAX,
+  BANDORI_NATIVE_SUDDEN_RATE_MIN,
+  adjustBandoriNativeNoteSize,
+  adjustBandoriNativeSuddenRate,
+  type BandoriNativeDirectionalEffectVariant,
+} from "./native-live-settings";
 
 const loadNativeSimulatorStageModule = () => import("./NativeSimulatorStage");
 const NativeSimulatorStage = dynamic(loadNativeSimulatorStageModule, {
@@ -129,6 +143,7 @@ const PLAYBACK_RATE_DECREASES = [-10, -1] as const;
 const PLAYBACK_RATE_INCREASES = [1, 10] as const;
 const NOTE_SPEED_DECREASES = [-0.5, -0.1, -0.01] as const;
 const NOTE_SPEED_INCREASES = [0.01, 0.1, 0.5] as const;
+const NOTE_SIZE_ADJUSTMENTS = [BANDORI_NATIVE_NOTE_SIZE_STEP] as const;
 const TRANSPORT_UI_UPDATE_INTERVAL_MS = 100;
 function createResolvedNoteSoundCueBank(
   skin: BandoriNativeTapSeSkin,
@@ -249,6 +264,58 @@ function getPlaybackRateAdjustmentLevel(
   return Math.abs(adjustmentHundredths) === 10 ? 2 : 1;
 }
 
+type SimulatorIntegerAdjustmentControlProps = {
+  adjustments: readonly number[];
+  currentAriaLabel: string;
+  decreaseAriaLabel: (amount: number) => string;
+  increaseAriaLabel: (amount: number) => string;
+  maximum: number;
+  minimum: number;
+  onAdjust: (adjustment: number) => void;
+  suffix?: string;
+  value: number;
+};
+
+function SimulatorIntegerAdjustmentControl({
+  adjustments,
+  currentAriaLabel,
+  decreaseAriaLabel,
+  increaseAriaLabel,
+  maximum,
+  minimum,
+  onAdjust,
+  suffix = "",
+  value,
+}: SimulatorIntegerAdjustmentControlProps) {
+  return (
+    <div className="flex items-center gap-1 sm:gap-2">
+      {[...adjustments].reverse().map((amount, index) => (
+        <SimulatorAdjustmentButton
+          key={-amount}
+          ariaLabel={decreaseAriaLabel(amount)}
+          direction="decrease"
+          disabled={value === minimum}
+          level={(adjustments.length - index) as SimulatorAdjustmentLevel}
+          onClick={() => onAdjust(-amount)}
+        />
+      ))}
+      <SimulatorAdjustmentValue ariaLabel={currentAriaLabel}>
+        {value}{suffix}
+      </SimulatorAdjustmentValue>
+      {adjustments.map((amount, index) => (
+        <SimulatorAdjustmentButton
+          key={amount}
+          ariaLabel={increaseAriaLabel(amount)}
+          direction="increase"
+          disabled={value === maximum}
+          level={(index + 1) as SimulatorAdjustmentLevel}
+          onClick={() => onAdjust(amount)}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function ChartSimulatorRuntime({
   songId,
   difficulty,
@@ -311,6 +378,14 @@ export default function ChartSimulatorRuntime({
   const [isNoteSpeedSlowdownSynchronized, setIsNoteSpeedSlowdownSynchronized] =
     useState(BANDORI_SIMULATOR_SYNC_NOTE_SPEED_SLOWDOWN_DEFAULT);
   const [noteSpeed, setNoteSpeed] = useState(BANDORI_NATIVE_NOTE_SPEED_DEFAULT);
+  const [noteSize, setNoteSize] = useState(BANDORI_NATIVE_NOTE_SIZE_DEFAULT);
+  const [suddenRate, setSuddenRate] = useState(BANDORI_NATIVE_SUDDEN_RATE_DEFAULT);
+  const [isSuddenLaneEnabled, setIsSuddenLaneEnabled] = useState(false);
+  const [directionalEffectVariant, setDirectionalEffectVariant] = useState<
+    BandoriNativeDirectionalEffectVariant
+  >(
+    BANDORI_NATIVE_DIRECTIONAL_EFFECT_VARIANT_DEFAULT,
+  );
   const [backgroundSkin, setBackgroundSkin] = useState<BandoriNativeBackgroundSkin>(
     BANDORI_NATIVE_BACKGROUND_SKIN,
   );
@@ -1416,6 +1491,7 @@ export default function ChartSimulatorRuntime({
             ariaLabel={t("stageAria")}
             backgroundSkin={effectiveBackgroundSkin}
             compiled={displayedChart.compiled}
+            directionalEffectVariant={directionalEffectVariant}
             directionalFlickSkin={effectiveDirectionalFlickSkin}
             fieldSkin={effectiveFieldSkin}
             getEffectPlaybackState={getStageEffectPlaybackState}
@@ -1427,6 +1503,7 @@ export default function ChartSimulatorRuntime({
             loadId={stageLoadId}
             noteApproachTimeScale={noteApproachTimeScale}
             noteSpeed={noteSpeed}
+            noteSize={noteSize}
             noteSkin={effectiveNoteSkin}
             noteContractErrorLabel={t("stageNoteContractUnavailable")}
             onLoadProgress={handleStageLoadProgress}
@@ -1435,6 +1512,8 @@ export default function ChartSimulatorRuntime({
             resolveAssetUrl={assetLoadState.resolveAssetUrl}
             rhythmSupportEnabled={isRhythmSupportEnabled}
             syncLineEnabled={isSyncLineEnabled}
+            suddenLaneEnabled={isSuddenLaneEnabled}
+            suddenRate={suddenRate}
           />
           {chartLoadingError || audioLoadingError ? (
             <div
@@ -1609,6 +1688,47 @@ export default function ChartSimulatorRuntime({
               </div>
             </SimulatorControlRow>
 
+            <SimulatorControlRow label={t("controls.noteSize")}>
+              <SimulatorIntegerAdjustmentControl
+                adjustments={NOTE_SIZE_ADJUSTMENTS}
+                currentAriaLabel={t("controls.currentNoteSize")}
+                decreaseAriaLabel={(amount) => t("controls.decreaseNoteSize", { amount })}
+                increaseAriaLabel={(amount) => t("controls.increaseNoteSize", { amount })}
+                maximum={BANDORI_NATIVE_NOTE_SIZE_MAX}
+                minimum={BANDORI_NATIVE_NOTE_SIZE_MIN}
+                onAdjust={(adjustment) => setNoteSize((current) => (
+                  adjustBandoriNativeNoteSize(current, adjustment)
+                ))}
+                suffix="%"
+                value={noteSize}
+              />
+            </SimulatorControlRow>
+
+            <SimulatorControlRow label={t("controls.suddenRate")}>
+              <SimulatorIntegerAdjustmentControl
+                adjustments={BANDORI_NATIVE_SUDDEN_RATE_ADJUSTMENTS}
+                currentAriaLabel={t("controls.currentSuddenRate")}
+                decreaseAriaLabel={(amount) => t("controls.decreaseSuddenRate", { amount })}
+                increaseAriaLabel={(amount) => t("controls.increaseSuddenRate", { amount })}
+                maximum={BANDORI_NATIVE_SUDDEN_RATE_MAX}
+                minimum={BANDORI_NATIVE_SUDDEN_RATE_MIN}
+                onAdjust={(adjustment) => setSuddenRate((current) => (
+                  adjustBandoriNativeSuddenRate(current, adjustment)
+                ))}
+                value={suddenRate}
+              />
+            </SimulatorControlRow>
+
+            <SimulatorControlRow label={t("controls.suddenLane")}>
+              <SimulatorBooleanControl
+                disabledLabel={t("skinControls.off")}
+                enabledLabel={t("skinControls.on")}
+                isEnabled={isSuddenLaneEnabled}
+                label={t("controls.suddenLane")}
+                onChange={setIsSuddenLaneEnabled}
+              />
+            </SimulatorControlRow>
+
             <SimulatorControlRow label={t("controls.playbackRate")}>
               <div className="flex items-center gap-1 sm:gap-2">
                   {PLAYBACK_RATE_DECREASES.map((adjustmentHundredths) => (
@@ -1714,12 +1834,14 @@ export default function ChartSimulatorRuntime({
           backgroundSkin={backgroundSkin}
           backgroundSkins={BANDORI_NATIVE_BACKGROUND_SKINS}
           directionalFlickSkin={directionalFlickSkin}
+          directionalEffectVariant={directionalEffectVariant}
           fieldSkin={fieldSkin}
           fieldSkins={BANDORI_NATIVE_FIELD_SKINS}
           limitedPerformanceSkin={limitedPerformanceSkin}
           noteSkin={noteSkin}
           onBackgroundSkinChange={setBackgroundSkin}
           onDirectionalFlickSkinChange={setDirectionalFlickSkin}
+          onDirectionalEffectVariantChange={setDirectionalEffectVariant}
           onFieldSkinChange={setFieldSkin}
           onLimitedPerformanceSkinChange={changeLimitedPerformanceSkin}
           onNoteSkinChange={setNoteSkin}

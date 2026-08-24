@@ -19,15 +19,6 @@ export type BandoriLimitedPerformanceSkinSlot =
   | "soundEffect";
 
 type LimitedTapEffectRecipe = "flick" | "hold" | "normal" | "skill";
-export type LimitedDirectionalEffectRecipe =
-  | "finger-left"
-  | "finger-right"
-  | "left-1"
-  | "left-2"
-  | "left-3"
-  | "right-1"
-  | "right-2"
-  | "right-3";
 
 export type BandoriLimitedPerformanceEffectContract = Readonly<{
   animatedVerticalBeam: Readonly<{
@@ -35,7 +26,6 @@ export type BandoriLimitedPerformanceEffectContract = Readonly<{
     recipe: LimitedTapEffectRecipe;
     travelSpeedMultiplier: number;
   }> | null;
-  directionalRecipes: Readonly<Partial<Record<LimitedDirectionalEffectRecipe, string>>>;
   recipes: Readonly<Record<LimitedTapEffectRecipe, string>>;
   resources: Readonly<Record<string, string>>;
 }>;
@@ -77,7 +67,6 @@ const PERSONA_DIRECTIONAL_NOTE_ROOT = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/ass
 const PERSONA_FIELD_ROOT = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/assets/star/forassetbundle/startapp/ingameskin/fieldskin/skin_persona`;
 const PERSONA_BACKGROUND_ROOT = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/assets/star/forassetbundle/asneeded/ingameskin/bgskin/skin_persona`;
 const PERSONA_TAP_EFFECT_ROOT = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/ingameskin/tapeffect/skin_persona`;
-const PERSONA_DIRECTIONAL_EFFECT_ROOT = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/ingameskin/tapeffect/directionalflickskin_personanormal`;
 const APRIL_2019_NOTE_ROOT = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/assets/star/forassetbundle/startapp/ingameskin/noteskin/skin_april2019`;
 const APRIL_2019_FIELD_ROOT = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/assets/star/forassetbundle/startapp/ingameskin/fieldskin/skin_april2019`;
 const APRIL_2019_BACKGROUND_ROOT = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/assets/star/forassetbundle/asneeded/ingameskin/bgskin/skin_april2019`;
@@ -135,9 +124,6 @@ const PERSONA_TAP_SE_SKIN: BandoriNativeTapSeSkin = {
 };
 
 const PERSONA_EFFECT_RESOURCES = {
-  "limited-persona-directional-normal-default-particlesystem": `${PERSONA_DIRECTIONAL_EFFECT_ROOT}/textures/default-particlesystem.png`,
-  "limited-persona-directional-normal-effect_circle": `${PERSONA_DIRECTIONAL_EFFECT_ROOT}/textures/effect_circle.png`,
-  "limited-persona-directional-normal-tex_parset_1": `${PERSONA_DIRECTIONAL_EFFECT_ROOT}/textures/tex_parset_1.png`,
   "limited-persona-tap-default-particle": `${PERSONA_TAP_EFFECT_ROOT}/textures/default-particle.png`,
   "limited-persona-tap-tex_e_001": `${PERSONA_TAP_EFFECT_ROOT}/textures/tex_e_001.png`,
   "limited-persona-tap-tex_e_002": `${PERSONA_TAP_EFFECT_ROOT}/textures/tex_e_002.png`,
@@ -243,7 +229,6 @@ function createSparseTapEffectContract(
   const root = `${CHART_SIMULATOR_LOGICAL_ASSET_ROOT}/ingameskin/tapeffect/${assetBundleName}`;
   return {
     animatedVerticalBeam: null,
-    directionalRecipes: {},
     recipes: {
       flick: `${root}/recipes/flick.json`,
       hold: `${root}/recipes/hold.json`,
@@ -345,16 +330,6 @@ const BANDORI_LIMITED_PERFORMANCE_SKIN_DEFINITIONS = [
         recipe: "flick",
         travelSpeedMultiplier: 4,
       },
-      directionalRecipes: {
-        "finger-left": `${PERSONA_DIRECTIONAL_EFFECT_ROOT}/recipes/finger-left.json`,
-        "finger-right": `${PERSONA_DIRECTIONAL_EFFECT_ROOT}/recipes/finger-right.json`,
-        "left-1": `${PERSONA_DIRECTIONAL_EFFECT_ROOT}/recipes/left-1.json`,
-        "left-2": `${PERSONA_DIRECTIONAL_EFFECT_ROOT}/recipes/left-2.json`,
-        "left-3": `${PERSONA_DIRECTIONAL_EFFECT_ROOT}/recipes/left-3.json`,
-        "right-1": `${PERSONA_DIRECTIONAL_EFFECT_ROOT}/recipes/right-1.json`,
-        "right-2": `${PERSONA_DIRECTIONAL_EFFECT_ROOT}/recipes/right-2.json`,
-        "right-3": `${PERSONA_DIRECTIONAL_EFFECT_ROOT}/recipes/right-3.json`,
-      },
       recipes: {
         flick: `${PERSONA_TAP_EFFECT_ROOT}/recipes/flick.json`,
         hold: `${PERSONA_TAP_EFFECT_ROOT}/recipes/hold.json`,
@@ -382,7 +357,6 @@ const BANDORI_LIMITED_PERFORMANCE_SKIN_DEFINITIONS = [
     directionalFlickSkin: null,
     effects: {
       animatedVerticalBeam: null,
-      directionalRecipes: {},
       recipes: {
         flick: `${APRIL_2019_TAP_EFFECT_ROOT}/recipes/flick.json`,
         hold: `${APRIL_2019_TAP_EFFECT_ROOT}/recipes/hold.json`,
@@ -444,7 +418,6 @@ const BANDORI_LIMITED_PERFORMANCE_SKIN_DEFINITIONS = [
     directionalFlickSkin: null,
     effects: {
       animatedVerticalBeam: null,
-      directionalRecipes: {},
       recipes: {
         flick: `${MIKU_TAP_EFFECT_ROOT}/recipes/flick.json`,
         hold: `${MIKU_TAP_EFFECT_ROOT}/recipes/hold.json`,
@@ -674,7 +647,6 @@ const BANDORI_LIMITED_PERFORMANCE_SKIN_DEFINITIONS = [
     directionalFlickSkin: null,
     effects: {
       animatedVerticalBeam: null,
-      directionalRecipes: {},
       recipes: {
         flick: `${STAGE_TAP_EFFECT_ROOT}/recipes/flick.json`,
         hold: `${STAGE_TAP_EFFECT_ROOT}/recipes/hold.json`,

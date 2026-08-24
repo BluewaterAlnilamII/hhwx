@@ -291,7 +291,6 @@ test("April 2019 uses sparse overrides and keeps ordinary Directional resources"
     "/local/chart-simulator/assets/star/forassetbundle/asneeded/ingameskin/bgskin/skin_april2019/livebg.png",
   );
   assert.equal(skin.effects.animatedVerticalBeam, null);
-  assert.deepEqual(skin.effects.directionalRecipes, {});
   assert.equal(
     skin.judgmentPerfectTextureUrl,
     "/local/chart-simulator/ingameskin/judgeskin/skin_april2019/perfect.png",
@@ -324,7 +323,6 @@ test("Persona note frames and effects use fixed direct files without per-skin ca
   );
   for (const url of [
     ...Object.values(skin.effects.recipes),
-    ...Object.values(skin.effects.directionalRecipes),
     ...Object.values(skin.effects.resources),
   ]) {
     assert.match(url, /^\/local\/chart-simulator\//u);
