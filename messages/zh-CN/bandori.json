@@ -748,7 +748,6 @@
         "limitedPerformance": {
           "label": "限定演出皮肤",
           "none": "无（使用普通设置）",
-          "overriddenBy": "由 {skin} 覆盖",
           "skin": {
             "5th": "五周年特别舞台",
             "april2018": "2018 愚人节",

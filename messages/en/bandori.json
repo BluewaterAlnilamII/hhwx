@@ -748,7 +748,6 @@
         "limitedPerformance": {
           "label": "Limited performance skin",
           "none": "None (use ordinary settings)",
-          "overriddenBy": "Overridden by {skin}",
           "skin": {
             "5th": "5th anniversary special stage",
             "april2018": "April Fools' 2018",

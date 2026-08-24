@@ -50,28 +50,18 @@ type SimulatorSkinControlsProps = {
 type SimulatorControlRowProps = {
   children: ReactNode;
   label: string;
-  overriddenLabel?: string;
 };
 
 export function SimulatorControlRow({
   children,
   label,
-  overriddenLabel,
 }: SimulatorControlRowProps) {
   return (
     <div className="grid items-start gap-2 py-4 first:pt-1 last:pb-1 sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-4">
       <div className="pt-2 text-sm font-semibold text-[var(--theme-color-text-muted)] sm:text-right">
         <span>{label}</span>
-        {overriddenLabel ? (
-          <span className="mt-1 block text-xs font-medium text-[var(--theme-color-semantic-warning-foreground)]">
-            {overriddenLabel}
-          </span>
-        ) : null}
       </div>
-      <div
-        aria-disabled={overriddenLabel ? "true" : undefined}
-        className="flex min-w-0 flex-wrap items-center gap-2"
-      >
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         {children}
       </div>
     </div>
@@ -135,11 +125,6 @@ export default function SimulatorSkinControls({
 }: SimulatorSkinControlsProps) {
   const t = useTranslations("bandori.songs.simulator.skinControls");
   const overrides = new Set(limitedPerformanceSkin?.coverage ?? []);
-  const overriddenLabel = limitedPerformanceSkin
-    ? t("limitedPerformance.overriddenBy", {
-        skin: t(`limitedPerformance.skin.${limitedPerformanceSkin.id}`),
-      })
-    : undefined;
 
   return (
     <SimulatorSettingsCard title={t("ariaLabel")}>
@@ -165,10 +150,7 @@ export default function SimulatorSkinControls({
           ))}
         </SimulatorControlRow>
 
-        <SimulatorControlRow
-          label={t("backgroundStyle")}
-          overriddenLabel={overrides.has("background") ? overriddenLabel : undefined}
-        >
+        <SimulatorControlRow label={t("backgroundStyle")}>
           {backgroundSkins.map((skin) => (
             <button
               key={skin.id}
@@ -186,10 +168,7 @@ export default function SimulatorSkinControls({
           ))}
         </SimulatorControlRow>
 
-        <SimulatorControlRow
-          label={t("fieldStyle")}
-          overriddenLabel={overrides.has("lane") ? overriddenLabel : undefined}
-        >
+        <SimulatorControlRow label={t("fieldStyle")}>
           {fieldSkins.map((skin) => (
             <button
               key={skin.id}
@@ -204,10 +183,7 @@ export default function SimulatorSkinControls({
           ))}
         </SimulatorControlRow>
 
-        <SimulatorControlRow
-          label={t("noteStyle")}
-          overriddenLabel={overrides.has("notes") ? overriddenLabel : undefined}
-        >
+        <SimulatorControlRow label={t("noteStyle")}>
           {BANDORI_NATIVE_NOTE_SKINS.map((skin) => (
             <button
               key={skin.id}
@@ -222,10 +198,7 @@ export default function SimulatorSkinControls({
           ))}
         </SimulatorControlRow>
 
-        <SimulatorControlRow
-          label={t("tapSeStyle")}
-          overriddenLabel={overrides.has("soundEffect") ? overriddenLabel : undefined}
-        >
+        <SimulatorControlRow label={t("tapSeStyle")}>
           {BANDORI_NATIVE_TAP_SE_SKINS.map((skin) => (
             <button
               key={skin.id}
@@ -243,10 +216,7 @@ export default function SimulatorSkinControls({
           ))}
         </SimulatorControlRow>
 
-        <SimulatorControlRow
-          label={t("directionalFlickStyle")}
-          overriddenLabel={overrides.has("directionalFlick") ? overriddenLabel : undefined}
-        >
+        <SimulatorControlRow label={t("directionalFlickStyle")}>
           {BANDORI_NATIVE_DIRECTIONAL_FLICK_SKINS.map((skin) => (
             <button
               key={skin.id}
