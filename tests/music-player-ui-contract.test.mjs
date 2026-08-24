@@ -21,10 +21,16 @@ test("player host is mounted in persistent app chrome and toolbar entry precedes
 });
 
 test("player UI uses semantic theme tokens without fixed palette classes", async () => {
-  const player = await readFile(
-    new URL("src/components/music-player/ToolbarMusicPlayer.tsx", ROOT_URL),
-    "utf8",
-  );
+  const [player, transportStyles] = await Promise.all([
+    readFile(
+      new URL("src/components/music-player/ToolbarMusicPlayer.tsx", ROOT_URL),
+      "utf8",
+    ),
+    readFile(
+      new URL("src/components/music-player/transport-control-styles.ts", ROOT_URL),
+      "utf8",
+    ),
+  ]);
 
   assert.match(player, /--theme-color-progress-indicator-background/u);
   assert.match(player, /--theme-color-semantic-danger/u);
@@ -38,6 +44,15 @@ test("player UI uses semantic theme tokens without fixed palette classes", async
   assert.match(
     player,
     /muted\s*\?\s*"bg-\[var\(--theme-color-control-background-pressed\)\] text-\[var\(--theme-color-progress-foreground\)\]"/u,
+  );
+  assert.match(
+    player,
+    /toolbarMenuAppearanceClassName,[\s\S]*border-\[var\(--theme-color-border-subtle\)\] bg-\[var\(--theme-color-control-background-muted\)\]/u,
+  );
+  assert.doesNotMatch(player, /hover:bg-\[var\(--theme-color-control-background-hover\)\]/u);
+  assert.match(
+    transportStyles,
+    /MUSIC_PLAYER_TRANSPORT_BUTTON_CLASS_NAME =[\s\S]*hover:bg-\[var\(--theme-color-control-background-pressed\)\]/u,
   );
 });
 

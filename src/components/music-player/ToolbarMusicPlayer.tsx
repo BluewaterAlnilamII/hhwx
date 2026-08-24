@@ -24,6 +24,11 @@ import {
 import MusicArtwork from "@/components/music-player/MusicArtwork";
 import OverflowMarqueeText from "@/components/music-player/OverflowMarqueeText";
 import {
+  MUSIC_PLAYER_PLAYBACK_BUTTON_CLASS_NAME,
+  MUSIC_PLAYER_PLAYBACK_ERROR_BUTTON_CLASS_NAME,
+  MUSIC_PLAYER_TRANSPORT_BUTTON_CLASS_NAME,
+} from "@/components/music-player/transport-control-styles";
+import {
   toolbarIconButtonClassName,
   toolbarIconInnerClassName,
   toolbarMenuAppearanceClassName,
@@ -33,6 +38,7 @@ import {
   selectMusicPlayerCurrentTrack,
   useMusicPlayerStore,
 } from "@/store/useMusicPlayerStore";
+import { cn } from "@/lib/utils";
 
 interface ToolbarMusicPlayerProps {
   isOpen: boolean;
@@ -282,7 +288,7 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
             aria-label={repeatModeLabel}
             aria-pressed={repeatMode !== "off"}
             data-repeat-mode={repeatMode}
-            className={`flex h-9 w-9 items-center justify-center rounded-[14px] outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${repeatMode !== "off" ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-progress-foreground)]" : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)]"}`}
+            className={`flex h-9 w-9 items-center justify-center rounded-[14px] outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${repeatMode !== "off" ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-progress-foreground)]" : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-pressed)]"}`}
           >
             {repeatMode === "one" ? (
               <Repeat1 className="h-4 w-4" aria-hidden="true" />
@@ -297,7 +303,7 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
             type="button"
             onClick={requestPrevious}
             aria-label={t("previous")}
-            className="flex h-9 w-9 items-center justify-center rounded-[14px] text-[var(--theme-color-text-muted)] outline-hidden transition hover:bg-[var(--theme-color-control-background-hover)] focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]"
+            className={MUSIC_PLAYER_TRANSPORT_BUTTON_CLASS_NAME}
           >
             <SkipBack className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -306,7 +312,9 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
             type="button"
             onClick={requestTogglePlayback}
             aria-label={playbackLabel}
-            className={`flex h-[52px] w-[52px] items-center justify-center rounded-full outline-hidden transition hover:scale-105 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-color-surface-background)] ${isError ? "bg-[var(--theme-color-semantic-danger-border)] text-[var(--theme-color-semantic-danger-foreground-on-dark)] shadow-[var(--theme-shadow-action-primary)] focus-visible:ring-[var(--theme-color-semantic-danger-border)]" : "bg-[var(--theme-color-progress-indicator-background)] text-[var(--theme-color-surface-background)] shadow-[var(--theme-shadow-action-primary)] focus-visible:ring-[var(--theme-color-focus-ring)]"}`}
+            className={isError
+              ? MUSIC_PLAYER_PLAYBACK_ERROR_BUTTON_CLASS_NAME
+              : MUSIC_PLAYER_PLAYBACK_BUTTON_CLASS_NAME}
           >
             {isPlaying ? <Pause className="h-5 w-5" aria-hidden="true" /> : <Play className="ml-0.5 h-5 w-5" aria-hidden="true" />}
           </button>
@@ -315,7 +323,7 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
             type="button"
             onClick={requestNext}
             aria-label={t("next")}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] text-[var(--theme-color-text-muted)] outline-hidden transition hover:bg-[var(--theme-color-control-background-hover)] focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]"
+            className={MUSIC_PLAYER_TRANSPORT_BUTTON_CLASS_NAME}
           >
             <SkipForward className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -327,7 +335,7 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
             onClick={toggleMuted}
             aria-label={muted ? t("unmute") : t("mute")}
             aria-pressed={muted}
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${muted ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-progress-foreground)]" : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)]"}`}
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${muted ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-progress-foreground)]" : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-pressed)]"}`}
           >
             {muted ? <VolumeX className="h-4 w-4" aria-hidden="true" /> : <Volume2 className="h-4 w-4" aria-hidden="true" />}
           </button>
@@ -406,7 +414,11 @@ export default function ToolbarMusicPlayer({ isOpen, onToggle, onRequestClose }:
           id="toolbar-music-player-panel"
           role="dialog"
           aria-label={t("panelLabel")}
-          className={`fixed right-3 top-[59px] w-[min(22.5rem,calc(100vw-1.5rem))] text-[var(--theme-color-text-default)] sm:absolute sm:right-0 sm:top-full sm:mt-3 ${toolbarMenuAppearanceClassName}`}
+          className={cn(
+            "fixed right-3 top-[59px] w-[min(22.5rem,calc(100vw-1.5rem))] text-[var(--theme-color-text-default)] sm:absolute sm:right-0 sm:top-full sm:mt-3",
+            toolbarMenuAppearanceClassName,
+            "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)]",
+          )}
         >
           <MusicPlayerPanel onRequestClose={onRequestClose} />
         </div>

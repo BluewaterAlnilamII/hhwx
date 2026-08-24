@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  BANDORI_CHART_REFERENCE_FRAME_RATE,
   beginBandoriChartScrub,
   commitBandoriChartScrub,
   createBandoriChartTransportState,
@@ -10,6 +11,7 @@ import {
   playBandoriChartTransport,
   previewBandoriChartScrub,
   restartBandoriChartTransport,
+  stepBandoriChartTransport,
   syncBandoriChartMediaTime,
 } from "../src/lib/bandori/chart-simulator/transport.ts";
 import {
@@ -108,4 +110,48 @@ test("pause, scrub, and jump snapshot the exact media clock before changing stat
   const jumped = jumpBandoriChartTransport(exactTransport, 5);
   assert.ok(Math.abs(jumped.currentTimeSeconds - 9.437) < 1e-12);
   assert.equal(jumped.phase, "playing");
+});
+
+test("reference-frame steps snap to adjacent 60 Hz boundaries and stay paused", () => {
+  assert.equal(BANDORI_CHART_REFERENCE_FRAME_RATE, 60);
+  const playing = syncBandoriChartMediaTime(
+    playBandoriChartTransport(createBandoriChartTransportState(20)),
+    4.437,
+  );
+
+  const previousFrame = stepBandoriChartTransport(playing, -1);
+  assert.ok(Math.abs(previousFrame.currentTimeSeconds - (266 / 60)) < 1e-12);
+  assert.equal(previousFrame.phase, "paused");
+
+  const nextFrame = stepBandoriChartTransport(playing, 1);
+  assert.ok(Math.abs(nextFrame.currentTimeSeconds - (267 / 60)) < 1e-12);
+  assert.equal(nextFrame.phase, "paused");
+
+  const exactBoundary = { ...previousFrame, currentTimeSeconds: 4.5 };
+  assert.ok(
+    Math.abs(stepBandoriChartTransport(exactBoundary, -1).currentTimeSeconds - (269 / 60)) < 1e-12,
+  );
+  assert.ok(
+    Math.abs(stepBandoriChartTransport(exactBoundary, 1).currentTimeSeconds - (271 / 60)) < 1e-12,
+  );
+});
+
+test("reference-frame steps do not accumulate drift and clamp at song boundaries", () => {
+  let transport = createBandoriChartTransportState(2);
+  for (let frame = 0; frame < 120; frame += 1) {
+    transport = stepBandoriChartTransport(transport, 1);
+  }
+  assert.equal(transport.currentTimeSeconds, 2);
+  assert.equal(transport.phase, "ended");
+  assert.equal(stepBandoriChartTransport(transport, 1).currentTimeSeconds, 2);
+
+  transport = stepBandoriChartTransport(transport, -1);
+  assert.equal(transport.currentTimeSeconds, 119 / 60);
+  assert.equal(transport.phase, "paused");
+
+  const start = createBandoriChartTransportState(2);
+  assert.equal(stepBandoriChartTransport(start, -1).currentTimeSeconds, 0);
+
+  const scrubbing = beginBandoriChartScrub(start);
+  assert.equal(stepBandoriChartTransport(scrubbing, 1), scrubbing);
 });

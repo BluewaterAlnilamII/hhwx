@@ -1,19 +1,64 @@
-import type { CompiledBandoriChart } from "@/lib/bandori/chart-simulator/compiler";
+import { BANDORI_CHART_REFERENCE_FRAME_RATE } from "@/lib/bandori/chart-simulator/transport";
 
 export type BandoriChartLoopRange = {
   endTimeSeconds: number;
   startTimeSeconds: number;
 };
 
-export type BandoriChartNoteLoopRange = BandoriChartLoopRange & {
-  normalizedEndNoteNumber: number;
-  normalizedStartNoteNumber: number;
+export type BandoriChartLoopPoints = {
+  endTimeSeconds: number | null;
+  startTimeSeconds: number | null;
 };
+
+export type BandoriChartLoopPointKind = "start" | "end";
 
 function assertDuration(durationSeconds: number): void {
   if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
     throw new RangeError("Loop duration must be a positive finite number");
   }
+}
+
+function clampLoopPoint(durationSeconds: number, timeSeconds: number): number {
+  assertDuration(durationSeconds);
+  if (!Number.isFinite(timeSeconds)) {
+    throw new RangeError("Loop point must be finite");
+  }
+  return Math.max(0, Math.min(durationSeconds, timeSeconds));
+}
+
+function createOneFrameLoopRange(
+  durationSeconds: number,
+  timeSeconds: number,
+): BandoriChartLoopRange {
+  const frameDurationSeconds = 1 / BANDORI_CHART_REFERENCE_FRAME_RATE;
+  if (timeSeconds + frameDurationSeconds <= durationSeconds) {
+    return {
+      endTimeSeconds: timeSeconds + frameDurationSeconds,
+      startTimeSeconds: timeSeconds,
+    };
+  }
+  return {
+    endTimeSeconds: durationSeconds,
+    startTimeSeconds: Math.max(0, durationSeconds - frameDurationSeconds),
+  };
+}
+
+export function createBandoriChartLoopPoints(): BandoriChartLoopPoints {
+  return { endTimeSeconds: null, startTimeSeconds: null };
+}
+
+export function clearBandoriChartLoopPoint(
+  points: BandoriChartLoopPoints,
+  kind: BandoriChartLoopPointKind,
+): BandoriChartLoopPoints {
+  if (kind === "start") {
+    return points.startTimeSeconds === null
+      ? points
+      : { ...points, startTimeSeconds: null };
+  }
+  return points.endTimeSeconds === null
+    ? points
+    : { ...points, endTimeSeconds: null };
 }
 
 export function createBandoriTimeLoopRange(
@@ -34,66 +79,41 @@ export function createBandoriTimeLoopRange(
   return { endTimeSeconds, startTimeSeconds };
 }
 
-export function createBandoriFullSongLoopRange(
+export function setBandoriChartLoopPoint(
+  points: BandoriChartLoopPoints,
   durationSeconds: number,
-): BandoriChartLoopRange {
-  return createBandoriTimeLoopRange(durationSeconds, 0, durationSeconds);
-}
+  kind: BandoriChartLoopPointKind,
+  timeSeconds: number,
+): BandoriChartLoopPoints {
+  const nextTimeSeconds = clampLoopPoint(durationSeconds, timeSeconds);
+  const oppositeTimeSeconds = kind === "start"
+    ? points.endTimeSeconds
+    : points.startTimeSeconds;
 
-export function resolveBandoriNoteLoopRange(
-  compiled: CompiledBandoriChart,
-  startNoteNumber: number,
-  endNoteNumber: number,
-): BandoriChartNoteLoopRange {
-  const noteTimes = compiled.notes.times;
-  if (
-    noteTimes.length !== compiled.maxCombo
-    || !Number.isSafeInteger(startNoteNumber)
-    || !Number.isSafeInteger(endNoteNumber)
-    || startNoteNumber < 1
-    || endNoteNumber > noteTimes.length
-    || startNoteNumber > endNoteNumber
-  ) {
-    throw new RangeError("Loop Note range must be an ordered one-based range inside the chart");
+  if (oppositeTimeSeconds === null) {
+    return kind === "start"
+      ? { ...points, startTimeSeconds: nextTimeSeconds }
+      : { ...points, endTimeSeconds: nextTimeSeconds };
   }
 
-  let startIndex = startNoteNumber - 1;
-  const selectedStartTime = noteTimes[startIndex];
-  while (startIndex > 0 && noteTimes[startIndex - 1] === selectedStartTime) {
-    startIndex -= 1;
+  if (nextTimeSeconds === oppositeTimeSeconds) {
+    return createOneFrameLoopRange(durationSeconds, nextTimeSeconds);
   }
-
-  let endIndex = endNoteNumber - 1;
-  const selectedEndTime = noteTimes[endIndex];
-  while (endIndex + 1 < noteTimes.length && noteTimes[endIndex + 1] === selectedEndTime) {
-    endIndex += 1;
-  }
-
-  const startTimeSeconds = startIndex === 0
-    ? 0
-    : (noteTimes[startIndex - 1] + noteTimes[startIndex]) / 2;
-  const endTimeSeconds = endIndex === noteTimes.length - 1
-    ? compiled.timelineDurationSeconds
-    : noteTimes[endIndex + 1];
-  createBandoriTimeLoopRange(
-    compiled.timelineDurationSeconds,
-    startTimeSeconds,
-    endTimeSeconds,
-  );
 
   return {
-    endTimeSeconds,
-    normalizedEndNoteNumber: endIndex + 1,
-    normalizedStartNoteNumber: startIndex + 1,
-    startTimeSeconds,
+    endTimeSeconds: Math.max(nextTimeSeconds, oppositeTimeSeconds),
+    startTimeSeconds: Math.min(nextTimeSeconds, oppositeTimeSeconds),
   };
 }
 
-export function isBandoriTimeInsideLoopRange(
-  range: BandoriChartLoopRange,
-  timeSeconds: number,
-): boolean {
-  return Number.isFinite(timeSeconds)
-    && timeSeconds >= range.startTimeSeconds
-    && timeSeconds < range.endTimeSeconds;
+export function getBandoriChartLoopRange(
+  points: BandoriChartLoopPoints,
+): BandoriChartLoopRange | null {
+  if (points.startTimeSeconds === null || points.endTimeSeconds === null) {
+    return null;
+  }
+  return {
+    endTimeSeconds: points.endTimeSeconds,
+    startTimeSeconds: points.startTimeSeconds,
+  };
 }

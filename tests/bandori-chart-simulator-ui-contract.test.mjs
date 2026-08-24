@@ -98,23 +98,173 @@ test("simulator loading reuses the page spinner and keeps the resource count com
   assert.doesNotMatch(indicator, /已准备|Loading resources/iu);
 });
 
-test("range looping reuses the serialized seek handoff without claiming a gapless boundary", async () => {
-  const [runtime, loopControls] = await Promise.all([
+test("simulator seek controls share the music player spacing, color, and borderless side-button style", async () => {
+  const [runtime, controlStyles] = await Promise.all([
     read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx"),
-    read("../src/app/[locale]/bandori/songs/[songId]/SimulatorLoopControls.tsx"),
+    read("../src/components/music-player/transport-control-styles.ts"),
   ]);
+
+  assert.match(
+    controlStyles,
+    /MUSIC_PLAYER_SEEK_BUTTON_CLASS_NAME =[\s\S]*?hover:bg-\[var\(--theme-color-control-background-pressed\)\]/u,
+  );
+  assert.match(
+    controlStyles,
+    /MUSIC_PLAYER_SIDE_BUTTON_BASE_CLASS_NAME =[\s\S]*?h-9 w-9[\s\S]*?text-\[var\(--theme-color-text-muted\)\]/u,
+  );
+  const sideButtonBaseStyle = controlStyles.match(
+    /MUSIC_PLAYER_SIDE_BUTTON_BASE_CLASS_NAME =\s*"([^"]+)"/u,
+  )?.[1];
+  assert.ok(sideButtonBaseStyle);
+  assert.doesNotMatch(sideButtonBaseStyle, /\bborder\b/u);
+  assert.match(
+    runtime,
+    /className="flex items-center justify-center gap-1\.5 sm:col-start-2 sm:row-start-1"/u,
+  );
+  assert.match(
+    runtime,
+    /grid-cols-\[max-content_2\.25rem_5rem\]/u,
+  );
+  assert.match(
+    runtime,
+    /isMuted \? "bg-\[var\(--theme-color-control-background-pressed\)\][\s\S]*hover:bg-\[var\(--theme-color-control-background-pressed\)\]"/u,
+  );
+  assert.doesNotMatch(runtime, /<output htmlFor=\{inputId\}/u);
+  assert.match(
+    runtime,
+    /sm:col-start-3 sm:row-start-1 sm:justify-self-end lg:grid-cols-2[\s\S]*?<SimulatorVolumeControl[\s\S]*?<SimulatorVolumeControl/u,
+  );
+  assert.match(runtime, /gap-y-1[^"\n]*lg:grid-cols-2 lg:gap-x-6/u);
+  assert.doesNotMatch(
+    runtime,
+    /mt-4 grid gap-y-3 border-t[\s\S]*?<SimulatorVolumeControl/u,
+  );
+});
+
+test("single-frame controls use symmetric step icons, deterministic hold repeat, and scoped shortcuts", async () => {
+  const runtime = await read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx");
+
+  assert.match(runtime, /TRANSPORT_UI_UPDATE_RATE_PER_SECOND = 30/u);
+  assert.match(runtime, /TRANSPORT_UI_UPDATE_INTERVAL_MS = 1000 \/ TRANSPORT_UI_UPDATE_RATE_PER_SECOND/u);
+
+  const normalControls = runtime.slice(
+    runtime.indexOf('aria-label={t("controls.timeline")}'),
+  );
+  const backFiveIndex = normalControls.indexOf('aria-label={t("controls.backFive")}');
+  const backFrameIndex = normalControls.indexOf('aria-label={t("controls.backOneFrame")}');
+  const playbackIndex = normalControls.indexOf('aria-label={t(isPlaying ? "controls.pause" : "controls.play")}');
+  const forwardFrameIndex = normalControls.indexOf('aria-label={t("controls.forwardOneFrame")}');
+  const forwardFiveIndex = normalControls.indexOf('aria-label={t("controls.forwardFive")}');
+  assert.ok(backFiveIndex >= 0);
+  assert.ok(backFrameIndex > backFiveIndex);
+  assert.ok(playbackIndex > backFrameIndex);
+  assert.ok(forwardFrameIndex > playbackIndex);
+  assert.ok(forwardFiveIndex > forwardFrameIndex);
+
+  assert.match(runtime, /<StepBack className="h-\[18px\] w-\[18px\]"/u);
+  assert.match(runtime, /<StepForward className="h-\[18px\] w-\[18px\]"/u);
+  assert.match(runtime, /const FRAME_STEP_HOLD_DELAY_MS = 350;/u);
+  assert.match(runtime, /const FRAME_STEP_REPEAT_RATE_PER_SECOND = 15;/u);
+  assert.match(runtime, /window\.setTimeout\([\s\S]*?window\.setInterval\(/u);
+  assert.match(runtime, /window\.clearTimeout\([\s\S]*?window\.clearInterval\(/u);
+  assert.match(runtime, /stepBandoriChartTransport\(transportRef\.current, direction\)/u);
+  assert.match(runtime, /transportRef\.current\.phase === "playing"\) pauseAudioAndTransport\(\)/u);
+
+  assert.match(runtime, /event\.key === "ArrowLeft" \|\| event\.key === "ArrowRight"/u);
+  assert.match(runtime, /jump\(event\.key === "ArrowLeft" \? -5 : 5\)/u);
+  assert.match(runtime, /event\.code === "KeyD" \|\| event\.code === "KeyF"/u);
+  assert.match(runtime, /event\.code === "KeyD" \? -1 : 1/u);
+  assert.match(runtime, /event\.code === "Space"\)[\s\S]*?event\.preventDefault\(\)[\s\S]*?togglePlayback\(\)/u);
+  assert.doesNotMatch(runtime, /isNativeSpaceActivationTarget/u);
+  assert.match(runtime, /isSimulatorShortcutInput\(event\.target\)/u);
+  assert.match(runtime, /event\.isComposing[\s\S]*?event\.shiftKey/u);
+  assert.match(runtime, /handleSimulatorShortcutKeyDown\(event\.nativeEvent, true\)/u);
+  assert.match(runtime, /NATIVE_RANGE_NAVIGATION_KEYS\.has\(event\.key\)[\s\S]*event\.preventDefault\(\)/u);
+  assert.match(runtime, /aria-keyshortcuts="ArrowLeft ArrowRight d f \[ \] Shift\+\[ Shift\+\] Space r"[\s\S]*onKeyDown=\{handleTimelineKeyDown\}/u);
+  assert.doesNotMatch(runtime, /onKeyDown=\{beginScrub\}|onKeyUp=\{commitScrub\}/u);
+  assert.match(runtime, /aria-keyshortcuts="ArrowLeft"[\s\S]*?aria-keyshortcuts="d"[\s\S]*?aria-keyshortcuts="Space"[\s\S]*?aria-keyshortcuts="f"[\s\S]*?aria-keyshortcuts="ArrowRight"/u);
+});
+
+test("stage fullscreen keeps transport overlays outside the central playfield and treats landscape as a preference", async () => {
+  const runtime = await read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx");
+
+  assert.match(runtime, /<Maximize className="h-5 w-5"/u);
+  assert.match(runtime, /<Minimize className="h-5 w-5"/u);
+  assert.match(runtime, /fullscreenRoot\.requestFullscreen\(\{ navigationUI: "hide" \}\)/u);
+  assert.match(runtime, /document\.addEventListener\("fullscreenchange", updateFullscreenState\)/u);
+  assert.match(runtime, /fullscreenRoot !== null && document\.fullscreenElement === fullscreenRoot/u);
+  assert.match(runtime, /await orientation\.lock\("landscape"\)/u);
+  assert.match(runtime, /keep fullscreen in the user's[\s\S]*current orientation/u);
+
+  const fullscreenEntryIndex = runtime.indexOf('aria-label={t("controls.enterFullscreen")}');
+  const fullscreenRootIndex = runtime.indexOf("data-chart-simulator-fullscreen-root");
+  const fullscreenControlsIndex = runtime.indexOf("data-chart-simulator-fullscreen-controls");
+  const normalTimelineIndex = runtime.indexOf('aria-label={t("controls.timeline")}');
+  assert.ok(fullscreenEntryIndex >= 0);
+  assert.ok(fullscreenRootIndex >= 0);
+  assert.ok(fullscreenControlsIndex > fullscreenRootIndex);
+  assert.ok(normalTimelineIndex > fullscreenControlsIndex);
+  const fullscreenEntrySection = runtime.slice(fullscreenEntryIndex, fullscreenRootIndex);
+  assert.match(fullscreenEntrySection, /border-\[var\(--theme-color-action-secondary-border\)\]/u);
+  const fullscreenSection = runtime.slice(fullscreenRootIndex, normalTimelineIndex);
+  assert.match(fullscreenSection, /data-chart-simulator-fullscreen-backward-controls/u);
+  assert.match(fullscreenSection, /data-chart-simulator-fullscreen-forward-controls/u);
+  assert.match(fullscreenSection, /data-chart-simulator-fullscreen-backward-controls[\s\S]*controls\.backOneFrame[\s\S]*controls\.backFive/u);
+  assert.match(fullscreenSection, /data-chart-simulator-fullscreen-forward-controls[\s\S]*controls\.forwardOneFrame[\s\S]*controls\.forwardFive/u);
+  assert.match(fullscreenSection, /top-\[42%\][\s\S]*flex-col/u);
+  assert.match(fullscreenSection, /portrait:fixed portrait:grid portrait:grid-cols-1/u);
+  assert.match(fullscreenSection, /gridTemplateRows: `minmax\(0, 1fr\) min\(100dvh, \$\{FULLSCREEN_STAGE_HEIGHT_DVW\}dvw\) minmax\(0, 1fr\)`/u);
+  assert.match(fullscreenSection, /portrait:row-start-1[\s\S]*loopControls\.ariaLabel/u);
+  assert.match(fullscreenSection, /data-chart-simulator-fullscreen-backward-controls[\s\S]*portrait:row-start-3/u);
+  assert.match(fullscreenSection, /data-chart-simulator-fullscreen-forward-controls[\s\S]*portrait:row-start-3/u);
+  assert.match(fullscreenSection, /safe-area-inset-left/u);
+  assert.match(fullscreenSection, /safe-area-inset-right/u);
+  assert.match(fullscreenSection, /bg-slate-950\/65/u);
+  assert.match(fullscreenSection, /loopControls\.reset[\s\S]*stageRenderFpsText\} FPS/u);
+  assert.doesNotMatch(fullscreenSection, /SimulatorVolumeControl|controls\.timeline|rotate-90|portrait:hidden/u);
+});
+
+test("stage render FPS uses a one-second ticker sample and stays outside the playfield", async () => {
+  const [runtime, stage] = await Promise.all([
+    read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx"),
+    read("../src/app/[locale]/bandori/songs/[songId]/NativeSimulatorStage.tsx"),
+  ]);
+
+  assert.match(stage, /RENDER_FPS_SAMPLE_INTERVAL_MS = 1000/u);
+  assert.match(stage, /const renderStageFrame = \(\) => \{[\s\S]*renderNotes\(\)[\s\S]*sample\.frameCount \+= 1[\s\S]*elapsedMs < RENDER_FPS_SAMPLE_INTERVAL_MS[\s\S]*onRenderFpsChange\(Math\.round\(sample\.frameCount \* 1000 \/ elapsedMs\)\)/u);
+  assert.match(stage, /app\.ticker\.add\(renderStageFrame\)/u);
+  assert.match(stage, /application\.stop\(\)[\s\S]*onRenderFpsChange\(null\)/u);
+  assert.match(runtime, /onRenderFpsChange=\{setStageRenderFps\}/u);
+  assert.match(runtime, /formatPlaybackTime\(durationSeconds\)[\s\S]*stageRenderFpsText\} FPS[\s\S]*aria-label=\{t\("loopControls\.ariaLabel"\)\}/u);
+});
+
+test("range looping reuses the serialized seek handoff without claiming a gapless boundary", async () => {
+  const runtime = await read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx");
 
   assert.match(runtime, /const seekToLoopStart = useCallback/u);
   assert.match(runtime, /seekAudioAndTransport\([\s\S]*includeStartBoundary: true/u);
-  assert.match(runtime, /const wrapLoopAfterBoundary = useCallback\([\s\S]*presentationTimeSeconds < loopRangeRef\.current\.endTimeSeconds[\s\S]*seekToLoopStart\(loopRangeRef\.current, false\)/u);
+  assert.match(runtime, /const wrapLoopAfterBoundary = useCallback\([\s\S]*const range = getBandoriChartLoopRange\(loopPointsRef\.current\)[\s\S]*presentationTimeSeconds < range\.endTimeSeconds[\s\S]*seekToLoopStart\(range\)/u);
   assert.match(runtime, /loopSeekPendingRef\.current = true[\s\S]*request\.then\(finish, finish\)/u);
   assert.match(runtime, /isMusicPresentationTransitioning \|\| pendingPlaybackResumeRef\.current/u);
+  assert.match(runtime, /setBandoriChartLoopPoint\([\s\S]*currentTimeSeconds[\s\S]*current\.phase === "playing"[\s\S]*currentTimeSeconds >= range\.endTimeSeconds[\s\S]*seekToLoopStart\(range\)/u);
+  assert.match(runtime, /const playableTransport = loopRange[\s\S]*getBandoriChartPresentationTime\(current\) >= loopRange\.endTimeSeconds[\s\S]*createLoopSeekTransport\(current, loopRange\.startTimeSeconds, false\)/u);
+  assert.match(runtime, /event\.code === "BracketLeft" \|\| event\.code === "BracketRight"[\s\S]*setLoopPointAtPresentationTime\([\s\S]*event\.code === "BracketLeft" \? "start" : "end"/u);
+  assert.match(runtime, /event\.shiftKey[\s\S]*event\.code !== "BracketLeft"[\s\S]*clearLoopPoint\(event\.code === "BracketLeft" \? "start" : "end"\)/u);
+  assert.match(runtime, /event\.code === "KeyR"[\s\S]*!event\.repeat[\s\S]*resetLoopPoints\(\)/u);
+  assert.match(runtime, /LOOP_POINT_CLEAR_HOLD_DELAY_MS = 500/u);
+  assert.match(runtime, /startLoopPointClearHold[\s\S]*window\.setTimeout\([\s\S]*suppressedLoopPointClickRef\.current = kind[\s\S]*clearLoopPoint\(kind\)/u);
+  assert.match(runtime, /onPointerDown=\{\(event\) => startLoopPointClearPointerHold\(event, "start"\)\}[\s\S]*onContextMenu=\{\(event\) => handleLoopPointContextMenu\(event, "start"\)\}/u);
+  assert.match(runtime, /suppressedLoopPointClickRef\.current === kind[\s\S]*setLoopPointAtPresentationTime\(kind\)/u);
+  assert.match(runtime, /loopStartPercentage !== null && loopEndPercentage !== null/u);
+  assert.match(runtime, /loopStartPercentage !== null[\s\S]*loopEndPercentage !== null/u);
+  assert.match(runtime, /native 16px range thumb travels between centers inset 8px[\s\S]*className="absolute inset-y-0 left-2 right-2"/u);
+  assert.match(runtime, /left-2 right-2[\s\S]*width: `\$\{playbackPercentage\}%`[\s\S]*left: `\$\{loopStartPercentage\}%`[\s\S]*left: `\$\{loopEndPercentage\}%`/u);
+  assert.doesNotMatch(runtime, /等待设置终点|循环中|waiting for loop/iu);
   assert.doesNotMatch(runtime, /isBandoriSimulatorLoopAvailable|isLoopUnavailable/u);
-  assert.doesNotMatch(loopControls, /isUnavailable|t\("unavailable"\)/u);
 });
 
 test("the Pixi stage loads the selected stage, point-note atlases, and bounded hit effects", async () => {
-  const [stage, stageContract, noteAssets, tapEffectAssets, notePresentation, hitPresentation, holdPresentation, judgmentComboPresentation, runtime, skinControls, loopControls, adjustmentControls, settingsCard, switchControl, loopRange, compiler, worker, musicBackends] = await Promise.all([
+  const [stage, stageContract, noteAssets, tapEffectAssets, notePresentation, hitPresentation, holdPresentation, judgmentComboPresentation, runtime, skinControls, adjustmentControls, settingsCard, switchControl, loopRange, compiler, worker, musicBackends] = await Promise.all([
     read("../src/app/[locale]/bandori/songs/[songId]/NativeSimulatorStage.tsx"),
     read("../src/app/[locale]/bandori/songs/[songId]/native-stage-contract.ts"),
     read("../src/app/[locale]/bandori/songs/[songId]/native-note-assets.ts"),
@@ -125,7 +275,6 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
     read("../src/lib/bandori/chart-simulator/native-judgment-combo-presentation.ts"),
     read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx"),
     read("../src/app/[locale]/bandori/songs/[songId]/SimulatorSkinControls.tsx"),
-    read("../src/app/[locale]/bandori/songs/[songId]/SimulatorLoopControls.tsx"),
     read("../src/app/[locale]/bandori/songs/[songId]/SimulatorAdjustmentControl.tsx"),
     read("../src/app/[locale]/bandori/songs/[songId]/SimulatorSettingsCard.tsx"),
     read("../src/components/Switch.tsx"),
@@ -134,7 +283,7 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
     read("../src/lib/bandori/chart-simulator/compiler.worker.ts"),
     read("../src/lib/bandori/chart-simulator/music-playback-backends.ts"),
   ]);
-  const simulatorSource = `${stage}\n${stageContract}\n${noteAssets}\n${tapEffectAssets}\n${notePresentation}\n${hitPresentation}\n${holdPresentation}\n${judgmentComboPresentation}\n${runtime}\n${skinControls}\n${loopControls}\n${adjustmentControls}\n${settingsCard}\n${switchControl}\n${loopRange}\n${compiler}\n${worker}`;
+  const simulatorSource = `${stage}\n${stageContract}\n${noteAssets}\n${tapEffectAssets}\n${notePresentation}\n${hitPresentation}\n${holdPresentation}\n${judgmentComboPresentation}\n${runtime}\n${skinControls}\n${adjustmentControls}\n${settingsCard}\n${switchControl}\n${loopRange}\n${compiler}\n${worker}`;
 
   assert.match(stage, /Application,[\s\S]*Assets,[\s\S]*Container,[\s\S]*Sprite/u);
   assert.match(stage, /const suddenLine = new NineSliceSprite/u);
@@ -163,10 +312,10 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /loadDirectionalEffects\([\s\S]*directionalFlickSkin,[\s\S]*loadJson,[\s\S]*loadTexture/u);
   assert.match(stage, /BANDORI_NATIVE_DIRECTIONAL_EFFECT_VARIANTS[\s\S]*BANDORI_NATIVE_DIRECTIONAL_EFFECT_RECIPE_KEYS/u);
   assert.match(stage, /app\.stage\.addChild\([\s\S]*directionalLineLayer,[\s\S]*judgmentLine,[\s\S]*laneEffectLayer,[\s\S]*lowHitEffectLayer,[\s\S]*highHitEffectLayer,[\s\S]*ribbonLayer,[\s\S]*noteLayer/u);
-  assert.match(stage, /app\.ticker\.add\(renderNotes\)/u);
+  assert.match(stage, /app\.ticker\.add\(renderStageFrame\)/u);
   assert.match(stage, /autoStart: false/u);
-  assert.match(stage, /app\.ticker\.add\(renderNotes\);[\s\S]*if \(isActiveRef\.current\) app\.start\(\)/u);
-  assert.match(stage, /if \(isActive\) application\.start\(\);[\s\S]*else application\.stop\(\)/u);
+  assert.match(stage, /app\.ticker\.add\(renderStageFrame\);[\s\S]*if \(isActiveRef\.current\) \{[\s\S]*app\.start\(\)/u);
+  assert.match(stage, /if \(isActive\) \{[\s\S]*application\.start\(\)[\s\S]*application\.stop\(\)/u);
   assert.match(runtime, /isActive=\{isActive && activeTab === "stage" && isSelectedChartReady\}/u);
   assert.match(runtime, /<SimulatorControlRow label=\{t\("controls\.suddenRate"\)\}>[\s\S]*suffix="%"[\s\S]*\{t\("controls\.suddenLane"\)\}[\s\S]*label=\{t\("controls\.suddenLane"\)\}[\s\S]*<\/SimulatorControlRow>/u);
   assert.doesNotMatch(runtime, /<SimulatorControlRow label=\{t\("controls\.suddenLane"\)\}>/u);
@@ -281,7 +430,10 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.doesNotMatch(runtime, /seekBandoriMediaElement|playBandoriMediaElement|media-seek/u);
   assert.match(runtime, /mediaOperationSequencer\.runLatest\(async \(operation\) =>/u);
   assert.match(runtime, /operation\.throwIfSuperseded\(\);[\s\S]*runtime\.startMusic\(/u);
-  assert.match(runtime, /const next = playBandoriChartTransport\(transportRef\.current\);[\s\S]*await seekAudioAndTransport\(next\)/u);
+  assert.match(
+    runtime,
+    /const playableTransport = loopRange[\s\S]*const next = playBandoriChartTransport\(playableTransport\);[\s\S]*await seekAudioAndTransport\(next\)/u,
+  );
   assert.match(runtime, /Math\.min\(currentTransport\.durationSeconds, runtime\.getMusicTime\(\)\)/u);
   assert.doesNotMatch(runtime, /frozenMediaTimeRef/u);
   assert.match(runtime, /startedTimeSeconds === null\)[\s\S]*pauseAudioInternally\(\)/u);
@@ -339,20 +491,20 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /projectBandoriNativeNote\([\s\S]*currentNoteApproachTimeScale/u);
   assert.match(stage, /projectBandoriNativeRibbonPoint\([\s\S]*currentNoteApproachTimeScale/u);
   assert.match(stage, /projectBandoriNativeRibbonBody\([\s\S]*currentNoteApproachTimeScale/u);
-  assert.match(runtime, /<SimulatorLoopControls/u);
-  assert.match(loopControls, /t\("reset"\)/u);
-  assert.match(loopControls, /step=\{0\.001\}/u);
-  assert.match(loopControls, /className="sr-only"/u);
-  assert.match(loopControls, /onRangeApply\(nextRange\)/u);
-  assert.match(runtime, /event\.timeSeconds < loopRangeRef\.current\.endTimeSeconds/u);
+  assert.doesNotMatch(runtime, /<SimulatorLoopControls|isLoopEnabled|changeLoopEnabled/u);
+  assert.match(runtime, /aria-label=\{t\("loopControls\.ariaLabel"\)\}/u);
+  assert.match(runtime, /aria-label=\{t\("loopControls\.setStart"\)\}[\s\S]*?aria-keyshortcuts="\[ Shift\+\["[\s\S]*?>\s*A\s*<\/button>/u);
+  assert.match(runtime, /aria-label=\{t\("loopControls\.setEnd"\)\}[\s\S]*?aria-keyshortcuts="\] Shift\+\]"[\s\S]*?>\s*B\s*<\/button>/u);
+  assert.match(runtime, /formatPlaybackTime\(presentationTime\)[\s\S]*formatPlaybackTime\(durationSeconds\)[\s\S]*role="group"[\s\S]*aria-label=\{t\("loopControls\.ariaLabel"\)\}/u);
+  assert.match(runtime, /grid-cols-\[9ch_auto_9ch\][^"\n]*font-mono[^"\n]*tabular-nums/u);
+  assert.match(runtime, /className="flex items-center gap-0"/u);
+  assert.match(runtime, /aria-label=\{t\("loopControls\.reset"\)\}[\s\S]*?aria-keyshortcuts="r"[\s\S]*?shortcut: "R"[\s\S]*?<RotateCcw/u);
+  assert.match(runtime, /sm:grid-cols-\[minmax\(0,1fr\)_auto_minmax\(0,1fr\)\]/u);
+  assert.match(runtime, /event\.timeSeconds < loopRange\.endTimeSeconds/u);
   assert.match(runtime, /wrapLoopAfterBoundary\(\)[\s\S]*flushNoteSoundsThrough\(presentationTimeSeconds\)[\s\S]*requestAnimationFrame\(updatePlayback\)/u);
-  assert.match(loopControls, /createBandoriTimeLoopRange/u);
-  assert.match(loopControls, /resolveBandoriNoteLoopRange/u);
-  assert.match(loopControls, /mode === "time"/u);
-  assert.match(loopControls, /mode === "notes"/u);
-  assert.match(loopRange, /\(noteTimes\[startIndex - 1\] \+ noteTimes\[startIndex\]\) \/ 2/u);
-  assert.match(loopRange, /endIndex === noteTimes\.length - 1[\s\S]*compiled\.timelineDurationSeconds[\s\S]*noteTimes\[endIndex \+ 1\]/u);
-  assert.doesNotMatch(loopRange, /ribbon|Long|Slide/u);
+  assert.match(loopRange, /setBandoriChartLoopPoint[\s\S]*Math\.max\(nextTimeSeconds, oppositeTimeSeconds\)[\s\S]*Math\.min\(nextTimeSeconds, oppositeTimeSeconds\)/u);
+  assert.match(loopRange, /1 \/ BANDORI_CHART_REFERENCE_FRAME_RATE/u);
+  assert.doesNotMatch(loopRange, /CompiledBandoriChart|resolveBandoriNoteLoopRange/u);
   assert.match(runtime, /stopAndResetNoteSounds\([\s\S]*currentTimeSeconds,[\s\S]*currentTimeSeconds > 0/u);
   assert.match(stage, /advanceBandoriEffectAnimationClock\(\{[\s\S]*presentationTimeSeconds: presentationTime,[\s\S]*previousPresentationTimeSeconds: lastEffectTimeSeconds/u);
   assert.match(stage, /effectAnimationTimeSeconds = effectClockStep\.animationTimeSeconds/u);
@@ -464,7 +616,10 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.doesNotMatch(noteAssets, /\/local\/chart-simulator\/(?:jp|cn)\//iu);
 
   const timelineIndex = runtime.indexOf('aria-label={t("controls.timeline")}');
-  const playbackControlsIndex = runtime.indexOf('onClick={restart}');
+  const playbackControlsIndex = runtime.indexOf(
+    'aria-label={t("controls.backFive")}',
+    timelineIndex,
+  );
   const bgmVolumeIndex = runtime.indexOf('label={t("controls.bgmVolume")}');
   const seVolumeIndex = runtime.indexOf('label={t("controls.seVolume")}');
   const effectControlsIndex = runtime.indexOf('{t("effectControlsTitle")}');
@@ -477,6 +632,11 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   const skinControlsIndex = runtime.indexOf('<SimulatorSkinControls');
   assert.ok(timelineIndex >= 0);
   assert.ok(playbackControlsIndex > timelineIndex);
+  assert.doesNotMatch(runtime, /controls\.restart|onClick=\{restart\}/u);
+  assert.match(runtime, /MUSIC_PLAYER_SEEK_BUTTON_CLASS_NAME/u);
+  assert.match(runtime, /MUSIC_PLAYER_PLAYBACK_BUTTON_CLASS_NAME/u);
+  assert.match(runtime, /<Rewind className="h-5 w-5"[\s\S]*?<FastForward className="h-5 w-5"/u);
+  assert.doesNotMatch(runtime, /<SkipBack|<SkipForward/u);
   assert.ok(bgmVolumeIndex > playbackControlsIndex);
   assert.ok(seVolumeIndex > bgmVolumeIndex);
   assert.ok(effectControlsIndex > seVolumeIndex);
@@ -544,14 +704,32 @@ test("localized song and simulator keys stay mirrored", async () => {
     assert.equal(Object.hasOwn(messages.skinControls.limitedPerformance, "slot"), false);
     assert.equal(Object.hasOwn(messages.skinControls, "allPerfectStatus"), false);
   }
-  assert.equal(zh.songs.simulator.loopControls.apply, "应用");
-  assert.equal(zh.songs.simulator.loopControls.reset, "重置");
-  assert.equal(en.songs.simulator.loopControls.apply, "Apply");
-  assert.equal(en.songs.simulator.loopControls.reset, "Reset");
-  assert.equal(zh.songs.simulator.controls.bgmVolume, "BGM音量");
-  assert.equal(zh.songs.simulator.controls.seVolume, "SE音量");
-  assert.equal(en.songs.simulator.controls.bgmVolume, "BGM volume");
-  assert.equal(en.songs.simulator.controls.seVolume, "SE volume");
+  assert.deepEqual(Object.keys(zh.songs.simulator.loopControls).sort(), [
+    "ariaLabel",
+    "reset",
+    "setEnd",
+    "setStart",
+  ]);
+  assert.deepEqual(
+    Object.keys(en.songs.simulator.loopControls).sort(),
+    Object.keys(zh.songs.simulator.loopControls).sort(),
+  );
+  assert.equal(zh.songs.simulator.loopControls.setStart, "设置循环起点");
+  assert.equal(zh.songs.simulator.loopControls.setEnd, "设置循环止点");
+  assert.equal(zh.songs.simulator.loopControls.reset, "重置循环区间");
+  assert.equal(en.songs.simulator.loopControls.setStart, "Set loop start");
+  assert.equal(en.songs.simulator.loopControls.setEnd, "Set loop end");
+  assert.equal(en.songs.simulator.loopControls.reset, "Reset loop range");
+  assert.equal(zh.songs.simulator.controls.enterFullscreen, "进入全屏");
+  assert.equal(zh.songs.simulator.controls.exitFullscreen, "退出全屏");
+  assert.equal(en.songs.simulator.controls.enterFullscreen, "Enter fullscreen");
+  assert.equal(en.songs.simulator.controls.exitFullscreen, "Exit fullscreen");
+  assert.equal(zh.songs.simulator.controls.renderFps, "舞台渲染帧率：{fps} FPS");
+  assert.equal(en.songs.simulator.controls.renderFps, "Stage render rate: {fps} FPS");
+  assert.equal(zh.songs.simulator.controls.bgmVolume, "BGM");
+  assert.equal(zh.songs.simulator.controls.seVolume, "SE");
+  assert.equal(en.songs.simulator.controls.bgmVolume, "BGM");
+  assert.equal(en.songs.simulator.controls.seVolume, "SE");
   assert.equal(zh.songs.simulator.skinControls.tapEffectStyle, "TAP EFFECT");
   assert.equal(en.songs.simulator.skinControls.tapEffectStyle, "TAP EFFECT");
   assert.equal(zh.songs.simulator.skinControls.limitedPerformance.none, "关");
