@@ -26,6 +26,12 @@ The current product contract includes:
   Slide presentation, including ribbons, curve points, rhythm support,
   simultaneous lines, and mirror behavior;
 - selectable Note Speed `1.00...12.00`, with the product default at `10.00`;
+- selectable Note Size `10%...200%`; Habahiro charts retain the selected value
+  while clamping the effective rendered size to `80%...150%`;
+- selectable Note appearance position `0...100`, with an independent option to
+  hide the lane field above the same boundary;
+- large and small Directional effect variants for all five ordinary families
+  and the Persona limited overlay;
 - automatic Perfect lane flash, judgment, Combo, tap/Flick/Directional/hold
   effects, and on-demand TapSE/Web Audio playback; and
 - a complete-chart analysis view that remains separate from native playfield

@@ -15,6 +15,9 @@
 - 7 种普通节奏标志／Note 样式及 5 种普通 Directional Flick 样式；
 - 普通及 Habahiro 多轨 Point、Skill、Flick、Directional、Long、Slide 演出，包括连接带、曲线节点、节奏辅助、同时线与镜像行为；
 - `1.00...12.00` 的 Note Speed，产品默认值为 `10.00`；
+- `10%...200%` 的节奏图标大小；Habahiro 谱面保留选择值，但实际渲染大小限制在 `80%...150%`；
+- `0...100` 的节奏图标出现位置，并可独立选择是否同步隐藏边界上方的按键条；
+- 5 种普通样式及 Persona 限定覆盖均支持大／小两种 Directional 效果；
 - 自动 Perfect 的按键闪光、判定、Combo、点击／Flick／Directional／保持效果，以及按需加载的 TapSE／Web Audio；
 - 与原生演出舞台彼此独立的完整谱面分析视图。
 

@@ -47,7 +47,6 @@ import {
 } from "../src/lib/bandori/chart-simulator/native-judgment-combo-presentation.ts";
 import {
   BANDORI_APPROVED_MANUAL_VERTICAL_BEAM_ABOVE_JUDGMENT_RATIO,
-  BANDORI_NATIVE_DIRECTIONAL_EFFECT_FRAME_URLS,
   BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS,
   createBandoriNativeSwipeEffectRuntime,
   getBandoriApprovedAnimatedTravelScreenY,
@@ -1716,10 +1715,9 @@ test("JP Flick and Directional recipes execute the recovered particle module all
 
   const placement = getBandoriNativeSwipeEffectPlacement("directional-left-3", 3);
   assert.ok(placement.pixelsPerWorldUnit > 0);
-  assert.equal(BANDORI_NATIVE_DIRECTIONAL_EFFECT_FRAME_URLS.length, 16);
   assert.match(BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS["tap-light"], /tapeffect\/skin00\/textures\/light\.png$/u);
   assert.doesNotMatch(
-    `${Object.values(BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS).join("\n")}\n${BANDORI_NATIVE_DIRECTIONAL_EFFECT_FRAME_URLS.join("\n")}`,
+    Object.values(BANDORI_NATIVE_SWIPE_EFFECT_TEXTURE_URLS).join("\n"),
     /\/(?:jp|cn)\//iu,
   );
 

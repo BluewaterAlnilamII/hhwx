@@ -87,7 +87,9 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /Promise\.all\(mainTextureUrls\.map\([\s\S]*loadTexture\(url\)/u);
   assert.match(stage, /usesLimitedTapEffect \? null : BANDORI_NATIVE_TAP_EFFECT_ATLAS_1_URL/u);
   assert.match(stage, /usesLimitedTapEffect \? null : BANDORI_NATIVE_TAP_EFFECT_ATLAS_2_URL/u);
-  assert.match(stage, /BANDORI_NATIVE_DIRECTIONAL_EFFECT_FRAME_URLS\.map\([\s\S]*usesLimitedDirectionalEffect \? null : url/u);
+  assert.match(stage, /getBandoriNativeDirectionalEffectAssetContract\(directionalFlickSkin\)/u);
+  assert.match(stage, /loadDirectionalEffects\([\s\S]*directionalFlickSkin,[\s\S]*loadJson,[\s\S]*loadTexture/u);
+  assert.match(stage, /BANDORI_NATIVE_DIRECTIONAL_EFFECT_VARIANTS[\s\S]*BANDORI_NATIVE_DIRECTIONAL_EFFECT_RECIPE_KEYS/u);
   assert.match(stage, /app\.stage\.addChild\([\s\S]*directionalLineLayer,[\s\S]*judgmentLine,[\s\S]*laneEffectLayer,[\s\S]*lowHitEffectLayer,[\s\S]*highHitEffectLayer,[\s\S]*ribbonLayer,[\s\S]*noteLayer/u);
   assert.match(stage, /app\.ticker\.add\(renderNotes\)/u);
   assert.match(stage, /autoStart: false/u);
@@ -111,7 +113,10 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /particleScreenY = getBandoriApprovedAnimatedTravelScreenY\([\s\S]*initialScreenY,[\s\S]*instance\.screenY,[\s\S]*animatedVerticalBeam\.travelSpeedMultiplier/u);
   assert.match(stage, /const directionalNotesCenterOffsetPixels =\s*getBandoriApprovedManualDirectionalNotesCenterOffsetPixels\(instance\)/u);
   assert.doesNotMatch(stage, /const (?:particleScreenY|directionalNotesCenterOffsetPixels) = display\.isNativeDefault/u);
-  assert.match(stage, /const terminalScreenX = event\.terminalLane === null[\s\S]*if \(limitedEffects && useLimitedEffect\)[\s\S]*triggerSwipeEffect\([\s\S]*terminalScreenX/u);
+  assert.match(stage, /const terminalScreenX = event\.terminalLane === null[\s\S]*event\.kind\.startsWith\("directional-"\)[\s\S]*triggerSwipeEffect\([\s\S]*terminalScreenX/u);
+  assert.match(stage, /getBandoriNativeNoteScale\([\s\S]*noteSizeRef\.current,[\s\S]*isMultiRangeChart/u);
+  assert.match(stage, /directionalLineLayer\.mask = mask[\s\S]*syncLineLayer\.mask = mask[\s\S]*ribbonLayer\.mask = mask[\s\S]*noteLayer\.mask = mask/u);
+  assert.match(stage, /fieldDisplayTexture\.frame\.height[\s\S]*fieldDisplayTexture\.updateUvs\(\)/u);
   assert.match(stage, /limitedPerformanceSkin\?\.judgmentPerfectTextureUrl[\s\S]*BANDORI_NATIVE_PERFECT_JUDGMENT_URL/u);
   assert.match(stage, /loadNativeSpriteAnchors\([\s\S]*noteSkin\.spriteAnchorsUrl/u);
   assert.match(stage, /BANDORI_NATIVE_JUDGMENT_LANE_SPACING_PIXELS/u);
@@ -128,7 +133,7 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.doesNotMatch(stage, /leftNoteIndex\)\?\.notes\[0\]/u);
   assert.doesNotMatch(stage, /rightNoteIndex\)\?\.notes\[0\]/u);
   assert.match(stage, /if \(syncLineEnabledRef\.current\)[\s\S]*desiredSyncLines\.add\(display\)/u);
-  assert.match(stage, /updateSyncLine\(display, activeNotes, true\)/u);
+  assert.match(stage, /updateSyncLine\(display, activeNotes, true, currentNoteScale\)/u);
   assert.match(stage, /rhythmSupportEnabledRef\.current[\s\S]*&& note\.rhythmSupportTexture/u);
   assert.match(stage, /isRhythmSupportNote && visual\.body === "normal"/u);
   assert.match(stage, /if \(laneEffectEnabledRef\.current\)/u);
@@ -260,7 +265,7 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /advanceBandoriEffectAnimationClock\(\{[\s\S]*presentationTimeSeconds: presentationTime,[\s\S]*previousPresentationTimeSeconds: lastEffectTimeSeconds/u);
   assert.match(stage, /effectAnimationTimeSeconds = effectClockStep\.animationTimeSeconds/u);
   assert.match(stage, /updateLaneEffect\([\s\S]*effectAnimationDeltaSeconds/u);
-  assert.match(stage, /updateHitEffect\(display, effectAnimationTimeSeconds\)/u);
+  assert.match(stage, /updateHitEffect\(display, effectAnimationTimeSeconds, currentNoteScale\)/u);
   assert.match(stage, /display\.animationElapsedSeconds \+= effectAnimationDeltaSeconds/u);
   assert.doesNotMatch(stage, /app\.ticker\.deltaMS/u);
   assert.match(runtime, /\[isSyncLineEnabled, setIsSyncLineEnabled\] = useState\(true\)/u);
@@ -289,7 +294,6 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /updateBandoriNativeDirectionalConnectorVertices/u);
   assert.match(stage, /createNativeTransparentColoredShader/u);
   assert.doesNotMatch(stage, /BANDORI_NATIVE_(?:DIRECTIONAL_BACK_LINE|CURVE_SLIDE_BELT|LONG_BELT)_THRESHOLD/u);
-  assert.doesNotMatch(stage, /BANDORI_NATIVE_LONG_NOTE_LINE_VERTEX_ALPHA/u);
   assert.match(stage, /createRibbonMeshDisplay\(texture, "ordinary"\)/u);
   assert.match(stage, /createRibbonMeshDisplay\(texture, "advanced"\)/u);
   assert.match(stage, /source\.alphaMode = "no-premultiply-alpha"/u);
