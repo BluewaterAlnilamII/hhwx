@@ -75,6 +75,42 @@ test("compiler retains the source chart while deriving deterministic typed table
   );
 });
 
+test("explicit coverage compiles without reading a scalar lane anchor", () => {
+  const source = [
+    { type: "BPM", beat: 0, bpm: 120 },
+    { type: "System", beat: 0, data: "lane_change", laneChange: true },
+    { type: "Single", beat: 1, lanes: [1, 2] },
+    // A retained legacy value is deliberately wrong: explicit coverage remains authoritative.
+    { type: "Single", beat: 2, lane: 6, lanes: [2, 3, 4] },
+    {
+      type: "Long",
+      connections: [
+        { beat: 3, lanes: [4, 5] },
+        { beat: 4, lanes: [4, 5] },
+      ],
+    },
+    {
+      type: "Slide",
+      connections: [
+        { beat: 5, lanes: [0, 1, 2] },
+        { beat: 6, lanes: [2, 3, 4], hidden: true },
+        { beat: 7, lanes: [4, 5, 6] },
+      ],
+    },
+  ];
+  const compiled = compileBandoriChart(source);
+
+  assert.deepEqual(Array.from(compiled.notes.lanes), [1, 3, 4, 4, 1, 5]);
+  assert.deepEqual(
+    Array.from(compiled.notes.coverageLanes),
+    [1, 2, 2, 3, 4, 4, 5, 4, 5, 0, 1, 2, 4, 5, 6],
+  );
+  assert.deepEqual(
+    Array.from(compiled.ribbons.connectionLanes),
+    [4, 4, 1, 3, 5],
+  );
+});
+
 test("ordinary Slide curves are converted into native hidden nodes before presentation", () => {
   const compiled = compileBandoriChart([
     { type: "BPM", beat: 0, bpm: 120 },

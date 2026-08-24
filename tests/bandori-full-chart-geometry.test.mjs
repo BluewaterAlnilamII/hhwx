@@ -76,3 +76,33 @@ test("full-chart mirror reflects chart data while retaining the stage layout", (
     );
   }
 });
+
+test("full-chart Habahiro geometry uses explicit coverage without source lane input", () => {
+  const compiled = compileBandoriChart([
+    { type: "BPM", beat: 0, bpm: 120 },
+    { type: "System", beat: 0, data: "lane_change", laneChange: true },
+    { type: "Single", beat: 1, lanes: [1, 2] },
+    {
+      type: "Slide",
+      connections: [
+        { beat: 2, lanes: [0, 1] },
+        { beat: 3, lanes: [4, 5] },
+      ],
+    },
+  ], { mediaDurationSeconds: 4 });
+
+  const normal = buildBandoriFullChartGeometry(compiled);
+  const mirrored = buildBandoriFullChartGeometry(compiled, { isMirrored: true });
+  assert.equal(normal.notes[0].lane, 1.5);
+  assert.equal(normal.notes[0].width, 2);
+  assert.equal(mirrored.notes[0].lane, 4.5);
+  assert.equal(mirrored.notes[0].width, 2);
+  assert.deepEqual(
+    normal.ribbons[0].segments[0].points.map(({ lane, width }) => ({ lane, width })),
+    [{ lane: 0.5, width: 2 }, { lane: 4.5, width: 2 }],
+  );
+  assert.deepEqual(
+    mirrored.ribbons[0].segments[0].points.map(({ lane, width }) => ({ lane, width })),
+    [{ lane: 5.5, width: 2 }, { lane: 1.5, width: 2 }],
+  );
+});

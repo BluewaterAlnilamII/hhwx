@@ -80,6 +80,7 @@ export type BandoriNativeRibbonVisual = {
   isCurvedSlide: boolean;
   kind: "long" | "slide";
   points: BandoriNativeRibbonPoint[];
+  rangeWidth: number;
   ribbonIndex: number;
 };
 
@@ -116,6 +117,7 @@ export type BandoriNativeProjectedNote = {
 };
 
 export type BandoriNativeProjectedRibbonPoint = BandoriNativeProjectedNote & {
+  lane: number;
   phase: "launcher" | "move" | "stop";
 };
 
@@ -524,10 +526,18 @@ function prepareRibbonVisuals(
       });
     }
     if (!isSupported) continue;
+    const rangeWidth = points[0]?.coveredLanes.length;
+    if (
+      rangeWidth === undefined
+      || points.some((point) => point.coveredLanes.length !== rangeWidth)
+    ) {
+      continue;
+    }
     visuals.push({
       isCurvedSlide: !isLong && points.some((point) => point.hidden),
       kind: isLong ? "long" : "slide",
       points,
+      rangeWidth,
       ribbonIndex,
     });
   }
@@ -1093,18 +1103,21 @@ export function projectBandoriNativeRibbonPoint(
   const next = ribbon.points[pointIndex + 1];
   const spawnTimeSeconds = point.time - arrivalSeconds;
   if (presentationTimeSeconds < spawnTimeSeconds) {
+    const lane = point.lane + laneOffset;
     return {
       ...projectBandoriNativeLane(
-        point.lane + laneOffset,
+        lane,
         0,
         0,
         spawnTimeSeconds,
         presentationTimeSeconds,
       ),
+      lane,
       phase: "launcher",
     };
   }
   if (presentationTimeSeconds <= point.time) {
+    const lane = point.lane + laneOffset;
     const progress = Math.max(0, Math.min(
       1,
       1 - ((point.time - presentationTimeSeconds) / arrivalSeconds),
@@ -1116,12 +1129,13 @@ export function projectBandoriNativeRibbonPoint(
       );
     return {
       ...projectBandoriNativeLane(
-        point.lane + laneOffset,
+        lane,
         progress,
         positionProgress,
         spawnTimeSeconds,
         presentationTimeSeconds,
       ),
+      lane,
       phase: "move",
     };
   }
@@ -1139,6 +1153,7 @@ export function projectBandoriNativeRibbonPoint(
       spawnTimeSeconds,
       presentationTimeSeconds,
     ),
+    lane,
     phase: "stop",
   };
 }
