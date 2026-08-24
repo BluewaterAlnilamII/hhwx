@@ -1,4 +1,5 @@
 import recipe from "./native-hold-effect-recipe.json";
+import { getBandoriNativeCurveLaneAnchor } from "./compiler";
 import {
   compileBandoriEffectRecipe,
   createBandoriEffectRecipeRuntime,
@@ -33,6 +34,10 @@ export type BandoriNativeHoldState = Readonly<{
 export type BandoriNativeHoldEffectVariant = Readonly<{
   kind: "long" | "slide";
   rangeWidth: number;
+}>;
+
+export type BandoriNativeProjectedHoldState = BandoriNativeProjectedRibbonPoint & Readonly<{
+  flashCoveredLanes: readonly number[];
 }>;
 
 export type BandoriNativeLongFlashColor = Readonly<{
@@ -92,11 +97,11 @@ export function projectBandoriNativeHoldState(
   presentationTimeSeconds: number,
   noteSpeed: number,
   approachTimeScale = 1,
-): BandoriNativeProjectedRibbonPoint | null {
+): BandoriNativeProjectedHoldState | null {
   // The sustained root shares NoteMesh's Stop-phase interpolation. Anchoring
   // it to the last reached connection would make it jump between lanes while
   // the ribbon contact point continues moving across the judgment line.
-  return projectBandoriNativeRibbonPoint(
+  const projection = projectBandoriNativeRibbonPoint(
     state.ribbon,
     state.pointIndex,
     currentBeat,
@@ -105,6 +110,21 @@ export function projectBandoriNativeHoldState(
     0,
     approachTimeScale,
   );
+  if (!projection) return null;
+  const firstFlashLane = getBandoriNativeCurveLaneAnchor(
+    projection.lane - (state.ribbon.rangeWidth - 1) / 2,
+  );
+  if (
+    firstFlashLane === null
+    || firstFlashLane + state.ribbon.rangeWidth > 7
+  ) {
+    throw new Error("Native LongNoteFlash projection leaves the seven native lanes");
+  }
+  const flashCoveredLanes = Array.from(
+    { length: state.ribbon.rangeWidth },
+    (_, index) => firstFlashLane + index,
+  );
+  return { ...projection, flashCoveredLanes };
 }
 
 export function projectBandoriNativeRibbonBody(

@@ -2,6 +2,8 @@ import {
   BANDORI_COMPILED_DIRECTION,
   BANDORI_COMPILED_NOTE_FLAG,
   BANDORI_COMPILED_NOTE_KIND,
+  getBandoriCoverageButtonLane,
+  getBandoriCoverageCenterLane,
   type CompiledBandoriChart,
 } from "./compiler";
 import {
@@ -12,7 +14,6 @@ import {
   type BandoriNativeRibbonVisual,
 } from "./native-note-presentation";
 import type { BandoriNativeSwipeEffectKind } from "./native-swipe-effect-presentation";
-import { roundNonNegativeMidpointToEven } from "./numeric";
 
 export type BandoriNativeTapHitEffectKind = "normal" | "skill";
 export type BandoriNativeHitEffectKind =
@@ -84,14 +85,15 @@ type BandoriApproximateKiraContract = {
 };
 
 export type BandoriNativeHitEvent = {
+  readonly buttonLane: number;
   readonly fingerKind: BandoriNativeSwipeEffectKind | null;
   readonly index: number;
   readonly kind: BandoriNativeHitEffectKind;
-  readonly lane: number;
   readonly rangeWidth: number;
-  readonly terminalLane: number | null;
+  readonly terminalVisualLane: number | null;
   readonly timeSeconds: number;
   readonly triggersLaneEffect: boolean;
+  readonly visualLane: number;
 };
 
 export type BandoriNativeLaneEffectEvent = {
@@ -126,23 +128,22 @@ export type BandoriApproximateKiraSample = BandoriApproximateHitLayerSample & {
   readonly worldY: number;
 };
 
-function getBandoriNativeTargetCenterLane(lane: number): number {
-  return roundNonNegativeMidpointToEven(lane);
-}
-
 function getBandoriNativeEffectTarget(
   visual: BandoriNativeNoteVisual,
   isDirectional: boolean,
-): { lane: number; rangeWidth: number } {
-  if (isDirectional) return { lane: visual.lane, rangeWidth: 1 };
+): { buttonLane: number; rangeWidth: number; visualLane: number } {
+  if (isDirectional) {
+    return { buttonLane: visual.lane, rangeWidth: 1, visualLane: visual.lane };
+  }
   const coveredLanes = visual.coveredLanes ?? [visual.lane];
   const rangeWidth = coveredLanes.length;
   if (rangeWidth < 1 || rangeWidth > 7) {
     throw new Error("Native tap effect requires one through seven covered lanes");
   }
   return {
-    lane: coveredLanes[(rangeWidth - 1) >> 1],
+    buttonLane: getBandoriCoverageButtonLane(coveredLanes),
     rangeWidth,
+    visualLane: getBandoriCoverageCenterLane(coveredLanes),
   };
 }
 
@@ -600,12 +601,12 @@ function effectSeed(index: number, lane: number, kind: BandoriNativeTapHitEffect
 }
 
 export function createBandoriApproximateKiraParticles(
-  event: Pick<BandoriNativeHitEvent, "index" | "kind" | "lane"> & {
+  event: Pick<BandoriNativeHitEvent, "buttonLane" | "index" | "kind"> & {
     readonly kind: BandoriNativeTapHitEffectKind;
   },
 ): BandoriApproximateKiraParticle[] {
   const contract = BANDORI_NATIVE_APPROXIMATE_HIT_EFFECTS[event.kind].kira;
-  const random = createRandom(effectSeed(event.index, event.lane, event.kind));
+  const random = createRandom(effectSeed(event.index, event.buttonLane, event.kind));
   return Array.from({ length: contract.count }, () => ({
     colorMix: random(),
     lifetimeSeconds: interpolate(
@@ -706,7 +707,7 @@ export function collectBandoriNativeHitEvents(
 
     let kind: BandoriNativeHitEffectKind | null = null;
     let fingerKind: BandoriNativeSwipeEffectKind | null = null;
-    let terminalLane: number | null = null;
+    let terminalVisualLane: number | null = null;
     if (isDirectional) {
       if (
         rootVisual.direction !== BANDORI_COMPILED_DIRECTION.left
@@ -723,7 +724,7 @@ export function collectBandoriNativeHitEvents(
       // Native width 3...7 reuses the same span-3 main prefab at the scalar
       // Directional root. Its terminal emitter therefore stays one lane from
       // that root rather than following the expanded group's outer body.
-      terminalLane = widthBucket < 3
+      terminalVisualLane = widthBucket < 3
         ? rootVisual.lane
         : rootVisual.lane + (rootVisual.direction < 0 ? -1 : 1);
     } else if (
@@ -737,14 +738,15 @@ export function collectBandoriNativeHitEvents(
     if (!kind) continue;
     const effectTarget = getBandoriNativeEffectTarget(rootVisual, isDirectional);
     events.push({
+      buttonLane: effectTarget.buttonLane,
       fingerKind,
       index,
       kind,
-      lane: effectTarget.lane,
       rangeWidth: effectTarget.rangeWidth,
-      terminalLane,
+      terminalVisualLane,
       timeSeconds: compiled.notes.times[index],
       triggersLaneEffect: true,
+      visualLane: effectTarget.visualLane,
     });
   }
   return events;
@@ -796,12 +798,6 @@ export function collectBandoriNativeLaneEffectEvents(
     const pointIndex = compiled.notes.sourceNodeIndexes[index];
     if (pointIndex === 0) {
       push("on-reserve", index, rootVisual.lane);
-      const firstAfter = ribbon.points[1];
-      if (firstAfter) {
-        // Native curve conversion keeps a fractional virtual X but bakes one
-        // scalar TargetCenterButton with the same midpoint-to-even rule.
-        push("on-reserve", index, getBandoriNativeTargetCenterLane(firstAfter.lane));
-      }
       continue;
     }
 

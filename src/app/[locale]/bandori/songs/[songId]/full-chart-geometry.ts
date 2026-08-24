@@ -1,5 +1,6 @@
 import {
   BANDORI_COMPILED_DIRECTION,
+  getBandoriCoverageCenterLane,
   getBandoriCompiledLaneSpan,
   type CompiledBandoriChart,
 } from "@/lib/bandori/chart-simulator/compiler";
@@ -97,6 +98,32 @@ function rawPoint(
     width,
     flags,
   };
+}
+
+function coveredRawPoint(
+  time: number,
+  coveredLanes: readonly number[],
+  flags: number,
+  isMirrored: boolean,
+): RawPoint {
+  const visualCoveredLanes = isMirrored
+    ? coveredLanes.map((lane) => 6 - lane).reverse()
+    : coveredLanes;
+  return {
+    time,
+    lane: getBandoriCoverageCenterLane(visualCoveredLanes),
+    projectedLane: visualCoveredLanes[0],
+    width: visualCoveredLanes.length,
+    flags,
+  };
+}
+
+function readCoverage(
+  lanes: Float32Array,
+  offsets: Uint32Array,
+  index: number,
+): number[] {
+  return Array.from(lanes.slice(offsets[index], offsets[index + 1]));
 }
 
 function buildSegments(durationSeconds: number): BandoriFullChartSegment[] {
@@ -239,15 +266,31 @@ export function buildBandoriFullChartGeometry(
   const segments = buildSegments(durationSeconds);
   const notes: BandoriFullChartNoteGeometry[] = [];
   for (let index = 0; index < compiled.notes.times.length; index += 1) {
+    const coveredLanes = readCoverage(
+      compiled.notes.coverageLanes,
+      compiled.notes.coverageOffsets,
+      index,
+    );
     notes.push({
-      ...project(rawPoint(
-        compiled.notes.times[index],
-        compiled.notes.lanes[index],
-        compiled.notes.widths[index],
-        compiled.notes.flags[index],
-        compiled.notes.directions[index],
-        isMirrored,
-      ), segments, durationSeconds),
+      ...project(
+        coveredLanes.length > 1
+          ? coveredRawPoint(
+              compiled.notes.times[index],
+              coveredLanes,
+              compiled.notes.flags[index],
+              isMirrored,
+            )
+          : rawPoint(
+              compiled.notes.times[index],
+              compiled.notes.lanes[index],
+              compiled.notes.widths[index],
+              compiled.notes.flags[index],
+              compiled.notes.directions[index],
+              isMirrored,
+            ),
+        segments,
+        durationSeconds,
+      ),
       noteIndex: index,
       kind: compiled.notes.kinds[index],
       direction: isMirrored
@@ -262,14 +305,26 @@ export function buildBandoriFullChartGeometry(
     const connectionEnd = compiled.ribbons.connectionOffsets[ribbonIndex + 1];
     const connections: RawPoint[] = [];
     for (let index = connectionStart; index < connectionEnd; index += 1) {
-      connections.push(rawPoint(
-        compiled.ribbons.connectionTimes[index],
-        compiled.ribbons.connectionLanes[index],
-        compiled.ribbons.connectionWidths[index],
-        compiled.ribbons.connectionFlags[index],
-        compiled.ribbons.connectionDirections[index],
-        isMirrored,
-      ));
+      const coveredLanes = readCoverage(
+        compiled.ribbons.connectionCoverageLanes,
+        compiled.ribbons.connectionCoverageOffsets,
+        index,
+      );
+      connections.push(coveredLanes.length > 1
+        ? coveredRawPoint(
+            compiled.ribbons.connectionTimes[index],
+            coveredLanes,
+            compiled.ribbons.connectionFlags[index],
+            isMirrored,
+          )
+        : rawPoint(
+            compiled.ribbons.connectionTimes[index],
+            compiled.ribbons.connectionLanes[index],
+            compiled.ribbons.connectionWidths[index],
+            compiled.ribbons.connectionFlags[index],
+            compiled.ribbons.connectionDirections[index],
+            isMirrored,
+          ));
     }
     const curveStart = compiled.ribbons.curveOffsets[ribbonIndex];
     const curveEnd = compiled.ribbons.curveOffsets[ribbonIndex + 1];

@@ -373,7 +373,7 @@ type SwipeEffectDisplay = {
   } | null;
   high: Container;
   kind: BandoriNativeSwipeEffectKind;
-  lane: number;
+  buttonLane: number;
   low: Container;
   isNativeDefault: boolean;
   placement: BandoriEffectRecipePlacement;
@@ -1008,7 +1008,7 @@ function createHitEffectDisplay(
 function createLimitedEffectDisplay(
   recipe: BandoriCompiledEffectRecipe,
   animatedVerticalBeam: LoadedLimitedPerformanceEffects["animatedVerticalBeam"],
-  lane: number,
+  buttonLane: number,
   rangeWidth: number,
   lowLayer: Container,
   highLayer: Container,
@@ -1032,14 +1032,14 @@ function createLimitedEffectDisplay(
           travelSpeedMultiplier: animatedVerticalBeam.travelSpeedMultiplier,
         }
       : null,
+    buttonLane,
     high,
     isNativeDefault: false,
     kind,
-    lane,
     low,
-    placement: getBandoriEffectRecipePlacement(recipe, lane),
+    placement: getBandoriEffectRecipePlacement(recipe, buttonLane),
     rangeWidth,
-    runtime: createBandoriEffectRecipeRuntime(recipe, { buttonIndex: lane, seed: 0 }),
+    runtime: createBandoriEffectRecipeRuntime(recipe, { buttonIndex: buttonLane, seed: 0 }),
     renderables: [],
     terminalOffsetX: 0,
     terminalOffsetY: 0,
@@ -1296,7 +1296,7 @@ function updateParticleEffectMesh(
 
 function createSwipeEffectDisplay(
   kind: BandoriNativeSwipeEffectKind,
-  lane: number,
+  buttonLane: number,
   rangeWidth: number,
   lowLayer: Container,
   highLayer: Container,
@@ -1313,14 +1313,14 @@ function createSwipeEffectDisplay(
   highLayer.addChild(high);
   return {
     animatedVerticalBeam: null,
+    buttonLane,
     high,
     isNativeDefault: true,
     kind,
-    lane,
     low,
-    placement: getBandoriNativeSwipeEffectPlacement(kind, lane),
+    placement: getBandoriNativeSwipeEffectPlacement(kind, buttonLane),
     rangeWidth,
-    runtime: createBandoriNativeSwipeEffectRuntime(kind, lane, 0),
+    runtime: createBandoriNativeSwipeEffectRuntime(kind, buttonLane, 0),
     renderables: [],
     terminalOffsetX: 0,
     terminalOffsetY: 0,
@@ -1477,10 +1477,14 @@ function triggerSwipeEffect(
     throw new BandoriNativeNoteContractError("Swipe-effect display width does not match its event");
   }
   if (display.animatedVerticalBeam) display.animatedVerticalBeam.initialScreenY = null;
-  display.runtime.setButtonIndex(display.lane);
+  display.runtime.setButtonIndex(display.buttonLane);
   display.runtime.play(
     0,
-    seedOverride ?? getBandoriNativeSwipeEffectSeed(event.index, event.lane, display.kind),
+    seedOverride ?? getBandoriNativeSwipeEffectSeed(
+      event.index,
+      event.buttonLane,
+      display.kind,
+    ),
   );
   display.triggerAnimationTimeSeconds = animationTimeSeconds;
   display.low.position.set(screenX, screenY);
@@ -1981,11 +1985,15 @@ export default function NativeSimulatorStage({
             }
           }
           for (const ribbon of preparedVisuals.ribbons) {
-            const head = ribbon.points[0];
-            if (head && head.coveredLanes.length > 1) {
-              habahiroSpriteNames.add(
-                getBandoriHabahiroLongFlashSpriteName(head.coveredLanes),
-              );
+            if (ribbon.rangeWidth > 1) {
+              for (let firstLane = 0; firstLane <= 7 - ribbon.rangeWidth; firstLane += 1) {
+                habahiroSpriteNames.add(getBandoriHabahiroLongFlashSpriteName(
+                  Array.from(
+                    { length: ribbon.rangeWidth },
+                    (_, laneOffset) => firstLane + laneOffset,
+                  ),
+                ));
+              }
             }
           }
         }
@@ -2914,8 +2922,7 @@ export default function NativeSimulatorStage({
 
         const activeHoldIndexes = new Set<number>();
         for (const state of holdStates) {
-          const head = state.ribbon.points[0];
-          if (!head) continue;
+          if (state.ribbon.points.length === 0) continue;
           const projection = projectBandoriNativeHoldState(
             state,
             currentBeat,
@@ -2927,14 +2934,16 @@ export default function NativeSimulatorStage({
           let flashTexture: Texture | undefined;
           let flashAnchorX = 0.5;
           let flashAnchorY = 0.5;
-          if (head.coveredLanes.length > 1) {
-            const flashName = getBandoriHabahiroLongFlashSpriteName(head.coveredLanes);
+          if (projection.flashCoveredLanes.length > 1) {
+            const flashName = getBandoriHabahiroLongFlashSpriteName(
+              projection.flashCoveredLanes,
+            );
             const flash = habahiroTextures.get(flashName);
             flashTexture = flash?.texture;
             flashAnchorX = flash?.anchorX ?? 0.5;
             flashAnchorY = flash?.anchorY ?? 0.5;
           } else {
-            const lane = head.coveredLanes[0];
+            const lane = projection.flashCoveredLanes[0];
             flashTexture = longFlashTextures[lane];
             const anchor = getNativeSpriteAnchor(
               noteSpriteAnchors,
@@ -2945,12 +2954,11 @@ export default function NativeSimulatorStage({
           }
           if (!flashTexture) continue;
           const holdRangeWidth = state.ribbon.kind === "long"
-            ? head.coveredLanes.length
+            ? state.ribbon.rangeWidth
             : 1;
-          const effectTargetLane = head.coveredLanes[(head.coveredLanes.length - 1) >> 1];
           const longEffectProjection = state.ribbon.kind === "long"
             ? projectBandoriNativeNote(
-                effectTargetLane,
+                projection.lane,
                 presentationTime,
                 presentationTime,
                 currentNoteSpeed,
@@ -3260,17 +3268,17 @@ export default function NativeSimulatorStage({
           );
           for (const event of events) {
             const projection = projectBandoriNativeNote(
-              event.lane,
+              event.visualLane,
               event.timeSeconds,
               event.timeSeconds,
               currentNoteSpeed,
             );
-            const laneEffect = laneEffects[event.lane];
+            const laneEffect = laneEffects[event.buttonLane];
             if (!projection || !laneEffect) continue;
-            const terminalScreenX = event.terminalLane === null
+            const terminalScreenX = event.terminalVisualLane === null
               ? projection.screenX
               : projection.screenX
-                + (event.terminalLane - event.lane)
+                + (event.terminalVisualLane - event.visualLane)
                 * BANDORI_NATIVE_JUDGMENT_LANE_SPACING_PIXELS;
 
             if (event.kind.startsWith("directional-")) {
@@ -3283,13 +3291,13 @@ export default function NativeSimulatorStage({
                   `Directional performance effect recipe is absent: ${semantic}`,
                 );
               }
-              const key = `directional:${semantic}:${event.lane}:${event.rangeWidth}`;
+              const key = `directional:${semantic}:${event.buttonLane}:${event.rangeWidth}`;
               let display = swipeEffects.get(key);
               if (!display) {
                 display = createLimitedEffectDisplay(
                   recipe,
                   null,
-                  event.lane,
+                  event.buttonLane,
                   event.rangeWidth,
                   lowHitEffectLayer,
                   highHitEffectLayer,
@@ -3309,7 +3317,7 @@ export default function NativeSimulatorStage({
                 swipeEffectSubtextures,
                 localFrameTextures,
                 currentNoteScale,
-                limitedEffectSeed(event.index, event.lane, semantic),
+                limitedEffectSeed(event.index, event.buttonLane, semantic),
               );
 
               if (event.fingerKind) {
@@ -3324,13 +3332,13 @@ export default function NativeSimulatorStage({
                     `Directional performance finger recipe is absent: ${fingerSemantic}`,
                   );
                 }
-                const fingerKey = `directional:${fingerSemantic}:${event.lane}:${event.rangeWidth}`;
+                const fingerKey = `directional:${fingerSemantic}:${event.buttonLane}:${event.rangeWidth}`;
                 let fingerDisplay = swipeEffects.get(fingerKey);
                 if (!fingerDisplay) {
                   fingerDisplay = createLimitedEffectDisplay(
                     fingerRecipe,
                     null,
-                    event.lane,
+                    event.buttonLane,
                     event.rangeWidth,
                     lowHitEffectLayer,
                     highHitEffectLayer,
@@ -3350,7 +3358,7 @@ export default function NativeSimulatorStage({
                   swipeEffectSubtextures,
                   localFrameTextures,
                   currentNoteScale,
-                  limitedEffectSeed(event.index, event.lane, fingerSemantic),
+                  limitedEffectSeed(event.index, event.buttonLane, fingerSemantic),
                 );
               }
               continue;
@@ -3364,7 +3372,7 @@ export default function NativeSimulatorStage({
                   `Limited performance effect recipe is absent: ${semantic}`,
                 );
               }
-              const key = `limited:${semantic}:${event.lane}:${event.rangeWidth}`;
+              const key = `limited:${semantic}:${event.buttonLane}:${event.rangeWidth}`;
               let display = swipeEffects.get(key);
               if (!display) {
                 display = createLimitedEffectDisplay(
@@ -3372,7 +3380,7 @@ export default function NativeSimulatorStage({
                   limitedEffects.animatedVerticalBeam?.recipeKey === semantic
                     ? limitedEffects.animatedVerticalBeam
                     : null,
-                  event.lane,
+                  event.buttonLane,
                   event.rangeWidth,
                   lowHitEffectLayer,
                   highHitEffectLayer,
@@ -3391,13 +3399,13 @@ export default function NativeSimulatorStage({
                 swipeEffectSubtextures,
                 localFrameTextures,
                 currentNoteScale,
-                limitedEffectSeed(event.index, event.lane, semantic),
+                limitedEffectSeed(event.index, event.buttonLane, semantic),
               );
               continue;
             }
 
             if (event.kind === "normal" || event.kind === "skill") {
-              const key = `${event.kind}:${event.lane}:${event.rangeWidth}`;
+              const key = `${event.kind}:${event.buttonLane}:${event.rangeWidth}`;
               let display = hitEffects.get(key);
               if (!display) {
                 display = createHitEffectDisplay(
@@ -3418,12 +3426,12 @@ export default function NativeSimulatorStage({
                 currentNoteScale,
               );
             } else {
-              const key = `${event.kind}:${event.lane}:${event.rangeWidth}`;
+              const key = `${event.kind}:${event.buttonLane}:${event.rangeWidth}`;
               let display = swipeEffects.get(key);
               if (!display) {
                 display = createSwipeEffectDisplay(
                   event.kind,
-                  event.lane,
+                  event.buttonLane,
                   event.rangeWidth,
                   lowHitEffectLayer,
                   highHitEffectLayer,

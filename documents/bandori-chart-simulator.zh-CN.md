@@ -41,7 +41,7 @@ bandori/chart-simulator/packs/{packTreeHash}/{logicalPath}
 
 ## 普通控件与限定覆盖
 
-背景、按键条／判定线、节奏标志／Note、Directional Flick、点击效果与 TapSE 是彼此独立的普通控件。Habahiro 不是另一种皮肤控件：谱面级 `laneChange=true` 标志启用其多轨演出，之后每个 Note 或连接带节点仍使用自身编译后的覆盖范围。
+背景、按键条／判定线、节奏标志／Note、Directional Flick、点击效果与 TapSE 是彼此独立的普通控件。Habahiro 不是另一种皮肤控件：谱面级 `laneChange=true` 标志启用其多轨演出，之后每个 Note 或连接带节点仍使用自身编译后的覆盖范围。当一个点提供 `lanes` 时，这段连续范围就是完整的位置合同：编译器不会读取旧的标量 `lane`，而会直接从范围派生画面中心和原生整数按键位。Long 或 Slide 可以让连续覆盖范围横向移动，但同一次按压中的覆盖宽度保持不变。
 
 限定演出皮肤是单独的稀疏覆盖层。选择后会保留普通选项，只覆盖该家族实际拥有的槽位；清除后立即恢复之前保留的普通选项。
 

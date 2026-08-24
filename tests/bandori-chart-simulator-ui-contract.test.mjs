@@ -113,7 +113,7 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /particleScreenY = getBandoriApprovedAnimatedTravelScreenY\([\s\S]*initialScreenY,[\s\S]*instance\.screenY,[\s\S]*animatedVerticalBeam\.travelSpeedMultiplier/u);
   assert.match(stage, /const directionalNotesCenterOffsetPixels =\s*getBandoriApprovedManualDirectionalNotesCenterOffsetPixels\(instance\)/u);
   assert.doesNotMatch(stage, /const (?:particleScreenY|directionalNotesCenterOffsetPixels) = display\.isNativeDefault/u);
-  assert.match(stage, /const terminalScreenX = event\.terminalLane === null[\s\S]*event\.kind\.startsWith\("directional-"\)[\s\S]*triggerSwipeEffect\([\s\S]*terminalScreenX/u);
+  assert.match(stage, /const terminalScreenX = event\.terminalVisualLane === null[\s\S]*event\.kind\.startsWith\("directional-"\)[\s\S]*triggerSwipeEffect\([\s\S]*terminalScreenX/u);
   assert.match(stage, /getBandoriNativeNoteScale\([\s\S]*noteSizeRef\.current,[\s\S]*isMultiRangeChart/u);
   assert.match(stage, /directionalLineLayer\.mask = mask[\s\S]*syncLineLayer\.mask = mask[\s\S]*ribbonLayer\.mask = mask[\s\S]*noteLayer\.mask = mask/u);
   assert.match(stage, /fieldDisplayTexture\.frame\.height[\s\S]*fieldDisplayTexture\.updateUvs\(\)/u);
@@ -205,8 +205,8 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(holdPresentation, /BANDORI_NATIVE_LONG_FLASH_PERIOD_SECONDS = 0\.8333333135/u);
   assert.match(holdPresentation, /createBandoriEffectRecipeRuntime\(selectedRecipe/u);
   assert.match(holdPresentation, /variant\.kind === "long"/u);
-  assert.match(stage, /getBandoriHabahiroLongFlashSpriteName\(head\.coveredLanes\)/u);
-  assert.doesNotMatch(stage, /getBandoriHabahiroLongFlashSpriteName\(point\.coveredLanes\)/u);
+  assert.match(stage, /getBandoriHabahiroLongFlashSpriteName\([\s\S]*projection\.flashCoveredLanes/u);
+  assert.doesNotMatch(stage, /getBandoriHabahiroLongFlashSpriteName\(head\.coveredLanes\)/u);
   assert.match(stage, /createPerfectJudgmentDisplay\(perfectJudgmentTexture\)/u);
   assert.match(stage, /triggerPerfectJudgment\(perfectJudgment, effectAnimationTimeSeconds\)/u);
   assert.match(stage, /upperBoundBandoriNoteTime\([\s\S]*compiled\.notes\.times,[\s\S]*presentationTime/u);

@@ -342,6 +342,7 @@ test("Slide hidden nodes select the curve belt while unsupported ribbon variants
       { beat: 2, coveredLanes: [4], hidden: true, lane: 4, meshWidthRate: 1, time: 1 },
       { beat: 3, coveredLanes: [2], hidden: false, lane: 2, meshWidthRate: 1, time: 1.5 },
     ],
+    rangeWidth: 1,
     ribbonIndex: 0,
   });
   assert.equal(visuals.notes[0].visuals[0].body, "long");
@@ -431,6 +432,29 @@ test("hidden Slide DiffVolume may extend beyond the outer lane centers", () => {
   assert.ok(Math.abs(mirrored.ribbons[1].points[1].lane - 6.4) < 0.000001);
   assert.ok(projectBandoriNativeRibbonPoint(visuals.ribbons[0], 1, 1.25, 0.625));
   assert.ok(projectBandoriNativeRibbonPoint(visuals.ribbons[1], 1, 2.25, 1.125));
+
+  const outerRightState = collectBandoriNativeHoldStates(visuals, 0.625)[0];
+  const mirroredOuterRightState = collectBandoriNativeHoldStates(mirrored, 0.625)[0];
+  assert.ok(outerRightState);
+  assert.ok(mirroredOuterRightState);
+  assert.deepEqual(
+    projectBandoriNativeHoldState(
+      outerRightState,
+      1.25,
+      0.625,
+      BANDORI_NATIVE_NOTE_SPEED_DEFAULT,
+    )?.flashCoveredLanes,
+    [6],
+  );
+  assert.deepEqual(
+    projectBandoriNativeHoldState(
+      mirroredOuterRightState,
+      1.25,
+      0.625,
+      BANDORI_NATIVE_NOTE_SPEED_DEFAULT,
+    )?.flashCoveredLanes,
+    [0],
+  );
 });
 
 test("generated ordinary Slide curves retain fractional centers during presentation", () => {
@@ -465,7 +489,7 @@ test("multi-range hidden Slide nodes still use their covered-lane center", () =>
       connections: [
         { beat: 1, lane: 0, lanes: [0, 1] },
         { beat: 2, lane: 5, lanes: [5, 6], hidden: true },
-        { beat: 3, lane: 1 },
+        { beat: 3, lane: 1, lanes: [1, 2] },
       ],
     },
   ]);
@@ -584,7 +608,7 @@ test("width-3 Directional mirrors lanes, direction, outer icon, and native overl
   ]);
 });
 
-test("lane-change marked charts retain multi-range ribbon centers, widths, and hidden segments", () => {
+test("lane-change marked charts retain fixed-width multi-range centers and hidden segments", () => {
   const compiled = compileBandoriChart([
     { type: "BPM", beat: 0, bpm: 120 },
     { type: "Single", beat: 0.25, lane: 0, laneChange: true },
@@ -592,7 +616,7 @@ test("lane-change marked charts retain multi-range ribbon centers, widths, and h
       type: "Slide",
       connections: [
         { beat: 1, lane: 5, lanes: [5, 6] },
-        { beat: 2, lane: 4, lanes: [3, 4, 5], hidden: true },
+        { beat: 2, lane: 3, lanes: [3, 4], hidden: true },
         { beat: 3, lane: 5, lanes: [5, 6] },
       ],
     },
@@ -601,9 +625,9 @@ test("lane-change marked charts retain multi-range ribbon centers, widths, and h
   const visuals = prepareBandoriNativeChartVisuals(compiled, false);
   const mirrored = prepareBandoriNativeChartVisuals(compiled, true);
   const width2 = 2 * getBandoriNativeMultiRangeMeshWidthRate(2);
-  const width3 = 3 * getBandoriNativeMultiRangeMeshWidthRate(3);
 
   assert.equal(visuals.ribbons[0].isCurvedSlide, true);
+  assert.equal(visuals.ribbons[0].rangeWidth, 2);
   assert.deepEqual(
     visuals.ribbons[0].points.map(({ coveredLanes, lane, meshWidthRate }) => ({
       coveredLanes,
@@ -612,7 +636,7 @@ test("lane-change marked charts retain multi-range ribbon centers, widths, and h
     })),
     [
       { coveredLanes: [5, 6], lane: 5.5, meshWidthRate: width2 },
-      { coveredLanes: [3, 4, 5], lane: 4, meshWidthRate: width3 },
+      { coveredLanes: [3, 4], lane: 3.5, meshWidthRate: width2 },
       { coveredLanes: [5, 6], lane: 5.5, meshWidthRate: width2 },
     ],
   );
@@ -620,10 +644,26 @@ test("lane-change marked charts retain multi-range ribbon centers, widths, and h
     mirrored.ribbons[0].points.map(({ coveredLanes, lane }) => ({ coveredLanes, lane })),
     [
       { coveredLanes: [0, 1], lane: 0.5 },
-      { coveredLanes: [1, 2, 3], lane: 2 },
+      { coveredLanes: [2, 3], lane: 2.5 },
       { coveredLanes: [0, 1], lane: 0.5 },
     ],
   );
+});
+
+test("lane-change marked charts reject width changes within one hold", () => {
+  const compiled = compileBandoriChart([
+    { type: "BPM", beat: 0, bpm: 120 },
+    { type: "System", beat: 0, data: "lane_change", laneChange: true },
+    {
+      type: "Slide",
+      connections: [
+        { beat: 1, lane: 0, lanes: [0, 1] },
+        { beat: 2, lane: 3, lanes: [2, 3, 4] },
+      ],
+    },
+  ]);
+
+  assert.deepEqual(prepareBandoriNativeChartVisuals(compiled, false).ribbons, []);
 });
 
 test("Habahiro multi-range point roots project their continuous lane centers", () => {
@@ -1127,98 +1167,27 @@ test("Perfect hit events route Flick and Directional roots, mirrors, fingers, an
   ]);
   const visuals = prepareBandoriNativeChartVisuals(compiled, true);
   assert.deepEqual(
-    collectBandoriNativeHitEvents(compiled, visuals, 0, 5),
+    collectBandoriNativeHitEvents(compiled, visuals, 0, 5).map((event) => [
+      event.buttonLane,
+      event.fingerKind,
+      event.index,
+      event.kind,
+      event.rangeWidth,
+      event.terminalVisualLane,
+      event.timeSeconds,
+      event.triggersLaneEffect,
+      event.visualLane,
+    ]),
     [
-      {
-        fingerKind: null,
-        index: 0,
-        kind: "normal",
-        lane: 6,
-        rangeWidth: 1,
-        terminalLane: null,
-        timeSeconds: 0.5,
-        triggersLaneEffect: true,
-      },
-      {
-        fingerKind: null,
-        index: 1,
-        kind: "skill",
-        lane: 5,
-        rangeWidth: 1,
-        terminalLane: null,
-        timeSeconds: 1,
-        triggersLaneEffect: true,
-      },
-      {
-        fingerKind: null,
-        index: 2,
-        kind: "flick",
-        lane: 4,
-        rangeWidth: 1,
-        terminalLane: null,
-        timeSeconds: 1.5,
-        triggersLaneEffect: true,
-      },
-      {
-        fingerKind: "directional-finger-right",
-        index: 3,
-        kind: "directional-right-2",
-        lane: 3,
-        rangeWidth: 1,
-        terminalLane: 3,
-        timeSeconds: 2,
-        triggersLaneEffect: true,
-      },
-      {
-        fingerKind: "directional-finger-left",
-        index: 4,
-        kind: "skill",
-        lane: 4,
-        rangeWidth: 1,
-        terminalLane: 4,
-        timeSeconds: 2.5,
-        triggersLaneEffect: true,
-      },
-      {
-        fingerKind: null,
-        index: 5,
-        kind: "normal",
-        lane: 5,
-        rangeWidth: 1,
-        terminalLane: null,
-        timeSeconds: 3,
-        triggersLaneEffect: true,
-      },
-      {
-        fingerKind: null,
-        index: 6,
-        kind: "flick",
-        lane: 5,
-        rangeWidth: 1,
-        terminalLane: null,
-        timeSeconds: 3.5,
-        triggersLaneEffect: true,
-      },
-      {
-        fingerKind: null,
-        index: 7,
-        kind: "normal",
-        lane: 1,
-        rangeWidth: 1,
-        terminalLane: null,
-        timeSeconds: 4,
-        triggersLaneEffect: true,
-      },
-      {
-        fingerKind: "directional-finger-right",
-        index: 8,
-        kind: "directional-right-2",
-        lane: 1,
-        rangeWidth: 1,
-        terminalLane: 1,
-        timeSeconds: 4.5,
-        triggersLaneEffect: true,
-      },
+      [6, null, 0, "normal", 1, null, 0.5, true, 6],
+      [5, null, 1, "skill", 1, null, 1, true, 5],
+      [4, null, 2, "flick", 1, null, 1.5, true, 4],
+      [3, "directional-finger-right", 3, "directional-right-2", 1, 3, 2, true, 3],
+      [4, "directional-finger-left", 4, "skill", 1, 4, 2.5, true, 4],
+      [5, null, 5, "normal", 1, null, 3, true, 5],
+      [5, null, 6, "flick", 1, null, 3.5, true, 5],
+      [1, null, 7, "normal", 1, null, 4, true, 1],
+      [1, "directional-finger-right", 8, "directional-right-2", 1, 1, 4.5, true, 1],
     ],
   );
   assert.deepEqual(collectBandoriNativeHitEvents(compiled, visuals, 2, 1), []);
@@ -1245,12 +1214,12 @@ test("Directional width 1 through 7 uses the native three-main buckets at the sc
   const visuals = prepareBandoriNativeChartVisuals(compiled, false);
   const events = collectBandoriNativeHitEvents(compiled, visuals, 0, 7.5);
   assert.deepEqual(
-    events.map(({ fingerKind, kind, lane, rangeWidth, terminalLane }) => ({
+    events.map(({ buttonLane, fingerKind, kind, rangeWidth, terminalVisualLane }) => ({
+      buttonLane,
       fingerKind,
       kind,
-      lane,
       rangeWidth,
-      terminalLane,
+      terminalVisualLane,
     })),
     [
       ["directional-right-1", 2, 2],
@@ -1267,14 +1236,14 @@ test("Directional width 1 through 7 uses the native three-main buckets at the sc
       ["directional-left-3", 6, 5],
       ["directional-left-3", 6, 5],
       ["directional-left-3", 6, 5],
-    ].map(([kind, lane, terminalLane]) => ({
+    ].map(([kind, buttonLane, terminalVisualLane]) => ({
+      buttonLane,
       fingerKind: kind.startsWith("directional-left")
         ? "directional-finger-left"
         : "directional-finger-right",
       kind,
-      lane,
       rangeWidth: 1,
-      terminalLane,
+      terminalVisualLane,
     })),
   );
   assert.equal(events.length, 14);
@@ -1328,77 +1297,109 @@ test("Long and Slide Directional tails share the width 3 main and one finger thr
   assert.deepEqual(
     collectBandoriNativeHitEvents(compiled, visuals, 0, 2.5)
       .filter((event) => event.fingerKind !== null)
-      .map(({ fingerKind, kind, lane, rangeWidth, terminalLane }) => ({
+      .map(({ buttonLane, fingerKind, kind, rangeWidth, terminalVisualLane }) => ({
+        buttonLane,
         fingerKind,
         kind,
-        lane,
         rangeWidth,
-        terminalLane,
+        terminalVisualLane,
       })),
     [
       {
         fingerKind: "directional-finger-right",
         kind: "directional-right-3",
-        lane: 0,
+        buttonLane: 0,
         rangeWidth: 1,
-        terminalLane: 1,
+        terminalVisualLane: 1,
       },
       {
         fingerKind: "directional-finger-left",
         kind: "directional-left-3",
-        lane: 6,
+        buttonLane: 6,
         rangeWidth: 1,
-        terminalLane: 5,
+        terminalVisualLane: 5,
       },
     ],
   );
 });
 
-test("Habahiro hit effects use range-specific selection at the lower-middle button", () => {
+test("Habahiro uses explicit coverage without source lane input", () => {
   const compiled = compileBandoriChart([
     { type: "BPM", beat: 0, bpm: 120 },
     { type: "System", beat: 0, data: "lane_change", laneChange: true },
-    { type: "Single", beat: 1, lane: 1, lanes: [1, 2] },
-    { type: "Single", beat: 2, lane: 3, lanes: [2, 3, 4], skill: true },
-    { type: "Single", beat: 3, lane: 3, lanes: [0, 1, 2, 3, 4, 5, 6], flick: true },
+    { type: "Single", beat: 1, lanes: [1, 2] },
+    { type: "Single", beat: 2, lanes: [1, 2, 3, 4], skill: true },
+    { type: "Single", beat: 3, lanes: [0, 1, 2, 3, 4, 5], flick: true },
     {
       type: "Long",
       connections: [
-        { beat: 4, lane: 4, lanes: [4, 5] },
-        { beat: 5, lane: 4, lanes: [4, 5] },
+        { beat: 4, lanes: [4, 5] },
+        { beat: 5, lanes: [4, 5] },
       ],
     },
     {
       type: "Slide",
       connections: [
-        { beat: 6, lane: 1, lanes: [0, 1, 2] },
-        { beat: 7, lane: 3, lanes: [3, 4] },
-        { beat: 8, lane: 5, lanes: [5, 6], flick: true },
+        { beat: 6, lanes: [0, 1, 2] },
+        { beat: 7, lanes: [2, 3, 4] },
+        { beat: 8, lanes: [4, 5, 6], flick: true },
       ],
     },
   ]);
   const visuals = prepareBandoriNativeChartVisuals(compiled, false);
+  const mirrored = prepareBandoriNativeChartVisuals(compiled, true);
   assert.deepEqual(
     collectBandoriNativeHitEvents(compiled, visuals, 0, 5).map((event) => [
       event.kind,
-      event.lane,
+      event.buttonLane,
+      event.visualLane,
       event.rangeWidth,
     ]),
     [
-      ["normal", 1, 2],
-      ["skill", 3, 3],
-      ["flick", 3, 7],
-      ["normal", 4, 2],
-      ["normal", 4, 2],
-      ["normal", 1, 3],
-      ["normal", 3, 2],
-      ["flick", 5, 2],
+      ["normal", 1, 1.5, 2],
+      ["skill", 2, 2.5, 4],
+      ["flick", 2, 2.5, 6],
+      ["normal", 4, 4.5, 2],
+      ["normal", 4, 4.5, 2],
+      ["normal", 1, 1, 3],
+      ["normal", 3, 3, 3],
+      ["flick", 5, 5, 3],
+    ],
+  );
+  assert.deepEqual(
+    collectBandoriNativeHitEvents(compiled, mirrored, 0, 5).map((event) => [
+      event.kind,
+      event.buttonLane,
+      event.visualLane,
+      event.rangeWidth,
+    ]),
+    [
+      ["normal", 4, 4.5, 2],
+      ["skill", 3, 3.5, 4],
+      ["flick", 3, 3.5, 6],
+      ["normal", 1, 1.5, 2],
+      ["normal", 1, 1.5, 2],
+      ["normal", 5, 5, 3],
+      ["normal", 3, 3, 3],
+      ["flick", 1, 1, 3],
     ],
   );
   assert.deepEqual(collectBandoriNativeLaneEffectEvents(compiled, visuals, 0, 5), []);
   assert.equal(
     getBandoriHabahiroLongFlashSpriteName([0, 1, 2]),
     "note_long_flash_0_1_2",
+  );
+  const movingWideState = collectBandoriNativeHoldStates(visuals, 3.25)
+    .find((state) => state.ribbon.kind === "slide");
+  assert.ok(movingWideState);
+  assert.deepEqual(
+    projectBandoriNativeHoldState(
+      movingWideState,
+      getBandoriCompiledBeatAtTime(compiled, 3.25),
+      3.25,
+      BANDORI_NATIVE_NOTE_SPEED_DEFAULT,
+    )?.flashCoveredLanes,
+    [1, 2, 3],
   );
 });
 
@@ -1427,7 +1428,7 @@ test("Long and Slide AutoPerfect lifecycle keeps only confirmed sustained and on
     collectBandoriNativeHitEvents(compiled, visuals, 0, 4).map((event) => [
       event.timeSeconds,
       event.kind,
-      event.lane,
+      event.visualLane,
     ]),
     [
       [0.5, "skill", 1],
@@ -1447,7 +1448,6 @@ test("Long and Slide AutoPerfect lifecycle keeps only confirmed sustained and on
       [0.5, "on-reserve", 1],
       [1, "on-reserve", 1],
       [1.5, "on-reserve", 2],
-      [1.5, "on-reserve", 3],
       [2, "off", 2],
       [2, "on-reserve", 3],
       [3, "off", 3],
@@ -1484,8 +1484,27 @@ test("Long and Slide AutoPerfect lifecycle keeps only confirmed sustained and on
   assert.ok(movingProjection);
   assert.ok(leftProjection);
   assert.ok(rightProjection);
+  closeTo(movingProjection.lane, 3.5);
+  assert.deepEqual(movingProjection.flashCoveredLanes, [4]);
   assert.ok(movingProjection.screenX > leftProjection.screenX);
   assert.ok(movingProjection.screenX < rightProjection.screenX);
+
+  const beforeLaneBoundaryState = collectBandoriNativeHoldStates(visuals, 2.24)[0];
+  const beforeLaneBoundaryProjection = projectBandoriNativeHoldState(
+    beforeLaneBoundaryState,
+    getBandoriCompiledBeatAtTime(compiled, 2.24),
+    2.24,
+    BANDORI_NATIVE_NOTE_SPEED_DEFAULT,
+  );
+  const afterLaneBoundaryState = collectBandoriNativeHoldStates(visuals, 2.26)[0];
+  const afterLaneBoundaryProjection = projectBandoriNativeHoldState(
+    afterLaneBoundaryState,
+    getBandoriCompiledBeatAtTime(compiled, 2.26),
+    2.26,
+    BANDORI_NATIVE_NOTE_SPEED_DEFAULT,
+  );
+  assert.deepEqual(beforeLaneBoundaryProjection?.flashCoveredLanes, [3]);
+  assert.deepEqual(afterLaneBoundaryProjection?.flashCoveredLanes, [4]);
 
   const slideRibbon = visuals.ribbons.find((ribbon) => ribbon.kind === "slide");
   const longRibbon = visuals.ribbons.find((ribbon) => ribbon.kind === "long");
@@ -1599,7 +1618,7 @@ test("Long and Slide AutoPerfect lifecycle keeps only confirmed sustained and on
   );
 });
 
-test("Slide lane effects pulse scalar buttons without treating hidden nodes as checkpoints", () => {
+test("Slide lane effects advance only when visible checkpoints reach the judgment line", () => {
   const compiled = compileBandoriChart([
     { type: "BPM", beat: 0, bpm: 120 },
     {
@@ -1627,10 +1646,8 @@ test("Slide lane effects pulse scalar buttons without treating hidden nodes as c
     ]),
     [
       [0.5, "on-reserve", 5],
-      [0.5, "on-reserve", 6],
       [1.5, "off", 5],
       [1.5, "on-reserve", 2],
-      [2, "on-reserve", 4],
       [2, "on-reserve", 4],
       [2.5, "off", 4],
       [2.5, "on-reserve", 4],
@@ -1639,7 +1656,7 @@ test("Slide lane effects pulse scalar buttons without treating hidden nodes as c
 });
 
 test("the only randomized layer is deterministic and stays inside JP envelopes", () => {
-  const event = { index: 7, kind: "normal", lane: 3, timeSeconds: 4 };
+  const event = { buttonLane: 3, index: 7, kind: "normal", timeSeconds: 4 };
   const first = createBandoriApproximateKiraParticles(event);
   const second = createBandoriApproximateKiraParticles(event);
   assert.deepEqual(first, second);

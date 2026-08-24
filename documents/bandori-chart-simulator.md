@@ -76,7 +76,11 @@ Background, lane/judgment line, rhythm marker/Note, Directional Flick, tap
 effect, and TapSE remain independently selectable ordinary controls. Habahiro
 is not another skin control: a chart-level `laneChange=true` marker enables its
 multi-range presentation, after which each Note or ribbon point uses its own
-compiled coverage.
+compiled coverage. When a point declares `lanes`, that contiguous range is the
+complete position contract: the compiler does not read its legacy scalar
+`lane`, and derives both the visual center and native integer button from the
+range. A Long or Slide may move its contiguous range, but its range width
+remains fixed for the complete hold.
 
 Limited performance skins are a separate sparse overlay. Selecting one retains
 the ordinary choices and overrides only the slots owned by that family.

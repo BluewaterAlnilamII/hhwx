@@ -58,9 +58,9 @@ export type CompiledBandoriChart = {
   notes: {
     times: Float64Array;
     beats: Float64Array;
-    /** Scalar source anchors used for positioning and compatibility. */
+    /** Native scalar anchors derived from explicit coverage or legacy lane input. */
     lanes: Float32Array;
-    /** Offsets into coverageLanes for the authoritative lanes ?? [lane] coverage. */
+    /** Offsets into coverageLanes for the authoritative explicit coverage or legacy lane. */
     coverageOffsets: Uint32Array;
     coverageLanes: Float32Array;
     widths: Float32Array;
@@ -175,12 +175,8 @@ function readWidth(value: unknown, path: string): number {
   return width;
 }
 
-function readCoveredLanes(
-  value: unknown,
-  path: string,
-  anchorLane: number,
-): number[] {
-  if (value === undefined) return [anchorLane];
+function readExplicitCoveredLanes(value: unknown, path: string): number[] | null {
+  if (value === undefined) return null;
   if (!Array.isArray(value) || value.length === 0 || value.length > 7) {
     throw new Error(`${path} must be a non-empty array with at most seven lanes`);
   }
@@ -197,11 +193,25 @@ function readCoveredLanes(
       throw new Error(`${path} must contain one contiguous ascending lane range`);
     }
   }
-  const expectedAnchor = lanes[Math.floor((lanes.length - 1) / 2)];
-  if (anchorLane !== expectedAnchor) {
-    throw new Error(`${path} does not match its scalar lane anchor`);
-  }
   return lanes;
+}
+
+export function getBandoriCoverageButtonLane(coveredLanes: ArrayLike<number>): number {
+  if (coveredLanes.length < 1 || coveredLanes.length > 7) {
+    throw new Error("Bandori coverage requires one through seven lanes");
+  }
+  return coveredLanes[(coveredLanes.length - 1) >> 1];
+}
+
+export function getBandoriCoverageCenterLane(coveredLanes: ArrayLike<number>): number {
+  if (coveredLanes.length < 1 || coveredLanes.length > 7) {
+    throw new Error("Bandori coverage requires one through seven lanes");
+  }
+  let sum = 0;
+  for (let index = 0; index < coveredLanes.length; index += 1) {
+    sum += coveredLanes[index];
+  }
+  return sum / coveredLanes.length;
 }
 
 function readDirection(value: unknown, path: string): number {
@@ -323,7 +333,12 @@ function compilePoint(
 ): CompiledPoint {
   if (!isRecord(rawPoint)) throw new Error(`${path} must be an object`);
   const beat = readBeat(rawPoint.beat, `${path}.beat`);
-  const lane = readFiniteNumber(rawPoint.lane, `${path}.lane`);
+  // Explicit coverage is the complete Habahiro position contract. Its legacy
+  // scalar lane may be absent or stale and must never influence compilation.
+  const explicitCoveredLanes = readExplicitCoveredLanes(rawPoint.lanes, `${path}.lanes`);
+  const lane = explicitCoveredLanes
+    ? getBandoriCoverageButtonLane(explicitCoveredLanes)
+    : readFiniteNumber(rawPoint.lane, `${path}.lane`);
   const isIntegerNativeLane = Number.isInteger(lane) && lane >= 0 && lane <= 6;
   const isAdmittedFractionalHiddenLane = allowFractionalHiddenLane
     && Object.hasOwn(rawPoint, "hidden")
@@ -339,7 +354,7 @@ function compilePoint(
     beat,
     time: beatToTime(segments, beat),
     lane,
-    coveredLanes: readCoveredLanes(rawPoint.lanes, `${path}.lanes`, lane),
+    coveredLanes: explicitCoveredLanes ?? [lane],
     width: readWidth(rawPoint.width, `${path}.width`),
     direction: readDirection(rawPoint.direction, `${path}.direction`),
     flags: readFlags(rawPoint),
