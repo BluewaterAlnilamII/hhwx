@@ -128,6 +128,7 @@ import {
 } from "@/lib/music-player-tab-coordinator";
 import { useMusicPlayerStore } from "@/store/useMusicPlayerStore";
 import { loadBandoriChartSimulatorAssets } from "@/lib/bandori/chart-simulator/asset-manifest-client";
+import { releaseUnusedBandoriChartSimulatorTexturesNow } from "@/lib/bandori/chart-simulator/pixi-texture-cache";
 import type {
   BandoriChartSimulatorAssetResolver,
 } from "@/lib/bandori/chart-simulator/asset-manifest";
@@ -616,6 +617,12 @@ export default function ChartSimulatorRuntime({
   const [musicLoadProgress, setMusicLoadProgress] =
     useState<AudioResourceLoadProgress | null>(null);
   const [hasPlaybackError, setHasPlaybackError] = useState(false);
+  useEffect(() => () => {
+    // Child stage cleanup releases its leases in the same unmount. Defer the
+    // sweep one microtask so all zero-reference textures can be unloaded now
+    // instead of waiting for the normal skin-switch grace period.
+    queueMicrotask(releaseUnusedBandoriChartSimulatorTexturesNow);
+  }, []);
   useEffect(() => {
     const updateFullscreenState = () => {
       const fullscreenRoot = fullscreenRootRef.current;
@@ -1391,6 +1398,7 @@ export default function ChartSimulatorRuntime({
         currentTimeSeconds > 0,
         currentTimeSeconds === 0,
       );
+      runtime.retainOnlyCueBank(cueBank.id);
     }).catch(() => {
       if (
         !controller.signal.aborted

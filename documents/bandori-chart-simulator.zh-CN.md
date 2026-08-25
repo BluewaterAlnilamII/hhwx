@@ -55,6 +55,10 @@ bandori/chart-simulator/packs/{packTreeHash}/{logicalPath}
 
 以 `/local/chart-simulator/` 开头的路径只是通过固定 CDN manifest 解析的逻辑资源标识，并不是 Web 仓库提供的实体文件。渲染器只加载当前背景、按键条、Note、Directional、效果、限定覆盖及 TapSE 选择需要的 pack 与成员。Index、manifest、pack 或成员缺失或无效时都会明确失败。
 
+解码后的 Pixi 纹理按解析后的不可变 URL 管理。共享舞台通过引用计数租约持有纹理；最后一个租约释放后，纹理会保温 15 秒，随后从 Pixi 缓存及解码／GPU 内存中卸载。替代舞台重新取得同一 URL 时会取消待执行的释放；同一 URL 的卸载会串行执行，避免旧舞台销毁替代舞台正在使用的资源。离开模拟器时会加速释放所有零引用纹理。这个生命周期不会删除浏览器 HTTP 缓存，因此不可变 pack 对象仍可由内存或磁盘缓存提供，只在之后重新选中时再次解码并上传。
+
+Web Audio 运行时在音效皮肤切换后只保留当前 TapSE Cue Bank。旧 Note SE 音源停止后，其余已解码 `AudioBuffer` 及 URL Promise 引用都会被移除；再次选择时会先复用正常的 HTTP 缓存，再重新解码。当前歌曲 Buffer 以及按需准备的 Signalsmith PCM 副本会保留到模拟器音频运行时销毁。
+
 ## 普通控件与限定覆盖
 
 背景、按键条／判定线、节奏标志／Note、Directional Flick、点击效果与 TapSE 是彼此独立的普通控件。Habahiro 不是另一种皮肤控件：谱面级 `laneChange=true` 标志启用其多轨演出，之后每个 Note 或连接带节点仍使用自身编译后的覆盖范围。当一个点提供 `lanes` 时，这段连续范围就是完整的位置合同：编译器不会读取旧的标量 `lane`，而会直接从范围派生画面中心和原生整数按键位。Long 或 Slide 可以让连续覆盖范围横向移动，但同一次按压中的覆盖宽度保持不变。
