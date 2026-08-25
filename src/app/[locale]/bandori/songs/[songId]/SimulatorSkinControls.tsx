@@ -26,6 +26,7 @@ import {
   type BandoriNativeTapEffectSkin,
 } from "./native-tap-effect-assets";
 import Switch from "@/components/Switch";
+import { cn } from "@/lib/utils";
 import type { BandoriNativeDirectionalEffectVariant } from "./native-live-settings";
 
 type SimulatorSkinControlsProps = {
@@ -56,18 +57,38 @@ type SimulatorSkinControlsProps = {
 type SimulatorControlRowProps = {
   children: ReactNode;
   label: string;
+  mobileLayout?: "inline" | "stacked";
 };
 
 export function SimulatorControlRow({
   children,
   label,
+  mobileLayout = "stacked",
 }: SimulatorControlRowProps) {
+  const isMobileInline = mobileLayout === "inline";
   return (
-    <div className="grid items-start gap-2 py-4 first:pt-1 last:pb-1 sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-4">
-      <div className="pt-2 text-sm font-semibold text-[var(--theme-color-text-muted)] sm:text-right">
+    <div
+      className={cn(
+        "grid py-3 first:pt-1 last:pb-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start sm:gap-4 sm:py-4",
+        isMobileInline
+          ? "grid-cols-2 items-center gap-2 py-2.5"
+          : "items-start gap-1.5",
+      )}
+    >
+      <div
+        className={cn(
+          "text-[13px] font-semibold text-[var(--theme-color-text-muted)] sm:flex sm:min-h-11 sm:items-center sm:justify-end sm:text-right sm:text-sm",
+          isMobileInline ? "flex min-h-11 items-center justify-end text-right" : null,
+        )}
+      >
         <span>{label}</span>
       </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <div
+        className={cn(
+          "flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2 sm:[&>*]:min-h-11",
+          isMobileInline ? "justify-start" : "justify-center sm:justify-start",
+        )}
+      >
         {children}
       </div>
     </div>
@@ -75,7 +96,7 @@ export function SimulatorControlRow({
 }
 
 function choiceClassName(isSelected: boolean, isDisabled = false): string {
-  return `inline-flex min-h-10 items-center justify-center rounded-full border px-3.5 py-2 text-sm font-semibold outline-hidden transition focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-color-surface-background)] ${
+  return `inline-flex min-h-9 items-center justify-center rounded-full border px-3 py-1.5 text-[13px] font-semibold outline-hidden transition focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-color-surface-background)] sm:min-h-11 sm:px-3.5 sm:py-2 sm:text-sm ${
     isDisabled
       ? "cursor-not-allowed border-[var(--theme-color-control-border-disabled)] bg-[var(--theme-color-control-background-disabled)] text-[var(--theme-color-control-foreground-disabled)] opacity-60"
       : isSelected

@@ -174,6 +174,7 @@ const NativeSimulatorStage = dynamic(loadNativeSimulatorStageModule, {
 void loadNativeSimulatorStageModule();
 
 type SimulatorTab = "stage" | "fullChart";
+type StageFullscreenMode = "native" | "viewport" | null;
 const IS_FULL_CHART_VIEW_ENABLED: boolean = false;
 const PLAYBACK_RATE_DECREASES = [-10, -1] as const;
 const PLAYBACK_RATE_INCREASES = [1, 10] as const;
@@ -434,8 +435,8 @@ function SimulatorVolumeControl({
   value,
 }: SimulatorVolumeControlProps) {
   return (
-    <div className="grid grid-cols-[max-content_2.25rem_5rem] items-center gap-x-1 text-sm font-semibold text-[var(--theme-color-text-muted)]">
-      <label htmlFor={inputId}>{label}</label>
+    <div className="grid min-w-0 grid-cols-[2.5rem_2.25rem_minmax(0,5rem)] items-center gap-x-1 text-sm font-semibold text-[var(--theme-color-text-muted)]">
+      <label htmlFor={inputId} className="justify-self-end">{label}</label>
       <button
         type="button"
         onClick={onMuteToggle}
@@ -453,7 +454,7 @@ function SimulatorVolumeControl({
         step={BANDORI_NATIVE_VOLUME_STEP}
         value={value}
         onChange={(event) => onChange(Number(event.currentTarget.value))}
-        className="min-w-0 accent-[var(--theme-color-progress-indicator-background)]"
+        className="w-full min-w-0 accent-[var(--theme-color-progress-indicator-background)]"
       />
     </div>
   );
@@ -523,8 +524,9 @@ export default function ChartSimulatorRuntime({
   });
   const [transport, setTransport] = useState(transportRef.current);
   const [activeTab, setActiveTab] = useState<SimulatorTab>("stage");
-  const [isStageFullscreen, setIsStageFullscreen] = useState(false);
-  const [isFullscreenSupported, setIsFullscreenSupported] = useState(false);
+  const [stageFullscreenMode, setStageFullscreenMode] =
+    useState<StageFullscreenMode>(null);
+  const isStageFullscreen = stageFullscreenMode !== null;
   const [stageRenderFps, setStageRenderFps] = useState<number | null>(null);
   const [hasOpenedFullChart, setHasOpenedFullChart] = useState(false);
   const [isMirrored, setIsMirrored] = useState(initialPreferences.isMirrored);
@@ -617,17 +619,30 @@ export default function ChartSimulatorRuntime({
   useEffect(() => {
     const updateFullscreenState = () => {
       const fullscreenRoot = fullscreenRootRef.current;
-      setIsStageFullscreen(
-        fullscreenRoot !== null && document.fullscreenElement === fullscreenRoot,
-      );
+      const isNativeFullscreen = fullscreenRoot !== null
+        && document.fullscreenElement === fullscreenRoot;
+      setStageFullscreenMode((currentMode) => {
+        if (isNativeFullscreen) return "native";
+        return currentMode === "native" ? null : currentMode;
+      });
     };
-    setIsFullscreenSupported(document.fullscreenEnabled);
     document.addEventListener("fullscreenchange", updateFullscreenState);
     updateFullscreenState();
     return () => {
       document.removeEventListener("fullscreenchange", updateFullscreenState);
     };
   }, []);
+  useEffect(() => {
+    if (stageFullscreenMode !== "viewport") return;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousDocumentOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousDocumentOverflow;
+    };
+  }, [stageFullscreenMode]);
   useEffect(() => {
     writeBandoriChartSimulatorPreferences(
       getBandoriChartSimulatorPreferenceStorage(),
@@ -1977,23 +1992,11 @@ export default function ChartSimulatorRuntime({
     setActiveTab(tab);
   };
 
-  const enterStageFullscreen = useCallback(async () => {
-    const fullscreenRoot = fullscreenRootRef.current;
-    if (
-      !fullscreenRoot
-      || !document.fullscreenEnabled
-      || document.fullscreenElement !== null
-    ) return;
-    try {
-      await fullscreenRoot.requestFullscreen({ navigationUI: "hide" });
-    } catch {
-      return;
-    }
-    if (document.fullscreenElement !== fullscreenRoot) return;
-    const orientation = window.screen.orientation as ScreenOrientation & {
+  const requestPreferredLandscapeOrientation = useCallback(async () => {
+    const orientation = window.screen.orientation as (ScreenOrientation & {
       lock?: (orientation: "landscape") => Promise<void>;
-    };
-    if (typeof orientation.lock !== "function") return;
+    }) | undefined;
+    if (typeof orientation?.lock !== "function") return;
     try {
       await orientation.lock("landscape");
     } catch {
@@ -2002,14 +2005,60 @@ export default function ChartSimulatorRuntime({
     }
   }, []);
 
+  const enterStageFullscreen = useCallback(async () => {
+    const fullscreenRoot = fullscreenRootRef.current;
+    if (!fullscreenRoot || stageFullscreenMode !== null) return;
+    if (document.fullscreenElement) return;
+
+    if (
+      document.fullscreenEnabled
+      && typeof fullscreenRoot.requestFullscreen === "function"
+    ) {
+      try {
+        await fullscreenRoot.requestFullscreen({ navigationUI: "hide" });
+      } catch {
+        // iPhone Safari and embedded browsers may expose a partial Fullscreen
+        // API that still rejects arbitrary elements. Fall back to the viewport.
+      }
+      if (document.fullscreenElement === fullscreenRoot) {
+        setStageFullscreenMode("native");
+        await requestPreferredLandscapeOrientation();
+        return;
+      }
+    }
+
+    setStageFullscreenMode("viewport");
+    await requestPreferredLandscapeOrientation();
+  }, [requestPreferredLandscapeOrientation, stageFullscreenMode]);
+
   const exitStageFullscreen = useCallback(async () => {
-    if (document.fullscreenElement !== fullscreenRootRef.current) return;
+    if (stageFullscreenMode === "viewport") {
+      setStageFullscreenMode(null);
+      return;
+    }
+    if (document.fullscreenElement !== fullscreenRootRef.current) {
+      setStageFullscreenMode(null);
+      return;
+    }
     try {
       await document.exitFullscreen();
     } catch {
       // The browser may already be completing an Escape-initiated exit.
     }
-  }, []);
+  }, [stageFullscreenMode]);
+
+  useEffect(() => {
+    if (stageFullscreenMode !== "viewport") return;
+    const handleViewportFullscreenEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      void exitStageFullscreen();
+    };
+    window.addEventListener("keydown", handleViewportFullscreenEscape);
+    return () => {
+      window.removeEventListener("keydown", handleViewportFullscreenEscape);
+    };
+  }, [exitStageFullscreen, stageFullscreenMode]);
 
   const changePlaybackRate = (adjustmentHundredths: number) => {
     const nextHundredths = adjustBandoriSimulatorPlaybackRate(
@@ -2229,7 +2278,7 @@ export default function ChartSimulatorRuntime({
             MUSIC_PLAYER_SEEK_BUTTON_CLASS_NAME,
             "border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] text-[var(--theme-color-action-secondary-foreground)] hover:bg-[var(--theme-color-action-secondary-background-hover)] disabled:cursor-not-allowed disabled:border-[var(--theme-color-control-border-disabled)] disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] disabled:hover:bg-[var(--theme-color-control-background-disabled)]",
           )}
-          disabled={!isFullscreenSupported || activeTab !== "stage"}
+          disabled={activeTab !== "stage"}
           onClick={() => void enterStageFullscreen()}
         >
           <Maximize className="h-5 w-5" aria-hidden="true" />
@@ -2244,6 +2293,9 @@ export default function ChartSimulatorRuntime({
             "relative",
             isStageFullscreen
               ? "flex h-full w-full items-center justify-center overflow-hidden bg-black"
+              : null,
+            stageFullscreenMode === "viewport"
+              ? "fixed inset-0 z-[100] h-[100dvh] w-[100dvw]"
               : null,
           )}
           aria-busy={simulatorLoadingLabel !== null}
@@ -2478,7 +2530,7 @@ export default function ChartSimulatorRuntime({
 
                 <div
                   data-chart-simulator-fullscreen-backward-controls
-                  className="absolute left-[max(0.75rem,env(safe-area-inset-left))] top-[42%] flex -translate-y-1/2 flex-col gap-1.5 portrait:static portrait:col-start-1 portrait:row-start-3 portrait:mt-3 portrait:ml-[max(0.75rem,env(safe-area-inset-left))] portrait:translate-y-0 portrait:self-start portrait:justify-self-start"
+                  className="absolute left-[max(0.75rem,env(safe-area-inset-left))] top-[42%] flex -translate-y-1/2 flex-col gap-1.5 portrait:static portrait:col-start-1 portrait:row-start-3 portrait:mt-3 portrait:ml-[max(0.75rem,env(safe-area-inset-left))] portrait:flex-row-reverse portrait:translate-y-0 portrait:self-start portrait:justify-self-start"
                 >
                   <button
                     type="button"
@@ -2521,7 +2573,7 @@ export default function ChartSimulatorRuntime({
 
                 <div
                   data-chart-simulator-fullscreen-forward-controls
-                  className="absolute right-[max(0.75rem,env(safe-area-inset-right))] top-[42%] flex -translate-y-1/2 flex-col gap-1.5 portrait:static portrait:col-start-1 portrait:row-start-3 portrait:mt-3 portrait:mr-[max(0.75rem,env(safe-area-inset-right))] portrait:translate-y-0 portrait:self-start portrait:justify-self-end"
+                  className="absolute right-[max(0.75rem,env(safe-area-inset-right))] top-[42%] flex -translate-y-1/2 flex-col gap-1.5 portrait:static portrait:col-start-1 portrait:row-start-3 portrait:mt-3 portrait:mr-[max(0.75rem,env(safe-area-inset-right))] portrait:flex-row portrait:translate-y-0 portrait:self-start portrait:justify-self-end"
                 >
                   <button
                     type="button"
@@ -2814,7 +2866,7 @@ export default function ChartSimulatorRuntime({
             <FastForward className="h-5 w-5" aria-hidden="true" />
           </button>
           </div>
-          <div className="grid justify-center gap-y-1 sm:col-start-3 sm:row-start-1 sm:justify-self-end lg:grid-cols-2 lg:gap-x-6">
+          <div className="grid w-full grid-cols-2 justify-center gap-x-2 gap-y-1 sm:col-start-3 sm:row-start-1 sm:w-auto sm:grid-cols-1 sm:justify-self-end sm:gap-x-0 xl:grid-cols-2 xl:gap-x-6">
             <SimulatorVolumeControl
               inputId="bandori-simulator-bgm-volume"
               isMuted={isBgmMuted}
@@ -2945,8 +2997,8 @@ export default function ChartSimulatorRuntime({
                 suffix="%"
                 value={suddenRate}
               />
-              <div className="flex basis-full flex-wrap items-center gap-2">
-                <span className="text-sm font-semibold text-[var(--theme-color-text-muted)]">
+              <div className="grid basis-full grid-cols-2 items-center gap-2 sm:flex sm:justify-start">
+                <span className="text-right text-[13px] font-semibold text-[var(--theme-color-text-muted)] sm:text-left sm:text-sm">
                   {t("controls.suddenLane")}
                 </span>
                 <SimulatorBooleanControl
@@ -2959,7 +3011,7 @@ export default function ChartSimulatorRuntime({
               </div>
             </SimulatorControlRow>
 
-            <SimulatorControlRow label={t("skinControls.syncLine")}>
+            <SimulatorControlRow label={t("skinControls.syncLine")} mobileLayout="inline">
               <SimulatorBooleanControl
                 disabledLabel={t("skinControls.off")}
                 enabledLabel={t("skinControls.on")}
@@ -2969,7 +3021,7 @@ export default function ChartSimulatorRuntime({
               />
             </SimulatorControlRow>
 
-            <SimulatorControlRow label={t("skinControls.rhythmSupport")}>
+            <SimulatorControlRow label={t("skinControls.rhythmSupport")} mobileLayout="inline">
               <SimulatorBooleanControl
                 disabledLabel={t("skinControls.off")}
                 enabledLabel={t("skinControls.on")}
@@ -2979,7 +3031,7 @@ export default function ChartSimulatorRuntime({
               />
             </SimulatorControlRow>
 
-            <SimulatorControlRow label={t("controls.mirrorData")}>
+            <SimulatorControlRow label={t("controls.mirrorData")} mobileLayout="inline">
               <SimulatorBooleanControl
                 disabledLabel={t("skinControls.off")}
                 enabledLabel={t("skinControls.on")}
@@ -2989,7 +3041,7 @@ export default function ChartSimulatorRuntime({
               />
             </SimulatorControlRow>
 
-            <SimulatorControlRow label={t("skinControls.laneEffect")}>
+            <SimulatorControlRow label={t("skinControls.laneEffect")} mobileLayout="inline">
               <SimulatorBooleanControl
                 disabledLabel={t("skinControls.off")}
                 enabledLabel={t("skinControls.on")}
