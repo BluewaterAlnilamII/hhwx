@@ -52,6 +52,7 @@ test("effect, skin, and volume controls share one validated browser preference",
     "directionalEffectVariant",
     "directionalFlickSkinId",
     "fieldSkinId",
+    "frameRateLimit",
     "isBgmMuted",
     "isLaneEffectEnabled",
     "isMirrored",
@@ -64,6 +65,7 @@ test("effect, skin, and volume controls share one validated browser preference",
     "noteSkinId",
     "noteSpeed",
     "playbackRateHundredths",
+    "resolutionScale",
     "seVolume",
     "suddenRate",
     "tapEffectSkinId",
@@ -208,6 +210,8 @@ test("mobile simulator settings match the compact transport control rhythm", asy
   assert.match(adjustmentControls, /h-9 w-9[\s\S]*sm:h-10 sm:w-10/u);
   assert.match(adjustmentControls, /h-\[18px\] w-\[18px\] sm:h-5 sm:w-5/u);
   assert.match(adjustmentControls, /h-9 min-w-14[\s\S]*text-sm font-bold[\s\S]*sm:h-10 sm:min-w-24[\s\S]*sm:text-base sm:font-black/u);
+  assert.match(adjustmentControls, /className\?: string[\s\S]*className=\{cn\(/u);
+  assert.match(runtime, /<SimulatorAdjustmentValue\s+ariaLabel=\{currentAriaLabel\}\s+className="min-w-\[4\.5rem\]"/u);
   assert.match(settingsCard, /p-3 shadow-sm sm:p-5/u);
   assert.match(settingsCard, /text-\[15px\][^"\n]*sm:text-base/u);
   assert.match(settingsCard, /mt-2[^"\n]*sm:mt-3/u);
@@ -572,6 +576,8 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(runtime, /\[isSyncLineEnabled, setIsSyncLineEnabled\] = useState\(\s*initialPreferences\.isSyncLineEnabled/u);
   assert.match(runtime, /\[isRhythmSupportEnabled, setIsRhythmSupportEnabled\] = useState\(\s*initialPreferences\.isRhythmSupportEnabled/u);
   assert.match(runtime, /\[isLaneEffectEnabled, setIsLaneEffectEnabled\] = useState\(\s*initialPreferences\.isLaneEffectEnabled/u);
+  assert.match(runtime, /initialPreferences\.frameRateLimit/u);
+  assert.match(runtime, /initialPreferences\.resolutionScale/u);
   assert.match(runtime, /isEnabled=\{isSyncLineEnabled\}/u);
   assert.match(runtime, /isEnabled=\{isRhythmSupportEnabled\}/u);
   assert.match(runtime, /isEnabled=\{isLaneEffectEnabled\}/u);
@@ -602,7 +608,11 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /backgroundColor: 0x000000/u);
   assert.match(stage, /app\.canvas\.style\.width = "100%"/u);
   assert.match(stage, /app\.canvas\.style\.height = "100%"/u);
-  assert.doesNotMatch(stage, /ResizeObserver|renderer\.resize/u);
+  assert.doesNotMatch(stage, /ResizeObserver/u);
+  assert.match(stage, /application\.renderer\.resize\([\s\S]*getBandoriSimulatorRendererResolution/u);
+  assert.match(stage, /application\.ticker\.maxFPS = getBandoriSimulatorTickerMaxFps/u);
+  assert.match(runtime, /frameRateLimit=\{frameRateLimit\}/u);
+  assert.match(runtime, /resolutionScale=\{resolutionScale\}/u);
   assert.match(stageContract, /width: 1334/u);
   assert.match(stageContract, /height: 750/u);
   assert.match(stageContract, /left: 87/u);
@@ -691,6 +701,8 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   const rhythmSupportIndex = runtime.indexOf('label={t("skinControls.rhythmSupport")}');
   const mirrorIndex = runtime.indexOf('label={t("controls.mirrorData")}');
   const laneEffectIndex = runtime.indexOf('label={t("skinControls.laneEffect")}');
+  const frameRateLimitIndex = runtime.indexOf('label={t("controls.frameRateLimit")}');
+  const resolutionScaleIndex = runtime.indexOf('label={t("controls.resolutionScale")}');
   const skinControlsIndex = runtime.indexOf('<SimulatorSkinControls');
   assert.ok(timelineIndex >= 0);
   assert.ok(playbackControlsIndex > timelineIndex);
@@ -712,7 +724,9 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.ok(rhythmSupportIndex > syncLineIndex);
   assert.ok(mirrorIndex > rhythmSupportIndex);
   assert.ok(laneEffectIndex > mirrorIndex);
-  assert.ok(skinControlsIndex > laneEffectIndex);
+  assert.ok(frameRateLimitIndex > laneEffectIndex);
+  assert.ok(resolutionScaleIndex > frameRateLimitIndex);
+  assert.ok(skinControlsIndex > resolutionScaleIndex);
 
   const limitedSkinIndex = skinControls.indexOf('label={t("limitedPerformance.label")}');
   const backgroundSkinIndex = skinControls.indexOf('label={t("backgroundStyle")}');

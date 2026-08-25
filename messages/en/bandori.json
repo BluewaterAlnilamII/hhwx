@@ -691,7 +691,16 @@
         "decreaseSuddenRate": "Decrease note appearance position by {amount}",
         "increaseSuddenRate": "Increase note appearance position by {amount}",
         "currentSuddenRate": "Current note appearance position",
-        "suddenLane": "Adjust the lane"
+        "suddenLane": "Adjust the lane",
+        "frameRateLimit": "Frame rate limit",
+        "decreaseFrameRateLimit": "Lower frame rate limit",
+        "increaseFrameRateLimit": "Raise frame rate limit",
+        "currentFrameRateLimit": "Current frame rate limit",
+        "unlimitedFrameRate": "Unlimited",
+        "resolutionScale": "Resolution scale",
+        "decreaseResolutionScale": "Lower resolution scale",
+        "increaseResolutionScale": "Raise resolution scale",
+        "currentResolutionScale": "Current resolution scale"
       },
       "effectControlsTitle": "Live effect settings",
       "loopControls": {

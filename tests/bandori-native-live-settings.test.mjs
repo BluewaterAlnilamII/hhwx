@@ -31,6 +31,14 @@ import {
   getBandoriNativeSuddenScreenY,
   isBandoriNativeMultiRangeChart,
 } from "../src/app/[locale]/bandori/songs/[songId]/native-live-settings.ts";
+import {
+  BANDORI_SIMULATOR_FRAME_RATE_LIMIT_DEFAULT,
+  BANDORI_SIMULATOR_FRAME_RATE_LIMIT_OPTIONS,
+  BANDORI_SIMULATOR_RESOLUTION_SCALE_DEFAULT,
+  BANDORI_SIMULATOR_RESOLUTION_SCALE_OPTIONS,
+  getBandoriSimulatorRendererResolution,
+  getBandoriSimulatorTickerMaxFps,
+} from "../src/lib/bandori/chart-simulator/render-settings.ts";
 
 test("native live-setting ranges clamp to the verified JP controls", () => {
   assert.equal(adjustBandoriNativeNoteSize(100, -10), 90);
@@ -57,6 +65,7 @@ test("chart simulator preferences persist every effect, skin, and volume control
     directionalEffectVariant: "off",
     directionalFlickSkinId: 5,
     fieldSkinId: 15,
+    frameRateLimit: 144,
     isBgmMuted: true,
     isLaneEffectEnabled: false,
     isMirrored: true,
@@ -69,6 +78,7 @@ test("chart simulator preferences persist every effect, skin, and volume control
     noteSkinId: 7,
     noteSpeed: 8.75,
     playbackRateHundredths: 73,
+    resolutionScale: 175,
     seVolume: 42,
     suddenRate: 64,
     tapEffectSkinId: "off",
@@ -92,6 +102,7 @@ test("chart simulator preferences safely normalize stale or invalid stored value
     directionalEffectVariant: "future",
     directionalFlickSkinId: 99,
     fieldSkinId: "retired",
+    frameRateLimit: 480,
     isBgmMuted: "true",
     isLaneEffectEnabled: false,
     isMirrored: true,
@@ -104,6 +115,7 @@ test("chart simulator preferences safely normalize stale or invalid stored value
     noteSkinId: 99,
     noteSpeed: 10.126,
     playbackRateHundredths: 20,
+    resolutionScale: 110,
     seVolume: -4,
     suddenRate: 105,
     tapEffectSkinId: "future",
@@ -127,6 +139,36 @@ test("chart simulator preferences safely normalize stale or invalid stored value
     getItem: () => "not JSON",
     setItem: () => {},
   }), defaults);
+});
+
+test("simulator render settings preserve the approved discrete options", () => {
+  assert.deepEqual(BANDORI_SIMULATOR_FRAME_RATE_LIMIT_OPTIONS, [
+    30,
+    60,
+    90,
+    120,
+    144,
+    180,
+    240,
+    null,
+  ]);
+  assert.equal(BANDORI_SIMULATOR_FRAME_RATE_LIMIT_DEFAULT, null);
+  assert.deepEqual(BANDORI_SIMULATOR_RESOLUTION_SCALE_OPTIONS, [
+    50,
+    75,
+    100,
+    125,
+    150,
+    175,
+    200,
+  ]);
+  assert.equal(BANDORI_SIMULATOR_RESOLUTION_SCALE_DEFAULT, 100);
+  assert.equal(getBandoriSimulatorRendererResolution(1, 100), 1);
+  assert.equal(getBandoriSimulatorRendererResolution(2, 50), 1);
+  assert.equal(getBandoriSimulatorRendererResolution(3, 100), 2);
+  assert.equal(getBandoriSimulatorRendererResolution(3, 200), 4);
+  assert.equal(getBandoriSimulatorTickerMaxFps(144), 144);
+  assert.equal(getBandoriSimulatorTickerMaxFps(null), 0);
 });
 
 test("Habahiro charts clamp the effective note scale without changing the stored value", () => {
