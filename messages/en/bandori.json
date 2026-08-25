@@ -687,13 +687,13 @@
         "decreaseNoteSize": "Decrease note size by {amount}%",
         "increaseNoteSize": "Increase note size by {amount}%",
         "currentNoteSize": "Current note size",
-        "suddenRate": "Note appearance position",
+        "suddenRate": "Note position",
         "decreaseSuddenRate": "Decrease note appearance position by {amount}",
         "increaseSuddenRate": "Increase note appearance position by {amount}",
         "currentSuddenRate": "Current note appearance position",
-        "suddenLane": "Hide lane field together"
+        "suddenLane": "Adjust the lane"
       },
-      "effectControlsTitle": "Performance effect settings",
+      "effectControlsTitle": "Live effect settings",
       "loopControls": {
         "ariaLabel": "Range loop",
         "setStart": "Set loop start",
@@ -711,34 +711,34 @@
       "audioLoadingFailed": "Audio resources failed to load — try again",
       "audioPlaybackFailed": "Music playback failed — try again",
       "skinControls": {
-        "ariaLabel": "Performance skin settings",
-        "noteStyle": "Note style",
-        "directionalFlickStyle": "Left/right Flick style",
+        "ariaLabel": "Live theme settings",
+        "noteStyle": "Note",
+        "directionalFlickStyle": "Directional flick note",
         "directionalEffectVariant": {
-          "label": "Left/right Flick effect",
-          "normal": "Large",
-          "light": "Small"
+          "label": "Directional flick note effect",
+          "normal": "Increase",
+          "light": "Decrease"
         },
-        "fieldStyle": "Lane field and judgment line",
-        "tapEffectStyle": "TAP EFFECT",
+        "fieldStyle": "Lane design",
+        "tapEffectStyle": "Tap effects",
         "backgroundStyle": "Background",
         "backgroundSkin": {
           "skin00": "Default Background",
           "skin02": "Challenge Event Background",
           "skin03": "Versus Event Background",
-          "practice": "Rehearsal Mode Background",
+          "practice": "Rehearsal Background",
           "teamLiveJudgment": "Team Event · Judgment Background",
           "teamLiveCombo": "Team Event · COMBO Background",
           "teamLiveLife": "Team Event · LIFE Background"
         },
-        "syncLine": "Simultaneous line",
-        "rhythmSupport": "Rhythm support",
-        "laneEffect": "Lane effect",
+        "syncLine": "Dual tap line",
+        "rhythmSupport": "Off-beat coloring",
+        "laneEffect": "Lane effects",
         "on": "On",
         "off": "Off",
-        "tapSeStyle": "Note SE",
+        "tapSeStyle": "SE",
         "limitedPerformance": {
-          "label": "Limited performance skin",
+          "label": "Limited skin",
           "none": "Off",
           "skin": {
             "5th": "5th anniversary special stage",

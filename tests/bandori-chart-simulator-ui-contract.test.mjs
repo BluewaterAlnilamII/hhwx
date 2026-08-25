@@ -123,8 +123,9 @@ test("simulator seek controls share the music player spacing, color, and borderl
   );
   assert.match(
     runtime,
-    /grid-cols-\[max-content_2\.25rem_5rem\]/u,
+    /grid-cols-\[2\.5rem_2\.25rem_minmax\(0,5rem\)\][\s\S]*?<label htmlFor=\{inputId\} className="justify-self-end">/u,
   );
+  assert.match(runtime, /className="w-full min-w-0 accent-\[var\(--theme-color-progress-indicator-background\)\]"/u);
   assert.match(
     runtime,
     /isMuted \? "bg-\[var\(--theme-color-control-background-pressed\)\][\s\S]*hover:bg-\[var\(--theme-color-control-background-pressed\)\]"/u,
@@ -132,9 +133,10 @@ test("simulator seek controls share the music player spacing, color, and borderl
   assert.doesNotMatch(runtime, /<output htmlFor=\{inputId\}/u);
   assert.match(
     runtime,
-    /sm:col-start-3 sm:row-start-1 sm:justify-self-end lg:grid-cols-2[\s\S]*?<SimulatorVolumeControl[\s\S]*?<SimulatorVolumeControl/u,
+    /grid w-full grid-cols-2[\s\S]*sm:w-auto sm:grid-cols-1[\s\S]*xl:grid-cols-2[\s\S]*?<SimulatorVolumeControl[\s\S]*?<SimulatorVolumeControl/u,
   );
-  assert.match(runtime, /gap-y-1[^"\n]*lg:grid-cols-2 lg:gap-x-6/u);
+  assert.match(runtime, /gap-x-2 gap-y-1[^"\n]*sm:gap-x-0[^"\n]*xl:grid-cols-2 xl:gap-x-6/u);
+  assert.doesNotMatch(runtime, /lg:grid-cols-2 lg:gap-x-6/u);
   assert.doesNotMatch(
     runtime,
     /mt-4 grid gap-y-3 border-t[\s\S]*?<SimulatorVolumeControl/u,
@@ -185,14 +187,53 @@ test("single-frame controls use symmetric step icons, deterministic hold repeat,
   assert.match(runtime, /aria-keyshortcuts="ArrowLeft"[\s\S]*?aria-keyshortcuts="d"[\s\S]*?aria-keyshortcuts="Space"[\s\S]*?aria-keyshortcuts="f"[\s\S]*?aria-keyshortcuts="ArrowRight"/u);
 });
 
+test("mobile simulator settings match the compact transport control rhythm", async () => {
+  const [runtime, skinControls, adjustmentControls, settingsCard] = await Promise.all([
+    read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx"),
+    read("../src/app/[locale]/bandori/songs/[songId]/SimulatorSkinControls.tsx"),
+    read("../src/app/[locale]/bandori/songs/[songId]/SimulatorAdjustmentControl.tsx"),
+    read("../src/app/[locale]/bandori/songs/[songId]/SimulatorSettingsCard.tsx"),
+  ]);
+
+  assert.match(adjustmentControls, /h-9 w-9[\s\S]*sm:h-10 sm:w-10/u);
+  assert.match(adjustmentControls, /h-\[18px\] w-\[18px\] sm:h-5 sm:w-5/u);
+  assert.match(adjustmentControls, /h-9 min-w-14[\s\S]*text-sm font-bold[\s\S]*sm:h-10 sm:min-w-24[\s\S]*sm:text-base sm:font-black/u);
+  assert.match(settingsCard, /p-3 shadow-sm sm:p-5/u);
+  assert.match(settingsCard, /text-\[15px\][^"\n]*sm:text-base/u);
+  assert.match(settingsCard, /mt-2[^"\n]*sm:mt-3/u);
+  assert.match(skinControls, /mobileLayout\?: "inline" \| "stacked"/u);
+  assert.match(skinControls, /grid py-3[\s\S]*grid-cols-2 items-center gap-2 py-2\.5[\s\S]*items-start gap-1\.5/u);
+  assert.match(skinControls, /justify-start" : "justify-center sm:justify-start"/u);
+  assert.match(skinControls, /justify-end text-right/u);
+  assert.match(skinControls, /text-\[13px\][^"\n]*sm:text-sm/u);
+  assert.match(skinControls, /min-h-9[\s\S]*px-3 py-1\.5 text-\[13px\][\s\S]*sm:min-h-11[\s\S]*sm:text-sm/u);
+  for (const label of [
+    "skinControls.syncLine",
+    "skinControls.rhythmSupport",
+    "controls.mirrorData",
+    "skinControls.laneEffect",
+  ]) {
+    assert.ok(
+      runtime.includes(`<SimulatorControlRow label={t("${label}")} mobileLayout="inline">`),
+    );
+  }
+  assert.equal((runtime.match(/mobileLayout="inline"/gu) ?? []).length, 4);
+  assert.match(runtime, /grid basis-full grid-cols-2 items-center gap-2 sm:flex sm:justify-start/u);
+});
+
 test("stage fullscreen keeps transport overlays outside the central playfield and treats landscape as a preference", async () => {
   const runtime = await read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx");
 
   assert.match(runtime, /<Maximize className="h-5 w-5"/u);
   assert.match(runtime, /<Minimize className="h-5 w-5"/u);
+  assert.match(runtime, /type StageFullscreenMode = "native" \| "viewport" \| null/u);
   assert.match(runtime, /fullscreenRoot\.requestFullscreen\(\{ navigationUI: "hide" \}\)/u);
   assert.match(runtime, /document\.addEventListener\("fullscreenchange", updateFullscreenState\)/u);
-  assert.match(runtime, /fullscreenRoot !== null && document\.fullscreenElement === fullscreenRoot/u);
+  assert.match(runtime, /currentMode === "native" \? null : currentMode/u);
+  assert.match(runtime, /setStageFullscreenMode\("viewport"\)/u);
+  assert.match(runtime, /stageFullscreenMode === "viewport"[\s\S]*fixed inset-0 z-\[100\] h-\[100dvh\] w-\[100dvw\]/u);
+  assert.match(runtime, /document\.body\.style\.overflow = "hidden"[\s\S]*document\.documentElement\.style\.overflow = "hidden"/u);
+  assert.match(runtime, /handleViewportFullscreenEscape[\s\S]*event\.key !== "Escape"[\s\S]*exitStageFullscreen\(\)/u);
   assert.match(runtime, /await orientation\.lock\("landscape"\)/u);
   assert.match(runtime, /keep fullscreen in the user's[\s\S]*current orientation/u);
 
@@ -206,6 +247,8 @@ test("stage fullscreen keeps transport overlays outside the central playfield an
   assert.ok(normalTimelineIndex > fullscreenControlsIndex);
   const fullscreenEntrySection = runtime.slice(fullscreenEntryIndex, fullscreenRootIndex);
   assert.match(fullscreenEntrySection, /border-\[var\(--theme-color-action-secondary-border\)\]/u);
+  assert.match(fullscreenEntrySection, /disabled=\{activeTab !== "stage"\}/u);
+  assert.doesNotMatch(fullscreenEntrySection, /isFullscreenSupported/u);
   const fullscreenSection = runtime.slice(fullscreenRootIndex, normalTimelineIndex);
   assert.match(fullscreenSection, /data-chart-simulator-fullscreen-backward-controls/u);
   assert.match(fullscreenSection, /data-chart-simulator-fullscreen-forward-controls/u);
@@ -215,8 +258,8 @@ test("stage fullscreen keeps transport overlays outside the central playfield an
   assert.match(fullscreenSection, /portrait:fixed portrait:grid portrait:grid-cols-1/u);
   assert.match(fullscreenSection, /gridTemplateRows: `minmax\(0, 1fr\) min\(100dvh, \$\{FULLSCREEN_STAGE_HEIGHT_DVW\}dvw\) minmax\(0, 1fr\)`/u);
   assert.match(fullscreenSection, /portrait:row-start-1[\s\S]*loopControls\.ariaLabel/u);
-  assert.match(fullscreenSection, /data-chart-simulator-fullscreen-backward-controls[\s\S]*portrait:row-start-3/u);
-  assert.match(fullscreenSection, /data-chart-simulator-fullscreen-forward-controls[\s\S]*portrait:row-start-3/u);
+  assert.match(fullscreenSection, /data-chart-simulator-fullscreen-backward-controls[\s\S]*portrait:row-start-3[\s\S]*portrait:flex-row-reverse/u);
+  assert.match(fullscreenSection, /data-chart-simulator-fullscreen-forward-controls[\s\S]*portrait:row-start-3[\s\S]*portrait:flex-row/u);
   assert.match(fullscreenSection, /safe-area-inset-left/u);
   assert.match(fullscreenSection, /safe-area-inset-right/u);
   assert.match(fullscreenSection, /bg-slate-950\/65/u);
@@ -570,6 +613,11 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /fieldSkin\.judgmentLineSpriteHeight/u);
   assert.match(skinControls, /BANDORI_NATIVE_NOTE_SKINS\.map/u);
   assert.match(skinControls, /<SimulatorSettingsCard title=\{t\("ariaLabel"\)\}>/u);
+  assert.match(skinControls, /sm:grid-cols-\[9rem_minmax\(0,1fr\)\]/u);
+  assert.doesNotMatch(skinControls, /sm:grid-cols-\[10rem_minmax\(0,1fr\)\]/u);
+  assert.match(skinControls, /sm:flex sm:min-h-11 sm:items-center sm:justify-end sm:text-right/u);
+  assert.match(skinControls, /sm:\[&>\*\]:min-h-11/u);
+  assert.doesNotMatch(skinControls, /className="pt-2 text-sm/u);
   assert.doesNotMatch(skinControls, /limitedPerformance\.coverage/u);
   assert.match(settingsCard, /theme-color-surface-background/u);
   assert.match(switchControl, /role="switch"/u);
@@ -731,7 +779,7 @@ test("localized song and simulator keys stay mirrored", async () => {
   assert.equal(en.songs.simulator.controls.bgmVolume, "BGM");
   assert.equal(en.songs.simulator.controls.seVolume, "SE");
   assert.equal(zh.songs.simulator.skinControls.tapEffectStyle, "TAP EFFECT");
-  assert.equal(en.songs.simulator.skinControls.tapEffectStyle, "TAP EFFECT");
+  assert.equal(en.songs.simulator.skinControls.tapEffectStyle, "Tap effects");
   assert.equal(zh.songs.simulator.skinControls.limitedPerformance.none, "关");
   assert.equal(en.songs.simulator.skinControls.limitedPerformance.none, "Off");
   assert.deepEqual(
