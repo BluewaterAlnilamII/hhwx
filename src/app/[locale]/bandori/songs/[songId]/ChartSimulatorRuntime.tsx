@@ -2350,12 +2350,9 @@ export default function ChartSimulatorRuntime({
             {chartLoadingError || audioLoadingError ? (
               <div
                 className={cn(
-                  "absolute inset-x-0 top-0 z-20 flex items-center justify-center bg-[color-mix(in_srgb,var(--theme-color-surface-background)_94%,transparent)] p-6 text-center backdrop-blur-sm",
+                  "absolute inset-0 z-20 flex items-center justify-center bg-[color-mix(in_srgb,var(--theme-color-surface-background)_94%,transparent)] p-6 text-center backdrop-blur-sm",
                   isStageFullscreen ? null : "rounded-2xl",
                 )}
-                style={{
-                  aspectRatio: `${BANDORI_NATIVE_STAGE_SIZE.width} / ${BANDORI_NATIVE_STAGE_SIZE.height}`,
-                }}
               >
                 <div>
                   <h3 className="text-base font-bold text-[var(--theme-color-semantic-danger-foreground)]">
@@ -2376,12 +2373,9 @@ export default function ChartSimulatorRuntime({
             ) : simulatorLoadingLabel ? (
               <div
                 className={cn(
-                  "pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-center bg-[color-mix(in_srgb,var(--theme-color-surface-background)_90%,transparent)] p-6 backdrop-blur-sm",
+                  "pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-[color-mix(in_srgb,var(--theme-color-surface-background)_90%,transparent)] p-6 backdrop-blur-sm",
                   isStageFullscreen ? null : "rounded-2xl",
                 )}
-                style={{
-                  aspectRatio: `${BANDORI_NATIVE_STAGE_SIZE.width} / ${BANDORI_NATIVE_STAGE_SIZE.height}`,
-                }}
               >
                 <ChartSimulatorLoadingIndicator
                   completedResources={isSelectedChartReady ? completedResources : null}

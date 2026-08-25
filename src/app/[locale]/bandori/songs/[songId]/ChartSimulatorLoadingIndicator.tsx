@@ -11,9 +11,13 @@ export default function ChartSimulatorLoadingIndicator({
   label,
   totalResources = null,
 }: ChartSimulatorLoadingIndicatorProps) {
-  const hasResourceCount = completedResources !== null
+  const progressPercentage = completedResources !== null
     && totalResources !== null
-    && totalResources > 0;
+    && totalResources > 0
+    ? Math.floor(
+        (Math.min(Math.max(completedResources, 0), totalResources) / totalResources) * 100,
+      )
+    : null;
 
   return (
     <div className="flex flex-col items-center justify-center gap-3 text-center text-[var(--theme-color-text-muted)]">
@@ -24,12 +28,12 @@ export default function ChartSimulatorLoadingIndicator({
       <p aria-live="polite" className="text-sm font-semibold">
         {label}
       </p>
-      {hasResourceCount ? (
+      {progressPercentage !== null ? (
         <span
           aria-hidden="true"
           className="text-sm font-black tabular-nums text-[var(--theme-color-text-default)]"
         >
-          {completedResources} / {totalResources}
+          {progressPercentage}%
         </span>
       ) : null}
     </div>
