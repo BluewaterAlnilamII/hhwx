@@ -9,6 +9,7 @@ import {
   Minus,
   Plus,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export type SimulatorAdjustmentLevel = 1 | 2 | 3;
 
@@ -63,17 +64,22 @@ export function SimulatorAdjustmentButton({
 type SimulatorAdjustmentValueProps = {
   ariaLabel: string;
   children: ReactNode;
+  className?: string;
 };
 
 export function SimulatorAdjustmentValue({
   ariaLabel,
   children,
+  className,
 }: SimulatorAdjustmentValueProps) {
   return (
     <output
       aria-label={ariaLabel}
       aria-live="polite"
-      className="inline-flex h-9 min-w-14 shrink-0 items-center justify-center rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] px-2 text-sm font-bold tabular-nums text-[var(--theme-color-text-default)] sm:h-10 sm:min-w-24 sm:px-4 sm:text-base sm:font-black"
+      className={cn(
+        "inline-flex h-9 min-w-14 shrink-0 items-center justify-center rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] px-2 text-sm font-bold tabular-nums text-[var(--theme-color-text-default)] sm:h-10 sm:min-w-24 sm:px-4 sm:text-base sm:font-black",
+        className,
+      )}
     >
       {children}
     </output>

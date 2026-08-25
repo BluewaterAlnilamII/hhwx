@@ -15,6 +15,14 @@ import {
   BANDORI_SIMULATOR_PLAYBACK_RATE_MIN_HUNDREDTHS,
 } from "@/lib/bandori/chart-simulator/playback-rate";
 import {
+  BANDORI_SIMULATOR_FRAME_RATE_LIMIT_DEFAULT,
+  BANDORI_SIMULATOR_RESOLUTION_SCALE_DEFAULT,
+  isBandoriSimulatorFrameRateLimit,
+  isBandoriSimulatorResolutionScale,
+  type BandoriSimulatorFrameRateLimit,
+  type BandoriSimulatorResolutionScale,
+} from "@/lib/bandori/chart-simulator/render-settings";
+import {
   BANDORI_LIMITED_PERFORMANCE_SKINS,
   type BandoriLimitedPerformanceSkin,
 } from "./limited-performance-skins";
@@ -65,6 +73,7 @@ export type BandoriChartSimulatorPreferences = Readonly<{
   directionalEffectVariant: BandoriNativeDirectionalEffectVariant;
   directionalFlickSkinId: BandoriNativeDirectionalFlickSkin["id"];
   fieldSkinId: BandoriNativeFieldSkin["id"];
+  frameRateLimit: BandoriSimulatorFrameRateLimit;
   isBgmMuted: boolean;
   isLaneEffectEnabled: boolean;
   isMirrored: boolean;
@@ -77,6 +86,7 @@ export type BandoriChartSimulatorPreferences = Readonly<{
   noteSkinId: BandoriNativeNoteSkin["id"];
   noteSpeed: number;
   playbackRateHundredths: number;
+  resolutionScale: BandoriSimulatorResolutionScale;
   seVolume: number;
   suddenRate: number;
   tapEffectSkinId: BandoriNativeTapEffectSkin["id"];
@@ -90,6 +100,7 @@ export function createDefaultBandoriChartSimulatorPreferences(): BandoriChartSim
     directionalEffectVariant: BANDORI_NATIVE_DIRECTIONAL_EFFECT_VARIANT_DEFAULT,
     directionalFlickSkinId: BANDORI_NATIVE_DIRECTIONAL_FLICK_SKIN.id,
     fieldSkinId: BANDORI_NATIVE_FIELD_SKIN.id,
+    frameRateLimit: BANDORI_SIMULATOR_FRAME_RATE_LIMIT_DEFAULT,
     isBgmMuted: false,
     isLaneEffectEnabled: true,
     isMirrored: false,
@@ -102,6 +113,7 @@ export function createDefaultBandoriChartSimulatorPreferences(): BandoriChartSim
     noteSkinId: BANDORI_NATIVE_NOTE_SKIN.id,
     noteSpeed: BANDORI_NATIVE_NOTE_SPEED_DEFAULT,
     playbackRateHundredths: BANDORI_SIMULATOR_PLAYBACK_RATE_DEFAULT_HUNDREDTHS,
+    resolutionScale: BANDORI_SIMULATOR_RESOLUTION_SCALE_DEFAULT,
     seVolume: BANDORI_NATIVE_VOLUME_DEFAULT,
     suddenRate: BANDORI_NATIVE_SUDDEN_RATE_DEFAULT,
     tapEffectSkinId: BANDORI_NATIVE_TAP_EFFECT_SKIN.id,
@@ -191,6 +203,9 @@ export function normalizeBandoriChartSimulatorPreferences(
       BANDORI_NATIVE_FIELD_SKIN_CHOICES,
       defaults.fieldSkinId,
     ),
+    frameRateLimit: isBandoriSimulatorFrameRateLimit(record.frameRateLimit)
+      ? record.frameRateLimit
+      : defaults.frameRateLimit,
     isBgmMuted: normalizeBoolean(record.isBgmMuted, defaults.isBgmMuted),
     isLaneEffectEnabled: normalizeBoolean(
       record.isLaneEffectEnabled,
@@ -231,6 +246,9 @@ export function normalizeBandoriChartSimulatorPreferences(
       BANDORI_SIMULATOR_PLAYBACK_RATE_MAX_HUNDREDTHS,
       defaults.playbackRateHundredths,
     ),
+    resolutionScale: isBandoriSimulatorResolutionScale(record.resolutionScale)
+      ? record.resolutionScale
+      : defaults.resolutionScale,
     seVolume: normalizeInteger(
       record.seVolume,
       BANDORI_NATIVE_VOLUME_MIN,

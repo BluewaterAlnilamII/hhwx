@@ -18,6 +18,12 @@ import {
 import {
   acquireBandoriChartSimulatorTexture,
 } from "@/lib/bandori/chart-simulator/pixi-texture-cache";
+import {
+  getBandoriSimulatorRendererResolution,
+  getBandoriSimulatorTickerMaxFps,
+  type BandoriSimulatorFrameRateLimit,
+  type BandoriSimulatorResolutionScale,
+} from "@/lib/bandori/chart-simulator/render-settings";
 import type {
   BandoriChartSimulatorTextureLease,
 } from "@/lib/bandori/chart-simulator/texture-lease-cache";
@@ -196,6 +202,7 @@ type NativeSimulatorStageProps = {
   directionalFlickSkin: BandoriNativeDirectionalFlickSkin;
   directionalEffectVariant: BandoriNativeDirectionalEffectVariant;
   fieldSkin: BandoriNativeFieldSkin;
+  frameRateLimit: BandoriSimulatorFrameRateLimit;
   getEffectPlaybackState: () => NativeSimulatorEffectPlaybackState;
   getPresentationTime: () => number;
   isActive: boolean;
@@ -211,6 +218,7 @@ type NativeSimulatorStageProps = {
   onLoadProgress: (progress: NativeSimulatorStageLoadProgress) => void;
   onRenderFpsChange: (framesPerSecond: number | null) => void;
   rendererErrorLabel: string;
+  resolutionScale: BandoriSimulatorResolutionScale;
   resourceErrorLabel: string;
   resolveAssetUrl: BandoriChartSimulatorAssetResolver;
   rhythmSupportEnabled: boolean;
@@ -227,6 +235,24 @@ type RenderFpsSample = {
   frameCount: number;
   startedAtMs: number | null;
 };
+
+function resizeBandoriNativeStageRenderer(
+  application: Application,
+  resolutionScale: BandoriSimulatorResolutionScale,
+): void {
+  application.renderer.resize(
+    BANDORI_NATIVE_STAGE_SIZE.width,
+    BANDORI_NATIVE_STAGE_SIZE.height,
+    getBandoriSimulatorRendererResolution(
+      window.devicePixelRatio,
+      resolutionScale,
+    ),
+  );
+  // Pixi auto-density writes fixed CSS pixels during resize; the stage itself
+  // must remain responsive inside the simulator viewport.
+  application.canvas.style.width = "100%";
+  application.canvas.style.height = "100%";
+}
 
 type StageStatus =
   | "loading"
@@ -1804,6 +1830,7 @@ export default function NativeSimulatorStage({
   directionalEffectVariant,
   directionalFlickSkin,
   fieldSkin,
+  frameRateLimit,
   getEffectPlaybackState,
   getPresentationTime,
   isActive,
@@ -1819,6 +1846,7 @@ export default function NativeSimulatorStage({
   onLoadProgress,
   onRenderFpsChange,
   rendererErrorLabel,
+  resolutionScale,
   resourceErrorLabel,
   resolveAssetUrl,
   rhythmSupportEnabled,
@@ -1834,6 +1862,7 @@ export default function NativeSimulatorStage({
     frameCount: 0,
     startedAtMs: null,
   });
+  const frameRateLimitRef = useRef(frameRateLimit);
   const isActiveRef = useRef(isActive);
   const isMirroredRef = useRef(isMirrored);
   const laneEffectEnabledRef = useRef(laneEffectEnabled);
@@ -1841,6 +1870,7 @@ export default function NativeSimulatorStage({
   const noteSpeedRef = useRef(noteSpeed);
   const noteSizeRef = useRef(noteSize);
   const rhythmSupportEnabledRef = useRef(rhythmSupportEnabled);
+  const resolutionScaleRef = useRef(resolutionScale);
   const syncLineEnabledRef = useRef(syncLineEnabled);
   const suddenLaneEnabledRef = useRef(suddenLaneEnabled);
   const suddenRateRef = useRef(suddenRate);
@@ -1873,6 +1903,23 @@ export default function NativeSimulatorStage({
   useEffect(() => {
     isMirroredRef.current = isMirrored;
   }, [isMirrored]);
+
+  useEffect(() => {
+    frameRateLimitRef.current = frameRateLimit;
+    const application = applicationRef.current;
+    if (application) {
+      application.ticker.maxFPS = getBandoriSimulatorTickerMaxFps(frameRateLimit);
+    }
+  }, [frameRateLimit]);
+
+  useEffect(() => {
+    resolutionScaleRef.current = resolutionScale;
+    const application = applicationRef.current;
+    if (!application) return;
+    resizeBandoriNativeStageRenderer(application, resolutionScale);
+    // Resizing clears the backing canvas, so paused stages need one immediate frame.
+    application.render();
+  }, [resolutionScale]);
 
   useEffect(() => {
     // Speed is read by the ticker and must not recreate the Pixi renderer.
@@ -1973,7 +2020,10 @@ export default function NativeSimulatorStage({
           antialias: true,
           autoStart: false,
           autoDensity: true,
-          resolution: Math.min(window.devicePixelRatio || 1, 2),
+          resolution: getBandoriSimulatorRendererResolution(
+            window.devicePixelRatio,
+            resolutionScaleRef.current,
+          ),
         });
       } catch {
         failStage("rendererError");
@@ -3530,6 +3580,10 @@ export default function NativeSimulatorStage({
         sample.startedAtMs = nowMs;
       };
 
+      resizeBandoriNativeStageRenderer(app, resolutionScaleRef.current);
+      app.ticker.maxFPS = getBandoriSimulatorTickerMaxFps(
+        frameRateLimitRef.current,
+      );
       applicationRef.current = app;
       renderNotes();
       app.ticker.add(renderStageFrame);

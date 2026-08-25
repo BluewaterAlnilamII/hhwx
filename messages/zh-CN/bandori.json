@@ -691,7 +691,16 @@
         "decreaseSuddenRate": "降低节奏图标的出现位置 {amount}",
         "increaseSuddenRate": "提高节奏图标的出现位置 {amount}",
         "currentSuddenRate": "当前节奏图标的出现位置",
-        "suddenLane": "同步隐藏按键条"
+        "suddenLane": "同步隐藏按键条",
+        "frameRateLimit": "帧率限制",
+        "decreaseFrameRateLimit": "降低帧率限制",
+        "increaseFrameRateLimit": "提高帧率限制",
+        "currentFrameRateLimit": "当前帧率限制",
+        "unlimitedFrameRate": "无限制",
+        "resolutionScale": "分辨率缩放",
+        "decreaseResolutionScale": "降低分辨率缩放",
+        "increaseResolutionScale": "提高分辨率缩放",
+        "currentResolutionScale": "当前分辨率缩放"
       },
       "effectControlsTitle": "演出效果设定",
       "loopControls": {

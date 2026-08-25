@@ -110,6 +110,12 @@ import {
   getBandoriSimulatorPlaybackRate,
 } from "@/lib/bandori/chart-simulator/playback-rate";
 import {
+  BANDORI_SIMULATOR_FRAME_RATE_LIMIT_OPTIONS,
+  BANDORI_SIMULATOR_RESOLUTION_SCALE_OPTIONS,
+  type BandoriSimulatorFrameRateLimit,
+  type BandoriSimulatorResolutionScale,
+} from "@/lib/bandori/chart-simulator/render-settings";
+import {
   beginBandoriChartScrub,
   commitBandoriChartScrub,
   createBandoriChartTransportState,
@@ -414,6 +420,59 @@ function SimulatorIntegerAdjustmentControl({
   );
 }
 
+type SimulatorDiscreteAdjustmentControlProps<
+  TValue extends number | null,
+> = {
+  currentAriaLabel: string;
+  decreaseAriaLabel: string;
+  formatValue: (value: TValue) => string;
+  increaseAriaLabel: string;
+  onChange: (value: TValue) => void;
+  options: readonly TValue[];
+  value: TValue;
+};
+
+function SimulatorDiscreteAdjustmentControl<TValue extends number | null>({
+  currentAriaLabel,
+  decreaseAriaLabel,
+  formatValue,
+  increaseAriaLabel,
+  onChange,
+  options,
+  value,
+}: SimulatorDiscreteAdjustmentControlProps<TValue>) {
+  const currentIndex = options.indexOf(value);
+  const changeValue = (offset: -1 | 1) => {
+    const nextValue = options[currentIndex + offset];
+    if (nextValue !== undefined) onChange(nextValue);
+  };
+
+  return (
+    <div className="flex items-center gap-1 sm:gap-2">
+      <SimulatorAdjustmentButton
+        ariaLabel={decreaseAriaLabel}
+        direction="decrease"
+        disabled={currentIndex <= 0}
+        level={2}
+        onClick={() => changeValue(-1)}
+      />
+      <SimulatorAdjustmentValue
+        ariaLabel={currentAriaLabel}
+        className="min-w-[4.5rem]"
+      >
+        {formatValue(value)}
+      </SimulatorAdjustmentValue>
+      <SimulatorAdjustmentButton
+        ariaLabel={increaseAriaLabel}
+        direction="increase"
+        disabled={currentIndex === options.length - 1}
+        level={2}
+        onClick={() => changeValue(1)}
+      />
+    </div>
+  );
+}
+
 type SimulatorVolumeControlProps = {
   inputId: string;
   isMuted: boolean;
@@ -610,6 +669,12 @@ export default function ChartSimulatorRuntime({
   const [isLaneEffectEnabled, setIsLaneEffectEnabled] = useState(
     initialPreferences.isLaneEffectEnabled,
   );
+  const [frameRateLimit, setFrameRateLimit] = useState<
+    BandoriSimulatorFrameRateLimit
+  >(initialPreferences.frameRateLimit);
+  const [resolutionScale, setResolutionScale] = useState<
+    BandoriSimulatorResolutionScale
+  >(initialPreferences.resolutionScale);
   const [stageLoadProgress, setStageLoadProgress] =
     useState<NativeSimulatorStageLoadProgress | null>(null);
   const [soundLoadProgress, setSoundLoadProgress] =
@@ -659,6 +724,7 @@ export default function ChartSimulatorRuntime({
         directionalEffectVariant,
         directionalFlickSkinId: directionalFlickSkin.id,
         fieldSkinId: fieldSkin.id,
+        frameRateLimit,
         isBgmMuted,
         isLaneEffectEnabled,
         isMirrored,
@@ -671,6 +737,7 @@ export default function ChartSimulatorRuntime({
         noteSkinId: noteSkin.id,
         noteSpeed,
         playbackRateHundredths,
+        resolutionScale,
         seVolume,
         suddenRate,
         tapEffectSkinId: tapEffectSkin.id,
@@ -683,6 +750,7 @@ export default function ChartSimulatorRuntime({
     directionalEffectVariant,
     directionalFlickSkin,
     fieldSkin,
+    frameRateLimit,
     isBgmMuted,
     isLaneEffectEnabled,
     isMirrored,
@@ -695,6 +763,7 @@ export default function ChartSimulatorRuntime({
     noteSkin,
     noteSpeed,
     playbackRateHundredths,
+    resolutionScale,
     seVolume,
     suddenRate,
     tapEffectSkin,
@@ -2331,6 +2400,7 @@ export default function ChartSimulatorRuntime({
               directionalEffectVariant={directionalEffectVariant}
               directionalFlickSkin={effectiveDirectionalFlickSkin}
               fieldSkin={effectiveFieldSkin}
+              frameRateLimit={frameRateLimit}
               getEffectPlaybackState={getStageEffectPlaybackState}
               getPresentationTime={getStagePresentationTime}
               isActive={isActive && activeTab === "stage" && isSelectedChartReady}
@@ -2346,6 +2416,7 @@ export default function ChartSimulatorRuntime({
               onLoadProgress={handleStageLoadProgress}
               onRenderFpsChange={setStageRenderFps}
               rendererErrorLabel={t("rendererUnavailable")}
+              resolutionScale={resolutionScale}
               resourceErrorLabel={t("stageResourceUnavailable")}
               resolveAssetUrl={assetLoadState.resolveAssetUrl}
               rhythmSupportEnabled={isRhythmSupportEnabled}
@@ -3050,6 +3121,32 @@ export default function ChartSimulatorRuntime({
                 isEnabled={isLaneEffectEnabled}
                 label={t("skinControls.laneEffect")}
                 onChange={setIsLaneEffectEnabled}
+              />
+            </SimulatorControlRow>
+
+            <SimulatorControlRow label={t("controls.frameRateLimit")}>
+              <SimulatorDiscreteAdjustmentControl
+                currentAriaLabel={t("controls.currentFrameRateLimit")}
+                decreaseAriaLabel={t("controls.decreaseFrameRateLimit")}
+                formatValue={(value) => value === null
+                  ? t("controls.unlimitedFrameRate")
+                  : `${value} FPS`}
+                increaseAriaLabel={t("controls.increaseFrameRateLimit")}
+                onChange={setFrameRateLimit}
+                options={BANDORI_SIMULATOR_FRAME_RATE_LIMIT_OPTIONS}
+                value={frameRateLimit}
+              />
+            </SimulatorControlRow>
+
+            <SimulatorControlRow label={t("controls.resolutionScale")}>
+              <SimulatorDiscreteAdjustmentControl
+                currentAriaLabel={t("controls.currentResolutionScale")}
+                decreaseAriaLabel={t("controls.decreaseResolutionScale")}
+                formatValue={(value) => `${value}%`}
+                increaseAriaLabel={t("controls.increaseResolutionScale")}
+                onChange={setResolutionScale}
+                options={BANDORI_SIMULATOR_RESOLUTION_SCALE_OPTIONS}
+                value={resolutionScale}
               />
             </SimulatorControlRow>
 
