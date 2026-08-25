@@ -88,14 +88,24 @@ test("the full-chart view stays present but temporarily disabled", async () => {
 });
 
 test("simulator loading reuses the page spinner and keeps the resource count compact", async () => {
-  const indicator = await read(
-    "../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorLoadingIndicator.tsx",
-  );
+  const [indicator, runtime] = await Promise.all([
+    read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorLoadingIndicator.tsx"),
+    read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx"),
+  ]);
 
   assert.match(indicator, /import \{ Loader2 \} from "lucide-react"/u);
   assert.match(indicator, /animate-spin motion-reduce:animate-none/u);
-  assert.match(indicator, /\{completedResources\} \/ \{totalResources\}/u);
+  assert.match(indicator, /Math\.floor\([\s\S]*Math\.min\(Math\.max\(completedResources, 0\), totalResources\)[\s\S]*\* 100/u);
+  assert.match(indicator, /\{progressPercentage\}%/u);
+  assert.doesNotMatch(indicator, /\{completedResources\} \/ \{totalResources\}/u);
   assert.doesNotMatch(indicator, /已准备|Loading resources/iu);
+  assert.match(runtime, /"absolute inset-0 z-20 flex items-center justify-center/u);
+  assert.match(runtime, /"pointer-events-none absolute inset-0 z-20/u);
+  assert.doesNotMatch(runtime, /absolute inset-x-0 top-0 z-20/u);
+  assert.equal(
+    (runtime.match(/aspectRatio: `\$\{BANDORI_NATIVE_STAGE_SIZE\.width\} \/ \$\{BANDORI_NATIVE_STAGE_SIZE\.height\}`/gu) ?? []).length,
+    2,
+  );
 });
 
 test("simulator seek controls share the music player spacing, color, and borderless side-button style", async () => {
