@@ -123,6 +123,7 @@ export type BandoriNativeAudioRuntime = {
     signal?: AbortSignal,
   ): Promise<void>;
   prepareMusic(url: string, signal?: AbortSignal): Promise<void>;
+  retainOnlyCueBank(cueBankId: string): void;
   resume(): Promise<void>;
   selectCueBank(cueBankId: string): void;
   setBgmVolume(volume: number): void;
@@ -164,6 +165,7 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
     Promise<ReadonlyMap<BandoriNativeNoteSoundCue, AudioBuffer>>
   >();
   private readonly bufferPromisesByUrl = new Map<string, Promise<AudioBuffer>>();
+  private readonly retainedCueBankIds = new Set<string>();
   private readonly activeSources = new Set<AudioBufferSourceNode>();
   private readonly activeLoops = new Map<string, ActiveLoop>();
   private readonly contextStateListeners = new Set<
@@ -213,6 +215,7 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
     if (!this.cueBanks.has(activeCueBankId)) {
       throw new Error(`Unknown native note sound cue bank: ${activeCueBankId}`);
     }
+    this.retainedCueBankIds.add(activeCueBankId);
     this.musicPlaybackState = {
       effectiveBackend: "native",
       generation: 0,
@@ -312,7 +315,9 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
     onResourceLoaded?: (url: string) => void,
     signal?: AbortSignal,
   ): Promise<void> {
+    if (this.disposed) throw new Error("Native note sound runtime is disposed");
     if (signal?.aborted) throw this.createAbortError();
+    this.retainedCueBankIds.add(cueBank.id);
     const existingCueUrls = this.cueBanks.get(cueBank.id);
     if (
       existingCueUrls
@@ -360,6 +365,7 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
     const request = Promise.all(Object.entries(cueUrls).map(
       async ([cue, url]) => {
         const buffer = await loadBuffer(url);
+        if (signal?.aborted) throw this.createAbortError();
         onResourceLoaded?.(url);
         return [cue, buffer] as const;
       },
@@ -368,7 +374,9 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
         BandoriNativeNoteSoundCue,
         AudioBuffer
       >;
-      this.buffersByCueBank.set(cueBank.id, buffers);
+      if (!this.disposed && this.retainedCueBankIds.has(cueBank.id)) {
+        this.buffersByCueBank.set(cueBank.id, buffers);
+      }
       return buffers;
     }).catch((error) => {
       for (const url of Object.values(cueUrls)) {
@@ -978,6 +986,25 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
     this.activeCueBankId = cueBankId;
   }
 
+  retainOnlyCueBank(cueBankId: string): void {
+    if (this.disposed) throw new Error("Native note sound runtime is disposed");
+    const cueUrls = this.cueBanks.get(cueBankId);
+    if (!cueUrls || !this.buffersByCueBank.has(cueBankId)) {
+      throw new Error(`Unprepared native note sound cue bank: ${cueBankId}`);
+    }
+    const retainedUrls = new Set(Object.values(cueUrls));
+    this.retainedCueBankIds.clear();
+    this.retainedCueBankIds.add(cueBankId);
+    for (const preparedCueBankId of this.buffersByCueBank.keys()) {
+      if (preparedCueBankId !== cueBankId) {
+        this.buffersByCueBank.delete(preparedCueBankId);
+      }
+    }
+    for (const url of this.bufferPromisesByUrl.keys()) {
+      if (!retainedUrls.has(url)) this.bufferPromisesByUrl.delete(url);
+    }
+  }
+
   setBgmVolume(volume: number): void {
     this.assertVolume(volume);
     this.bgmVolume = volume;
@@ -994,13 +1021,15 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
     }
   }
 
-  private attachSource(source: AudioBufferSourceNode): void {
+  private attachSource(source: AudioBufferSourceNode, cleanup?: () => void): void {
     this.activeSources.add(source);
     source.onended = () => {
       this.activeSources.delete(source);
       for (const [voiceKey, activeLoop] of this.activeLoops) {
         if (activeLoop.source === source) this.activeLoops.delete(voiceKey);
       }
+      source.disconnect();
+      cleanup?.();
     };
   }
 
@@ -1033,7 +1062,7 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
     source.loop = true;
     source.connect(gain);
     gain.connect(seGain);
-    this.attachSource(source);
+    this.attachSource(source, () => gain.disconnect());
     this.activeLoops.set(voiceKey, { gain, source });
     source.start(
       when ?? context.currentTime,
@@ -1055,6 +1084,9 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
       activeLoop.source.stop(startTime + fade);
     } catch {
       this.activeSources.delete(activeLoop.source);
+      activeLoop.source.onended = null;
+      activeLoop.source.disconnect();
+      activeLoop.gain.disconnect();
     }
   }
 
@@ -1101,6 +1133,9 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
   }
 
   stopAll(): void {
+    for (const activeLoop of this.activeLoops.values()) {
+      activeLoop.gain.disconnect();
+    }
     this.activeLoops.clear();
     for (const source of this.activeSources) {
       source.onended = null;
@@ -1109,6 +1144,7 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
       } catch {
         // A source may already have ended between the Set iteration and stop().
       }
+      source.disconnect();
     }
     this.activeSources.clear();
   }
@@ -1157,6 +1193,11 @@ class WebAudioBandoriNativeAudioRuntime implements BandoriNativeAudioRuntime {
     this.musicEndedListeners.clear();
     this.musicPlaybackErrorListeners.clear();
     this.musicPlaybackStateListeners.clear();
+    this.retainedCueBankIds.clear();
+    this.cueBanks.clear();
+    this.buffersByCueBank.clear();
+    this.bufferPromisesByCueBank.clear();
+    this.bufferPromisesByUrl.clear();
     const preparedSignalsmith = this.preparedSignalsmith;
     if (preparedSignalsmith) {
       this.signalsmithProcessorErrorCleanup?.();

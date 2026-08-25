@@ -338,14 +338,14 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   ]);
   const simulatorSource = `${stage}\n${stageContract}\n${noteAssets}\n${tapEffectAssets}\n${notePresentation}\n${hitPresentation}\n${holdPresentation}\n${judgmentComboPresentation}\n${runtime}\n${skinControls}\n${adjustmentControls}\n${settingsCard}\n${switchControl}\n${loopRange}\n${compiler}\n${worker}`;
 
-  assert.match(stage, /Application,[\s\S]*Assets,[\s\S]*Container,[\s\S]*Sprite/u);
+  assert.match(stage, /Application,[\s\S]*Container,[\s\S]*Sprite/u);
   assert.match(stage, /const suddenLine = new NineSliceSprite/u);
   assert.match(stage, /leftWidth: BANDORI_NATIVE_SUDDEN_LINE_BORDER_PIXELS\.left/u);
   assert.match(stage, /suddenLine\.setSize\([\s\S]*size\.width \/ sourcePixelScale/u);
   assert.match(stage, /getBandoriNativeSuddenLineScreenY\(rate\)/u);
   assert.doesNotMatch(stage, /const suddenLine = new Sprite/u);
   assert.match(stage, /Promise\.all\(\[/u);
-  assert.match(stage, /const loadTexture = async \(logicalUrl: string\)[\s\S]*const resolvedUrl = resolveAssetUrl\(logicalUrl\)[\s\S]*Assets\.load<Texture>\(resolvedUrl\)/u);
+  assert.match(stage, /const loadTexture = async \(logicalUrl: string\)[\s\S]*const resolvedUrl = resolveAssetUrl\(logicalUrl\)[\s\S]*acquireBandoriChartSimulatorTexture\(resolvedUrl\)/u);
   assert.match(stage, /plannedResourceUrls = new Set\([\s\S]*requiredLogicalUrls\.map\(resolveAssetUrl\)/u);
   assert.match(stage, /completedResourceUrls = new Set<string>\(\)/u);
   assert.match(stage, /onLoadProgress\(\{[\s\S]*phase: "resources"[\s\S]*totalResources/u);
@@ -375,6 +375,10 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.doesNotMatch(skinControls, /overriddenLabel|limitedPerformance\.overriddenBy/u);
   assert.match(stage, /void initialize\(\)\.catch/u);
   assert.match(stage, /resourceAbortController\.abort\(\)/u);
+  assert.match(stage, /acquireBandoriChartSimulatorTexture\(resolvedUrl\)/u);
+  assert.match(stage, /textureLeases\.splice\(0\)[\s\S]*lease\.release\(\)/u);
+  assert.doesNotMatch(stage, /Assets\.load<Texture>/u);
+  assert.match(runtime, /queueMicrotask\(releaseUnusedBandoriChartSimulatorTexturesNow\)/u);
   assert.match(stage, /prepareBandoriNativeChartVisuals\(compiled, false\)/u);
   assert.match(stage, /prepareBandoriNativeChartVisuals\(compiled, true\)/u);
   assert.match(stage, /renderedMirror !== isMirroredRef\.current/u);

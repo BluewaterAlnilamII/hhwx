@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Application,
-  Assets,
   Container,
   GlProgram,
   Graphics,
@@ -16,6 +15,12 @@ import {
   Sprite,
   Texture,
 } from "pixi.js";
+import {
+  acquireBandoriChartSimulatorTexture,
+} from "@/lib/bandori/chart-simulator/pixi-texture-cache";
+import type {
+  BandoriChartSimulatorTextureLease,
+} from "@/lib/bandori/chart-simulator/texture-lease-cache";
 import {
   getBandoriCompiledBeatAtTime,
   type CompiledBandoriChart,
@@ -1916,6 +1921,7 @@ export default function NativeSimulatorStage({
     const resourceAbortController = new AbortController();
     const localFrameTextures: Texture[] = [];
     const localShaders: Shader[] = [];
+    const textureLeases: BandoriChartSimulatorTextureLease<Texture>[] = [];
     let disposed = false;
     let appInitialized = false;
     let appDestroyed = false;
@@ -1932,6 +1938,7 @@ export default function NativeSimulatorStage({
       }
       for (const shader of localShaders.splice(0)) shader.destroy();
       for (const texture of localFrameTextures.splice(0)) texture.destroy(false);
+      for (const lease of textureLeases.splice(0)) lease.release();
       if (applicationRef.current === app) applicationRef.current = null;
     };
     const failStage = (
@@ -2176,7 +2183,9 @@ export default function NativeSimulatorStage({
         };
         const loadTexture = async (logicalUrl: string) => {
           const resolvedUrl = resolveAssetUrl(logicalUrl);
-          const texture = await Assets.load<Texture>(resolvedUrl);
+          const lease = acquireBandoriChartSimulatorTexture(resolvedUrl);
+          textureLeases.push(lease);
+          const texture = await lease.resource;
           markResourceComplete(resolvedUrl);
           return texture;
         };

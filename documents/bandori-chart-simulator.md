@@ -132,6 +132,24 @@ current background, lane, Note, Directional, effect, limited-overlay, and TapSE
 selections. Missing or invalid index, manifest, pack, or member data fails
 explicitly.
 
+Decoded Pixi textures are owned by resolved immutable URL. Shared stage
+instances use reference-counted leases; after the final lease is released, a
+texture remains warm for 15 seconds and is then removed from the Pixi cache and
+unloaded from decoded/GPU memory. A replacement stage that reacquires the same
+URL cancels the pending release, and unloads for one URL are serialized so an
+older stage cannot destroy a replacement stage's resource. Leaving the
+simulator accelerates every zero-reference release. This lifecycle does not
+delete the browser HTTP cache, so immutable pack objects may still be served
+from memory or disk cache and are decoded and uploaded again only when selected
+later.
+
+The Web Audio runtime retains only the selected TapSE cue bank after a skin
+change. Once old Note SE sources are stopped, other decoded `AudioBuffer` banks
+and their URL-promise references are dropped; selecting them again reuses the
+normal HTTP cache before decoding. The current song buffer and an optional
+prepared Signalsmith PCM copy remain warm until the simulator audio runtime is
+disposed.
+
 ## Ordinary and limited controls
 
 Background, lane/judgment line, rhythm marker/Note, Directional Flick, tap

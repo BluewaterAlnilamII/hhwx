@@ -213,6 +213,7 @@ test("the shared AudioContext uses the output clock while render time owns conti
 
   class FakeGain {
     connectCalls = [];
+    disconnectCalls = 0;
     gain = {
       cancelScheduledValues() {},
       linearRampToValueAtTime() {},
@@ -225,6 +226,10 @@ test("the shared AudioContext uses the output clock while render time owns conti
 
     connect(destination) {
       this.connectCalls.push(destination);
+    }
+
+    disconnect() {
+      this.disconnectCalls += 1;
     }
   }
 
@@ -462,6 +467,35 @@ test("the shared AudioContext uses the output clock while render time owns conti
     unsubscribeContextState();
     unsubscribeMusicEnded();
 
+    const alternateCueBank = {
+      id: "alternate",
+      cueUrls: {
+        flick: "https://cdn.example/alternate/flick.wav",
+        "long-keep": "https://cdn.example/alternate/long.wav",
+        perfect: "https://cdn.example/alternate/perfect.wav",
+      },
+    };
+    await runtime.prepareCueBank(alternateCueBank);
+    runtime.selectCueBank(alternateCueBank.id);
+    runtime.stopAll();
+    runtime.retainOnlyCueBank(alternateCueBank.id);
+    assert.throws(
+      () => runtime.selectCueBank(cueBank.id),
+      /Unprepared native note sound cue bank/u,
+    );
+    const fetchCountBeforeReload = fetchCalls.length;
+    await runtime.prepareCueBank(cueBank);
+    assert.equal(
+      fetchCalls.length,
+      fetchCountBeforeReload + new Set(Object.values(cueBank.cueUrls)).size,
+    );
+    runtime.selectCueBank(cueBank.id);
+    runtime.retainOnlyCueBank(cueBank.id);
+    assert.throws(
+      () => runtime.selectCueBank(alternateCueBank.id),
+      /Unprepared native note sound cue bank/u,
+    );
+
     runtime.dispose();
     assert.equal(context.closeCalls, 1);
   } finally {
@@ -498,6 +532,7 @@ test("the simulator owns one shared music and polyphonic Note SE AudioContext", 
   assert.match(runtime, /buffersByCueBank\.has\(this\.activeCueBankId\)/u);
   assert.match(runtime, /prepareCueBank\([\s\S]*cueBank/u);
   assert.match(runtime, /selectCueBank\(cueBankId/u);
+  assert.match(runtime, /retainOnlyCueBank\(cueBankId/u);
   assert.match(runtime, /prepareMusic\(url: string, signal\?: AbortSignal\)/u);
   assert.match(runtime, /source\.connect\(musicGain\)/u);
   assert.match(runtime, /prepared\.node\.connect\(musicGain\)/u);
@@ -526,6 +561,7 @@ test("the simulator owns one shared music and polyphonic Note SE AudioContext", 
   assert.match(runtime, /source\.playbackRate\.setValueAtTime/u);
   assert.match(pageRuntime, /createResolvedNoteSoundCueBank/u);
   assert.match(pageRuntime, /runtime\.prepareCueBank\(cueBank, \(url\) =>/u);
+  assert.match(pageRuntime, /runtime\.retainOnlyCueBank\(cueBank\.id\)/u);
   assert.match(pageRuntime, /runtime\.prepareMusic\(audioUrl, controller\.signal\)/u);
   assert.doesNotMatch(pageRuntime, /NOTE_SOUND_CUE_BANKS/u);
   assert.match(pageRuntime, /requestAnimationFrame\(updatePlayback\)/u);
