@@ -39,6 +39,10 @@ import {
   getBandoriSimulatorRendererResolution,
   getBandoriSimulatorTickerMaxFps,
 } from "../src/lib/bandori/chart-simulator/render-settings.ts";
+import {
+  BANDORI_SLIDE_JUDGMENT_FRAME_CORRECTION_DEFAULT_TENTHS,
+  BANDORI_SLIDE_JUDGMENT_FRAME_CORRECTION_OPTIONS,
+} from "../src/lib/bandori/chart-simulator/native-judgment-window-presentation.ts";
 
 test("native live-setting ranges clamp to the verified JP controls", () => {
   assert.equal(adjustBandoriNativeNoteSize(100, -10), 90);
@@ -69,6 +73,8 @@ test("chart simulator preferences persist every effect, skin, and volume control
     isBgmMuted: true,
     isLaneEffectEnabled: false,
     isMirrored: true,
+    isGreatJudgmentWindowEnabled: true,
+    isPerfectJudgmentWindowEnabled: true,
     isRhythmSupportEnabled: false,
     isSeMuted: true,
     isSuddenLaneEnabled: true,
@@ -80,6 +86,7 @@ test("chart simulator preferences persist every effect, skin, and volume control
     playbackRateHundredths: 73,
     resolutionScale: 175,
     seVolume: 42,
+    slideJudgmentFrameCorrectionTenths: 7,
     suddenRate: 64,
     tapEffectSkinId: "off",
     tapSeSkinId: 3,
@@ -96,6 +103,17 @@ test("chart simulator preferences persist every effect, skin, and volume control
 
 test("chart simulator preferences safely normalize stale or invalid stored values", () => {
   const defaults = createDefaultBandoriChartSimulatorPreferences();
+  assert.deepEqual(
+    normalizeBandoriChartSimulatorPreferences({
+      isGreatJudgmentWindowEnabled: true,
+      isPerfectJudgmentWindowEnabled: false,
+    }),
+    {
+      ...defaults,
+      isGreatJudgmentWindowEnabled: true,
+      isPerfectJudgmentWindowEnabled: true,
+    },
+  );
   assert.deepEqual(normalizeBandoriChartSimulatorPreferences({
     backgroundSkinId: "unknown",
     bgmVolume: 101,
@@ -106,6 +124,8 @@ test("chart simulator preferences safely normalize stale or invalid stored value
     isBgmMuted: "true",
     isLaneEffectEnabled: false,
     isMirrored: true,
+    isGreatJudgmentWindowEnabled: "yes",
+    isPerfectJudgmentWindowEnabled: "yes",
     isRhythmSupportEnabled: false,
     isSeMuted: true,
     isSuddenLaneEnabled: true,
@@ -117,6 +137,7 @@ test("chart simulator preferences safely normalize stale or invalid stored value
     playbackRateHundredths: 20,
     resolutionScale: 110,
     seVolume: -4,
+    slideJudgmentFrameCorrectionTenths: 11,
     suddenRate: 105,
     tapEffectSkinId: "future",
     tapSeSkinId: 99,
@@ -163,6 +184,10 @@ test("simulator render settings preserve the approved discrete options", () => {
     200,
   ]);
   assert.equal(BANDORI_SIMULATOR_RESOLUTION_SCALE_DEFAULT, 100);
+  assert.deepEqual(BANDORI_SLIDE_JUDGMENT_FRAME_CORRECTION_OPTIONS, [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+  ]);
+  assert.equal(BANDORI_SLIDE_JUDGMENT_FRAME_CORRECTION_DEFAULT_TENTHS, 5);
   assert.equal(getBandoriSimulatorRendererResolution(1, 100), 1);
   assert.equal(getBandoriSimulatorRendererResolution(2, 50), 1);
   assert.equal(getBandoriSimulatorRendererResolution(3, 100), 2);

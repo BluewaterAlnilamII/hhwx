@@ -38,6 +38,12 @@ import {
   createBandoriNativeTransparentColoredShaderSources,
 } from "@/lib/bandori/chart-simulator/native-note-material";
 import {
+  collectBandoriNativeJudgmentWindowSegments,
+  prepareBandoriNativeJudgmentWindowCandidates,
+  type BandoriNativeJudgmentWindowCandidate,
+  type BandoriSlideJudgmentFrameCorrectionTenths,
+} from "@/lib/bandori/chart-simulator/native-judgment-window-presentation";
+import {
   BandoriNativeNoteContractError,
   BANDORI_NATIVE_BUTTON_EFFECT_PIXELS_PER_WORLD_UNIT,
   BANDORI_NATIVE_DIRECTIONAL_CONNECTOR_INDICES,
@@ -56,6 +62,7 @@ import {
   prepareBandoriNativeChartVisuals,
   projectBandoriNativeNote,
   projectBandoriNativeRibbonPoint,
+  projectBandoriNativeTimelinePosition,
   updateBandoriNativeDirectionalConnectorVertices,
   updateBandoriNativeRibbonMeshVertices,
   upperBoundBandoriNoteTime,
@@ -205,6 +212,7 @@ type NativeSimulatorStageProps = {
   frameRateLimit: BandoriSimulatorFrameRateLimit;
   getEffectPlaybackState: () => NativeSimulatorEffectPlaybackState;
   getPresentationTime: () => number;
+  greatJudgmentWindowEnabled: boolean;
   isActive: boolean;
   isMirrored: boolean;
   laneEffectEnabled: boolean;
@@ -217,11 +225,13 @@ type NativeSimulatorStageProps = {
   noteContractErrorLabel: string;
   onLoadProgress: (progress: NativeSimulatorStageLoadProgress) => void;
   onRenderFpsChange: (framesPerSecond: number | null) => void;
+  perfectJudgmentWindowEnabled: boolean;
   rendererErrorLabel: string;
   resolutionScale: BandoriSimulatorResolutionScale;
   resourceErrorLabel: string;
   resolveAssetUrl: BandoriChartSimulatorAssetResolver;
   rhythmSupportEnabled: boolean;
+  slideJudgmentFrameCorrectionTenths: BandoriSlideJudgmentFrameCorrectionTenths;
   syncLineEnabled: boolean;
   suddenLaneEnabled: boolean;
   suddenRate: number;
@@ -230,6 +240,11 @@ type NativeSimulatorStageProps = {
 };
 
 const RENDER_FPS_SAMPLE_INTERVAL_MS = 1000;
+const PERFECT_JUDGMENT_WINDOW_COLOR = 0x41dfff;
+const GREAT_JUDGMENT_WINDOW_COLOR = 0xffc247;
+const JUDGMENT_WINDOW_ALPHA = 0.28;
+const JUDGMENT_WINDOW_BORDER_ALPHA = 0.9;
+const JUDGMENT_WINDOW_BORDER_WIDTH = 2;
 
 type RenderFpsSample = {
   frameCount: number;
@@ -1833,6 +1848,7 @@ export default function NativeSimulatorStage({
   frameRateLimit,
   getEffectPlaybackState,
   getPresentationTime,
+  greatJudgmentWindowEnabled,
   isActive,
   isMirrored,
   laneEffectEnabled,
@@ -1845,11 +1861,13 @@ export default function NativeSimulatorStage({
   noteContractErrorLabel,
   onLoadProgress,
   onRenderFpsChange,
+  perfectJudgmentWindowEnabled,
   rendererErrorLabel,
   resolutionScale,
   resourceErrorLabel,
   resolveAssetUrl,
   rhythmSupportEnabled,
+  slideJudgmentFrameCorrectionTenths,
   syncLineEnabled,
   suddenLaneEnabled,
   suddenRate,
@@ -1863,14 +1881,19 @@ export default function NativeSimulatorStage({
     startedAtMs: null,
   });
   const frameRateLimitRef = useRef(frameRateLimit);
+  const greatJudgmentWindowEnabledRef = useRef(greatJudgmentWindowEnabled);
   const isActiveRef = useRef(isActive);
   const isMirroredRef = useRef(isMirrored);
   const laneEffectEnabledRef = useRef(laneEffectEnabled);
   const noteApproachTimeScaleRef = useRef(noteApproachTimeScale);
   const noteSpeedRef = useRef(noteSpeed);
   const noteSizeRef = useRef(noteSize);
+  const perfectJudgmentWindowEnabledRef = useRef(perfectJudgmentWindowEnabled);
   const rhythmSupportEnabledRef = useRef(rhythmSupportEnabled);
   const resolutionScaleRef = useRef(resolutionScale);
+  const slideJudgmentFrameCorrectionTenthsRef = useRef(
+    slideJudgmentFrameCorrectionTenths,
+  );
   const syncLineEnabledRef = useRef(syncLineEnabled);
   const suddenLaneEnabledRef = useRef(suddenLaneEnabled);
   const suddenRateRef = useRef(suddenRate);
@@ -1903,6 +1926,19 @@ export default function NativeSimulatorStage({
   useEffect(() => {
     isMirroredRef.current = isMirrored;
   }, [isMirrored]);
+
+  useEffect(() => {
+    greatJudgmentWindowEnabledRef.current = greatJudgmentWindowEnabled;
+  }, [greatJudgmentWindowEnabled]);
+
+  useEffect(() => {
+    perfectJudgmentWindowEnabledRef.current = perfectJudgmentWindowEnabled;
+  }, [perfectJudgmentWindowEnabled]);
+
+  useEffect(() => {
+    slideJudgmentFrameCorrectionTenthsRef.current =
+      slideJudgmentFrameCorrectionTenths;
+  }, [slideJudgmentFrameCorrectionTenths]);
 
   useEffect(() => {
     frameRateLimitRef.current = frameRateLimit;
@@ -2548,6 +2584,7 @@ export default function NativeSimulatorStage({
       const swipeEffectSubtextures = new Map<string, Texture>();
 
       const directionalLineLayer = new Container();
+      const judgmentWindowLayer = new Graphics();
       const syncLineLayer = new Container();
       const laneEffectLayer = new Container();
       const lowHitEffectLayer = new Container();
@@ -2558,6 +2595,7 @@ export default function NativeSimulatorStage({
       const informationLayer = new Container();
       const suddenMask = new Graphics();
       directionalLineLayer.eventMode = "none";
+      judgmentWindowLayer.eventMode = "none";
       syncLineLayer.eventMode = "none";
       laneEffectLayer.eventMode = "none";
       lowHitEffectLayer.eventMode = "none";
@@ -2570,6 +2608,7 @@ export default function NativeSimulatorStage({
       app.stage.addChild(
         ...backgroundLayers,
         field,
+        judgmentWindowLayer,
         directionalLineLayer,
         syncLineLayer,
         judgmentLine,
@@ -2625,6 +2664,17 @@ export default function NativeSimulatorStage({
         compiled,
         mirroredChartVisuals,
       );
+      const normalJudgmentCandidates = prepareBandoriNativeJudgmentWindowCandidates(
+        compiled,
+        normalChartVisuals,
+      );
+      const mirroredJudgmentCandidates = prepareBandoriNativeJudgmentWindowCandidates(
+        compiled,
+        mirroredChartVisuals,
+      );
+      let judgmentCandidatesByNoteIndex = isMirroredRef.current
+        ? mirroredJudgmentCandidates
+        : normalJudgmentCandidates;
       if (normalSyncLinePairs.length !== mirroredSyncLinePairs.length) {
         throw new BandoriNativeNoteContractError(
           "Mirrored sync-line topology does not match the source chart",
@@ -2689,6 +2739,9 @@ export default function NativeSimulatorStage({
         syncLinePairs: readonly BandoriNativeSyncLinePair[],
       ) => {
         chartVisuals = nextVisuals;
+        judgmentCandidatesByNoteIndex = nextVisuals === mirroredChartVisuals
+          ? mirroredJudgmentCandidates
+          : normalJudgmentCandidates;
         for (const displays of syncLinesByNoteIndex) displays.length = 0;
         ribbonByIndex.clear();
         ribbonNoteIndexes.clear();
@@ -2856,6 +2909,7 @@ export default function NativeSimulatorStage({
       };
 
       const activeNotes = new Map<number, NoteGroupDisplay>();
+      const activeJudgmentCandidates: BandoriNativeJudgmentWindowCandidate[] = [];
       const renderedRibbonIndexes = new Set<number>();
       const desiredNoteMarks = new Uint32Array(compiled.notes.times.length);
       const desiredNoteIndexes: number[] = [];
@@ -2987,10 +3041,93 @@ export default function NativeSimulatorStage({
         );
         const currentBeat = getBandoriCompiledBeatAtTime(compiled, presentationTime);
         const firstIndex = lowerBoundBandoriNoteTime(compiled.notes.times, presentationTime);
+        const firstJudgmentIndex = upperBoundBandoriNoteTime(
+          compiled.notes.times,
+          presentationTime,
+        );
         const endIndex = upperBoundBandoriNoteTime(
           compiled.notes.times,
           presentationTime + arrivalSeconds,
         );
+
+        judgmentWindowLayer.clear();
+        const showGreat = greatJudgmentWindowEnabledRef.current;
+        const showPerfect = perfectJudgmentWindowEnabledRef.current;
+        if (showGreat || showPerfect) {
+          activeJudgmentCandidates.length = 0;
+          for (let index = firstJudgmentIndex; index < endIndex; index += 1) {
+            const candidate = judgmentCandidatesByNoteIndex[index];
+            if (candidate) activeJudgmentCandidates.push(candidate);
+          }
+          const judgmentWindowSegments = collectBandoriNativeJudgmentWindowSegments({
+            activeCandidates: activeJudgmentCandidates,
+            approachTimeScale: currentNoteApproachTimeScale,
+            minimumInputTimeSeconds: presentationTime,
+            noteSpeed: currentNoteSpeed,
+            showGreat,
+            showPerfect,
+            slideFrameCorrectionTenths:
+              slideJudgmentFrameCorrectionTenthsRef.current,
+          });
+          for (const segment of judgmentWindowSegments) {
+            const startLeftLane = segment.leftButton - 0.5;
+            const startRightLane = segment.rightButton + 0.5;
+            const endLeftLane = startLeftLane;
+            const endRightLane = startRightLane;
+            const startLeft = projectBandoriNativeTimelinePosition(
+              startLeftLane,
+              segment.startTimeSeconds,
+              presentationTime,
+              currentNoteSpeed,
+              currentNoteApproachTimeScale,
+            );
+            const startRight = projectBandoriNativeTimelinePosition(
+              startRightLane,
+              segment.startTimeSeconds,
+              presentationTime,
+              currentNoteSpeed,
+              currentNoteApproachTimeScale,
+            );
+            const endLeft = projectBandoriNativeTimelinePosition(
+              endLeftLane,
+              segment.endTimeSeconds,
+              presentationTime,
+              currentNoteSpeed,
+              currentNoteApproachTimeScale,
+            );
+            const endRight = projectBandoriNativeTimelinePosition(
+              endRightLane,
+              segment.endTimeSeconds,
+              presentationTime,
+              currentNoteSpeed,
+              currentNoteApproachTimeScale,
+            );
+            judgmentWindowLayer
+              .poly([
+                startLeft.screenX,
+                startLeft.screenY,
+                startRight.screenX,
+                startRight.screenY,
+                endRight.screenX,
+                endRight.screenY,
+                endLeft.screenX,
+                endLeft.screenY,
+              ])
+              .fill({
+                alpha: JUDGMENT_WINDOW_ALPHA,
+                color: segment.category === "perfect"
+                  ? PERFECT_JUDGMENT_WINDOW_COLOR
+                  : GREAT_JUDGMENT_WINDOW_COLOR,
+              })
+              .stroke({
+                alpha: JUDGMENT_WINDOW_BORDER_ALPHA,
+                color: segment.category === "perfect"
+                  ? PERFECT_JUDGMENT_WINDOW_COLOR
+                  : GREAT_JUDGMENT_WINDOW_COLOR,
+                width: JUDGMENT_WINDOW_BORDER_WIDTH,
+              });
+          }
+        }
 
         const activeHoldIndexes = new Set<number>();
         for (const state of tapEffectEnabled ? holdStates : []) {

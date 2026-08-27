@@ -5,6 +5,11 @@ import {
   BANDORI_NATIVE_NOTE_SPEED_STEP,
 } from "@/lib/bandori/chart-simulator/native-note-presentation";
 import {
+  BANDORI_SLIDE_JUDGMENT_FRAME_CORRECTION_DEFAULT_TENTHS,
+  isBandoriSlideJudgmentFrameCorrectionTenths,
+  type BandoriSlideJudgmentFrameCorrectionTenths,
+} from "@/lib/bandori/chart-simulator/native-judgment-window-presentation";
+import {
   BANDORI_NATIVE_TAP_SE_SKIN,
   BANDORI_NATIVE_TAP_SE_SKINS,
   type BandoriNativeTapSeSkin,
@@ -77,6 +82,8 @@ export type BandoriChartSimulatorPreferences = Readonly<{
   isBgmMuted: boolean;
   isLaneEffectEnabled: boolean;
   isMirrored: boolean;
+  isGreatJudgmentWindowEnabled: boolean;
+  isPerfectJudgmentWindowEnabled: boolean;
   isRhythmSupportEnabled: boolean;
   isSeMuted: boolean;
   isSuddenLaneEnabled: boolean;
@@ -88,6 +95,7 @@ export type BandoriChartSimulatorPreferences = Readonly<{
   playbackRateHundredths: number;
   resolutionScale: BandoriSimulatorResolutionScale;
   seVolume: number;
+  slideJudgmentFrameCorrectionTenths: BandoriSlideJudgmentFrameCorrectionTenths;
   suddenRate: number;
   tapEffectSkinId: BandoriNativeTapEffectSkin["id"];
   tapSeSkinId: BandoriNativeTapSeSkin["id"];
@@ -104,6 +112,8 @@ export function createDefaultBandoriChartSimulatorPreferences(): BandoriChartSim
     isBgmMuted: false,
     isLaneEffectEnabled: true,
     isMirrored: false,
+    isGreatJudgmentWindowEnabled: false,
+    isPerfectJudgmentWindowEnabled: false,
     isRhythmSupportEnabled: true,
     isSeMuted: false,
     isSuddenLaneEnabled: false,
@@ -115,6 +125,8 @@ export function createDefaultBandoriChartSimulatorPreferences(): BandoriChartSim
     playbackRateHundredths: BANDORI_SIMULATOR_PLAYBACK_RATE_DEFAULT_HUNDREDTHS,
     resolutionScale: BANDORI_SIMULATOR_RESOLUTION_SCALE_DEFAULT,
     seVolume: BANDORI_NATIVE_VOLUME_DEFAULT,
+    slideJudgmentFrameCorrectionTenths:
+      BANDORI_SLIDE_JUDGMENT_FRAME_CORRECTION_DEFAULT_TENTHS,
     suddenRate: BANDORI_NATIVE_SUDDEN_RATE_DEFAULT,
     tapEffectSkinId: BANDORI_NATIVE_TAP_EFFECT_SKIN.id,
     tapSeSkinId: BANDORI_NATIVE_TAP_SE_SKIN.id,
@@ -178,6 +190,15 @@ export function normalizeBandoriChartSimulatorPreferences(
   const defaults = createDefaultBandoriChartSimulatorPreferences();
   if (typeof value !== "object" || value === null) return defaults;
   const record = value as Record<string, unknown>;
+  const isGreatJudgmentWindowEnabled = normalizeBoolean(
+    record.isGreatJudgmentWindowEnabled,
+    defaults.isGreatJudgmentWindowEnabled,
+  );
+  const isPerfectJudgmentWindowEnabled = isGreatJudgmentWindowEnabled
+    || normalizeBoolean(
+      record.isPerfectJudgmentWindowEnabled,
+      defaults.isPerfectJudgmentWindowEnabled,
+    );
   return {
     backgroundSkinId: normalizeSkinId(
       record.backgroundSkinId,
@@ -212,6 +233,8 @@ export function normalizeBandoriChartSimulatorPreferences(
       defaults.isLaneEffectEnabled,
     ),
     isMirrored: normalizeBoolean(record.isMirrored, defaults.isMirrored),
+    isGreatJudgmentWindowEnabled,
+    isPerfectJudgmentWindowEnabled,
     isRhythmSupportEnabled: normalizeBoolean(
       record.isRhythmSupportEnabled,
       defaults.isRhythmSupportEnabled,
@@ -255,6 +278,12 @@ export function normalizeBandoriChartSimulatorPreferences(
       BANDORI_NATIVE_VOLUME_MAX,
       defaults.seVolume,
     ),
+    slideJudgmentFrameCorrectionTenths:
+      isBandoriSlideJudgmentFrameCorrectionTenths(
+        record.slideJudgmentFrameCorrectionTenths,
+      )
+        ? record.slideJudgmentFrameCorrectionTenths
+        : defaults.slideJudgmentFrameCorrectionTenths,
     suddenRate: normalizeInteger(
       record.suddenRate,
       BANDORI_NATIVE_SUDDEN_RATE_MIN,

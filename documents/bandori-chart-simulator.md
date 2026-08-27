@@ -30,6 +30,9 @@ The current product contract includes:
   while clamping the effective rendered size to `80%...150%`;
 - selectable Note appearance position `0...100`, with an independent option to
   hide the lane field above the same boundary;
+- independent, browser-persisted Perfect and Great-only diagnostic timing bands
+  for standard point presses, Directional presses, Long heads and releases,
+  and every authored scoring Slide node;
 - large, small, and Off Directional effect choices for all five ordinary
   families and the Persona limited overlay;
 - automatic Perfect lane flash, judgment, Combo, tap/Flick/Directional/hold
@@ -39,10 +42,85 @@ The current product contract includes:
   presentation.
 
 Anything not listed in the current implementation and tests is disabled.
-Interactive failure and broken-hold branches, non-Perfect judgments,
+Interactive failure and broken-hold branches, interactive non-Perfect judgments,
 non-AutoPerfect sound routing, fever and dynamic stage transitions, character
 carriers, MV/Live2D/3D backgrounds, and unverified settings do not silently
 fall back to guessed behavior.
+
+## Diagnostic timing windows
+
+The Perfect and Great switches are Off by default. Enabling Great also enables
+and locks Perfect; disabling Great leaves Perfect enabled until the user turns
+it off. They render a one-dimensional time-axis visualization; they do not add
+touch input or change the simulator's AutoPerfect behavior. For one native frame
+`F = float32(1 / 60)` seconds, the standard press window is Perfect at
+`abs(delta) <= 2.5F`, and the two Great-only sides cover
+`2.5F < abs(delta) < 5.5F`.
+
+Long releases use the confirmed `sweetFrame=1` expansion: Perfect covers
+`abs(delta) < 3.5F`, while Great-only covers
+`3.5F <= abs(delta) <= 6.5F`. This applies to ordinary Long releases and to
+Flick or Directional Long tails.
+
+Slide uses a browser-persisted manual frame correction `c` from `+0.0F` through
+`+1.0F`, in `0.1F` steps, with `+0.5F` as the default. Its Fast-side Perfect
+band is `(2+c)F` for authored heads and plain ends, while an authored middle
+scoring node uses only `cF`. A head or plain end has a three-frame Great-only
+band from `(5+c)F` through `(2+c)F`; middle nodes have no Great band. Flick and
+Directional Slide ends cannot complete early, so their Fast-side length is zero
+and they have no Fast Great band. This diagnostic setting deliberately does not
+infer the phase from Note Speed, device geometry, or float32 position-table
+accumulation. Pitch-preserving slow playback scales these Fast frame offsets
+with the visual approach clock.
+
+Every scoring Slide node has only Perfect on the Slow side. For a head or middle
+node, its nominal Slow end is the earlier of `T + float32(13 / 60)` seconds and
+the chart-position midpoint to the next visible scoring node. The midpoint is
+calculated in Beat/`AbsolutePos` space and then converted through the BPM
+timeline; it is not the arithmetic mean of the two nodes' seconds. Hidden curve
+samples are skipped. A plain or Directional final node has no successor midpoint
+and uses the `0.2166666687s` timeout. A Flick final node instead uses
+`float32(7 / 60)` seconds. The manual correction affects only Fast.
+
+Each band spans only the owning Note's contiguous covered buttons. Standard and
+Long bands show both Fast and Slow sides. Slide also exposes its nominal Slow
+Perfect extent while approaching, but the complete band still disappears with
+the owning Note's AutoPerfect trigger at `T`, including the render at exactly
+`T`. A high-contrast outline follows
+every owned band segment so splits between Notes remain visible. Active standard presses that
+share a button divide ownership at the midpoint between their raw target times.
+Only a candidate whose native trigger interval contains the represented input
+time participates: a standard press uses `abs(delta) < 7.5F`, while a Slide
+head uses its Fast interval through Bad and its existing Slow timeout or
+midpoint cutoff. Good and Bad remain internal acquisition limits and do not
+gain diagnostic bands or playback behavior.
+After an earlier press is AutoPerfected and removed, a later press regains the
+still-future portion of its nominal window on the next render frame. Long
+releases do not join that split, so overlapping tail windows stay independent. An
+unbound Slide head competes by current projected distance to the judgment line;
+an ordinary candidate wins an exact cross-type distance tie. After the head is
+bound, its authored middle and tail nodes stay independent instead of being
+reselected. Removing an earlier triggered head restores the still-future
+portion of its neighbour's nominal range on the next render frame.
+The cross-type comparison fixes native `JudgementAdjustValueB` at `0`.
+
+The visualization deliberately collapses touch position to one dimension: every
+Slide band stays on the authored scoring node's own covered buttons instead of
+interpolating along the ribbon. It therefore means "operate on these buttons
+when this time slice reaches the judgment line" and does not include native
+adjacent-lane collision circles. Hidden geometry samples never receive their
+own band. Mirroring maps the owned buttons normally; the bands are not hidden
+by the Sudden mask.
+
+This AutoPerfect-only simulator uses the Slide timeout and midpoint only to bound
+the diagnostic Slow Perfect band. It does not execute a Miss transition or model
+touch or finger state, tail re-entry, swipe distance or direction, release
+failure, adjacent-lane touch tolerance, or any other two-dimensional input
+selection. Those native findings do not alter playback. The open/closed status
+of a mathematical interval endpoint is retained by the classification formulas,
+but its zero-width point is not rendered as a separate pixel band. Same-button,
+exact-time duplicate standard presses are invalid chart input and receive no
+simulator-specific tie behavior.
 
 ## Pitch-preserving slow playback
 

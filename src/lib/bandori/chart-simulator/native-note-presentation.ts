@@ -1068,6 +1068,45 @@ export function projectBandoriNativeNote(
   );
 }
 
+/**
+ * Projects a time-axis marker with the native Note movement curve. Unlike a
+ * live Note, a diagnostic marker may continue beyond its target time so the
+ * complete timing window remains visible until Auto Perfect removes the owning
+ * Note. Before its virtual spawn time it stays at the launcher.
+ */
+export function projectBandoriNativeTimelinePosition(
+  centerLane: number,
+  targetTimeSeconds: number,
+  presentationTimeSeconds: number,
+  noteSpeed = BANDORI_NATIVE_NOTE_SPEED_DEFAULT,
+  approachTimeScale = 1,
+): BandoriNativeProjectedNote {
+  if (!Number.isFinite(centerLane)) {
+    return fail("Native timeline projection requires a finite lane center");
+  }
+  if (!Number.isFinite(targetTimeSeconds) || !Number.isFinite(presentationTimeSeconds)) {
+    return fail("Native timeline projection requires finite times");
+  }
+  const arrivalSeconds = getBandoriSimulatorNoteArrivalSeconds(noteSpeed, approachTimeScale);
+  const spawnTimeSeconds = targetTimeSeconds - arrivalSeconds;
+  const progress = Math.max(
+    0,
+    1 - ((targetTimeSeconds - presentationTimeSeconds) / arrivalSeconds),
+  );
+  const positionProgress = progress === 0
+    ? 0
+    : NATIVE_DEPTH_EXPONENT_BASE ** (
+      (progress - 1) * NATIVE_DEPTH_EXPONENT_RANGE
+    );
+  return projectBandoriNativeLane(
+    centerLane,
+    progress,
+    positionProgress,
+    spawnTimeSeconds,
+    presentationTimeSeconds,
+  );
+}
+
 export function projectBandoriNativeRibbonPoint(
   ribbon: BandoriNativeRibbonVisual,
   pointIndex: number,

@@ -75,6 +75,10 @@ import {
   BANDORI_NATIVE_NOTE_SPEED_MIN,
 } from "@/lib/bandori/chart-simulator/native-note-presentation";
 import {
+  BANDORI_SLIDE_JUDGMENT_FRAME_CORRECTION_OPTIONS,
+  type BandoriSlideJudgmentFrameCorrectionTenths,
+} from "@/lib/bandori/chart-simulator/native-judgment-window-presentation";
+import {
   collectBandoriNativeNoteSoundEvents,
   createBandoriNativeNoteSoundTimeline,
   getBandoriNativeActiveNoteSoundLoops,
@@ -355,6 +359,12 @@ function getTimelinePercentage(timeSeconds: number, durationSeconds: number): nu
   return Math.min(100, Math.max(0, (timeSeconds / durationSeconds) * 100));
 }
 
+function formatSlideJudgmentFrameCorrection(
+  correctionTenths: BandoriSlideJudgmentFrameCorrectionTenths,
+): string {
+  return `+${(correctionTenths / 10).toFixed(1)}F`;
+}
+
 function getNoteSpeedAdjustmentLevel(adjustment: number): SimulatorAdjustmentLevel {
   const magnitude = Math.abs(adjustment);
   if (magnitude === 0.5) return 3;
@@ -598,6 +608,18 @@ export default function ChartSimulatorRuntime({
   );
   const [noteSpeed, setNoteSpeed] = useState(initialPreferences.noteSpeed);
   const [noteSize, setNoteSize] = useState(initialPreferences.noteSize);
+  const [isGreatJudgmentWindowEnabled, setIsGreatJudgmentWindowEnabled] = useState(
+    initialPreferences.isGreatJudgmentWindowEnabled,
+  );
+  const [isPerfectJudgmentWindowEnabled, setIsPerfectJudgmentWindowEnabled] = useState(
+    initialPreferences.isPerfectJudgmentWindowEnabled,
+  );
+  const [slideJudgmentFrameCorrectionTenths, setSlideJudgmentFrameCorrectionTenths] =
+    useState(initialPreferences.slideJudgmentFrameCorrectionTenths);
+  const changeGreatJudgmentWindowEnabled = (isEnabled: boolean) => {
+    if (isEnabled) setIsPerfectJudgmentWindowEnabled(true);
+    setIsGreatJudgmentWindowEnabled(isEnabled);
+  };
   const [suddenRate, setSuddenRate] = useState(initialPreferences.suddenRate);
   const [isSuddenLaneEnabled, setIsSuddenLaneEnabled] = useState(
     initialPreferences.isSuddenLaneEnabled,
@@ -728,6 +750,8 @@ export default function ChartSimulatorRuntime({
         isBgmMuted,
         isLaneEffectEnabled,
         isMirrored,
+        isGreatJudgmentWindowEnabled,
+        isPerfectJudgmentWindowEnabled,
         isRhythmSupportEnabled,
         isSeMuted,
         isSuddenLaneEnabled,
@@ -739,6 +763,7 @@ export default function ChartSimulatorRuntime({
         playbackRateHundredths,
         resolutionScale,
         seVolume,
+        slideJudgmentFrameCorrectionTenths,
         suddenRate,
         tapEffectSkinId: tapEffectSkin.id,
         tapSeSkinId: tapSeSkin.id,
@@ -754,6 +779,8 @@ export default function ChartSimulatorRuntime({
     isBgmMuted,
     isLaneEffectEnabled,
     isMirrored,
+    isGreatJudgmentWindowEnabled,
+    isPerfectJudgmentWindowEnabled,
     isRhythmSupportEnabled,
     isSeMuted,
     isSuddenLaneEnabled,
@@ -765,6 +792,7 @@ export default function ChartSimulatorRuntime({
     playbackRateHundredths,
     resolutionScale,
     seVolume,
+    slideJudgmentFrameCorrectionTenths,
     suddenRate,
     tapEffectSkin,
     tapSeSkin,
@@ -2403,6 +2431,7 @@ export default function ChartSimulatorRuntime({
               frameRateLimit={frameRateLimit}
               getEffectPlaybackState={getStageEffectPlaybackState}
               getPresentationTime={getStagePresentationTime}
+              greatJudgmentWindowEnabled={isGreatJudgmentWindowEnabled}
               isActive={isActive && activeTab === "stage" && isSelectedChartReady}
               isMirrored={isMirrored}
               laneEffectEnabled={isLaneEffectEnabled}
@@ -2415,11 +2444,13 @@ export default function ChartSimulatorRuntime({
               noteContractErrorLabel={t("stageNoteContractUnavailable")}
               onLoadProgress={handleStageLoadProgress}
               onRenderFpsChange={setStageRenderFps}
+              perfectJudgmentWindowEnabled={isPerfectJudgmentWindowEnabled}
               rendererErrorLabel={t("rendererUnavailable")}
               resolutionScale={resolutionScale}
               resourceErrorLabel={t("stageResourceUnavailable")}
               resolveAssetUrl={assetLoadState.resolveAssetUrl}
               rhythmSupportEnabled={isRhythmSupportEnabled}
+              slideJudgmentFrameCorrectionTenths={slideJudgmentFrameCorrectionTenths}
               syncLineEnabled={isSyncLineEnabled}
               suddenLaneEnabled={isSuddenLaneEnabled}
               suddenRate={suddenRate}
@@ -3053,6 +3084,45 @@ export default function ChartSimulatorRuntime({
                 ))}
                 suffix="%"
                 value={noteSize}
+              />
+            </SimulatorControlRow>
+
+            <SimulatorControlRow
+              label={t("controls.perfectJudgmentWindow")}
+              mobileLayout="inline"
+            >
+              <SimulatorBooleanControl
+                disabled={isGreatJudgmentWindowEnabled}
+                disabledLabel={t("skinControls.off")}
+                enabledLabel={t("skinControls.on")}
+                isEnabled={isPerfectJudgmentWindowEnabled}
+                label={t("controls.perfectJudgmentWindow")}
+                onChange={setIsPerfectJudgmentWindowEnabled}
+              />
+            </SimulatorControlRow>
+
+            <SimulatorControlRow
+              label={t("controls.greatJudgmentWindow")}
+              mobileLayout="inline"
+            >
+              <SimulatorBooleanControl
+                disabledLabel={t("skinControls.off")}
+                enabledLabel={t("skinControls.on")}
+                isEnabled={isGreatJudgmentWindowEnabled}
+                label={t("controls.greatJudgmentWindow")}
+                onChange={changeGreatJudgmentWindowEnabled}
+              />
+            </SimulatorControlRow>
+
+            <SimulatorControlRow label={t("controls.slideJudgmentFrameCorrection")}>
+              <SimulatorDiscreteAdjustmentControl
+                currentAriaLabel={t("controls.currentSlideJudgmentFrameCorrection")}
+                decreaseAriaLabel={t("controls.decreaseSlideJudgmentFrameCorrection")}
+                formatValue={formatSlideJudgmentFrameCorrection}
+                increaseAriaLabel={t("controls.increaseSlideJudgmentFrameCorrection")}
+                onChange={setSlideJudgmentFrameCorrectionTenths}
+                options={BANDORI_SLIDE_JUDGMENT_FRAME_CORRECTION_OPTIONS}
+                value={slideJudgmentFrameCorrectionTenths}
               />
             </SimulatorControlRow>
 
