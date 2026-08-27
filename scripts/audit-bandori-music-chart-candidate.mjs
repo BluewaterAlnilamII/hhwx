@@ -91,6 +91,97 @@ function chartTimeline(chart) {
   return chart.notes.map(({ beat, time, fever }) => ({ beat, time, fever }));
 }
 
+const slideEndGameNoteTypes = new Set([
+  "SlideEndA",
+  "SlideEndB",
+  "SlideEndFlickA",
+  "SlideEndFlickB",
+  "SlideADirectionalFlickLeft",
+  "SlideADirectionalFlickRight",
+  "SlideBDirectionalFlickLeft",
+  "SlideBDirectionalFlickRight",
+]);
+
+function normalizeBestdoriChartForCompatibility(chart, compatibility, key) {
+  if (
+    compatibility === null
+    || typeof compatibility !== "object"
+    || Array.isArray(compatibility)
+    || Object.keys(compatibility).some((name) => name !== "prematureSlideEnds")
+  ) {
+    throw new Error(`candidate compatibility is invalid: ${key}`);
+  }
+  const recoveries = compatibility.prematureSlideEnds ?? [];
+  if (!Array.isArray(recoveries)) {
+    throw new Error(`candidate prematureSlideEnds is invalid: ${key}`);
+  }
+  const normalized = structuredClone(chart);
+  const connectionMatches = (connection, identity) => (
+    connection
+    && typeof connection === "object"
+    && connection.lane === identity.lane
+    && Number.isFinite(connection.beat)
+    && Math.abs(connection.beat - identity.beat) < 1e-9
+  );
+
+  recoveries.forEach((recovery, recoveryIndex) => {
+    const recoveryKeys = recovery && typeof recovery === "object" && !Array.isArray(recovery)
+      ? Object.keys(recovery).sort()
+      : [];
+    if (!same(recoveryKeys, ["gameNoteType", "premature", "terminal"])) {
+      throw new Error(`candidate premature Slide End recovery is invalid: ${key}:${recoveryIndex}`);
+    }
+    if (!slideEndGameNoteTypes.has(recovery.gameNoteType)) {
+      throw new Error(`candidate Slide End GameNoteType is unsupported: ${key}:${recoveryIndex}`);
+    }
+    for (const name of ["premature", "terminal"]) {
+      const identity = recovery[name];
+      const identityKeys = identity && typeof identity === "object" && !Array.isArray(identity)
+        ? Object.keys(identity).sort()
+        : [];
+      if (
+        !same(identityKeys, ["beat", "lane"])
+        || !Number.isFinite(identity.beat)
+        || !Number.isInteger(identity.lane)
+        || identity.lane < 0
+        || identity.lane > 6
+      ) {
+        throw new Error(`candidate ${name} Slide End identity is invalid: ${key}:${recoveryIndex}`);
+      }
+    }
+
+    const sourceMatches = [];
+    const terminalMatches = [];
+    normalized.forEach((entity, entityIndex) => {
+      if (entity?.type !== "Slide" || !Array.isArray(entity.connections) || entity.connections.length === 0) {
+        return;
+      }
+      if (connectionMatches(entity.connections.at(-1), recovery.premature)) {
+        sourceMatches.push(entityIndex);
+      }
+      if (
+        entity.connections.length === 1
+        && connectionMatches(entity.connections[0], recovery.terminal)
+      ) {
+        terminalMatches.push(entityIndex);
+      }
+    });
+    if (sourceMatches.length !== 1 || terminalMatches.length !== 1) {
+      throw new Error(
+        `candidate recovery does not uniquely match Bestdori: ${key}:${recoveryIndex}`,
+      );
+    }
+    const sourceIndex = sourceMatches[0];
+    const terminalIndex = terminalMatches[0];
+    if (sourceIndex === terminalIndex) {
+      throw new Error(`candidate recovery overlaps itself: ${key}:${recoveryIndex}`);
+    }
+    normalized[sourceIndex].connections.push(normalized[terminalIndex].connections[0]);
+    normalized.splice(terminalIndex, 1);
+  });
+  return normalized;
+}
+
 const args = parseArguments(process.argv.slice(2));
 const candidatePath = path.resolve(args.candidate);
 const candidateRoot = path.dirname(candidatePath);
@@ -107,6 +198,7 @@ const cases = Object.entries(candidate.charts ?? {}).flatMap(([musicId, difficul
     sha256: record.sha256,
     expectedNotes: record.notes,
     features: record.features ?? [],
+    compatibility: record.compatibility ?? {},
   }))
 )).sort((left, right) => (
   Number(left.musicId) - Number(right.musicId)
@@ -145,6 +237,14 @@ for (let index = 0; index < cases.length; index += 1) {
     throw new Error(`candidate has unsupported chart features: ${key}`);
   }
   if (isMultiRange) {
+    if (
+      current.compatibility === null
+      || typeof current.compatibility !== "object"
+      || Array.isArray(current.compatibility)
+      || Object.keys(current.compatibility).length !== 0
+    ) {
+      throw new Error(`multiRange candidate compatibility must be empty: ${key}`);
+    }
     multiRangeCharts += 1;
   }
   const candidateObjectPath = path.join(
@@ -170,7 +270,12 @@ for (let index = 0; index < cases.length; index += 1) {
     if (same(rebuiltChart, bestdoriChart)) {
       rawExactMatches += 1;
     }
-    bestdori = prepareBandoriChart(bestdoriChart, song, current.difficulty);
+    const normalizedBestdoriChart = normalizeBestdoriChartForCompatibility(
+      bestdoriChart,
+      current.compatibility,
+      key,
+    );
+    bestdori = prepareBandoriChart(normalizedBestdoriChart, song, current.difficulty);
     Object.assign(checks, {
       preparedFull: same(rebuilt, bestdori),
       timeline: same(chartTimeline(rebuilt), chartTimeline(bestdori)),
@@ -202,7 +307,7 @@ const counts = Object.fromEntries(dimensions.map((dimension) => [
   applicableCounts[dimension] - mismatchKeys[dimension].length,
 ]));
 const report = {
-  schemaVersion: "hhwx-bandori-music-chart-consumer-audit-v3",
+  schemaVersion: "hhwx-bandori-music-chart-consumer-audit-v4",
   generatedAt: new Date().toISOString(),
   inputs: {
     candidate: candidatePath,
@@ -214,7 +319,7 @@ const report = {
   contract: {
     consumer: "prepareBandoriChart",
     blockingDimensions: dimensions,
-    rawEntityEquality: "informational for ordinary charts only; multiRange does not read Bestdori",
+    rawEntityEquality: "informational for ordinary charts only; raw-verified premature Slide End recovery is applied to the Bestdori baseline; multiRange does not read Bestdori",
   },
   counts: {
     charts: cases.length,
