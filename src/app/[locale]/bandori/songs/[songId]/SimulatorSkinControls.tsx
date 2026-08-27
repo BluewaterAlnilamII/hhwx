@@ -113,6 +113,7 @@ function getTypeLabel(id: number | string): string {
 }
 
 type SimulatorBooleanControlProps = {
+  disabled?: boolean;
   disabledLabel: string;
   enabledLabel: string;
   isEnabled: boolean;
@@ -121,6 +122,7 @@ type SimulatorBooleanControlProps = {
 };
 
 export function SimulatorBooleanControl({
+  disabled = false,
   disabledLabel,
   enabledLabel,
   isEnabled,
@@ -131,6 +133,7 @@ export function SimulatorBooleanControl({
     <Switch
       checked={isEnabled}
       checkedLabel={enabledLabel}
+      disabled={disabled}
       label={label}
       onCheckedChange={onChange}
       uncheckedLabel={disabledLabel}

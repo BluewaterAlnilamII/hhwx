@@ -302,6 +302,20 @@ export function getBandoriCompiledBeatAtTime(
     + ((Math.max(0, timeSeconds) - compiled.bpm.times[index]) * compiled.bpm.values[index]) / 60;
 }
 
+export function getBandoriCompiledTimeAtBeat(
+  compiled: Pick<CompiledBandoriChart, "bpm">,
+  beat: number,
+): number {
+  if (!Number.isFinite(beat)) {
+    throw new Error("Bandori chart beat must be finite");
+  }
+  const normalizedBeat = Math.max(0, beat);
+  const index = findLastAtOrBefore(compiled.bpm.beats, normalizedBeat);
+  if (index < 0) throw new Error("Bandori chart has no BPM at the requested beat");
+  return compiled.bpm.times[index]
+    + ((normalizedBeat - compiled.bpm.beats[index]) * 60) / compiled.bpm.values[index];
+}
+
 export function getBandoriCompiledLaneSpan(
   lane: number,
   width: number,

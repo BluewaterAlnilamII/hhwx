@@ -56,6 +56,8 @@ test("effect, skin, and volume controls share one validated browser preference",
     "isBgmMuted",
     "isLaneEffectEnabled",
     "isMirrored",
+    "isGreatJudgmentWindowEnabled",
+    "isPerfectJudgmentWindowEnabled",
     "isRhythmSupportEnabled",
     "isSeMuted",
     "isSuddenLaneEnabled",
@@ -67,6 +69,7 @@ test("effect, skin, and volume controls share one validated browser preference",
     "playbackRateHundredths",
     "resolutionScale",
     "seVolume",
+    "slideJudgmentFrameCorrectionTenths",
     "suddenRate",
     "tapEffectSkinId",
     "tapSeSkinId",
@@ -231,7 +234,29 @@ test("mobile simulator settings match the compact transport control rhythm", asy
       runtime.includes(`<SimulatorControlRow label={t("${label}")} mobileLayout="inline">`),
     );
   }
-  assert.equal((runtime.match(/mobileLayout="inline"/gu) ?? []).length, 4);
+  assert.match(
+    runtime,
+    /controls\.perfectJudgmentWindow[\s\S]*isEnabled=\{isPerfectJudgmentWindowEnabled\}[\s\S]*onChange=\{setIsPerfectJudgmentWindowEnabled\}/u,
+  );
+  assert.match(
+    runtime,
+    /controls\.greatJudgmentWindow[\s\S]*isEnabled=\{isGreatJudgmentWindowEnabled\}[\s\S]*onChange=\{changeGreatJudgmentWindowEnabled\}/u,
+  );
+  assert.match(
+    runtime,
+    /changeGreatJudgmentWindowEnabled[\s\S]*if \(isEnabled\) setIsPerfectJudgmentWindowEnabled\(true\)[\s\S]*setIsGreatJudgmentWindowEnabled\(isEnabled\)/u,
+  );
+  assert.match(
+    runtime,
+    /controls\.perfectJudgmentWindow[\s\S]*disabled=\{isGreatJudgmentWindowEnabled\}/u,
+  );
+  assert.match(
+    runtime,
+    /controls\.slideJudgmentFrameCorrection[\s\S]*options=\{BANDORI_SLIDE_JUDGMENT_FRAME_CORRECTION_OPTIONS\}[\s\S]*value=\{slideJudgmentFrameCorrectionTenths\}/u,
+  );
+  assert.match(runtime, /slideJudgmentFrameCorrectionTenths,/u);
+  assert.match(skinControls, /disabled\?: boolean[\s\S]*disabled=\{disabled\}/u);
+  assert.equal((runtime.match(/mobileLayout="inline"/gu) ?? []).length, 6);
   assert.match(runtime, /grid basis-full grid-cols-2 items-center gap-2 sm:flex sm:justify-start/u);
 });
 
@@ -293,6 +318,45 @@ test("stage render FPS uses a one-second ticker sample and stays outside the pla
   assert.match(stage, /application\.stop\(\)[\s\S]*onRenderFpsChange\(null\)/u);
   assert.match(runtime, /onRenderFpsChange=\{setStageRenderFps\}/u);
   assert.match(runtime, /formatPlaybackTime\(durationSeconds\)[\s\S]*stageRenderFpsText\} FPS[\s\S]*aria-label=\{t\("loopControls\.ariaLabel"\)\}/u);
+});
+
+test("native judgment windows stay diagnostic, lane-owned, and outside the Sudden mask", async () => {
+  const [runtime, stage] = await Promise.all([
+    read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx"),
+    read("../src/app/[locale]/bandori/songs/[songId]/NativeSimulatorStage.tsx"),
+  ]);
+
+  assert.match(
+    stage,
+    /app\.stage\.addChild\([\s\S]*field,[\s\S]*judgmentWindowLayer,[\s\S]*directionalLineLayer/u,
+  );
+  assert.doesNotMatch(stage, /judgmentWindowLayer\.mask/u);
+  assert.match(stage, /prepareBandoriNativeJudgmentWindowCandidates/u);
+  assert.match(
+    stage,
+    /const firstJudgmentIndex = upperBoundBandoriNoteTime\([\s\S]*for \(let index = firstJudgmentIndex; index < endIndex; index \+= 1\)[\s\S]*activeJudgmentCandidates\.push\(candidate\)[\s\S]*collectBandoriNativeJudgmentWindowSegments/u,
+  );
+  assert.match(stage, /projectBandoriNativeTimelinePosition/u);
+  assert.doesNotMatch(stage, /getBandoriNativeRibbonLaneAtBeat/u);
+  assert.match(
+    stage,
+    /const startLeftLane = segment\.leftButton - 0\.5;[\s\S]*const endLeftLane = startLeftLane;/u,
+  );
+  assert.match(stage, /approachTimeScale: currentNoteApproachTimeScale/u);
+  assert.match(stage, /PERFECT_JUDGMENT_WINDOW_COLOR = 0x41dfff/u);
+  assert.match(stage, /GREAT_JUDGMENT_WINDOW_COLOR = 0xffc247/u);
+  assert.match(stage, /JUDGMENT_WINDOW_BORDER_ALPHA = 0\.9/u);
+  assert.match(stage, /\.stroke\(\{[\s\S]*width: JUDGMENT_WINDOW_BORDER_WIDTH/u);
+  assert.match(runtime, /greatJudgmentWindowEnabled=\{isGreatJudgmentWindowEnabled\}/u);
+  assert.match(runtime, /perfectJudgmentWindowEnabled=\{isPerfectJudgmentWindowEnabled\}/u);
+  assert.match(
+    runtime,
+    /slideJudgmentFrameCorrectionTenths=\{slideJudgmentFrameCorrectionTenths\}/u,
+  );
+  assert.match(
+    stage,
+    /slideFrameCorrectionTenths:[\s\S]*slideJudgmentFrameCorrectionTenthsRef\.current/u,
+  );
 });
 
 test("range looping reuses the serialized seek handoff without claiming a gapless boundary", async () => {
@@ -806,6 +870,38 @@ test("localized song and simulator keys stay mirrored", async () => {
   assert.equal(zh.songs.simulator.controls.seVolume, "SE");
   assert.equal(en.songs.simulator.controls.bgmVolume, "BGM");
   assert.equal(en.songs.simulator.controls.seVolume, "SE");
+  assert.equal(
+    zh.songs.simulator.controls.perfectJudgmentWindow,
+    "显示 Perfect 判定区间",
+  );
+  assert.equal(
+    zh.songs.simulator.controls.greatJudgmentWindow,
+    "显示 Great 判定区间",
+  );
+  assert.equal(
+    en.songs.simulator.controls.perfectJudgmentWindow,
+    "Show Perfect timing window",
+  );
+  assert.equal(
+    en.songs.simulator.controls.greatJudgmentWindow,
+    "Show Great timing window",
+  );
+  assert.equal(
+    zh.songs.simulator.controls.slideJudgmentFrameCorrection,
+    "Slide 判定帧补正",
+  );
+  assert.equal(
+    zh.songs.simulator.controls.decreaseSlideJudgmentFrameCorrection,
+    "降低 Slide 判定帧补正 0.1 帧",
+  );
+  assert.equal(
+    en.songs.simulator.controls.slideJudgmentFrameCorrection,
+    "Slide judgment frame correction",
+  );
+  assert.equal(
+    en.songs.simulator.controls.increaseSlideJudgmentFrameCorrection,
+    "Increase Slide judgment frame correction by 0.1 frame",
+  );
   assert.equal(zh.songs.simulator.skinControls.tapEffectStyle, "TAP EFFECT");
   assert.equal(en.songs.simulator.skinControls.tapEffectStyle, "Tap effects");
   assert.equal(zh.songs.simulator.skinControls.limitedPerformance.none, "关");
