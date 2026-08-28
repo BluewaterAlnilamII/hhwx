@@ -36,6 +36,7 @@ import SimulatorSettingsCard from "./SimulatorSettingsCard";
 import SimulatorSkinControls, {
   SimulatorBooleanControl,
   SimulatorControlRow,
+  SimulatorSubcontrolRow,
 } from "./SimulatorSkinControls";
 import {
   MUSIC_PLAYER_PLAYBACK_BUTTON_CLASS_NAME,
@@ -433,6 +434,7 @@ function SimulatorIntegerAdjustmentControl({
 type SimulatorDiscreteAdjustmentControlProps<
   TValue extends number | null,
 > = {
+  adjustmentLevel?: SimulatorAdjustmentLevel;
   currentAriaLabel: string;
   decreaseAriaLabel: string;
   formatValue: (value: TValue) => string;
@@ -443,6 +445,7 @@ type SimulatorDiscreteAdjustmentControlProps<
 };
 
 function SimulatorDiscreteAdjustmentControl<TValue extends number | null>({
+  adjustmentLevel = 2,
   currentAriaLabel,
   decreaseAriaLabel,
   formatValue,
@@ -463,7 +466,7 @@ function SimulatorDiscreteAdjustmentControl<TValue extends number | null>({
         ariaLabel={decreaseAriaLabel}
         direction="decrease"
         disabled={currentIndex <= 0}
-        level={2}
+        level={adjustmentLevel}
         onClick={() => changeValue(-1)}
       />
       <SimulatorAdjustmentValue
@@ -476,7 +479,7 @@ function SimulatorDiscreteAdjustmentControl<TValue extends number | null>({
         ariaLabel={increaseAriaLabel}
         direction="increase"
         disabled={currentIndex === options.length - 1}
-        level={2}
+        level={adjustmentLevel}
         onClick={() => changeValue(1)}
       />
     </div>
@@ -3090,6 +3093,31 @@ export default function ChartSimulatorRuntime({
             <SimulatorControlRow
               label={t("controls.perfectJudgmentWindow")}
               mobileLayout="inline"
+              subcontrols={(
+                <>
+                  <SimulatorSubcontrolRow label={t("controls.greatJudgmentWindow")}>
+                    <SimulatorBooleanControl
+                      disabledLabel={t("skinControls.off")}
+                      enabledLabel={t("skinControls.on")}
+                      isEnabled={isGreatJudgmentWindowEnabled}
+                      label={t("controls.greatJudgmentWindow")}
+                      onChange={changeGreatJudgmentWindowEnabled}
+                    />
+                  </SimulatorSubcontrolRow>
+                  <SimulatorSubcontrolRow label={t("controls.slideJudgmentFrameCorrection")}>
+                    <SimulatorDiscreteAdjustmentControl
+                      adjustmentLevel={1}
+                      currentAriaLabel={t("controls.currentSlideJudgmentFrameCorrection")}
+                      decreaseAriaLabel={t("controls.decreaseSlideJudgmentFrameCorrection")}
+                      formatValue={formatSlideJudgmentFrameCorrection}
+                      increaseAriaLabel={t("controls.increaseSlideJudgmentFrameCorrection")}
+                      onChange={setSlideJudgmentFrameCorrectionTenths}
+                      options={BANDORI_SLIDE_JUDGMENT_FRAME_CORRECTION_OPTIONS}
+                      value={slideJudgmentFrameCorrectionTenths}
+                    />
+                  </SimulatorSubcontrolRow>
+                </>
+              )}
             >
               <SimulatorBooleanControl
                 disabled={isGreatJudgmentWindowEnabled}
@@ -3098,31 +3126,6 @@ export default function ChartSimulatorRuntime({
                 isEnabled={isPerfectJudgmentWindowEnabled}
                 label={t("controls.perfectJudgmentWindow")}
                 onChange={setIsPerfectJudgmentWindowEnabled}
-              />
-            </SimulatorControlRow>
-
-            <SimulatorControlRow
-              label={t("controls.greatJudgmentWindow")}
-              mobileLayout="inline"
-            >
-              <SimulatorBooleanControl
-                disabledLabel={t("skinControls.off")}
-                enabledLabel={t("skinControls.on")}
-                isEnabled={isGreatJudgmentWindowEnabled}
-                label={t("controls.greatJudgmentWindow")}
-                onChange={changeGreatJudgmentWindowEnabled}
-              />
-            </SimulatorControlRow>
-
-            <SimulatorControlRow label={t("controls.slideJudgmentFrameCorrection")}>
-              <SimulatorDiscreteAdjustmentControl
-                currentAriaLabel={t("controls.currentSlideJudgmentFrameCorrection")}
-                decreaseAriaLabel={t("controls.decreaseSlideJudgmentFrameCorrection")}
-                formatValue={formatSlideJudgmentFrameCorrection}
-                increaseAriaLabel={t("controls.increaseSlideJudgmentFrameCorrection")}
-                onChange={setSlideJudgmentFrameCorrectionTenths}
-                options={BANDORI_SLIDE_JUDGMENT_FRAME_CORRECTION_OPTIONS}
-                value={slideJudgmentFrameCorrectionTenths}
               />
             </SimulatorControlRow>
 
@@ -3140,10 +3143,7 @@ export default function ChartSimulatorRuntime({
                 suffix="%"
                 value={suddenRate}
               />
-              <div className="grid basis-full grid-cols-2 items-center gap-2 sm:flex sm:justify-start">
-                <span className="text-right text-[13px] font-semibold text-[var(--theme-color-text-muted)] sm:text-left sm:text-sm">
-                  {t("controls.suddenLane")}
-                </span>
+              <SimulatorSubcontrolRow label={t("controls.suddenLane")}>
                 <SimulatorBooleanControl
                   disabledLabel={t("skinControls.off")}
                   enabledLabel={t("skinControls.on")}
@@ -3151,7 +3151,7 @@ export default function ChartSimulatorRuntime({
                   label={t("controls.suddenLane")}
                   onChange={setIsSuddenLaneEnabled}
                 />
-              </div>
+              </SimulatorSubcontrolRow>
             </SimulatorControlRow>
 
             <SimulatorControlRow label={t("skinControls.syncLine")} mobileLayout="inline">

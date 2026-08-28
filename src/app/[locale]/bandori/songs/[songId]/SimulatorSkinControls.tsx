@@ -58,12 +58,14 @@ type SimulatorControlRowProps = {
   children: ReactNode;
   label: string;
   mobileLayout?: "inline" | "stacked";
+  subcontrols?: ReactNode;
 };
 
 export function SimulatorControlRow({
   children,
   label,
   mobileLayout = "stacked",
+  subcontrols,
 }: SimulatorControlRowProps) {
   const isMobileInline = mobileLayout === "inline";
   return (
@@ -73,6 +75,7 @@ export function SimulatorControlRow({
         isMobileInline
           ? "grid-cols-2 items-center gap-2 py-2.5"
           : "items-start gap-1.5",
+        subcontrols ? "sm:gap-y-2" : null,
       )}
     >
       <div
@@ -91,6 +94,30 @@ export function SimulatorControlRow({
       >
         {children}
       </div>
+      {subcontrols ? (
+        <div className="col-span-full grid gap-2 sm:col-span-1 sm:col-start-2 sm:[&>*]:min-h-11">
+          {subcontrols}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+type SimulatorSubcontrolRowProps = {
+  children: ReactNode;
+  label: string;
+};
+
+export function SimulatorSubcontrolRow({
+  children,
+  label,
+}: SimulatorSubcontrolRowProps) {
+  return (
+    <div className="grid basis-full grid-cols-2 items-center gap-2 sm:flex sm:justify-start">
+      <span className="text-right text-[13px] font-semibold text-[var(--theme-color-text-muted)] sm:text-left sm:text-sm">
+        {label}
+      </span>
+      {children}
     </div>
   );
 }
