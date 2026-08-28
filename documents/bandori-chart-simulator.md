@@ -51,8 +51,9 @@ fall back to guessed behavior.
 
 The Perfect and Great switches are Off by default. Enabling Great also enables
 and locks Perfect; disabling Great leaves Perfect enabled until the user turns
-it off. They render a one-dimensional time-axis visualization; they do not add
-touch input or change the simulator's AutoPerfect behavior. For one native frame
+it off. They render a two-dimensional time-by-horizontal-touch visualization at
+the fixed judgment-line height; they do not add touch input or change the
+simulator's AutoPerfect behavior. For one native frame
 `F = float32(1 / 60)` seconds, the standard press window is Perfect at
 `abs(delta) <= 2.5F`, and the two Great-only sides cover
 `2.5F < abs(delta) < 5.5F`.
@@ -63,7 +64,7 @@ Long releases use the confirmed `sweetFrame=1` expansion: Perfect covers
 Flick or Directional Long tails.
 
 Slide uses a browser-persisted manual frame correction `c` from `+0.0F` through
-`+1.0F`, in `0.1F` steps, with `+0.5F` as the default. Its Fast-side Perfect
+`+1.0F`, in `0.1F` steps, with `+0.0F` as the default. Its Fast-side Perfect
 band is `(2+c)F` for authored heads and plain ends, while an authored middle
 scoring node uses only `cF`. A head or plain end has a three-frame Great-only
 band from `(5+c)F` through `(2+c)F`; middle nodes have no Great band. Flick and
@@ -82,41 +83,61 @@ samples are skipped. A plain or Directional final node has no successor midpoint
 and uses the `0.2166666687s` timeout. A Flick final node instead uses
 `float32(7 / 60)` seconds. The manual correction affects only Fast.
 
-Each band spans only the owning Note's contiguous covered buttons. Standard and
-Long bands show both Fast and Slow sides. Slide also exposes its nominal Slow
-Perfect extent while approaching, but the complete band still disappears with
-the owning Note's AutoPerfect trigger at `T`, including the render at exactly
-`T`. A high-contrast outline follows
-every owned band segment so splits between Notes remain visible. Active standard presses that
-share a button divide ownership at the midpoint between their raw target times.
-Only a candidate whose native trigger interval contains the represented input
-time participates: a standard press uses `abs(delta) < 7.5F`, while a Slide
-head uses its Fast interval through Bad and its existing Slow timeout or
-midpoint cutoff. Good and Bad remain internal acquisition limits and do not
-gain diagnostic bands or playback behavior.
-After an earlier press is AutoPerfected and removed, a later press regains the
-still-future portion of its nominal window on the next render frame. Long
-releases do not join that split, so overlapping tail windows stay independent. An
-unbound Slide head competes by current projected distance to the judgment line;
-an ordinary candidate wins an exact cross-type distance tie. After the head is
-bound, its authored middle and tail nodes stay independent instead of being
-reselected. Removing an earlier triggered head restores the still-future
-portion of its neighbour's nominal range on the next render frame.
-The cross-type comparison fixes native `JudgementAdjustValueB` at `0`.
+At the judgment line, every integer button center has a strict collision radius
+of `1.168` button spacings. A single-width Note therefore reaches from
+`lane - 1.168` to `lane + 1.168`; a contiguous wide Note uses the union of every
+covered button's circle. The renderer partitions those fixed circles into
+horizontal slabs, combines them with temporal ownership cuts, and outlines each
+continuous actual region of the same Note. Perfect and Great keep distinct fill
+colors, but their shared edge and other internal rectangle seams are omitted
+from that Note-level outline. Disconnected regions and Good/Bad cutouts keep
+their own exterior edges. The renderer does not sample screen pixels. Standard
+and Long bands show both Fast and Slow sides. Slide also exposes its nominal
+Slow Perfect extent while approaching, but the complete band still disappears
+with the owning Note's AutoPerfect trigger at `T`, including the render at
+exactly `T`.
 
-The visualization deliberately collapses touch position to one dimension: every
-Slide band stays on the authored scoring node's own covered buttons instead of
-interpolating along the ribbon. It therefore means "operate on these buttons
-when this time slice reaches the judgment line" and does not include native
-adjacent-lane collision circles. Hidden geometry samples never receive their
-own band. Mirroring maps the owned buttons normally; the bands are not hidden
-by the Sudden mask.
+New-touch ownership follows the native hierarchy. Eligible buttons are checked
+from nearest to farthest touch distance. Each button first chooses exactly one
+candidate: standard presses minimize Beat/`AbsolutePos` distance, so their
+temporal boundary is the Beat midpoint converted through the BPM timeline;
+unbound Slide heads minimize current projected distance to the judgment line.
+Candidate ownership is gated by native movement activation. Bands are still
+rendered only for Notes that have entered the playfield, while a precomputed
+per-button index may include a future standard press or Slide head whose
+activation falls inside the band's displayed future input-time domain. That
+candidate begins competing only at `T - arrivalSeconds`, where the arrival
+duration uses the current Note Speed and approach-time scale. Each frame uses
+binary time-range queries to include only candidates that can activate before
+the displayed domain ends; a later candidate cannot crop an earlier band.
+The cross-type comparison also uses projected distance, fixes native
+`JudgementAdjustValueB` at `0`, and gives an exact tie to the standard candidate.
+Only then is the chosen candidate classified. A non-triggerable winner lets the
+next eligible button be checked, while a triggerable Good or Bad winner owns the
+touch without drawing a band and therefore creates a visible blank cutout over
+a farther button's Perfect or Great region. Standard acquisition remains
+`abs(delta) < 7.5F`; Slide-head acquisition covers Fast through Bad plus its
+Slow timeout or midpoint cutoff. When an earlier Note is AutoPerfected and
+removed, a later Note regains its still-future actual region on the next render
+frame.
+
+Long releases and already-bound Slide middle or tail nodes do not re-enter this
+new-touch priority search. Their circle-union regions remain independent and may
+overlap. Bound Slide nodes still remain sequential: each diagnostic range starts
+no earlier than the authored time of the previous visible scoring node on the
+same Slide. This AutoPerfect-only lower bound represents the previous node
+completing at its authored time; hidden geometry samples do not create a bound.
+Every Slide region stays at the authored scoring node's own covered buttons and
+does not interpolate along the ribbon. Hidden geometry samples never receive
+their own region. Mirroring maps the horizontal regions normally; the bands are
+not hidden by the Sudden mask.
 
 This AutoPerfect-only simulator uses the Slide timeout and midpoint only to bound
 the diagnostic Slow Perfect band. It does not execute a Miss transition or model
 touch or finger state, tail re-entry, swipe distance or direction, release
-failure, adjacent-lane touch tolerance, or any other two-dimensional input
-selection. Those native findings do not alter playback. The open/closed status
+failure, or gesture completion. The modeled adjacent-lane collision and
+new-touch priority affect only these diagnostic regions, not playback. The
+open/closed status
 of a mathematical interval endpoint is retained by the classification formulas,
 but its zero-width point is not rendered as a separate pixel band. Same-button,
 exact-time duplicate standard presses are invalid chart input and receive no

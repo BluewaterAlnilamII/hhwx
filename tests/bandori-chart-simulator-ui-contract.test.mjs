@@ -340,9 +340,13 @@ test("native judgment windows stay diagnostic, lane-owned, and outside the Sudde
   assert.doesNotMatch(stage, /getBandoriNativeRibbonLaneAtBeat/u);
   assert.match(
     stage,
-    /const startLeftLane = segment\.leftButton - 0\.5;[\s\S]*const endLeftLane = startLeftLane;/u,
+    /const startLeftLane = segment\.leftLane;[\s\S]*const startRightLane = segment\.rightLane;[\s\S]*const endLeftLane = startLeftLane;/u,
   );
   assert.match(stage, /approachTimeScale: currentNoteApproachTimeScale/u);
+  assert.match(stage, /collectBandoriNativeJudgmentWindowOutlineEdges/u);
+  assert.match(stage, /prepareBandoriNativeJudgmentWindowPriorityIndex/u);
+  assert.match(stage, /priorityIndex: judgmentPriorityIndex/u);
+  assert.match(stage, /for \(const edge of judgmentWindowOutlineEdges\)/u);
   assert.match(stage, /PERFECT_JUDGMENT_WINDOW_COLOR = 0x41dfff/u);
   assert.match(stage, /GREAT_JUDGMENT_WINDOW_COLOR = 0xffc247/u);
   assert.match(stage, /JUDGMENT_WINDOW_BORDER_ALPHA = 0\.9/u);
