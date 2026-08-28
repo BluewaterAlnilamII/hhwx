@@ -187,7 +187,7 @@ test("simulator render settings preserve the approved discrete options", () => {
   assert.deepEqual(BANDORI_SLIDE_JUDGMENT_FRAME_CORRECTION_OPTIONS, [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
   ]);
-  assert.equal(BANDORI_SLIDE_JUDGMENT_FRAME_CORRECTION_DEFAULT_TENTHS, 5);
+  assert.equal(BANDORI_SLIDE_JUDGMENT_FRAME_CORRECTION_DEFAULT_TENTHS, 0);
   assert.equal(getBandoriSimulatorRendererResolution(1, 100), 1);
   assert.equal(getBandoriSimulatorRendererResolution(2, 50), 1);
   assert.equal(getBandoriSimulatorRendererResolution(3, 100), 2);

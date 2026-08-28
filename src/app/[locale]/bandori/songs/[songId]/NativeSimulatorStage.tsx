@@ -38,8 +38,10 @@ import {
   createBandoriNativeTransparentColoredShaderSources,
 } from "@/lib/bandori/chart-simulator/native-note-material";
 import {
+  collectBandoriNativeJudgmentWindowOutlineEdges,
   collectBandoriNativeJudgmentWindowSegments,
   prepareBandoriNativeJudgmentWindowCandidates,
+  prepareBandoriNativeJudgmentWindowPriorityIndex,
   type BandoriNativeJudgmentWindowCandidate,
   type BandoriSlideJudgmentFrameCorrectionTenths,
 } from "@/lib/bandori/chart-simulator/native-judgment-window-presentation";
@@ -2672,9 +2674,20 @@ export default function NativeSimulatorStage({
         compiled,
         mirroredChartVisuals,
       );
+      const normalJudgmentPriorityIndex =
+        prepareBandoriNativeJudgmentWindowPriorityIndex(
+          normalJudgmentCandidates,
+        );
+      const mirroredJudgmentPriorityIndex =
+        prepareBandoriNativeJudgmentWindowPriorityIndex(
+          mirroredJudgmentCandidates,
+        );
       let judgmentCandidatesByNoteIndex = isMirroredRef.current
         ? mirroredJudgmentCandidates
         : normalJudgmentCandidates;
+      let judgmentPriorityIndex = isMirroredRef.current
+        ? mirroredJudgmentPriorityIndex
+        : normalJudgmentPriorityIndex;
       if (normalSyncLinePairs.length !== mirroredSyncLinePairs.length) {
         throw new BandoriNativeNoteContractError(
           "Mirrored sync-line topology does not match the source chart",
@@ -2742,6 +2755,9 @@ export default function NativeSimulatorStage({
         judgmentCandidatesByNoteIndex = nextVisuals === mirroredChartVisuals
           ? mirroredJudgmentCandidates
           : normalJudgmentCandidates;
+        judgmentPriorityIndex = nextVisuals === mirroredChartVisuals
+          ? mirroredJudgmentPriorityIndex
+          : normalJudgmentPriorityIndex;
         for (const displays of syncLinesByNoteIndex) displays.length = 0;
         ribbonByIndex.clear();
         ribbonNoteIndexes.clear();
@@ -3062,16 +3078,22 @@ export default function NativeSimulatorStage({
           const judgmentWindowSegments = collectBandoriNativeJudgmentWindowSegments({
             activeCandidates: activeJudgmentCandidates,
             approachTimeScale: currentNoteApproachTimeScale,
+            compiled,
             minimumInputTimeSeconds: presentationTime,
             noteSpeed: currentNoteSpeed,
+            priorityIndex: judgmentPriorityIndex,
             showGreat,
             showPerfect,
             slideFrameCorrectionTenths:
               slideJudgmentFrameCorrectionTenthsRef.current,
           });
+          const judgmentWindowOutlineEdges =
+            collectBandoriNativeJudgmentWindowOutlineEdges(
+              judgmentWindowSegments,
+            );
           for (const segment of judgmentWindowSegments) {
-            const startLeftLane = segment.leftButton - 0.5;
-            const startRightLane = segment.rightButton + 0.5;
+            const startLeftLane = segment.leftLane;
+            const startRightLane = segment.rightLane;
             const endLeftLane = startLeftLane;
             const endRightLane = startRightLane;
             const startLeft = projectBandoriNativeTimelinePosition(
@@ -3118,14 +3140,40 @@ export default function NativeSimulatorStage({
                 color: segment.category === "perfect"
                   ? PERFECT_JUDGMENT_WINDOW_COLOR
                   : GREAT_JUDGMENT_WINDOW_COLOR,
-              })
-              .stroke({
+              });
+          }
+          for (const category of ["perfect", "great"] as const) {
+            let hasOutline = false;
+            for (const edge of judgmentWindowOutlineEdges) {
+              if (edge.category !== category) continue;
+              const start = projectBandoriNativeTimelinePosition(
+                edge.startLane,
+                edge.startTimeSeconds,
+                presentationTime,
+                currentNoteSpeed,
+                currentNoteApproachTimeScale,
+              );
+              const end = projectBandoriNativeTimelinePosition(
+                edge.endLane,
+                edge.endTimeSeconds,
+                presentationTime,
+                currentNoteSpeed,
+                currentNoteApproachTimeScale,
+              );
+              judgmentWindowLayer
+                .moveTo(start.screenX, start.screenY)
+                .lineTo(end.screenX, end.screenY);
+              hasOutline = true;
+            }
+            if (hasOutline) {
+              judgmentWindowLayer.stroke({
                 alpha: JUDGMENT_WINDOW_BORDER_ALPHA,
-                color: segment.category === "perfect"
+                color: category === "perfect"
                   ? PERFECT_JUDGMENT_WINDOW_COLOR
                   : GREAT_JUDGMENT_WINDOW_COLOR,
                 width: JUDGMENT_WINDOW_BORDER_WIDTH,
               });
+            }
           }
         }
 

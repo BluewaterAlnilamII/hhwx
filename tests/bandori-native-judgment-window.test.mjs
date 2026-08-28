@@ -6,6 +6,7 @@ import {
   compileBandoriChart,
 } from "../src/lib/bandori/chart-simulator/compiler.ts";
 import {
+  BANDORI_NATIVE_ADJACENT_LANE_COLLISION_RADIUS,
   BANDORI_NATIVE_LONG_RELEASE_GREAT_BOUNDARY_SECONDS,
   BANDORI_NATIVE_LONG_RELEASE_PERFECT_BOUNDARY_SECONDS,
   BANDORI_NATIVE_JUDGMENT_ADJUST_VALUE_B,
@@ -17,9 +18,11 @@ import {
   BANDORI_NATIVE_STANDARD_TRIGGER_BOUNDARY_SECONDS,
   classifyBandoriNativeLongReleaseJudgment,
   classifyBandoriNativeStandardJudgment,
+  collectBandoriNativeJudgmentWindowOutlineEdges,
   collectBandoriNativeJudgmentWindowSegments,
   isBandoriNativeStandardPressTriggerable,
   prepareBandoriNativeJudgmentWindowCandidates,
+  prepareBandoriNativeJudgmentWindowPriorityIndex,
 } from "../src/lib/bandori/chart-simulator/native-judgment-window-presentation.ts";
 import {
   prepareBandoriNativeChartVisuals,
@@ -33,11 +36,18 @@ const closeTo = (actual, expected, epsilon = 1e-12) => {
   );
 };
 
-const standardCandidate = (noteIndex, timeSeconds, buttons = [3]) => ({
+const standardCandidate = (
+  noteIndex,
+  timeSeconds,
+  buttons = [3],
+  positionBeat = timeSeconds,
+) => ({
   buttons,
   isSlideHead: false,
   isSlideMiddle: false,
   noteIndex,
+  positionBeat,
+  slidePreviousScoringTimeSeconds: null,
   slideSlowMidpointTimeSeconds: null,
   slideTailKind: "none",
   timingKind: "standardPress",
@@ -49,6 +59,8 @@ const longReleaseCandidate = (noteIndex, timeSeconds, buttons = [3]) => ({
   isSlideHead: false,
   isSlideMiddle: false,
   noteIndex,
+  positionBeat: timeSeconds,
+  slidePreviousScoringTimeSeconds: null,
   slideSlowMidpointTimeSeconds: null,
   slideTailKind: "none",
   timingKind: "longRelease",
@@ -62,6 +74,7 @@ const slideCandidate = (
     buttons = [3],
     isSlideHead = false,
     isSlideMiddle = false,
+    slidePreviousScoringTimeSeconds = null,
     slideSlowMidpointTimeSeconds = null,
     slideTailKind = "plain",
   } = {},
@@ -70,6 +83,8 @@ const slideCandidate = (
   isSlideHead,
   isSlideMiddle,
   noteIndex,
+  positionBeat: timeSeconds,
+  slidePreviousScoringTimeSeconds,
   slideSlowMidpointTimeSeconds,
   slideTailKind,
   timingKind: "slidePosition",
@@ -182,6 +197,10 @@ test("judgment candidates distinguish standard presses and Long releases", () =>
     ],
   );
   assert.equal(candidates[4].isSlideHead, true);
+  assert.equal(candidates[4].positionBeat, 5);
+  assert.equal(candidates[4].slidePreviousScoringTimeSeconds, null);
+  assert.equal(candidates[5].slidePreviousScoringTimeSeconds, 5);
+  assert.equal(candidates[6].slidePreviousScoringTimeSeconds, 6);
   assert.equal(candidates[4].slideSlowMidpointTimeSeconds, 5.5);
   assert.equal(candidates[5].slideSlowMidpointTimeSeconds, 6.5);
   assert.equal(candidates[6].slideSlowMidpointTimeSeconds, null);
@@ -343,11 +362,16 @@ test("Slide Slow Perfect stops at the earlier native timeout or visible-node mid
 
   assert.equal(candidates.length, 5);
   closeTo(candidates[0].timeSeconds, 0.38);
+  assert.equal(candidates[0].slidePreviousScoringTimeSeconds, null);
   closeTo(candidates[0].slideSlowMidpointTimeSeconds, 0.5);
   closeTo(candidates[1].timeSeconds, 0.8);
+  closeTo(candidates[1].slidePreviousScoringTimeSeconds, 0.38);
   closeTo(candidates[1].slideSlowMidpointTimeSeconds, 0.9);
+  closeTo(candidates[2].slidePreviousScoringTimeSeconds, 0.8);
   assert.equal(candidates[2].slideSlowMidpointTimeSeconds, null);
+  assert.equal(candidates[3].slidePreviousScoringTimeSeconds, null);
   closeTo(candidates[3].slideSlowMidpointTimeSeconds, 1.9);
+  closeTo(candidates[4].slidePreviousScoringTimeSeconds, 1.4);
   assert.equal(candidates[4].slideSlowMidpointTimeSeconds, null);
 
   const slowEnds = candidates.map((candidate) => {
@@ -365,7 +389,7 @@ test("Slide Slow Perfect stops at the earlier native timeout or visible-node mid
   closeTo(slowEnds[4], 2.4 + BANDORI_NATIVE_SLIDE_SLOW_TIMEOUT_SECONDS);
 });
 
-test("Slide heads split acquisition by projected position while bound nodes stay independent", () => {
+test("Slide heads split acquisition while bound nodes stay out of priority selection", () => {
   const standard = standardCandidate(0, 1);
   const slideHead = slideCandidate(1, 1.08, { isSlideHead: true });
   const bothActive = collectBandoriNativeJudgmentWindowSegments({
@@ -373,6 +397,7 @@ test("Slide heads split acquisition by projected position while bound nodes stay
     noteSpeed: 10,
     showGreat: true,
     showPerfect: true,
+    slideFrameCorrectionTenths: 5,
   });
   const standardPerfect = bothActive.find((segment) => (
     segment.noteIndex === 0 && segment.category === "perfect"
@@ -392,6 +417,7 @@ test("Slide heads split acquisition by projected position while bound nodes stay
     noteSpeed: 10,
     showGreat: false,
     showPerfect: true,
+    slideFrameCorrectionTenths: 5,
   }).find((segment) => segment.noteIndex === 1);
   assert.ok(boundSlide);
   closeTo(
@@ -404,7 +430,38 @@ test("Slide heads split acquisition by projected position while bound nodes stay
   );
 });
 
-test("candidates outside their trigger windows do not over-clip Slide heads", () => {
+test("bound Slide nodes cannot start before their previous visible scoring node", () => {
+  const previousScoringTimeSeconds = 1;
+  const plainTail = slideCandidate(1, 1.04, {
+    slidePreviousScoringTimeSeconds: previousScoringTimeSeconds,
+  });
+  const tailSegments = collectBandoriNativeJudgmentWindowSegments({
+    activeCandidates: [plainTail],
+    showGreat: true,
+    showPerfect: true,
+    slideFrameCorrectionTenths: 5,
+  });
+
+  assert.equal(tailSegments.length, 1);
+  assert.equal(tailSegments[0].category, "perfect");
+  closeTo(tailSegments[0].startTimeSeconds, previousScoringTimeSeconds);
+
+  const middle = slideCandidate(2, 1.005, {
+    isSlideMiddle: true,
+    slidePreviousScoringTimeSeconds: previousScoringTimeSeconds,
+  });
+  const [middlePerfect] = collectBandoriNativeJudgmentWindowSegments({
+    activeCandidates: [middle],
+    showGreat: true,
+    showPerfect: true,
+    slideFrameCorrectionTenths: 5,
+  });
+
+  assert.equal(middlePerfect.category, "perfect");
+  closeTo(middlePerfect.startTimeSeconds, previousScoringTimeSeconds);
+});
+
+test("a distant candidate only clips the spatial portion owned through its button", () => {
   const slideHead = slideCandidate(0, 62, {
     buttons: [0, 1, 2],
     isSlideHead: true,
@@ -418,15 +475,62 @@ test("candidates outside their trigger windows do not over-clip Slide heads", ()
     showPerfect: true,
     slideFrameCorrectionTenths: 5,
   });
-  const slidePerfect = segments.find((segment) => (
+  const slidePerfectSegments = segments.filter((segment) => (
     segment.noteIndex === slideHead.noteIndex && segment.category === "perfect"
   ));
 
-  assert.ok(slidePerfect);
-  closeTo(slidePerfect.endTimeSeconds, 62.2);
+  assert.equal(slidePerfectSegments.length, 2);
+  const narrowedSlowRegion = slidePerfectSegments.find((segment) => (
+    segment.startTimeSeconds > slideHead.timeSeconds
+  ));
+  assert.ok(narrowedSlowRegion);
+  closeTo(narrowedSlowRegion.endTimeSeconds, 62.2);
+  closeTo(
+    narrowedSlowRegion.leftLane,
+    1 - BANDORI_NATIVE_ADJACENT_LANE_COLLISION_RADIUS,
+  );
 });
 
-test("ownership begins when a competing standard Note becomes triggerable", () => {
+test("future priority candidates compete only after their movement activation", () => {
+  const slideHead = slideCandidate(61, 8.1, {
+    buttons: [2],
+    isSlideHead: true,
+  });
+  const futureStandard = standardCandidate(65, 8.85, [2]);
+  const priorityIndex = prepareBandoriNativeJudgmentWindowPriorityIndex([
+    slideHead,
+    futureStandard,
+  ]);
+  const collectSlideSlowEnd = (noteSpeed) => {
+    const segments = collectBandoriNativeJudgmentWindowSegments({
+      activeCandidates: [slideHead],
+      minimumInputTimeSeconds: 8.033,
+      noteSpeed,
+      priorityIndex,
+      showGreat: false,
+      showPerfect: true,
+      slideFrameCorrectionTenths: 5,
+    });
+    return Math.max(
+      ...segments
+        .filter((segment) => segment.noteIndex === slideHead.noteIndex)
+        .map((segment) => segment.endTimeSeconds),
+    );
+  };
+
+  closeTo(collectSlideSlowEnd(10), 8.2396479028, 1e-9);
+  closeTo(collectSlideSlowEnd(10.8), 8.25);
+  closeTo(
+    collectSlideSlowEnd(10.94),
+    slideHead.timeSeconds + BANDORI_NATIVE_SLIDE_SLOW_TIMEOUT_SECONDS,
+  );
+  closeTo(
+    collectSlideSlowEnd(12),
+    slideHead.timeSeconds + BANDORI_NATIVE_SLIDE_SLOW_TIMEOUT_SECONDS,
+  );
+});
+
+test("per-button selection happens before triggerability and can leave a blank gap", () => {
   const slideHead = slideCandidate(0, 1, {
     isSlideHead: true,
   });
@@ -441,12 +545,21 @@ test("ownership begins when a competing standard Note becomes triggerable", () =
   const slidePerfect = segments.find((segment) => (
     segment.noteIndex === slideHead.noteIndex && segment.category === "perfect"
   ));
+  const standardPerfect = segments.find((segment) => (
+    segment.noteIndex === standard.noteIndex && segment.category === "perfect"
+  ));
 
   assert.ok(slidePerfect);
-  closeTo(
-    slidePerfect.endTimeSeconds,
-    standard.timeSeconds - 7.5 * BANDORI_NATIVE_JUDGMENT_FRAME_SECONDS,
+  assert.ok(standardPerfect);
+  assert.ok(
+    slidePerfect.endTimeSeconds
+      < standard.timeSeconds - BANDORI_NATIVE_STANDARD_TRIGGER_BOUNDARY_SECONDS,
   );
+  closeTo(
+    standardPerfect.startTimeSeconds,
+    standard.timeSeconds - BANDORI_NATIVE_STANDARD_PERFECT_BOUNDARY_SECONDS,
+  );
+  assert.ok(slidePerfect.endTimeSeconds < standardPerfect.startTimeSeconds);
 });
 
 test("Great-only rendering keeps two outer intervals independent from Perfect", () => {
@@ -551,7 +664,7 @@ test("same-button ownership splits close notes and restores after the first clea
   assert.ok(afterFirstClears[0].startTimeSeconds < midpoint);
 });
 
-test("ownership is split per covered button for partially overlapping wide notes", () => {
+test("wide notes use circle unions and split spatial ownership at button midpoints", () => {
   const wide = standardCandidate(0, 1, [1, 2]);
   const narrow = standardCandidate(1, 1.04, [2]);
   const segments = collectBandoriNativeJudgmentWindowSegments({
@@ -563,14 +676,151 @@ test("ownership is split per covered button for partially overlapping wide notes
   const wideSegments = segments.filter((segment) => segment.noteIndex === 0);
   assert.equal(wideSegments.length, 2);
   assert.deepEqual(
-    wideSegments.map(({ leftButton, rightButton }) => [leftButton, rightButton]),
-    [[1, 1], [2, 2]],
+    wideSegments.map(({ leftLane, rightLane }) => [leftLane, rightLane]),
+    [
+      [
+        1 - BANDORI_NATIVE_ADJACENT_LANE_COLLISION_RADIUS,
+        2 + BANDORI_NATIVE_ADJACENT_LANE_COLLISION_RADIUS,
+      ],
+      [1 - BANDORI_NATIVE_ADJACENT_LANE_COLLISION_RADIUS, 1.5],
+    ],
   );
+  closeTo(wideSegments[0].endTimeSeconds, 1.02);
+  closeTo(wideSegments[1].startTimeSeconds, 1.02);
   closeTo(
-    wideSegments[0].endTimeSeconds,
+    wideSegments[1].endTimeSeconds,
     wide.timeSeconds + BANDORI_NATIVE_STANDARD_PERFECT_BOUNDARY_SECONDS,
   );
-  closeTo(wideSegments[1].endTimeSeconds, 1.02);
+});
+
+test("a single Note owns the full adjacent-lane collision diameter", () => {
+  const [segment] = collectBandoriNativeJudgmentWindowSegments({
+    activeCandidates: [standardCandidate(0, 1, [3])],
+    showGreat: false,
+    showPerfect: true,
+  });
+
+  closeTo(
+    segment.leftLane,
+    3 - BANDORI_NATIVE_ADJACENT_LANE_COLLISION_RADIUS,
+  );
+  closeTo(
+    segment.rightLane,
+    3 + BANDORI_NATIVE_ADJACENT_LANE_COLLISION_RADIUS,
+  );
+});
+
+test("an invisible nearer-button Bad blocks and then restores adjacent Perfect", () => {
+  const segments = collectBandoriNativeJudgmentWindowSegments({
+    activeCandidates: [
+      standardCandidate(0, 1, [0]),
+      standardCandidate(1, 1.11, [1]),
+    ],
+    showGreat: false,
+    showPerfect: true,
+  });
+  const adjacentPerfect = segments.filter((segment) => segment.noteIndex === 1);
+
+  assert.equal(adjacentPerfect.length, 2);
+  closeTo(adjacentPerfect[0].leftLane, 0.5);
+  closeTo(
+    adjacentPerfect[1].leftLane,
+    1 - BANDORI_NATIVE_ADJACENT_LANE_COLLISION_RADIUS,
+  );
+  closeTo(
+    adjacentPerfect[0].endTimeSeconds,
+    1 + BANDORI_NATIVE_STANDARD_TRIGGER_BOUNDARY_SECONDS,
+  );
+  closeTo(
+    adjacentPerfect[1].startTimeSeconds,
+    adjacentPerfect[0].endTimeSeconds,
+  );
+});
+
+test("standard ownership uses Beat midpoint across a BPM boundary", () => {
+  const compiled = compileBandoriChart([
+    { type: "BPM", beat: 0, bpm: 60 },
+    { type: "BPM", beat: 2, bpm: 120 },
+  ]);
+  const segments = collectBandoriNativeJudgmentWindowSegments({
+    activeCandidates: [
+      standardCandidate(0, 1.96, [3], 1.96),
+      standardCandidate(1, 2.02, [3], 2.04),
+    ],
+    compiled,
+    showGreat: false,
+    showPerfect: true,
+  });
+  const first = segments.find((segment) => segment.noteIndex === 0);
+  const second = segments.find((segment) => segment.noteIndex === 1);
+
+  assert.ok(first);
+  assert.ok(second);
+  closeTo(first.endTimeSeconds, 2);
+  closeTo(second.startTimeSeconds, 2);
+});
+
+test("one Note outline removes the shared edge between Perfect and Great fills", () => {
+  const edges = collectBandoriNativeJudgmentWindowOutlineEdges([
+    {
+      category: "great",
+      endTimeSeconds: 1,
+      leftLane: 2,
+      noteIndex: 0,
+      rightLane: 4,
+      startTimeSeconds: 0,
+      timingKind: "standardPress",
+    },
+    {
+      category: "perfect",
+      endTimeSeconds: 2,
+      leftLane: 2,
+      noteIndex: 0,
+      rightLane: 4,
+      startTimeSeconds: 1,
+      timingKind: "standardPress",
+    },
+  ]);
+
+  assert.equal(
+    edges.some((edge) => (
+      edge.startTimeSeconds === 1
+      && edge.endTimeSeconds === 1
+    )),
+    false,
+  );
+  assert.equal(edges.length, 6);
+});
+
+test("one Note outline keeps only the exposed part of a stepped split", () => {
+  const edges = collectBandoriNativeJudgmentWindowOutlineEdges([
+    {
+      category: "perfect",
+      endTimeSeconds: 1,
+      leftLane: 1,
+      noteIndex: 0,
+      rightLane: 3,
+      startTimeSeconds: 0,
+      timingKind: "standardPress",
+    },
+    {
+      category: "perfect",
+      endTimeSeconds: 2,
+      leftLane: 1,
+      noteIndex: 0,
+      rightLane: 2,
+      startTimeSeconds: 1,
+      timingKind: "standardPress",
+    },
+  ]);
+  const middleEdges = edges.filter((edge) => (
+    edge.startTimeSeconds === 1 && edge.endTimeSeconds === 1
+  ));
+
+  assert.deepEqual(
+    middleEdges.map((edge) => [edge.startLane, edge.endLane]),
+    [[2, 3]],
+  );
 });
 
 test("diagnostic timeline projection continues past the judgment line", () => {
