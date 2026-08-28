@@ -109,6 +109,7 @@ import {
   getBandoriNativeHoldEffectSeed,
   projectBandoriNativeHoldState,
   projectBandoriNativeRibbonBody,
+  type BandoriNativeProjectedHoldState,
 } from "@/lib/bandori/chart-simulator/native-hold-effect-presentation";
 import {
   BANDORI_NATIVE_ALL_PERFECT_COMBO_DIGIT_URLS,
@@ -161,11 +162,13 @@ import {
   getBandoriNativeBodyFrameId,
   getBandoriHabahiroBodySpriteName,
   getBandoriHabahiroIconSpriteName,
+  getBandoriHabahiroLongBodySpriteName,
   getBandoriHabahiroLongFlashSpriteName,
   getBandoriHabahiroRhythmSpriteName,
   getBandoriHabahiroSpriteUrl,
   isBandoriHabahiroMultiRangeFlickIcon,
   getBandoriNativeIconFrameId,
+  getBandoriNativeLongBodyFrameId,
   getBandoriNativeLongFlashUrl,
   getBandoriNativeNoteFrame,
   getBandoriNativeNoteFrameUrl,
@@ -2097,6 +2100,9 @@ export default function NativeSimulatorStage({
 
       let resources: Texture[];
       const habahiroSpriteNames = new Set<BandoriHabahiroSpriteName>();
+      const slideBodyRangeWidths = new Set<number>();
+      const longFlashRangeWidths = new Set<number>();
+      let hasSingleLaneSlide = false;
       try {
         for (const preparedVisuals of [normalChartVisuals, mirroredChartVisuals]) {
           for (const group of preparedVisuals.notes) {
@@ -2111,18 +2117,38 @@ export default function NativeSimulatorStage({
               }
             }
           }
-          if (tapEffectEnabled) {
-            for (const ribbon of preparedVisuals.ribbons) {
-              if (ribbon.rangeWidth > 1) {
-                for (let firstLane = 0; firstLane <= 7 - ribbon.rangeWidth; firstLane += 1) {
-                  habahiroSpriteNames.add(getBandoriHabahiroLongFlashSpriteName(
-                    Array.from(
-                      { length: ribbon.rangeWidth },
-                      (_, laneOffset) => firstLane + laneOffset,
-                    ),
-                  ));
-                }
+          for (const ribbon of preparedVisuals.ribbons) {
+            if (ribbon.kind === "slide") {
+              if (ribbon.rangeWidth === 1) {
+                hasSingleLaneSlide = true;
+              } else if (ribbon.rangeWidth > 1) {
+                slideBodyRangeWidths.add(ribbon.rangeWidth);
               }
+            }
+            if (tapEffectEnabled && ribbon.rangeWidth > 1) {
+              longFlashRangeWidths.add(ribbon.rangeWidth);
+            }
+          }
+        }
+        const dynamicWideRangeWidths = new Set([
+          ...slideBodyRangeWidths,
+          ...longFlashRangeWidths,
+        ]);
+        for (const rangeWidth of dynamicWideRangeWidths) {
+          for (let firstLane = 0; firstLane <= 7 - rangeWidth; firstLane += 1) {
+            const coveredLanes = Array.from(
+              { length: rangeWidth },
+              (_, laneOffset) => firstLane + laneOffset,
+            );
+            if (slideBodyRangeWidths.has(rangeWidth)) {
+              habahiroSpriteNames.add(
+                getBandoriHabahiroLongBodySpriteName(coveredLanes),
+              );
+            }
+            if (longFlashRangeWidths.has(rangeWidth)) {
+              habahiroSpriteNames.add(
+                getBandoriHabahiroLongFlashSpriteName(coveredLanes),
+              );
             }
           }
         }
@@ -2142,6 +2168,11 @@ export default function NativeSimulatorStage({
               usedFrameIds.add(getBandoriNativeIconFrameId(visual.icon));
             }
           }
+        }
+      }
+      if (hasSingleLaneSlide) {
+        for (let lane = 0; lane < 7; lane += 1) {
+          usedFrameIds.add(getBandoriNativeLongBodyFrameId(lane));
         }
       }
       let habahiroTextures = new Map<BandoriHabahiroSpriteName, HabahiroTexture>();
@@ -2925,6 +2956,7 @@ export default function NativeSimulatorStage({
       };
 
       const activeNotes = new Map<number, NoteGroupDisplay>();
+      const projectedHoldStates = new Map<number, BandoriNativeProjectedHoldState>();
       const activeJudgmentCandidates: BandoriNativeJudgmentWindowCandidate[] = [];
       const renderedRibbonIndexes = new Set<number>();
       const desiredNoteMarks = new Uint32Array(compiled.notes.times.length);
@@ -3056,6 +3088,19 @@ export default function NativeSimulatorStage({
           visibleRibbons,
         );
         const currentBeat = getBandoriCompiledBeatAtTime(compiled, presentationTime);
+        projectedHoldStates.clear();
+        for (const state of holdStates) {
+          const projection = projectBandoriNativeHoldState(
+            state,
+            currentBeat,
+            presentationTime,
+            currentNoteSpeed,
+            currentNoteApproachTimeScale,
+          );
+          if (projection) {
+            projectedHoldStates.set(state.ribbon.ribbonIndex, projection);
+          }
+        }
         const firstIndex = lowerBoundBandoriNoteTime(compiled.notes.times, presentationTime);
         const firstJudgmentIndex = upperBoundBandoriNoteTime(
           compiled.notes.times,
@@ -3179,14 +3224,7 @@ export default function NativeSimulatorStage({
 
         const activeHoldIndexes = new Set<number>();
         for (const state of tapEffectEnabled ? holdStates : []) {
-          if (state.ribbon.points.length === 0) continue;
-          const projection = projectBandoriNativeHoldState(
-            state,
-            currentBeat,
-            presentationTime,
-            currentNoteSpeed,
-            currentNoteApproachTimeScale,
-          );
+          const projection = projectedHoldStates.get(state.ribbon.ribbonIndex);
           if (!projection) continue;
           let flashTexture: Texture | undefined;
           let flashAnchorX = 0.5;
@@ -3397,32 +3435,63 @@ export default function NativeSimulatorStage({
             const useRhythmSupport = rhythmSupportEnabledRef.current
               && note.rhythmSupportTexture
               && note.rhythmSupportAnchor;
-            note.body.texture = useRhythmSupport
+            let bodyTexture = useRhythmSupport
               ? note.rhythmSupportTexture!
               : note.baseBodyTexture;
-            const bodyAnchor = useRhythmSupport
-              ? note.rhythmSupportAnchor!
-              : note.baseBodyAnchor;
-            note.body.anchor.set(bodyAnchor.x, bodyAnchor.y);
+            let bodyAnchorX = useRhythmSupport
+              ? note.rhythmSupportAnchor!.x
+              : note.baseBodyAnchor.x;
+            let bodyAnchorY = useRhythmSupport
+              ? note.rhythmSupportAnchor!.y
+              : note.baseBodyAnchor.y;
             const ribbonNode = ribbonPointByNoteIndex[index];
             const ribbonPoint = ribbonNode?.ribbon.points[ribbonNode.pointIndex];
-            const projected = ribbonNode && ribbonPoint
-              ? projectBandoriNativeRibbonBody(
-                ribbonNode.ribbon,
-                ribbonNode.pointIndex,
-                currentBeat,
-                presentationTime,
-                currentNoteSpeed,
-                note.visual.lane - ribbonPoint.lane,
-                currentNoteApproachTimeScale,
-              )
-              : projectBandoriNativeNote(
-                note.visual.lane,
-                compiled.notes.times[index],
-                presentationTime,
-                currentNoteSpeed,
-                currentNoteApproachTimeScale,
-              );
+            const holdProjection = ribbonNode && ribbonNode.pointIndex === 0
+              ? projectedHoldStates.get(ribbonNode.ribbon.ribbonIndex)
+              : undefined;
+            const projected = holdProjection
+              ?? (ribbonNode && ribbonPoint
+                ? projectBandoriNativeRibbonBody(
+                  ribbonNode.ribbon,
+                  ribbonNode.pointIndex,
+                  currentBeat,
+                  presentationTime,
+                  currentNoteSpeed,
+                  note.visual.lane - ribbonPoint.lane,
+                  currentNoteApproachTimeScale,
+                )
+                : projectBandoriNativeNote(
+                  note.visual.lane,
+                  compiled.notes.times[index],
+                  presentationTime,
+                  currentNoteSpeed,
+                  currentNoteApproachTimeScale,
+                ));
+            if (
+              !useRhythmSupport
+              && note.visual.body === "long"
+              && ribbonNode?.ribbon.kind === "slide"
+              && ribbonNode.pointIndex === 0
+            ) {
+              const coveredLanes = holdProjection?.flashCoveredLanes;
+              if (coveredLanes?.length === 1) {
+                const frameId = getBandoriNativeLongBodyFrameId(coveredLanes[0]);
+                bodyTexture = frameTextures.get(frameId) ?? bodyTexture;
+                const anchor = getNativeSpriteAnchor(noteSpriteAnchors, frameId);
+                bodyAnchorX = anchor.x;
+                bodyAnchorY = anchor.y;
+              } else if (coveredLanes && coveredLanes.length > 1) {
+                const bodyName = getBandoriHabahiroLongBodySpriteName(coveredLanes);
+                const body = habahiroTextures.get(bodyName);
+                if (body) {
+                  bodyTexture = body.texture;
+                  bodyAnchorX = body.anchorX;
+                  bodyAnchorY = body.anchorY;
+                }
+              }
+            }
+            note.body.texture = bodyTexture;
+            note.body.anchor.set(bodyAnchorX, bodyAnchorY);
             note.projected = projected;
             note.container.visible = ribbonNode
               ? isBandoriNativeRibbonPointBodyVisible(projected)

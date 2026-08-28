@@ -102,10 +102,12 @@ import {
   BANDORI_NATIVE_NOTE_SKINS,
   getBandoriHabahiroBodySpriteName,
   getBandoriHabahiroIconSpriteName,
+  getBandoriHabahiroLongBodySpriteName,
   getBandoriHabahiroLongFlashSpriteName,
   getBandoriHabahiroRhythmSpriteName,
   getBandoriNativeBodyFrameId,
   getBandoriNativeIconFrameId,
+  getBandoriNativeLongBodyFrameId,
   getBandoriNativeLongFlashUrl,
   getBandoriNativeNoteFrame,
   getBandoriNativeRhythmSupportNoteUrl,
@@ -1505,6 +1507,14 @@ test("Long and Slide AutoPerfect lifecycle keeps only confirmed sustained and on
   );
   assert.deepEqual(beforeLaneBoundaryProjection?.flashCoveredLanes, [3]);
   assert.deepEqual(afterLaneBoundaryProjection?.flashCoveredLanes, [4]);
+  assert.equal(
+    getBandoriNativeLongBodyFrameId(beforeLaneBoundaryProjection.flashCoveredLanes[0]),
+    "note_long_3",
+  );
+  assert.equal(
+    getBandoriNativeLongBodyFrameId(afterLaneBoundaryProjection.flashCoveredLanes[0]),
+    "note_long_4",
+  );
 
   const slideRibbon = visuals.ribbons.find((ribbon) => ribbon.kind === "slide");
   const longRibbon = visuals.ribbons.find((ribbon) => ribbon.kind === "long");
@@ -2461,6 +2471,10 @@ test("Habahiro direct Sprites retain the JP rendered pivots and coverage names",
     lane: 3,
   };
   assert.equal(getBandoriHabahiroBodySpriteName(visual), "note_normal_2_3_4");
+  assert.equal(
+    getBandoriHabahiroLongBodySpriteName([2, 3, 4]),
+    "note_long_2_3_4",
+  );
   assert.equal(getBandoriHabahiroRhythmSpriteName(visual), "note_normal_16_2_3_4");
   assert.equal(getBandoriHabahiroIconSpriteName({ ...visual, body: "flick", icon: "flick" }), "note_flick_top_3");
   const widthFiveFlick = {

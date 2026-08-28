@@ -192,6 +192,12 @@ export function getBandoriHabahiroLongFlashSpriteName(
   return requireHabahiroSpriteName(`note_long_flash_${coveredLanes.join("_")}`);
 }
 
+export function getBandoriHabahiroLongBodySpriteName(
+  coveredLanes: readonly number[],
+): BandoriHabahiroSpriteName {
+  return requireHabahiroSpriteName(`note_long_${coveredLanes.join("_")}`);
+}
+
 export function getBandoriHabahiroRhythmSpriteName(
   visual: BandoriNativeNoteVisual,
 ): BandoriHabahiroSpriteName {
@@ -335,6 +341,15 @@ export function getBandoriNativeBodyFrameId(
 ): BandoriNativeNoteFrameId {
   if (visual.body === "slideAmong") return "note_slide_among";
   return `${BODY_PREFIX[visual.body]}_${visual.lane}` as BandoriNativeNoteFrameId;
+}
+
+export function getBandoriNativeLongBodyFrameId(
+  lane: number,
+): BandoriNativeNoteFrameId {
+  if (!Number.isInteger(lane) || lane < 0 || lane > 6) {
+    throw new Error("Native Long body lane must be an integer from 0 through 6");
+  }
+  return `note_long_${lane}` as BandoriNativeNoteFrameId;
 }
 
 export function getBandoriNativeIconFrameId(

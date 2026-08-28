@@ -219,6 +219,16 @@ test("mobile simulator settings match the compact transport control rhythm", asy
   assert.match(settingsCard, /text-\[15px\][^"\n]*sm:text-base/u);
   assert.match(settingsCard, /mt-2[^"\n]*sm:mt-3/u);
   assert.match(skinControls, /mobileLayout\?: "inline" \| "stacked"/u);
+  assert.match(skinControls, /subcontrols\?: ReactNode/u);
+  assert.match(skinControls, /type SimulatorSubcontrolRowProps = \{[\s\S]*children: ReactNode;[\s\S]*label: string;/u);
+  assert.match(
+    skinControls,
+    /subcontrols \? "sm:gap-y-2"[\s\S]*col-span-full grid gap-2 sm:col-span-1 sm:col-start-2/u,
+  );
+  assert.match(
+    skinControls,
+    /export function SimulatorSubcontrolRow\([\s\S]*grid basis-full grid-cols-2 items-center gap-2 sm:flex sm:justify-start/u,
+  );
   assert.match(skinControls, /grid py-3[\s\S]*grid-cols-2 items-center gap-2 py-2\.5[\s\S]*items-start gap-1\.5/u);
   assert.match(skinControls, /justify-start" : "justify-center sm:justify-start"/u);
   assert.match(skinControls, /justify-end text-right/u);
@@ -252,12 +262,52 @@ test("mobile simulator settings match the compact transport control rhythm", asy
   );
   assert.match(
     runtime,
-    /controls\.slideJudgmentFrameCorrection[\s\S]*options=\{BANDORI_SLIDE_JUDGMENT_FRAME_CORRECTION_OPTIONS\}[\s\S]*value=\{slideJudgmentFrameCorrectionTenths\}/u,
+    /controls\.slideJudgmentFrameCorrection[\s\S]*adjustmentLevel=\{1\}[\s\S]*options=\{BANDORI_SLIDE_JUDGMENT_FRAME_CORRECTION_OPTIONS\}[\s\S]*value=\{slideJudgmentFrameCorrectionTenths\}/u,
+  );
+  assert.match(
+    runtime,
+    /adjustmentLevel = 2[\s\S]*direction="decrease"[\s\S]*level=\{adjustmentLevel\}[\s\S]*direction="increase"[\s\S]*level=\{adjustmentLevel\}/u,
+  );
+  const judgmentWindowLabelIndex = runtime.indexOf(
+    'label={t("controls.perfectJudgmentWindow")}',
+  );
+  const suddenRateLabelIndex = runtime.indexOf(
+    'label={t("controls.suddenRate")}',
+  );
+  const judgmentWindowGroupStart = runtime.lastIndexOf(
+    "<SimulatorControlRow",
+    judgmentWindowLabelIndex,
+  );
+  const suddenRateRowStart = runtime.lastIndexOf(
+    "<SimulatorControlRow",
+    suddenRateLabelIndex,
+  );
+  assert.ok(judgmentWindowGroupStart >= 0);
+  assert.ok(suddenRateRowStart > judgmentWindowGroupStart);
+  const judgmentWindowGroup = runtime.slice(
+    judgmentWindowGroupStart,
+    suddenRateRowStart,
+  );
+  assert.equal((judgmentWindowGroup.match(/<SimulatorControlRow/gu) ?? []).length, 1);
+  assert.match(
+    judgmentWindowGroup,
+    /controls\.perfectJudgmentWindow[\s\S]*controls\.greatJudgmentWindow[\s\S]*controls\.slideJudgmentFrameCorrection/u,
+  );
+  assert.match(
+    judgmentWindowGroup,
+    /mobileLayout="inline"[\s\S]*subcontrols=\{/u,
+  );
+  assert.equal(
+    (judgmentWindowGroup.match(
+      /<SimulatorSubcontrolRow/gu,
+    ) ?? []).length,
+    2,
   );
   assert.match(runtime, /slideJudgmentFrameCorrectionTenths,/u);
   assert.match(skinControls, /disabled\?: boolean[\s\S]*disabled=\{disabled\}/u);
-  assert.equal((runtime.match(/mobileLayout="inline"/gu) ?? []).length, 6);
-  assert.match(runtime, /grid basis-full grid-cols-2 items-center gap-2 sm:flex sm:justify-start/u);
+  assert.equal((runtime.match(/mobileLayout="inline"/gu) ?? []).length, 5);
+  assert.equal((runtime.match(/<SimulatorSubcontrolRow/gu) ?? []).length, 3);
+  assert.match(skinControls, /grid basis-full grid-cols-2 items-center gap-2 sm:flex sm:justify-start/u);
 });
 
 test("stage fullscreen keeps transport overlays outside the central playfield and treats landscape as a preference", async () => {
@@ -583,6 +633,19 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(holdPresentation, /createBandoriEffectRecipeRuntime\(selectedRecipe/u);
   assert.match(holdPresentation, /variant\.kind === "long"/u);
   assert.match(stage, /getBandoriHabahiroLongFlashSpriteName\([\s\S]*projection\.flashCoveredLanes/u);
+  assert.match(
+    stage,
+    /const holdProjection = ribbonNode && ribbonNode\.pointIndex === 0[\s\S]*const projected = holdProjection[\s\S]*const coveredLanes = holdProjection\?\.flashCoveredLanes/u,
+  );
+  assert.match(stage, /getBandoriHabahiroLongBodySpriteName\(coveredLanes\)/u);
+  assert.match(
+    stage,
+    /const slideBodyRangeWidths = new Set<number>\(\)[\s\S]*const longFlashRangeWidths = new Set<number>\(\)[\s\S]*const dynamicWideRangeWidths = new Set\(\[[\s\S]*\.\.\.slideBodyRangeWidths,[\s\S]*\.\.\.longFlashRangeWidths,[\s\S]*getBandoriHabahiroLongBodySpriteName\(coveredLanes\)[\s\S]*getBandoriHabahiroLongFlashSpriteName\(coveredLanes\)/u,
+  );
+  assert.match(
+    stage,
+    /if \(hasSingleLaneSlide\) \{[\s\S]*for \(let lane = 0; lane < 7; lane \+= 1\)[\s\S]*getBandoriNativeLongBodyFrameId\(lane\)/u,
+  );
   assert.doesNotMatch(stage, /getBandoriHabahiroLongFlashSpriteName\(head\.coveredLanes\)/u);
   assert.match(stage, /createPerfectJudgmentDisplay\(perfectJudgmentTexture\)/u);
   assert.match(stage, /triggerPerfectJudgment\(perfectJudgment, effectAnimationTimeSeconds\)/u);
