@@ -12,6 +12,23 @@ surface uniformly. Music audio owns presentation time. Play, pause, restart,
 fixed jumps, scrubbing, slow music playback, mirror, deterministic seek
 reconstruction, and range-loop restarts all use the same transport path.
 
+## Documentation ownership
+
+This document and its Chinese counterpart are the canonical contract for the
+Web simulator's currently admitted behavior, settings, rendering, and resource
+consumption. Related private assets-builder documents have narrower ownership:
+
+- `hhwx-assets-builder/docs/music-charts.md` defines source-chart conversion
+  and publication;
+- `hhwx-assets-builder/docs/chart-simulator-release.md` defines
+  presentation-resource packaging and release; and
+- `hhwx-assets-builder/docs/research/chart-simulator/` retains
+  reverse-engineering evidence, methods, snapshot identity, and admission
+  decisions.
+
+Native evidence belongs in that private archive. This public document records
+only the resulting behavior actually implemented and protected by Web tests.
+
 ## Supported presentation
 
 The current product contract includes:
@@ -30,9 +47,9 @@ The current product contract includes:
   while clamping the effective rendered size to `80%...150%`;
 - selectable Note appearance position `0...100`, with an independent option to
   hide the lane field above the same boundary;
-- independent, browser-persisted Perfect and Great-only diagnostic timing bands
-  for standard point presses, Directional presses, Long heads and releases,
-  and every authored scoring Slide node;
+- browser-persisted Perfect and Great-only diagnostic timing bands, plus actual
+  boundary-offset labels, for standard point presses, Directional presses,
+  Long heads and releases, and every authored scoring Slide node;
 - large, small, and Off Directional effect choices for all five ordinary
   families and the Persona limited overlay;
 - automatic Perfect lane flash, judgment, Combo, tap/Flick/Directional/hold
@@ -49,14 +66,21 @@ fall back to guessed behavior.
 
 ## Diagnostic timing windows
 
-The Perfect and Great switches are Off by default. Enabling Great also enables
-and locks Perfect; disabling Great leaves Perfect enabled until the user turns
-it off. They render a two-dimensional time-by-horizontal-touch visualization at
-the fixed judgment-line height; they do not add touch input or change the
-simulator's AutoPerfect behavior. For one native frame
+The Perfect and Great switches are Off by default. Enabling Great enables
+Perfect first when needed but does not lock its switch. Disabling Perfect also
+disables Great, while disabling Great leaves Perfect unchanged. The resulting
+valid combination is browser-persisted. They render a two-dimensional
+time-by-horizontal-touch visualization at the fixed judgment-line height; they
+do not add touch input or change the simulator's AutoPerfect behavior. For one
+native frame
 `F = float32(1 / 60)` seconds, the standard press window is Perfect at
 `abs(delta) <= 2.5F`, and the two Great-only sides cover
 `2.5F < abs(delta) < 5.5F`.
+
+The browser-persisted maximum-offset-label switch defaults to On. While timing
+bands are displayed, it labels the actual outer Perfect and Great boundaries
+after horizontal ownership and temporal clipping, using signed frame offsets
+with two decimal places. These labels are diagnostic output only.
 
 Long releases use the confirmed `sweetFrame=1` expansion: Perfect covers
 `abs(delta) < 3.5F`, while Great-only covers

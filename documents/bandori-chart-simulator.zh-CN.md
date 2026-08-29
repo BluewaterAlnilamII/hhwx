@@ -6,6 +6,16 @@
 
 模拟器内部使用固定的 `1334 x 750` 舞台，再整体等比缩放。音乐音频是演出时间的唯一时钟。播放、暂停、重新开始、固定跳转、拖动、音乐慢放、镜像、seek 重建及区间循环回卷都复用同一条 transport 路径。
 
+## 文档职责
+
+本文档及其英文版本是 Web 谱面模拟器当前已准入行为、设置、渲染及资源消费方式的主产品契约。相关私有 assets-builder 文档各自负责更窄的范围：
+
+- `hhwx-assets-builder/docs/music-charts.md` 定义源谱面转换与发布；
+- `hhwx-assets-builder/docs/chart-simulator-release.md` 定义演出资源打包与发布；
+- `hhwx-assets-builder/docs/research/chart-simulator/` 保存逆向证据、分析方法、快照身份及准入决定。
+
+原生证据应保存在该私有档案中；本公开文档只记录已经由 Web 实现并受测试保护的最终行为。
+
 ## 已支持演出
 
 当前产品契约包括：
@@ -17,7 +27,7 @@
 - `1.00...12.00` 的 Note Speed，产品默认值为 `10.00`；
 - `10%...200%` 的节奏图标大小；Habahiro 谱面保留选择值，但实际渲染大小限制在 `80%...150%`；
 - `0...100` 的节奏图标出现位置，并可独立选择是否同步隐藏边界上方的按键条；
-- 可分别开关并跨歌曲保存的 Perfect 与 Great-only 诊断判定色带，覆盖普通点按、Directional 点按、Long 头尾及全部谱面计分 Slide 节点；
+- 可开关并跨歌曲保存的 Perfect 与 Great-only 诊断判定色带及实际边界偏移标签，覆盖普通点按、Directional 点按、Long 头尾及全部谱面计分 Slide 节点；
 - 5 种普通样式及 Persona 限定覆盖均支持大／小／关三种 Directional 效果选择；
 - 自动 Perfect 的按键闪光、判定、Combo、点击／Flick／Directional／保持效果，其中普通点击特效可单独关闭，以及按需加载的 TapSE／Web Audio；
 - 与原生演出舞台彼此独立的完整谱面分析视图。
@@ -26,7 +36,9 @@
 
 ## 诊断判定区间
 
-“显示 Perfect 判定区间”和“显示 Great 判定区间”默认关闭。开启 Great 会同时开启并锁定 Perfect；关闭 Great 后，Perfect 会保持开启，直到用户自行关闭。它们是在判定线固定高度上表达“时间 × 横向触摸位置”的二维可视化，不增加触摸输入，也不改变模拟器的 AutoPerfect 行为。设一个原生帧为 `F = float32(1 / 60)` 秒，标准点按在 `abs(delta) <= 2.5F` 时属于 Perfect；两侧 Great-only 区间为 `2.5F < abs(delta) < 5.5F`。
+“显示 Perfect 判定区间”和“显示 Great 判定区间”默认关闭。开启 Great 时，若 Perfect 尚未开启则会先将其开启，但不会锁定 Perfect 开关；关闭 Perfect 会同时关闭 Great，而单独关闭 Great 不影响 Perfect。最终的有效组合会跨歌曲保存在浏览器中。它们是在判定线固定高度上表达“时间 × 横向触摸位置”的二维可视化，不增加触摸输入，也不改变模拟器的 AutoPerfect 行为。设一个原生帧为 `F = float32(1 / 60)` 秒，标准点按在 `abs(delta) <= 2.5F` 时属于 Perfect；两侧 Great-only 区间为 `2.5F < abs(delta) < 5.5F`。
+
+“显示区间最大偏移帧”会跨歌曲保存且默认开启。判定色带显示时，它会在横向归属与时间裁剪后的实际 Perfect／Great 外边界标出带符号、保留两位小数的帧偏移；这些标签仅用于诊断，不改变任何判定行为。
 
 Long 释放使用已确认的 `sweetFrame=1` 扩展：`abs(delta) < 3.5F` 属于 Perfect，Great-only 两侧为 `3.5F <= abs(delta) <= 6.5F`。该规则同时适用于普通 Long 松手以及 Flick／Directional Long 尾端。
 
