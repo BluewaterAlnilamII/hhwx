@@ -621,8 +621,16 @@ export default function ChartSimulatorRuntime({
   );
   const [slideJudgmentFrameCorrectionTenths, setSlideJudgmentFrameCorrectionTenths] =
     useState(initialPreferences.slideJudgmentFrameCorrectionTenths);
+  const changePerfectJudgmentWindowEnabled = (isEnabled: boolean) => {
+    if (!isEnabled && isGreatJudgmentWindowEnabled) {
+      setIsGreatJudgmentWindowEnabled(false);
+    }
+    setIsPerfectJudgmentWindowEnabled(isEnabled);
+  };
   const changeGreatJudgmentWindowEnabled = (isEnabled: boolean) => {
-    if (isEnabled) setIsPerfectJudgmentWindowEnabled(true);
+    if (isEnabled && !isPerfectJudgmentWindowEnabled) {
+      setIsPerfectJudgmentWindowEnabled(true);
+    }
     setIsGreatJudgmentWindowEnabled(isEnabled);
   };
   const [suddenRate, setSuddenRate] = useState(initialPreferences.suddenRate);
@@ -3134,12 +3142,11 @@ export default function ChartSimulatorRuntime({
               )}
             >
               <SimulatorBooleanControl
-                disabled={isGreatJudgmentWindowEnabled}
                 disabledLabel={t("skinControls.off")}
                 enabledLabel={t("skinControls.on")}
                 isEnabled={isPerfectJudgmentWindowEnabled}
                 label={t("controls.perfectJudgmentWindow")}
-                onChange={setIsPerfectJudgmentWindowEnabled}
+                onChange={changePerfectJudgmentWindowEnabled}
               />
             </SimulatorControlRow>
 

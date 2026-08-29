@@ -247,7 +247,7 @@ test("mobile simulator settings match the compact transport control rhythm", asy
   }
   assert.match(
     runtime,
-    /controls\.perfectJudgmentWindow[\s\S]*isEnabled=\{isPerfectJudgmentWindowEnabled\}[\s\S]*onChange=\{setIsPerfectJudgmentWindowEnabled\}/u,
+    /controls\.perfectJudgmentWindow[\s\S]*isEnabled=\{isPerfectJudgmentWindowEnabled\}[\s\S]*onChange=\{changePerfectJudgmentWindowEnabled\}/u,
   );
   assert.match(
     runtime,
@@ -259,11 +259,15 @@ test("mobile simulator settings match the compact transport control rhythm", asy
   );
   assert.match(
     runtime,
-    /changeGreatJudgmentWindowEnabled[\s\S]*if \(isEnabled\) setIsPerfectJudgmentWindowEnabled\(true\)[\s\S]*setIsGreatJudgmentWindowEnabled\(isEnabled\)/u,
+    /changeGreatJudgmentWindowEnabled[\s\S]*if \(isEnabled && !isPerfectJudgmentWindowEnabled\)[\s\S]*setIsPerfectJudgmentWindowEnabled\(true\)[\s\S]*setIsGreatJudgmentWindowEnabled\(isEnabled\)/u,
   );
   assert.match(
     runtime,
-    /controls\.perfectJudgmentWindow[\s\S]*disabled=\{isGreatJudgmentWindowEnabled\}/u,
+    /changePerfectJudgmentWindowEnabled[\s\S]*if \(!isEnabled && isGreatJudgmentWindowEnabled\)[\s\S]*setIsGreatJudgmentWindowEnabled\(false\)[\s\S]*setIsPerfectJudgmentWindowEnabled\(isEnabled\)/u,
+  );
+  assert.doesNotMatch(
+    runtime,
+    /disabled=\{isGreatJudgmentWindowEnabled\}/u,
   );
   assert.match(
     runtime,
@@ -1094,6 +1098,13 @@ test("the public simulator contract keeps product boundaries without private rev
   assert.match(english, /chart-level `laneChange=true`/u);
   assert.match(english, /They are not files served from the\s+Web repository/u);
   assert.match(english, /HHWX_CHART_SIMULATOR_PROJECTION_ROOT/u);
+  assert.match(english, /does not lock its switch/u);
+  assert.match(english, /Disabling Perfect also\s+disables Great/u);
+  assert.match(english, /maximum-offset-label switch defaults to On/u);
+  assert.match(
+    english,
+    /`hhwx-assets-builder\/docs\/research\/chart-simulator\/` retains\s+reverse-engineering evidence/u,
+  );
   assert.match(chinese, /当前实现与测试没有列入的能力一律禁用/u);
   assert.match(chinese, /演出资源只允许来自官方 JP 资源集/u);
   assert.match(chinese, /不得加入 CN 演出资源包/u);
@@ -1101,6 +1112,13 @@ test("the public simulator contract keeps product boundaries without private rev
   assert.match(chinese, /`practice`.*普通背景，不属于限定覆盖/su);
   assert.match(chinese, /谱面级 `laneChange=true`/u);
   assert.match(chinese, /并不是 Web 仓库提供的实体文件/u);
+  assert.match(chinese, /不会锁定 Perfect 开关/u);
+  assert.match(chinese, /关闭 Perfect 会同时关闭 Great/u);
+  assert.match(chinese, /“显示区间最大偏移帧”会跨歌曲保存且默认开启/u);
+  assert.match(
+    chinese,
+    /`hhwx-assets-builder\/docs\/research\/chart-simulator\/` 保存逆向证据/u,
+  );
   for (const document of [english, chinese]) {
     assert.doesNotMatch(document, /\b(?:RVA|pathId|IL2CPP)\b|CAB-[0-9a-f]+/iu);
     assert.doesNotMatch(document, /21 (?:limited|限定)/iu);
