@@ -13,6 +13,7 @@ import {
   Rectangle,
   Shader,
   Sprite,
+  Text,
   Texture,
 } from "pixi.js";
 import {
@@ -39,7 +40,9 @@ import {
 } from "@/lib/bandori/chart-simulator/native-note-material";
 import {
   collectBandoriNativeJudgmentWindowOutlineEdges,
+  collectBandoriNativeJudgmentWindowOffsetLabels,
   collectBandoriNativeJudgmentWindowSegments,
+  formatBandoriNativeJudgmentWindowOffsetFrames,
   prepareBandoriNativeJudgmentWindowCandidates,
   prepareBandoriNativeJudgmentWindowPriorityIndex,
   type BandoriNativeJudgmentWindowCandidate,
@@ -220,6 +223,7 @@ type NativeSimulatorStageProps = {
   greatJudgmentWindowEnabled: boolean;
   isActive: boolean;
   isMirrored: boolean;
+  judgmentWindowOffsetLabelEnabled: boolean;
   laneEffectEnabled: boolean;
   limitedPerformanceSkin: BandoriLimitedPerformanceSkin | null;
   loadId: string;
@@ -250,6 +254,52 @@ const GREAT_JUDGMENT_WINDOW_COLOR = 0xffc247;
 const JUDGMENT_WINDOW_ALPHA = 0.28;
 const JUDGMENT_WINDOW_BORDER_ALPHA = 0.9;
 const JUDGMENT_WINDOW_BORDER_WIDTH = 2;
+const JUDGMENT_WINDOW_OFFSET_LABEL_BASE_FONT_SIZE = 24;
+const JUDGMENT_WINDOW_OFFSET_LABEL_MIN_FONT_SIZE = 12;
+const JUDGMENT_WINDOW_OFFSET_LABEL_MAX_FONT_SIZE = 18;
+const JUDGMENT_WINDOW_OFFSET_LABEL_TOP_HIDDEN_RATIO = 0.1;
+const JUDGMENT_WINDOW_OFFSET_LABEL_GAP = 2;
+
+function getJudgmentWindowOffsetLabelFontSize(
+  screenY: number,
+  visibleStartY: number,
+  judgmentLineY: number,
+): number {
+  const progress = Math.min(
+    1,
+    Math.max(0, (screenY - visibleStartY) / (judgmentLineY - visibleStartY)),
+  );
+  const smoothProgress = progress * progress * (3 - 2 * progress);
+  return JUDGMENT_WINDOW_OFFSET_LABEL_MIN_FONT_SIZE
+    + (JUDGMENT_WINDOW_OFFSET_LABEL_MAX_FONT_SIZE
+      - JUDGMENT_WINDOW_OFFSET_LABEL_MIN_FONT_SIZE)
+      * smoothProgress;
+}
+
+function createJudgmentWindowOffsetLabelText(
+  category: "perfect" | "great",
+  resolution: number,
+): Text {
+  const text = new Text({
+    resolution,
+    roundPixels: false,
+    style: {
+      align: "center",
+      fill: category === "perfect"
+        ? PERFECT_JUDGMENT_WINDOW_COLOR
+        : GREAT_JUDGMENT_WINDOW_COLOR,
+      fontFamily: "Arial",
+      fontSize: JUDGMENT_WINDOW_OFFSET_LABEL_BASE_FONT_SIZE,
+      fontWeight: "700",
+      stroke: { color: 0x071018, width: 3 },
+    },
+    text: "",
+  });
+  text.anchor.set(0.5);
+  text.eventMode = "none";
+  text.visible = false;
+  return text;
+}
 
 type RenderFpsSample = {
   frameCount: number;
@@ -1856,6 +1906,7 @@ export default function NativeSimulatorStage({
   greatJudgmentWindowEnabled,
   isActive,
   isMirrored,
+  judgmentWindowOffsetLabelEnabled,
   laneEffectEnabled,
   limitedPerformanceSkin,
   loadId,
@@ -1889,6 +1940,9 @@ export default function NativeSimulatorStage({
   const greatJudgmentWindowEnabledRef = useRef(greatJudgmentWindowEnabled);
   const isActiveRef = useRef(isActive);
   const isMirroredRef = useRef(isMirrored);
+  const judgmentWindowOffsetLabelEnabledRef = useRef(
+    judgmentWindowOffsetLabelEnabled,
+  );
   const laneEffectEnabledRef = useRef(laneEffectEnabled);
   const noteApproachTimeScaleRef = useRef(noteApproachTimeScale);
   const noteSpeedRef = useRef(noteSpeed);
@@ -1931,6 +1985,10 @@ export default function NativeSimulatorStage({
   useEffect(() => {
     isMirroredRef.current = isMirrored;
   }, [isMirrored]);
+
+  useEffect(() => {
+    judgmentWindowOffsetLabelEnabledRef.current = judgmentWindowOffsetLabelEnabled;
+  }, [judgmentWindowOffsetLabelEnabled]);
 
   useEffect(() => {
     greatJudgmentWindowEnabledRef.current = greatJudgmentWindowEnabled;
@@ -2618,6 +2676,7 @@ export default function NativeSimulatorStage({
 
       const directionalLineLayer = new Container();
       const judgmentWindowLayer = new Graphics();
+      const judgmentWindowOffsetLabelLayer = new Container();
       const syncLineLayer = new Container();
       const laneEffectLayer = new Container();
       const lowHitEffectLayer = new Container();
@@ -2629,6 +2688,7 @@ export default function NativeSimulatorStage({
       const suddenMask = new Graphics();
       directionalLineLayer.eventMode = "none";
       judgmentWindowLayer.eventMode = "none";
+      judgmentWindowOffsetLabelLayer.eventMode = "none";
       syncLineLayer.eventMode = "none";
       laneEffectLayer.eventMode = "none";
       lowHitEffectLayer.eventMode = "none";
@@ -2642,19 +2702,24 @@ export default function NativeSimulatorStage({
         ...backgroundLayers,
         field,
         judgmentWindowLayer,
-        directionalLineLayer,
-        syncLineLayer,
         judgmentLine,
         laneEffectLayer,
         lowHitEffectLayer,
         highHitEffectLayer,
+        informationLayer,
+        directionalLineLayer,
         ribbonLayer,
+        syncLineLayer,
         noteLayer,
+        judgmentWindowOffsetLabelLayer,
         touchingFlashLayer,
         suddenLine,
-        informationLayer,
         suddenMask,
       );
+      const judgmentWindowOffsetLabelPools = {
+        great: [] as Text[],
+        perfect: [] as Text[],
+      };
 
       const perfectJudgment = createPerfectJudgmentDisplay(perfectJudgmentTexture);
       const combo = createComboDisplay(comboUnitTexture, comboDigitTextures);
@@ -3114,6 +3179,11 @@ export default function NativeSimulatorStage({
         judgmentWindowLayer.clear();
         const showGreat = greatJudgmentWindowEnabledRef.current;
         const showPerfect = perfectJudgmentWindowEnabledRef.current;
+        const showOffsetLabels = showPerfect
+          && judgmentWindowOffsetLabelEnabledRef.current;
+        judgmentWindowOffsetLabelLayer.visible = showOffsetLabels;
+        let usedGreatOffsetLabelCount = 0;
+        let usedPerfectOffsetLabelCount = 0;
         if (showGreat || showPerfect) {
           activeJudgmentCandidates.length = 0;
           for (let index = firstJudgmentIndex; index < endIndex; index += 1) {
@@ -3218,6 +3288,100 @@ export default function NativeSimulatorStage({
                   : GREAT_JUDGMENT_WINDOW_COLOR,
                 width: JUDGMENT_WINDOW_BORDER_WIDTH,
               });
+            }
+          }
+          if (showOffsetLabels) {
+            const offsetLabels = collectBandoriNativeJudgmentWindowOffsetLabels({
+              candidatesByNoteIndex: judgmentCandidatesByNoteIndex,
+              minimumInputTimeSeconds: presentationTime,
+              segments: judgmentWindowSegments,
+            });
+            const visibleStartY = BANDORI_NATIVE_STAGE_SIZE.height
+              * JUDGMENT_WINDOW_OFFSET_LABEL_TOP_HIDDEN_RATIO;
+            const judgmentLineY = projectBandoriNativeTimelinePosition(
+              3,
+              presentationTime,
+              presentationTime,
+              currentNoteSpeed,
+              currentNoteApproachTimeScale,
+            ).screenY;
+            for (const label of offsetLabels) {
+              const anchor = projectBandoriNativeTimelinePosition(
+                label.lane,
+                label.boundaryTimeSeconds,
+                presentationTime,
+                currentNoteSpeed,
+                currentNoteApproachTimeScale,
+              );
+              if (
+                anchor.screenX < 0
+                || anchor.screenX > BANDORI_NATIVE_STAGE_SIZE.width
+                || anchor.screenY < visibleStartY
+                || anchor.screenY > BANDORI_NATIVE_STAGE_SIZE.height
+              ) {
+                continue;
+              }
+              const pool = judgmentWindowOffsetLabelPools[label.category];
+              const poolIndex = label.category === "perfect"
+                ? usedPerfectOffsetLabelCount++
+                : usedGreatOffsetLabelCount++;
+              let display = pool[poolIndex];
+              if (!display) {
+                display = createJudgmentWindowOffsetLabelText(
+                  label.category,
+                  app.renderer.resolution,
+                );
+                pool.push(display);
+                judgmentWindowOffsetLabelLayer.addChild(display);
+              }
+              if (display.resolution !== app.renderer.resolution) {
+                display.resolution = app.renderer.resolution;
+              }
+              const text = formatBandoriNativeJudgmentWindowOffsetFrames(
+                label.offsetFrames,
+              );
+              if (display.text !== text) display.text = text;
+              const labelFontSize = getJudgmentWindowOffsetLabelFontSize(
+                anchor.screenY,
+                visibleStartY,
+                judgmentLineY,
+              );
+              const labelLayoutScale = labelFontSize
+                / JUDGMENT_WINDOW_OFFSET_LABEL_MAX_FONT_SIZE;
+              display.scale.set(
+                labelFontSize / JUDGMENT_WINDOW_OFFSET_LABEL_BASE_FONT_SIZE,
+              );
+              const halfWidth = display.width / 2;
+              const halfHeight = display.height / 2;
+              const direction = label.side === "fast" ? -1 : 1;
+              const preferredY = anchor.screenY + direction * (
+                halfHeight
+                  + JUDGMENT_WINDOW_OFFSET_LABEL_GAP * labelLayoutScale
+              );
+              const screenX = Math.min(
+                BANDORI_NATIVE_STAGE_SIZE.width - halfWidth,
+                Math.max(halfWidth, anchor.screenX),
+              );
+              const screenY = Math.min(
+                BANDORI_NATIVE_STAGE_SIZE.height - halfHeight,
+                Math.max(halfHeight, preferredY),
+              );
+              display.position.set(screenX, screenY);
+              display.visible = true;
+            }
+            for (
+              let index = usedPerfectOffsetLabelCount;
+              index < judgmentWindowOffsetLabelPools.perfect.length;
+              index += 1
+            ) {
+              judgmentWindowOffsetLabelPools.perfect[index].visible = false;
+            }
+            for (
+              let index = usedGreatOffsetLabelCount;
+              index < judgmentWindowOffsetLabelPools.great.length;
+              index += 1
+            ) {
+              judgmentWindowOffsetLabelPools.great[index].visible = false;
             }
           }
         }

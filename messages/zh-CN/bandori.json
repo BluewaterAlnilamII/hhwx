@@ -689,6 +689,7 @@
         "currentNoteSize": "当前节奏图标的大小",
         "perfectJudgmentWindow": "显示 Perfect 判定区间",
         "greatJudgmentWindow": "显示 Great 判定区间",
+        "maximumJudgmentOffset": "显示区间最大偏移帧",
         "slideJudgmentFrameCorrection": "Slide 判定帧补正",
         "decreaseSlideJudgmentFrameCorrection": "降低 Slide 判定帧补正 0.1 帧",
         "increaseSlideJudgmentFrameCorrection": "提高 Slide 判定帧补正 0.1 帧",

@@ -19,7 +19,9 @@ import {
   classifyBandoriNativeLongReleaseJudgment,
   classifyBandoriNativeStandardJudgment,
   collectBandoriNativeJudgmentWindowOutlineEdges,
+  collectBandoriNativeJudgmentWindowOffsetLabels,
   collectBandoriNativeJudgmentWindowSegments,
+  formatBandoriNativeJudgmentWindowOffsetFrames,
   isBandoriNativeStandardPressTriggerable,
   prepareBandoriNativeJudgmentWindowCandidates,
   prepareBandoriNativeJudgmentWindowPriorityIndex,
@@ -820,6 +822,164 @@ test("one Note outline keeps only the exposed part of a stepped split", () => {
   assert.deepEqual(
     middleEdges.map((edge) => [edge.startLane, edge.endLane]),
     [[2, 3]],
+  );
+});
+
+test("offset labels report the actual outer Perfect and Great boundaries", () => {
+  const candidate = standardCandidate(0, 1, [2, 3, 4]);
+  const segments = collectBandoriNativeJudgmentWindowSegments({
+    activeCandidates: [candidate],
+    showGreat: true,
+    showPerfect: true,
+  });
+  const labels = collectBandoriNativeJudgmentWindowOffsetLabels({
+    candidatesByNoteIndex: [candidate],
+    segments,
+  });
+
+  assert.deepEqual(labels.map((label) => ({
+    category: label.category,
+    lane: label.lane,
+    side: label.side,
+    text: formatBandoriNativeJudgmentWindowOffsetFrames(label.offsetFrames),
+  })), [
+    { category: "perfect", lane: 3, side: "fast", text: "-2.50" },
+    { category: "perfect", lane: 3, side: "slow", text: "+2.50" },
+    { category: "great", lane: 3, side: "fast", text: "-5.50" },
+    { category: "great", lane: 3, side: "slow", text: "+5.50" },
+  ]);
+});
+
+test("offset label anchors prefer the Note center then the leftmost widest fragment", () => {
+  const candidate = standardCandidate(0, 10, [2, 3, 4]);
+  const labels = collectBandoriNativeJudgmentWindowOffsetLabels({
+    candidatesByNoteIndex: [candidate],
+    segments: [
+      {
+        category: "perfect",
+        endTimeSeconds: 9.5,
+        leftLane: 2.8,
+        noteIndex: 0,
+        rightLane: 3.2,
+        startTimeSeconds: 9,
+        timingKind: "standardPress",
+      },
+      {
+        category: "perfect",
+        endTimeSeconds: 9.5,
+        leftLane: 4,
+        noteIndex: 0,
+        rightLane: 6,
+        startTimeSeconds: 9,
+        timingKind: "standardPress",
+      },
+      {
+        category: "great",
+        endTimeSeconds: 8.5,
+        leftLane: 0,
+        noteIndex: 0,
+        rightLane: 2.5,
+        startTimeSeconds: 8,
+        timingKind: "standardPress",
+      },
+      {
+        category: "great",
+        endTimeSeconds: 8.5,
+        leftLane: 3.5,
+        noteIndex: 0,
+        rightLane: 6,
+        startTimeSeconds: 8,
+        timingKind: "standardPress",
+      },
+    ],
+  });
+
+  assert.equal(labels.find((label) => label.category === "perfect")?.lane, 3);
+  assert.equal(labels.find((label) => label.category === "great")?.lane, 1.25);
+});
+
+test("offset labels keep priority clipping but ignore the moving playback cut", () => {
+  const first = standardCandidate(0, 1);
+  const second = standardCandidate(1, 1.04);
+  const bothActiveSegments = collectBandoriNativeJudgmentWindowSegments({
+    activeCandidates: [first, second],
+    showGreat: false,
+    showPerfect: true,
+  });
+  const bothActiveLabels = collectBandoriNativeJudgmentWindowOffsetLabels({
+    candidatesByNoteIndex: [first, second],
+    segments: bothActiveSegments,
+  });
+  const firstSlow = bothActiveLabels.find((label) => (
+    label.noteIndex === 0 && label.side === "slow"
+  ));
+  const secondFast = bothActiveLabels.find((label) => (
+    label.noteIndex === 1 && label.side === "fast"
+  ));
+  assert.ok(firstSlow);
+  assert.ok(secondFast);
+  closeTo(firstSlow.offsetFrames, 0.02 / BANDORI_NATIVE_JUDGMENT_FRAME_SECONDS);
+  closeTo(secondFast.offsetFrames, -0.02 / BANDORI_NATIVE_JUDGMENT_FRAME_SECONDS);
+
+  const minimumInputTimeSeconds = 1.001;
+  const restoredSegments = collectBandoriNativeJudgmentWindowSegments({
+    activeCandidates: [second],
+    minimumInputTimeSeconds,
+    showGreat: false,
+    showPerfect: true,
+  });
+  const restoredLabels = collectBandoriNativeJudgmentWindowOffsetLabels({
+    candidatesByNoteIndex: [null, second],
+    minimumInputTimeSeconds,
+    segments: restoredSegments,
+  });
+  assert.equal(restoredLabels.some((label) => label.side === "fast"), false);
+  assert.equal(
+    formatBandoriNativeJudgmentWindowOffsetFrames(
+      restoredLabels.find((label) => label.side === "slow").offsetFrames,
+    ),
+    "+2.50",
+  );
+});
+
+test("Slide gesture labels preserve the zero Fast boundary", () => {
+  const candidate = slideCandidate(0, 1, { slideTailKind: "flick" });
+  const segments = collectBandoriNativeJudgmentWindowSegments({
+    activeCandidates: [candidate],
+    showGreat: true,
+    showPerfect: true,
+  });
+  const labels = collectBandoriNativeJudgmentWindowOffsetLabels({
+    candidatesByNoteIndex: [candidate],
+    segments,
+  });
+
+  assert.deepEqual(labels.map((label) => (
+    formatBandoriNativeJudgmentWindowOffsetFrames(label.offsetFrames)
+  )), ["0.00", "+7.00"]);
+  assert.equal(labels.some((label) => label.category === "great"), false);
+});
+
+test("offset labels preserve separate simultaneous Notes with identical values", () => {
+  const left = standardCandidate(0, 1, [1]);
+  const right = standardCandidate(1, 1, [5]);
+  const segments = collectBandoriNativeJudgmentWindowSegments({
+    activeCandidates: [left, right],
+    showGreat: false,
+    showPerfect: true,
+  });
+  const labels = collectBandoriNativeJudgmentWindowOffsetLabels({
+    candidatesByNoteIndex: [left, right],
+    segments,
+  });
+
+  assert.deepEqual(
+    labels.filter((label) => label.side === "fast").map((label) => label.noteIndex),
+    [0, 1],
+  );
+  assert.deepEqual(
+    labels.filter((label) => label.side === "slow").map((label) => label.noteIndex),
+    [0, 1],
   );
 });
 

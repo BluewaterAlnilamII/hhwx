@@ -614,6 +614,8 @@ export default function ChartSimulatorRuntime({
   const [isGreatJudgmentWindowEnabled, setIsGreatJudgmentWindowEnabled] = useState(
     initialPreferences.isGreatJudgmentWindowEnabled,
   );
+  const [isJudgmentWindowOffsetLabelEnabled, setIsJudgmentWindowOffsetLabelEnabled] =
+    useState(initialPreferences.isJudgmentWindowOffsetLabelEnabled);
   const [isPerfectJudgmentWindowEnabled, setIsPerfectJudgmentWindowEnabled] = useState(
     initialPreferences.isPerfectJudgmentWindowEnabled,
   );
@@ -754,6 +756,7 @@ export default function ChartSimulatorRuntime({
         isLaneEffectEnabled,
         isMirrored,
         isGreatJudgmentWindowEnabled,
+        isJudgmentWindowOffsetLabelEnabled,
         isPerfectJudgmentWindowEnabled,
         isRhythmSupportEnabled,
         isSeMuted,
@@ -783,6 +786,7 @@ export default function ChartSimulatorRuntime({
     isLaneEffectEnabled,
     isMirrored,
     isGreatJudgmentWindowEnabled,
+    isJudgmentWindowOffsetLabelEnabled,
     isPerfectJudgmentWindowEnabled,
     isRhythmSupportEnabled,
     isSeMuted,
@@ -2437,6 +2441,7 @@ export default function ChartSimulatorRuntime({
               greatJudgmentWindowEnabled={isGreatJudgmentWindowEnabled}
               isActive={isActive && activeTab === "stage" && isSelectedChartReady}
               isMirrored={isMirrored}
+              judgmentWindowOffsetLabelEnabled={isJudgmentWindowOffsetLabelEnabled}
               laneEffectEnabled={isLaneEffectEnabled}
               limitedPerformanceSkin={limitedPerformanceSkin}
               loadId={stageLoadId}
@@ -3102,6 +3107,15 @@ export default function ChartSimulatorRuntime({
                       isEnabled={isGreatJudgmentWindowEnabled}
                       label={t("controls.greatJudgmentWindow")}
                       onChange={changeGreatJudgmentWindowEnabled}
+                    />
+                  </SimulatorSubcontrolRow>
+                  <SimulatorSubcontrolRow label={t("controls.maximumJudgmentOffset")}>
+                    <SimulatorBooleanControl
+                      disabledLabel={t("skinControls.off")}
+                      enabledLabel={t("skinControls.on")}
+                      isEnabled={isJudgmentWindowOffsetLabelEnabled}
+                      label={t("controls.maximumJudgmentOffset")}
+                      onChange={setIsJudgmentWindowOffsetLabelEnabled}
                     />
                   </SimulatorSubcontrolRow>
                   <SimulatorSubcontrolRow label={t("controls.slideJudgmentFrameCorrection")}>
