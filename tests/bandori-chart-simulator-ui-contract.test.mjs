@@ -57,6 +57,7 @@ test("effect, skin, and volume controls share one validated browser preference",
     "isLaneEffectEnabled",
     "isMirrored",
     "isGreatJudgmentWindowEnabled",
+    "isJudgmentWindowOffsetLabelEnabled",
     "isPerfectJudgmentWindowEnabled",
     "isRhythmSupportEnabled",
     "isSeMuted",
@@ -254,6 +255,10 @@ test("mobile simulator settings match the compact transport control rhythm", asy
   );
   assert.match(
     runtime,
+    /controls\.maximumJudgmentOffset[\s\S]*isEnabled=\{isJudgmentWindowOffsetLabelEnabled\}[\s\S]*onChange=\{setIsJudgmentWindowOffsetLabelEnabled\}/u,
+  );
+  assert.match(
+    runtime,
     /changeGreatJudgmentWindowEnabled[\s\S]*if \(isEnabled\) setIsPerfectJudgmentWindowEnabled\(true\)[\s\S]*setIsGreatJudgmentWindowEnabled\(isEnabled\)/u,
   );
   assert.match(
@@ -291,7 +296,7 @@ test("mobile simulator settings match the compact transport control rhythm", asy
   assert.equal((judgmentWindowGroup.match(/<SimulatorControlRow/gu) ?? []).length, 1);
   assert.match(
     judgmentWindowGroup,
-    /controls\.perfectJudgmentWindow[\s\S]*controls\.greatJudgmentWindow[\s\S]*controls\.slideJudgmentFrameCorrection/u,
+    /controls\.perfectJudgmentWindow[\s\S]*controls\.greatJudgmentWindow[\s\S]*controls\.maximumJudgmentOffset[\s\S]*controls\.slideJudgmentFrameCorrection/u,
   );
   assert.match(
     judgmentWindowGroup,
@@ -301,12 +306,12 @@ test("mobile simulator settings match the compact transport control rhythm", asy
     (judgmentWindowGroup.match(
       /<SimulatorSubcontrolRow/gu,
     ) ?? []).length,
-    2,
+    3,
   );
   assert.match(runtime, /slideJudgmentFrameCorrectionTenths,/u);
   assert.match(skinControls, /disabled\?: boolean[\s\S]*disabled=\{disabled\}/u);
   assert.equal((runtime.match(/mobileLayout="inline"/gu) ?? []).length, 5);
-  assert.equal((runtime.match(/<SimulatorSubcontrolRow/gu) ?? []).length, 3);
+  assert.equal((runtime.match(/<SimulatorSubcontrolRow/gu) ?? []).length, 4);
   assert.match(skinControls, /grid basis-full grid-cols-2 items-center gap-2 sm:flex sm:justify-start/u);
 });
 
@@ -402,6 +407,10 @@ test("native judgment windows stay diagnostic, lane-owned, and outside the Sudde
   assert.match(stage, /JUDGMENT_WINDOW_BORDER_ALPHA = 0\.9/u);
   assert.match(stage, /\.stroke\(\{[\s\S]*width: JUDGMENT_WINDOW_BORDER_WIDTH/u);
   assert.match(runtime, /greatJudgmentWindowEnabled=\{isGreatJudgmentWindowEnabled\}/u);
+  assert.match(
+    runtime,
+    /judgmentWindowOffsetLabelEnabled=\{isJudgmentWindowOffsetLabelEnabled\}/u,
+  );
   assert.match(runtime, /perfectJudgmentWindowEnabled=\{isPerfectJudgmentWindowEnabled\}/u);
   assert.match(
     runtime,
@@ -410,6 +419,37 @@ test("native judgment windows stay diagnostic, lane-owned, and outside the Sudde
   assert.match(
     stage,
     /slideFrameCorrectionTenths:[\s\S]*slideJudgmentFrameCorrectionTenthsRef\.current/u,
+  );
+  assert.match(stage, /collectBandoriNativeJudgmentWindowOffsetLabels/u);
+  assert.match(stage, /judgmentWindowOffsetLabelPools/u);
+  assert.match(
+    stage,
+    /const visibleStartY = BANDORI_NATIVE_STAGE_SIZE\.height[\s\S]*JUDGMENT_WINDOW_OFFSET_LABEL_TOP_HIDDEN_RATIO[\s\S]*anchor\.screenY < visibleStartY/u,
+  );
+  assert.match(
+    stage,
+    /getJudgmentWindowOffsetLabelFontSize\([\s\S]*const smoothProgress = progress \* progress \* \(3 - 2 \* progress\)[\s\S]*JUDGMENT_WINDOW_OFFSET_LABEL_MIN_FONT_SIZE[\s\S]*JUDGMENT_WINDOW_OFFSET_LABEL_MAX_FONT_SIZE/u,
+  );
+  assert.match(
+    stage,
+    /display\.scale\.set\([\s\S]*labelFontSize \/ JUDGMENT_WINDOW_OFFSET_LABEL_BASE_FONT_SIZE/u,
+  );
+  assert.match(
+    stage,
+    /new Text\(\{[\s\S]*resolution,[\s\S]*roundPixels: false[\s\S]*fontSize: JUDGMENT_WINDOW_OFFSET_LABEL_BASE_FONT_SIZE/u,
+  );
+  assert.match(
+    stage,
+    /display\.resolution !== app\.renderer\.resolution[\s\S]*display\.resolution = app\.renderer\.resolution/u,
+  );
+  assert.doesNotMatch(stage, /doJudgmentWindowOffsetLabelsOverlap/u);
+  assert.doesNotMatch(stage, /judgmentWindowOffsetLabelLeaderLayer/u);
+  assert.doesNotMatch(stage, /JUDGMENT_WINDOW_OFFSET_LABEL_STACK_STEP/u);
+  assert.match(stage, /display\.visible = true/u);
+  assert.match(stage, /judgmentWindowOffsetLabelLayer\.visible = showOffsetLabels/u);
+  assert.match(
+    stage,
+    /app\.stage\.addChild\([\s\S]*informationLayer,[\s\S]*directionalLineLayer,[\s\S]*ribbonLayer,[\s\S]*syncLineLayer,[\s\S]*noteLayer,[\s\S]*judgmentWindowOffsetLabelLayer,[\s\S]*touchingFlashLayer/u,
   );
 });
 
@@ -486,7 +526,7 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /getBandoriNativeDirectionalEffectAssetContract\(directionalFlickSkin\)/u);
   assert.match(stage, /loadDirectionalEffects\([\s\S]*directionalFlickSkin,[\s\S]*loadJson,[\s\S]*loadTexture/u);
   assert.match(stage, /BANDORI_NATIVE_DIRECTIONAL_EFFECT_VARIANTS[\s\S]*BANDORI_NATIVE_DIRECTIONAL_EFFECT_RECIPE_KEYS/u);
-  assert.match(stage, /app\.stage\.addChild\([\s\S]*directionalLineLayer,[\s\S]*judgmentLine,[\s\S]*laneEffectLayer,[\s\S]*lowHitEffectLayer,[\s\S]*highHitEffectLayer,[\s\S]*ribbonLayer,[\s\S]*noteLayer/u);
+  assert.match(stage, /app\.stage\.addChild\([\s\S]*judgmentLine,[\s\S]*laneEffectLayer,[\s\S]*lowHitEffectLayer,[\s\S]*highHitEffectLayer,[\s\S]*informationLayer,[\s\S]*directionalLineLayer,[\s\S]*ribbonLayer,[\s\S]*syncLineLayer,[\s\S]*noteLayer/u);
   assert.match(stage, /app\.ticker\.add\(renderStageFrame\)/u);
   assert.match(stage, /autoStart: false/u);
   assert.match(stage, /app\.ticker\.add\(renderStageFrame\);[\s\S]*if \(isActiveRef\.current\) \{[\s\S]*app\.start\(\)/u);
@@ -954,6 +994,14 @@ test("localized song and simulator keys stay mirrored", async () => {
     "Show Great timing window",
   );
   assert.equal(
+    zh.songs.simulator.controls.maximumJudgmentOffset,
+    "显示区间最大偏移帧",
+  );
+  assert.equal(
+    en.songs.simulator.controls.maximumJudgmentOffset,
+    "Show max timing offset (frames)",
+  );
+  assert.equal(
     zh.songs.simulator.controls.slideJudgmentFrameCorrection,
     "Slide 判定帧补正",
   );
@@ -963,11 +1011,11 @@ test("localized song and simulator keys stay mirrored", async () => {
   );
   assert.equal(
     en.songs.simulator.controls.slideJudgmentFrameCorrection,
-    "Slide judgment frame correction",
+    "Slide judgment adjustment",
   );
   assert.equal(
     en.songs.simulator.controls.increaseSlideJudgmentFrameCorrection,
-    "Increase Slide judgment frame correction by 0.1 frame",
+    "Increase Slide judgment adjustment by 0.1 frame",
   );
   assert.equal(zh.songs.simulator.skinControls.tapEffectStyle, "TAP EFFECT");
   assert.equal(en.songs.simulator.skinControls.tapEffectStyle, "Tap effects");

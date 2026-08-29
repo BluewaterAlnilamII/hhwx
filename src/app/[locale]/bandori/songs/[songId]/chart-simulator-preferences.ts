@@ -83,6 +83,7 @@ export type BandoriChartSimulatorPreferences = Readonly<{
   isLaneEffectEnabled: boolean;
   isMirrored: boolean;
   isGreatJudgmentWindowEnabled: boolean;
+  isJudgmentWindowOffsetLabelEnabled: boolean;
   isPerfectJudgmentWindowEnabled: boolean;
   isRhythmSupportEnabled: boolean;
   isSeMuted: boolean;
@@ -113,6 +114,7 @@ export function createDefaultBandoriChartSimulatorPreferences(): BandoriChartSim
     isLaneEffectEnabled: true,
     isMirrored: false,
     isGreatJudgmentWindowEnabled: false,
+    isJudgmentWindowOffsetLabelEnabled: true,
     isPerfectJudgmentWindowEnabled: false,
     isRhythmSupportEnabled: true,
     isSeMuted: false,
@@ -234,6 +236,10 @@ export function normalizeBandoriChartSimulatorPreferences(
     ),
     isMirrored: normalizeBoolean(record.isMirrored, defaults.isMirrored),
     isGreatJudgmentWindowEnabled,
+    isJudgmentWindowOffsetLabelEnabled: normalizeBoolean(
+      record.isJudgmentWindowOffsetLabelEnabled,
+      defaults.isJudgmentWindowOffsetLabelEnabled,
+    ),
     isPerfectJudgmentWindowEnabled,
     isRhythmSupportEnabled: normalizeBoolean(
       record.isRhythmSupportEnabled,

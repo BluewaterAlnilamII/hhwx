@@ -104,6 +104,15 @@ export type BandoriNativeJudgmentWindowSegment = Readonly<{
   timingKind: BandoriNativeJudgmentWindowTimingKind;
 }>;
 
+export type BandoriNativeJudgmentWindowOffsetLabel = Readonly<{
+  boundaryTimeSeconds: number;
+  category: BandoriNativeJudgmentWindowSegment["category"];
+  lane: number;
+  noteIndex: number;
+  offsetFrames: number;
+  side: "fast" | "slow";
+}>;
+
 export type BandoriNativeJudgmentWindowOutlineEdge = Readonly<{
   category: BandoriNativeJudgmentWindowSegment["category"];
   endLane: number;
@@ -1092,6 +1101,165 @@ export function collectBandoriNativeJudgmentWindowSegments({
     || left.endTimeSeconds - right.endTimeSeconds
     || left.noteIndex - right.noteIndex
   ));
+}
+
+type JudgmentWindowBoundaryLaneInterval = Readonly<{
+  leftLane: number;
+  rightLane: number;
+}>;
+
+function mergeJudgmentWindowBoundaryLaneIntervals(
+  intervals: readonly JudgmentWindowBoundaryLaneInterval[],
+): JudgmentWindowBoundaryLaneInterval[] {
+  const sorted = intervals.toSorted((left, right) => (
+    left.leftLane - right.leftLane || left.rightLane - right.rightLane
+  ));
+  const merged: JudgmentWindowBoundaryLaneInterval[] = [];
+  for (const interval of sorted) {
+    const previous = merged.at(-1);
+    if (!previous || interval.leftLane > previous.rightLane) {
+      merged.push(interval);
+      continue;
+    }
+    if (interval.rightLane > previous.rightLane) {
+      merged[merged.length - 1] = {
+        leftLane: previous.leftLane,
+        rightLane: interval.rightLane,
+      };
+    }
+  }
+  return merged;
+}
+
+function selectJudgmentWindowBoundaryLane(
+  segments: readonly BandoriNativeJudgmentWindowSegment[],
+  noteCenterLane: number,
+): number | null {
+  const intervals = mergeJudgmentWindowBoundaryLaneIntervals(
+    segments.map(({ leftLane, rightLane }) => ({ leftLane, rightLane })),
+  );
+  const centerInterval = intervals.find((interval) => (
+    noteCenterLane >= interval.leftLane && noteCenterLane <= interval.rightLane
+  ));
+  if (centerInterval) return noteCenterLane;
+  const widest = intervals.reduce<JudgmentWindowBoundaryLaneInterval | null>(
+    (selected, interval) => {
+      if (!selected) return interval;
+      return interval.rightLane - interval.leftLane
+          > selected.rightLane - selected.leftLane
+        ? interval
+        : selected;
+    },
+    null,
+  );
+  return widest ? (widest.leftLane + widest.rightLane) / 2 : null;
+}
+
+/**
+ * Extracts labels from the already priority-clipped visible segments. The
+ * current-time cut is only a rendering cutoff, so it never becomes a moving
+ * Fast maximum label after the real early boundary has passed.
+ */
+export function collectBandoriNativeJudgmentWindowOffsetLabels({
+  candidatesByNoteIndex,
+  minimumInputTimeSeconds = Number.NEGATIVE_INFINITY,
+  segments,
+}: Readonly<{
+  candidatesByNoteIndex: readonly (
+    BandoriNativeJudgmentWindowCandidate | null
+  )[];
+  minimumInputTimeSeconds?: number;
+  segments: readonly BandoriNativeJudgmentWindowSegment[];
+}>): BandoriNativeJudgmentWindowOffsetLabel[] {
+  const segmentsByNoteAndCategory = new Map<
+    string,
+    BandoriNativeJudgmentWindowSegment[]
+  >();
+  for (const segment of segments) {
+    const key = `${segment.noteIndex}:${segment.category}`;
+    const grouped = segmentsByNoteAndCategory.get(key);
+    if (grouped) grouped.push(segment);
+    else segmentsByNoteAndCategory.set(key, [segment]);
+  }
+
+  const labels: BandoriNativeJudgmentWindowOffsetLabel[] = [];
+  for (const groupedSegments of segmentsByNoteAndCategory.values()) {
+    const firstSegment = groupedSegments[0];
+    const candidate = candidatesByNoteIndex[firstSegment.noteIndex];
+    if (!candidate) continue;
+    const noteCenterLane = (
+      candidate.buttons[0] + candidate.buttons.at(-1)!
+    ) / 2;
+    const fastBoundaryTimeSeconds = groupedSegments.reduce(
+      (minimum, segment) => Math.min(minimum, segment.startTimeSeconds),
+      Number.POSITIVE_INFINITY,
+    );
+    if (
+      fastBoundaryTimeSeconds <= candidate.timeSeconds
+      && !(
+        fastBoundaryTimeSeconds === minimumInputTimeSeconds
+        && fastBoundaryTimeSeconds < candidate.timeSeconds
+      )
+    ) {
+      const lane = selectJudgmentWindowBoundaryLane(
+        groupedSegments.filter(
+          (segment) => segment.startTimeSeconds === fastBoundaryTimeSeconds,
+        ),
+        noteCenterLane,
+      );
+      if (lane !== null) {
+        labels.push({
+          boundaryTimeSeconds: fastBoundaryTimeSeconds,
+          category: firstSegment.category,
+          lane,
+          noteIndex: candidate.noteIndex,
+          offsetFrames: (
+            fastBoundaryTimeSeconds - candidate.timeSeconds
+          ) / BANDORI_NATIVE_JUDGMENT_FRAME_SECONDS,
+          side: "fast",
+        });
+      }
+    }
+
+    const slowBoundaryTimeSeconds = groupedSegments.reduce(
+      (maximum, segment) => Math.max(maximum, segment.endTimeSeconds),
+      Number.NEGATIVE_INFINITY,
+    );
+    if (slowBoundaryTimeSeconds >= candidate.timeSeconds) {
+      const lane = selectJudgmentWindowBoundaryLane(
+        groupedSegments.filter(
+          (segment) => segment.endTimeSeconds === slowBoundaryTimeSeconds,
+        ),
+        noteCenterLane,
+      );
+      if (lane !== null) {
+        labels.push({
+          boundaryTimeSeconds: slowBoundaryTimeSeconds,
+          category: firstSegment.category,
+          lane,
+          noteIndex: candidate.noteIndex,
+          offsetFrames: (
+            slowBoundaryTimeSeconds - candidate.timeSeconds
+          ) / BANDORI_NATIVE_JUDGMENT_FRAME_SECONDS,
+          side: "slow",
+        });
+      }
+    }
+  }
+  return labels.sort((left, right) => (
+    (left.category === right.category ? 0 : left.category === "perfect" ? -1 : 1)
+    || Math.abs(left.offsetFrames) - Math.abs(right.offsetFrames)
+    || left.noteIndex - right.noteIndex
+    || (left.side === right.side ? 0 : left.side === "fast" ? -1 : 1)
+  ));
+}
+
+export function formatBandoriNativeJudgmentWindowOffsetFrames(
+  offsetFrames: number,
+): string {
+  const magnitude = Math.abs(offsetFrames).toFixed(2);
+  if (Number(magnitude) === 0) return "0.00";
+  return `${offsetFrames < 0 ? "-" : "+"}${magnitude}`;
 }
 
 /**

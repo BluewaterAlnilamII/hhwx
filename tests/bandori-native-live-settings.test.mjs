@@ -74,6 +74,7 @@ test("chart simulator preferences persist every effect, skin, and volume control
     isLaneEffectEnabled: false,
     isMirrored: true,
     isGreatJudgmentWindowEnabled: true,
+    isJudgmentWindowOffsetLabelEnabled: false,
     isPerfectJudgmentWindowEnabled: true,
     isRhythmSupportEnabled: false,
     isSeMuted: true,
@@ -106,11 +107,13 @@ test("chart simulator preferences safely normalize stale or invalid stored value
   assert.deepEqual(
     normalizeBandoriChartSimulatorPreferences({
       isGreatJudgmentWindowEnabled: true,
+      isJudgmentWindowOffsetLabelEnabled: false,
       isPerfectJudgmentWindowEnabled: false,
     }),
     {
       ...defaults,
       isGreatJudgmentWindowEnabled: true,
+      isJudgmentWindowOffsetLabelEnabled: false,
       isPerfectJudgmentWindowEnabled: true,
     },
   );
@@ -125,6 +128,7 @@ test("chart simulator preferences safely normalize stale or invalid stored value
     isLaneEffectEnabled: false,
     isMirrored: true,
     isGreatJudgmentWindowEnabled: "yes",
+    isJudgmentWindowOffsetLabelEnabled: "yes",
     isPerfectJudgmentWindowEnabled: "yes",
     isRhythmSupportEnabled: false,
     isSeMuted: true,
