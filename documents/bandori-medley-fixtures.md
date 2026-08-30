@@ -6,7 +6,7 @@ Chinese version: [bandori-medley-fixtures.zh-CN.md](bandori-medley-fixtures.zh-C
 
 Historical main/dev results are retained to check the independent calculator, not to import old search architecture. The archive contains original HHWX profiles, cached master/chart/event data, selected original reports, and an index. It runs neither the old solver nor the new search.
 
-All real profiles, original containers, reports, local paths, and generated indexes stay in the Git-ignored `temp/medley-regression-fixtures/` directory. Do not commit or publish them. Only this documentation and the archive utility are versioned. There are no new dependencies or application changes.
+All real profiles, original containers, reports, local paths, and generated indexes stay in the Git-ignored `temp/medley-regression-fixtures/` directory. Do not commit or publish them. Only documentation and test utilities are versioned. There are no new dependencies or application changes.
 
 The initial collection contains 21 distinct CN profiles: the 119/1329/1889-card benchmarks and two ten-profile batches with two shared profiles. These are full rosters; even 119 cards is not a tiny exhaustive-search fixture.
 
@@ -33,11 +33,17 @@ For each source/profile/song/settings combination, retain the highest reported s
 
 ## Score comparison rules
 
-1. Replay a saved legal team/leader/area assignment using identical profile, song order, difficulty, PERFECT rate, event settings, and data. Check scoring before using its result as a lower bound for search.
-2. With identical complete inputs, a completed new search must reach at least the validated old assignment's score. A higher score alone does not prove correctness; overcounting could also raise it.
+1. Routine regression runs the new search directly and compares its total average score with the retained historical average under matching profile, song order, difficulty, PERFECT rate, event settings, and data. Do not rerun the old solver, replay old teams, or feed old winners into the search as a prerequisite. Targeted replay is reserved for a separately needed discrepancy investigation.
+2. With identical complete inputs, a completed new search must reach at least the historical average. An incomplete result does not pass, even if its diagnostic score is higher. A higher score alone does not prove scoring correctness; overcounting could also raise it.
 3. Keep `score`, `averageScore`, and old exact/completion claims as originally recorded. Do not silently equate score fields or promote an old claim to a new proof. Auxiliary saved candidates are not necessarily the reported winner.
 4. Retained caches are the files found in each source directory, not proof of the exact data used by every historical run. Reports lacking per-run data hashes or commit IDs remain explicitly unverified in those respects. Directory labels do not identify the generating branch.
-5. Real-profile runners fixed expert/full-P/no-fever; generic benchmark reports omitted their configurable PERFECT rate, which remains unknown in the index. Missing leaders are not inferred from old card order. Resolve missing inputs before replay.
+5. Real-profile runners fixed expert/full-P/no-fever; generic benchmark reports omitted their configurable PERFECT rate, which remains unknown in the index. Record any comparison assumption rather than filling this historical gap silently. Missing leaders are not inferred from old card order and do not block direct score comparison.
 6. A fifteen-card projection and the original full roster are different search inputs. Do not compare their optimal scores as if they covered the same search space.
 
-This checkpoint only preserves and validates the archive. Fixed-team score replay, new-search comparison, and large-roster performance acceptance are separate work; it changes none of the [foundation rules](bandori-medley-foundation.md).
+## First direct comparison
+
+Run `node --import tsx scripts/compare-bandori-medley-search.mjs` against the local archive. It builds the native release test entry point and runs the full 119-card profile, expert songs `295 → 300 → 703`, full PERFECT, no fever, and both owned legal area configurations. The no-event reference average is 1,693,959; event 323 is 1,781,877. These references omit historical PERFECT rates and per-run data hashes; the run explicitly records full PERFECT and the retained main-directory cache, without claiming those historical gaps have been verified.
+
+Each case has 300 seconds and a 256 MiB candidate-storage budget. On Windows, the runner samples native peak working set every second and stops at 1 GiB; this is not a hard OS allocation limit or browser/WASM memory measurement. An external deadline allows 15 seconds for the normal timeout result to return. Run cases sequentially and stop at the first incomplete result or score regression, without raising budgets or changing the algorithm.
+
+Inputs, hashes, source commit, historical settings, scores/differences, native outcomes, counters, timing, and sampled memory stay under the private archive's `runs/` directory. No old team is rescored. This changes none of the [foundation rules](bandori-medley-foundation.md); larger-roster acceptance and algorithm changes remain separate decisions.

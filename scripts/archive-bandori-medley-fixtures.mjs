@@ -234,11 +234,11 @@ function collectArchive() {
     + `Profiles and reports are unchanged copies; identical files share one stored copy.\n\n`
     + `## Profiles\n\n| Alias | Cards | Indexed results | With explicit leaders |\n| --- | ---: | ---: | ---: |\n${table}\n\n`
     + `## Before comparing scores\n\n`
-    + `- Historical scores and exact flags are unverified evidence, not new-solver acceptance assertions.\n`
+    + `- Historical averages are comparison references; old exact flags do not prove completion of the new search.\n`
     + `- Cache snapshots are preserved as found; reports without data hashes cannot prove which version a run used.\n`
     + `- A source label identifies a saved directory, not the branch or commit that generated every report.\n`
     + `- Missing PERFECT rates, leaders or team details remain missing; never infer a leader from legacy card order.\n`
-    + `- First replay a complete legal assignment with identical inputs and scoring rules; then require a completed new search to reach at least that score.\n`
+    + `- Compare the new search directly with the retained historical average under matching inputs; old-team replay is only for a separately needed discrepancy investigation.\n`
     + `- A fifteen-card projection is not comparable to the original full roster's search result.\n\n`
     + `Verify from the repository root: \`node --import tsx scripts/archive-bandori-medley-fixtures.mjs --verify\`.\n`);
 }
