@@ -168,13 +168,19 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
             );
         }
         if let Some(rate_up) = card.skill.rate_up_with_perfect
-            && (!validate_non_negative_f32(rate_up.increment_percent_bits)
-                || rate_up.max_perfect_count == 0)
+            && (!validate_non_negative_f32(rate_up.stack_percent_bits)
+                || !validate_non_negative_f32(rate_up.max_score_up_percent_bits)
+                || rate_up.stack_percent_bits.to_f32() == 0.0
+                || skill_rates
+                    .into_iter()
+                    .flatten()
+                    .map(F32Bits::to_f32)
+                    .any(|base_rate| base_rate > rate_up.max_score_up_percent_bits.to_f32()))
         {
             return invalid(
                 ValidationCode::InvalidSkill,
                 format!("{path}.skill.rateUpWithPerfect"),
-                "rate-up increment must be finite and non-negative and its cap must be positive",
+                "rate-up stack must be positive and its maximum must cover every base score-up rate",
             );
         }
         cards_by_id.insert(card.instance_id, card);

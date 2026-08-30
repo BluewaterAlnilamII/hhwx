@@ -33,8 +33,10 @@ pub struct ExactProbabilityV1 {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RateUpWithPerfectV1 {
-    pub increment_percent_bits: F32Bits,
-    pub max_perfect_count: u16,
+    /// Amount added after each PERFECT, including the current note.
+    pub stack_percent_bits: F32Bits,
+    /// Maximum total score-up percent after the base skill line and stacks.
+    pub max_score_up_percent_bits: F32Bits,
 }
 
 /// A team-context-resolved score skill behavior.
