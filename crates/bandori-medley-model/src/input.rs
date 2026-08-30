@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{SCORING_INPUT_SCHEMA_VERSION, SCORING_RULES_VERSION, ValidationError};
+use crate::ValidationError;
 
 /// Exact decimal probability represented as `numerator / 10^decimal_scale`.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -128,12 +128,5 @@ impl FixedMedleyEvaluationInputV1 {
     /// Validate the complete normalized contract without repairing any value.
     pub fn validate(&self) -> Result<(), ValidationError> {
         crate::validation::validate_input(self)
-    }
-
-    /// Whether this input identifies the only currently supported schema and rules.
-    #[must_use]
-    pub fn has_supported_versions(&self) -> bool {
-        self.schema_version == SCORING_INPUT_SCHEMA_VERSION
-            && self.scoring_rules_version == SCORING_RULES_VERSION
     }
 }

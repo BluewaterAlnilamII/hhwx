@@ -12,9 +12,3 @@ mod scoring;
 
 pub use error::{ScoreError, ScoreErrorCode};
 pub use scoring::{F64BitsV1, MedleyScoreTraceV1, SongScoreTraceV1, evaluate_fixed_medley};
-
-/// Return the only normalized input schema accepted by this reference boundary.
-#[must_use]
-pub const fn supported_input_schema() -> &'static str {
-    bandori_medley_model::SCORING_INPUT_SCHEMA_VERSION
-}

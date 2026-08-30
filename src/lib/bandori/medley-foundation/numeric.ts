@@ -63,10 +63,3 @@ export function parsePerfectRatePercent(
   }
   return { numerator, decimalScale };
 }
-
-export function readPositiveInteger(value: unknown, path: string, maximum = U32_MAX): number {
-  if (!Number.isSafeInteger(value) || (value as number) <= 0 || (value as number) > maximum) {
-    failInput("INVALID_PARAMETER", path, `must be a positive integer no greater than ${maximum}`);
-  }
-  return value as number;
-}

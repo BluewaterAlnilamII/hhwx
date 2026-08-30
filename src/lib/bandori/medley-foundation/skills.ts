@@ -7,7 +7,6 @@ import type {
   SkillBehaviorV1,
 } from "./contracts";
 import { failInput } from "./errors";
-import { regionalNumber } from "./parameters";
 
 const SCORE_EFFECT_TYPES = new Set([
   "score",
@@ -33,6 +32,15 @@ function finiteNumber(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function regionalNumber(value: unknown, server: BandoriServer): number | null {
+  if (Array.isArray(value)) {
+    const selected = finiteNumber(value[server]);
+    if (selected !== null) return selected;
+    return finiteNumber(value[0]);
+  }
+  return finiteNumber(value);
 }
 
 function readSkillLevel(value: number, path: string): number {
@@ -209,5 +217,3 @@ export function resolveBestdoriScoreSkill(options: {
       : null,
   };
 }
-
-export type { FixedTeamSkillContextV1 } from "./contracts";

@@ -81,18 +81,6 @@ function sum(value: Triple<number>): number {
   return total;
 }
 
-function regionalNumber(value: unknown, server: BandoriServer): number | null {
-  if (Array.isArray(value)) {
-    const selected = value[server];
-    if (selected !== null && selected !== undefined && selected !== "" && Number.isFinite(Number(selected))) {
-      return Number(selected);
-    }
-    const jp = value[0];
-    return jp !== null && jp !== undefined && jp !== "" && Number.isFinite(Number(jp)) ? Number(jp) : null;
-  }
-  return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
-}
-
 function exactServerRegionalNumber(value: unknown, server: BandoriServer): number | null {
   if (Array.isArray(value)) {
     const selected = value[server];
@@ -401,5 +389,3 @@ export function calculateFixedTeamParameters(options: {
     }>,
   };
 }
-
-export { regionalNumber };
