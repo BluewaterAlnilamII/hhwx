@@ -1,8 +1,7 @@
-//! Public contract for the greenfield Bandori medley search.
+//! Greenfield Bandori medley search.
 //!
-//! This checkpoint defines normalized inputs, exact/incomplete outputs,
-//! resource controls, and strict validation. It deliberately contains no
-//! scoring, candidate generation, upper bound, enumeration, or join.
+//! The crate owns its normalized contract and an independent implementation
+//! of the approved Bestdori-compatible scoring and search design.
 
 #![forbid(unsafe_code)]
 
@@ -15,6 +14,11 @@ mod error;
 mod exact_score;
 mod input;
 mod output;
+#[allow(
+    dead_code,
+    reason = "team parameter derivation is wired into candidate scoring in the next checkpoint"
+)]
+mod parameters;
 mod validation;
 
 pub use control::{SearchControl, SearchStopReason};
