@@ -10,9 +10,9 @@ mod input;
 mod validation;
 
 pub use input::{
-    CardPowerComponentsV1, CardScoringInputV1, DifficultyV1, ExactProbabilityV1, F32Bits,
-    FixedMedleyEvaluationInputV1, FixedTeamV1, MedleySongV1, RateUpWithPerfectV1,
-    ResolvedScoreSkillV1, ScoringNoteV1, SkillBehaviorV1,
+    CardScoringInputV1, DifficultyV1, ExactProbabilityV1, F32Bits, FixedMedleyEvaluationInputV1,
+    FixedTeamV1, MedleySongV1, RateUpWithPerfectV1, ResolvedScoreSkillV1, ScoringNoteV1,
+    SkillBehaviorV1,
 };
 pub use validation::{ValidationCode, ValidationError};
 

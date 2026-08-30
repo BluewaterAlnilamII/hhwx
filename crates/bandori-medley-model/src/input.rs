@@ -29,15 +29,6 @@ pub struct ExactProbabilityV1 {
     pub decimal_scale: u8,
 }
 
-/// The three client-side power categories combined by the score calculation.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct CardPowerComponentsV1 {
-    pub base_power_bits: F32Bits,
-    pub area_item_power_bits: F32Bits,
-    pub event_power_bits: F32Bits,
-}
-
 /// Optional dynamic increase used by skills that grow with PERFECT judgments.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -88,7 +79,6 @@ pub struct CardScoringInputV1 {
     pub instance_id: u32,
     pub master_card_id: u32,
     pub character_id: u32,
-    pub power: CardPowerComponentsV1,
     pub skill: ResolvedScoreSkillV1,
 }
 
@@ -98,6 +88,8 @@ pub struct CardScoringInputV1 {
 pub struct FixedTeamV1 {
     pub slot: u8,
     pub member_instance_ids: [u32; 5],
+    /// Final deck parameter produced by the audited client-compatible power pipeline.
+    pub deck_total_parameter_bits: F32Bits,
 }
 
 /// Supported live difficulties at the normalized boundary.

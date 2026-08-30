@@ -131,19 +131,6 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
                 "masterCardId and characterId must be positive",
             );
         }
-        for (field, value) in [
-            ("basePowerBits", card.power.base_power_bits),
-            ("areaItemPowerBits", card.power.area_item_power_bits),
-            ("eventPowerBits", card.power.event_power_bits),
-        ] {
-            if !validate_non_negative_f32(value) {
-                return invalid(
-                    ValidationCode::InvalidCard,
-                    format!("{path}.power.{field}"),
-                    "power must be a finite, non-negative, canonical f32",
-                );
-            }
-        }
         if card.skill.master_skill_id == 0 || card.skill.duration_micros == 0 {
             return invalid(
                 ValidationCode::InvalidSkill,
@@ -201,6 +188,13 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
                 ValidationCode::InvalidTeam,
                 format!("{path}.slot"),
                 "team slots must be ordered 0, 1, 2",
+            );
+        }
+        if !validate_non_negative_f32(team.deck_total_parameter_bits) {
+            return invalid(
+                ValidationCode::InvalidTeam,
+                format!("{path}.deckTotalParameterBits"),
+                "deck total must be a finite, non-negative, canonical f32",
             );
         }
         let mut team_characters = HashSet::with_capacity(5);
@@ -304,8 +298,8 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
 mod tests {
     use super::*;
     use crate::{
-        CardPowerComponentsV1, CardScoringInputV1, DifficultyV1, FixedTeamV1, MedleySongV1,
-        ResolvedScoreSkillV1, ScoringNoteV1,
+        CardScoringInputV1, DifficultyV1, FixedTeamV1, MedleySongV1, ResolvedScoreSkillV1,
+        ScoringNoteV1,
     };
 
     fn fixture() -> FixedMedleyEvaluationInputV1 {
@@ -314,11 +308,6 @@ mod tests {
                 instance_id,
                 master_card_id: instance_id + 1,
                 character_id: instance_id + 1,
-                power: CardPowerComponentsV1 {
-                    base_power_bits: F32Bits::from_f32(1_000.0),
-                    area_item_power_bits: F32Bits::from_f32(100.0),
-                    event_power_bits: F32Bits::from_f32(50.0),
-                },
                 skill: ResolvedScoreSkillV1 {
                     master_skill_id: instance_id + 1,
                     duration_micros: 2_000_000,
@@ -334,6 +323,7 @@ mod tests {
             member_instance_ids: std::array::from_fn(|member| {
                 u32::try_from(slot * 5 + member).expect("15 fixture cards fit in u32")
             }),
+            deck_total_parameter_bits: F32Bits::from_f32(17_250.0),
         });
         let songs = std::array::from_fn(|slot| MedleySongV1 {
             slot: u8::try_from(slot).expect("three slots fit in u8"),
