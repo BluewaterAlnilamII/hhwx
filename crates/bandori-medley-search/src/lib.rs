@@ -19,6 +19,11 @@ mod output;
     reason = "team parameter derivation is wired into candidate scoring in the next checkpoint"
 )]
 mod parameters;
+#[allow(
+    dead_code,
+    reason = "proved bounds are wired into traversal and join pruning in the next checkpoint"
+)]
+mod upper_bound;
 mod validation;
 
 pub use control::{SearchControl, SearchStopReason};

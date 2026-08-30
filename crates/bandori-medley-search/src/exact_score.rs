@@ -69,7 +69,7 @@ enum Judgment {
     Great,
 }
 
-fn skill_orders() -> &'static [[usize; 5]] {
+pub(crate) fn skill_orders() -> &'static [[usize; 5]] {
     static ORDERS: OnceLock<Vec<[usize; 5]>> = OnceLock::new();
     ORDERS
         .get_or_init(|| {
