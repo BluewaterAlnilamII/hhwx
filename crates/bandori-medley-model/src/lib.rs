@@ -1,8 +1,7 @@
 //! Versioned, search-independent inputs for the greenfield Bandori medley scorer.
 //!
-//! The model uses explicit integer or IEEE-754 bit representations at its JSON
-//! boundary. It does not accept UI state, network responses, search controls, or
-//! values inherited from the legacy team builder.
+//! The model uses JSON-safe integers and finite JavaScript-compatible numbers.
+//! It does not accept UI state, network responses, or search controls.
 
 #![forbid(unsafe_code)]
 
@@ -10,7 +9,7 @@ mod input;
 mod validation;
 
 pub use input::{
-    CardScoringInputV1, DifficultyV1, ExactProbabilityV1, F32Bits, FixedMedleyEvaluationInputV1,
+    CardScoringInputV1, DifficultyV1, ExactProbabilityV1, FixedMedleyEvaluationInputV1,
     FixedTeamV1, MedleySongV1, RateUpWithPerfectV1, ResolvedScoreSkillV1, ScoringNoteV1,
     SkillBehaviorV1,
 };

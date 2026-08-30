@@ -10,8 +10,8 @@ use crate::error::{ScoreError, ScoreErrorCode};
 use crate::permutations::skill_orders;
 
 const SKILL_ORDER_COUNT: u16 = 120;
-const PERFECT_RATE: f32 = 1.1_f32;
-const GREAT_RATE: f32 = 0.8_f32;
+const PERFECT_RATE: f64 = 1.1;
+const GREAT_RATE: f64 = 0.8;
 
 /// JSON-safe IEEE-754 double-precision payload split into two exact u32 words.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -52,9 +52,9 @@ pub struct SongScoreTraceV1 {
     pub slot: u8,
     pub start_combo: u32,
     pub note_count: u32,
-    pub deck_total_parameter_bits: u32,
-    pub play_level_rate_bits: u32,
-    pub base_score_per_note_bits: u32,
+    pub deck_total_parameter_bits: F64BitsV1,
+    pub play_level_rate_bits: F64BitsV1,
+    pub base_score_per_note_bits: F64BitsV1,
     pub base_note_scores: Vec<JudgmentScoreTraceV1>,
     pub base_expected_score_bits: F64BitsV1,
     pub permutation_expected_score_bits: Vec<F64BitsV1>,
@@ -98,14 +98,14 @@ struct Activation<'a> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct ActivationState {
     continued_active: bool,
-    rate_up_accumulator_bits: u32,
+    rate_up_accumulator_bits: u64,
 }
 
 impl Default for ActivationState {
     fn default() -> Self {
         Self {
             continued_active: true,
-            rate_up_accumulator_bits: 0.0_f32.to_bits(),
+            rate_up_accumulator_bits: 0.0_f64.to_bits(),
         }
     }
 }
@@ -132,74 +132,28 @@ fn exact_probability_to_f64(probability: ExactProbabilityV1) -> f64 {
     probability.numerator as f64 / denominator as f64
 }
 
-fn play_level_rate(play_level: u16) -> f32 {
-    let level_offset = f32::from(play_level) - 5.0_f32;
-    let adjustment = level_offset * 0.01_f32;
-    1.0_f32 + adjustment
+fn play_level_rate(play_level: u16) -> f64 {
+    1.0 + (f64::from(play_level) - 5.0) * 0.01
 }
 
-fn base_score_per_note(deck_total_parameter: f32, play_level: u16, note_count: u32) -> f32 {
-    let after_level = deck_total_parameter * play_level_rate(play_level);
-    let after_note_count = after_level / note_count as f32;
-    after_note_count * 3.0_f32
+fn base_score_per_note(deck_total_parameter: f64, play_level: u16, note_count: u32) -> f64 {
+    deck_total_parameter * play_level_rate(play_level) / f64::from(note_count) * 3.0
 }
 
-// Exact f32 payloads from JP masterMedleyComboRateList artifact
-// a4a77ff9daee4d0373612044e14d4844343bceed4b32a34843300e81e2d331ab.
-// Reconstructing these values with f32 arithmetic is not equivalent: 1.04 +
-// 3 * 0.01 is one ULP below the stored 1.07 value.
-const MEDLEY_COMBO_RATE_BITS: [u32; 35] = [
-    0x3f80_0000,
-    0x3f81_47ae,
-    0x3f82_8f5c,
-    0x3f83_d70a,
-    0x3f85_1eb8,
-    0x3f86_6666,
-    0x3f87_ae14,
-    0x3f88_f5c3,
-    0x3f8a_3d71,
-    0x3f8b_851f,
-    0x3f8c_cccd,
-    0x3f8e_147b,
-    0x3f8f_5c29,
-    0x3f90_a3d7,
-    0x3f91_eb85,
-    0x3f93_3333,
-    0x3f94_7ae1,
-    0x3f95_c28f,
-    0x3f97_0a3d,
-    0x3f98_51ec,
-    0x3f99_999a,
-    0x3f9a_e148,
-    0x3f9c_28f6,
-    0x3f9d_70a4,
-    0x3f9e_b852,
-    0x3fa0_0000,
-    0x3fa1_47ae,
-    0x3fa2_8f5c,
-    0x3fa3_d70a,
-    0x3fa5_1eb8,
-    0x3fa6_6666,
-    0x3fa7_ae14,
-    0x3fa8_f5c3,
-    0x3faa_3d71,
-    0x3fab_851f,
-];
-
-fn medley_combo_rate(combo: u32) -> f32 {
-    let table_index = match combo {
-        0..=20 => 0,
-        21..=50 => 1,
-        51..=100 => 2,
-        101..=300 => 3 + (combo - 101) / 50,
-        301..=3_000 => 7 + (combo - 301) / 100,
-        3_001..=9_999 => 34,
-        _ => 0,
-    };
-    f32::from_bits(MEDLEY_COMBO_RATE_BITS[table_index as usize])
+/// Bestdori's medley combo formula. Native-client table differences are
+/// documented separately and intentionally do not alter calculator semantics.
+fn medley_combo_rate(combo: u32) -> f64 {
+    match combo {
+        0..=20 => 1.0,
+        21..=50 => 1.01,
+        51..=100 => 1.02,
+        101..=300 => 1.01 + f64::from((combo - 1) / 50) * 0.01,
+        301..=3_000 => 1.04 + f64::from((combo - 1) / 100) * 0.01,
+        _ => 1.34,
+    }
 }
 
-fn floor_f32_to_u32(value: f32, path: &str) -> Result<u32, ScoreError> {
+fn floor_number_to_u32(value: f64, path: &str) -> Result<u32, ScoreError> {
     if !value.is_finite() || value < 0.0 {
         return Err(ScoreError::new(
             ScoreErrorCode::ArithmeticNonFinite,
@@ -208,7 +162,7 @@ fn floor_f32_to_u32(value: f32, path: &str) -> Result<u32, ScoreError> {
         ));
     }
     let floored = value.floor();
-    if f64::from(floored) > f64::from(u32::MAX) {
+    if floored > f64::from(u32::MAX) {
         return Err(ScoreError::new(
             ScoreErrorCode::ArithmeticOverflow,
             path,
@@ -218,51 +172,42 @@ fn floor_f32_to_u32(value: f32, path: &str) -> Result<u32, ScoreError> {
     Ok(floored as u32)
 }
 
-fn percent_multiplier(percent: f32) -> f32 {
-    let normalized = percent / 100.0_f32;
-    1.0_f32 + normalized
+fn percent_multiplier(percent: f64) -> f64 {
+    1.0 + percent / 100.0
 }
 
 fn base_skill_multiplier(
     skill: &ResolvedScoreSkillV1,
     state: &mut ActivationState,
     judgment: Judgment,
-) -> f32 {
+) -> f64 {
     match skill.behavior {
-        SkillBehaviorV1::Neutral => 1.0_f32,
-        SkillBehaviorV1::Score {
-            score_up_percent_bits,
-        } => percent_multiplier(score_up_percent_bits.to_f32()),
-        SkillBehaviorV1::ScoreOnPerfect {
-            score_up_percent_bits,
-        } => match judgment {
-            Judgment::Perfect => percent_multiplier(score_up_percent_bits.to_f32()),
-            Judgment::Great => 1.0_f32,
+        SkillBehaviorV1::Neutral => 1.0,
+        SkillBehaviorV1::Score { score_up_percent } => percent_multiplier(score_up_percent),
+        SkillBehaviorV1::ScoreOnPerfect { score_up_percent } => match judgment {
+            Judgment::Perfect => percent_multiplier(score_up_percent),
+            Judgment::Great => 1.0,
         },
-        SkillBehaviorV1::PerfectOnly {
-            score_up_percent_bits,
-        } => match judgment {
-            Judgment::Perfect => percent_multiplier(score_up_percent_bits.to_f32()),
-            Judgment::Great => 0.0_f32,
+        SkillBehaviorV1::PerfectOnly { score_up_percent } => match judgment {
+            Judgment::Perfect => percent_multiplier(score_up_percent),
+            Judgment::Great => 0.0,
         },
         SkillBehaviorV1::ContinuedPerfect {
-            active_score_up_percent_bits,
-            fallback_score_up_percent_bits,
+            active_score_up_percent,
+            fallback_score_up_percent,
         } => {
             if judgment == Judgment::Great {
                 state.continued_active = false;
             }
             if state.continued_active {
-                percent_multiplier(active_score_up_percent_bits.to_f32())
+                percent_multiplier(active_score_up_percent)
             } else {
-                percent_multiplier(fallback_score_up_percent_bits.to_f32())
+                percent_multiplier(fallback_score_up_percent)
             }
         }
-        SkillBehaviorV1::GreatOrWorseHalf {
-            score_up_percent_bits,
-        } => match judgment {
-            Judgment::Perfect => percent_multiplier(score_up_percent_bits.to_f32()),
-            Judgment::Great => 0.5_f32,
+        SkillBehaviorV1::GreatOrWorseHalf { score_up_percent } => match judgment {
+            Judgment::Perfect => percent_multiplier(score_up_percent),
+            Judgment::Great => 0.5,
         },
     }
 }
@@ -271,21 +216,21 @@ fn skill_multiplier(
     skill: &ResolvedScoreSkillV1,
     state: &mut ActivationState,
     judgment: Judgment,
-) -> f32 {
+) -> f64 {
     let mut multiplier = base_skill_multiplier(skill, state, judgment);
     let Some(rate_up) = skill.rate_up_with_perfect else {
         return multiplier;
     };
 
-    let base_bonus_percent = (multiplier - 1.0_f32) * 100.0_f32;
-    let accumulator_cap = rate_up.max_score_up_percent_bits.to_f32() - base_bonus_percent;
-    let mut accumulator = f32::from_bits(state.rate_up_accumulator_bits);
+    let base_bonus_percent = (multiplier - 1.0) * 100.0;
+    let accumulator_cap = rate_up.max_score_up_percent - base_bonus_percent;
+    let mut accumulator = f64::from_bits(state.rate_up_accumulator_bits);
     if judgment == Judgment::Perfect {
-        let incremented = accumulator + rate_up.stack_percent_bits.to_f32();
+        let incremented = accumulator + rate_up.stack_percent;
         accumulator = incremented.min(accumulator_cap);
         state.rate_up_accumulator_bits = accumulator.to_bits();
     }
-    let accumulator_rate = accumulator / 100.0_f32;
+    let accumulator_rate = accumulator / 100.0;
     multiplier += accumulator_rate;
     multiplier
 }
@@ -294,7 +239,7 @@ fn build_base_note_scores(
     song: &MedleySongV1,
     team: &FixedTeamV1,
     start_combo: u32,
-) -> Result<(f32, f32, Vec<JudgmentScoreTraceV1>), ScoreError> {
+) -> Result<(f64, f64, Vec<JudgmentScoreTraceV1>), ScoreError> {
     let note_count = u32::try_from(song.notes.len()).map_err(|_| {
         ScoreError::new(
             ScoreErrorCode::ArithmeticOverflow,
@@ -302,14 +247,14 @@ fn build_base_note_scores(
             "note count exceeds u32",
         )
     })?;
-    let deck_total_parameter = team.deck_total_parameter_bits.to_f32();
+    let deck_total_parameter = team.deck_total_parameter;
     let level_rate = play_level_rate(song.play_level);
     let base = base_score_per_note(deck_total_parameter, song.play_level, note_count);
     if !level_rate.is_finite() || !base.is_finite() || base < 0.0 {
         return Err(ScoreError::new(
             ScoreErrorCode::ArithmeticNonFinite,
             format!("songs[{}].baseScorePerNote", song.slot),
-            "client-order f32 base score must remain finite and non-negative",
+            "Bestdori-compatible base score must remain finite and non-negative",
         ));
     }
 
@@ -328,11 +273,11 @@ fn build_base_note_scores(
         let perfect_with_combo = perfect_corrected * combo_rate;
         let great_with_combo = great_corrected * combo_rate;
         scores.push(JudgmentScoreTraceV1 {
-            perfect: floor_f32_to_u32(
+            perfect: floor_number_to_u32(
                 perfect_with_combo,
                 &format!("songs[{}].notes[{note_index}].perfectBaseScore", song.slot),
             )?,
-            great: floor_f32_to_u32(
+            great: floor_number_to_u32(
                 great_with_combo,
                 &format!("songs[{}].notes[{note_index}].greatBaseScore", song.slot),
             )?,
@@ -417,7 +362,7 @@ fn note_score_for_judgment(
         Judgment::Perfect => base_score.perfect,
         Judgment::Great => base_score.great,
     };
-    let mut combined_multiplier = 1.0_f32;
+    let mut combined_multiplier = 1.0_f64;
     for (activation_index, activation) in activations.iter().enumerate() {
         if note.time_micros <= activation.trigger_time_micros
             || note.time_micros > activation.end_time_micros
@@ -429,13 +374,12 @@ fn note_score_for_judgment(
             &mut state.activations[activation_index],
             judgment,
         );
-        let additive_delta = multiplier - 1.0_f32;
+        let additive_delta = multiplier - 1.0;
         combined_multiplier += additive_delta;
     }
-    combined_multiplier = combined_multiplier.max(0.0_f32);
-    let score_up_rate = 1.0_f32 * combined_multiplier;
-    let with_skill = inner_score as f32 * score_up_rate;
-    floor_f32_to_u32(
+    combined_multiplier = combined_multiplier.max(0.0);
+    let with_skill = f64::from(inner_score) * combined_multiplier;
+    floor_number_to_u32(
         with_skill,
         &format!("songs[{}].notes[{note_index}].finalScore", song.slot),
     )
@@ -567,9 +511,9 @@ fn score_song(
         slot: song.slot,
         start_combo,
         note_count,
-        deck_total_parameter_bits: team.deck_total_parameter_bits.0,
-        play_level_rate_bits: level_rate.to_bits(),
-        base_score_per_note_bits: base.to_bits(),
+        deck_total_parameter_bits: F64BitsV1::from_f64(team.deck_total_parameter),
+        play_level_rate_bits: F64BitsV1::from_f64(level_rate),
+        base_score_per_note_bits: F64BitsV1::from_f64(base),
         base_note_scores,
         base_expected_score_bits: F64BitsV1::from_f64(base_expected),
         permutation_expected_score_bits,
@@ -625,7 +569,7 @@ pub fn evaluate_fixed_medley(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bandori_medley_model::{F32Bits, RateUpWithPerfectV1, ScoringNoteV1, ValidationCode};
+    use bandori_medley_model::{RateUpWithPerfectV1, ScoringNoteV1, ValidationCode};
 
     const VALID_FIXED_MEDLEY: &str =
         include_str!("../../bandori-medley-model/tests/fixtures/valid-fixed-medley-v1.json");
@@ -738,50 +682,32 @@ mod tests {
     }
 
     #[test]
-    fn client_f32_and_two_rounding_boundaries_are_frozen() {
-        let first_base = base_score_per_note(3_143.0_f32, 26, 5);
-        let first_corrected = first_base * PERFECT_RATE;
-        let first_inner =
-            floor_f32_to_u32(first_corrected * 1.0_f32, "test").expect("rounding fixture fits");
-        assert_eq!(first_inner, 2_510);
-        let naive_first = (3_143.0_f64 * 1.21_f64 / 5.0_f64 * 3.0_f64 * 1.1_f64).floor();
-        assert_eq!(naive_first, 2_509.0);
-
-        let second_base = base_score_per_note(126.0_f32, 26, 5);
-        let second_corrected = second_base * PERFECT_RATE;
-        let second_inner =
-            floor_f32_to_u32(second_corrected, "test").expect("first rounding fixture fits");
-        assert_eq!(second_inner, 100);
-        let client_second =
-            floor_f32_to_u32(second_inner as f32 * percent_multiplier(15.0_f32), "test")
-                .expect("second rounding fixture fits");
-        assert_eq!(client_second, 115);
-        assert_eq!((100.0_f64 * 1.15_f64).floor(), 114.0);
+    fn bestdori_number_chain_keeps_both_integer_rounding_points() {
+        let base = base_score_per_note(126.0, 26, 5);
+        let inner =
+            floor_number_to_u32(base * PERFECT_RATE, "test").expect("first rounding fixture fits");
+        assert_eq!(inner, 100);
+        let final_score = floor_number_to_u32(f64::from(inner) * percent_multiplier(15.0), "test")
+            .expect("second rounding fixture fits");
+        assert_eq!(final_score, 114);
     }
 
     #[test]
     fn medley_combo_carries_across_the_20_to_21_boundary() {
-        assert_eq!(medley_combo_rate(20).to_bits(), 1.0_f32.to_bits());
-        assert_eq!(medley_combo_rate(21).to_bits(), 1.01_f32.to_bits());
+        assert_eq!(medley_combo_rate(20), 1.0);
+        assert_eq!(medley_combo_rate(21), 1.01);
         assert!(medley_combo_rate(21) > medley_combo_rate(20));
     }
 
     #[test]
-    fn medley_combo_rates_use_exact_master_f32_payloads() {
-        assert_eq!(medley_combo_rate(300).to_bits(), 0x3f87_ae14);
-        assert_eq!(medley_combo_rate(301).to_bits(), 0x3f88_f5c3);
-        assert_eq!(medley_combo_rate(400).to_bits(), 0x3f88_f5c3);
-        assert_eq!(medley_combo_rate(401).to_bits(), 0x3f8a_3d71);
-        assert_eq!(medley_combo_rate(700).to_bits(), 0x3f8c_cccd);
-        assert_eq!(medley_combo_rate(701).to_bits(), 0x3f8e_147b);
-        assert_eq!(medley_combo_rate(3_000).to_bits(), 0x3faa_3d71);
-        assert_eq!(medley_combo_rate(3_001).to_bits(), 0x3fab_851f);
-        assert_eq!(medley_combo_rate(9_999).to_bits(), 0x3fab_851f);
-        assert_eq!(medley_combo_rate(10_000).to_bits(), 0x3f80_0000);
-
-        let reconstructed = 1.04_f32 + 3.0_f32 * 0.01_f32;
-        assert_eq!(reconstructed.to_bits(), 0x3f88_f5c2);
-        assert_ne!(medley_combo_rate(301).to_bits(), reconstructed.to_bits());
+    fn medley_combo_rates_follow_the_bestdori_formula() {
+        assert_eq!(medley_combo_rate(300), 1.06);
+        assert_eq!(medley_combo_rate(301), 1.07);
+        assert_eq!(medley_combo_rate(400), 1.07);
+        assert_eq!(medley_combo_rate(401), 1.08);
+        assert_eq!(medley_combo_rate(3_000), 1.33);
+        assert_eq!(medley_combo_rate(3_001), 1.34);
+        assert_eq!(medley_combo_rate(10_000), 1.34);
     }
 
     #[test]
@@ -823,7 +749,7 @@ mod tests {
         for card in &mut input.cards {
             card.skill.duration_micros = 10_000_000;
             card.skill.behavior = SkillBehaviorV1::Score {
-                score_up_percent_bits: F32Bits::from_f32(100.0),
+                score_up_percent: 100.0,
             };
         }
         for note in &mut input.songs[0].notes[..6] {
@@ -834,7 +760,7 @@ mod tests {
         let song = &trace.songs[0];
         let final_inner = song.base_note_scores[6].perfect;
         let expected_final =
-            floor_f32_to_u32(final_inner as f32 * 7.0_f32, "test").expect("test score fits");
+            floor_number_to_u32(f64::from(final_inner) * 7.0, "test").expect("test score fits");
         let expected_total: u32 = song.base_note_scores[..6]
             .iter()
             .map(|score| score.perfect)
@@ -856,12 +782,12 @@ mod tests {
         for card in &mut input.cards {
             card.skill.duration_micros = 1_000_000;
             card.skill.behavior = SkillBehaviorV1::Score {
-                score_up_percent_bits: F32Bits::from_f32(0.0),
+                score_up_percent: 0.0,
             };
         }
         let leader_instance_id = input.teams[0].leader_instance_id;
         input.cards[leader_instance_id as usize].skill.behavior = SkillBehaviorV1::Score {
-            score_up_percent_bits: F32Bits::from_f32(100.0),
+            score_up_percent: 100.0,
         };
         for (index, note) in input.songs[0].notes.iter_mut().enumerate() {
             note.time_micros = if index < 6 {
@@ -874,7 +800,7 @@ mod tests {
         let with_leader = evaluate_fixed_medley(&input).expect("leader fixture scores");
         let final_inner = with_leader.songs[0].base_note_scores[6].perfect;
         input.cards[leader_instance_id as usize].skill.behavior = SkillBehaviorV1::Score {
-            score_up_percent_bits: F32Bits::from_f32(0.0),
+            score_up_percent: 0.0,
         };
         let without_leader = evaluate_fixed_medley(&input).expect("zero leader fixture scores");
         assert_eq!(
@@ -893,16 +819,16 @@ mod tests {
         for card in &mut input.cards {
             card.skill.duration_micros = 10_000_000;
             card.skill.behavior = SkillBehaviorV1::Score {
-                score_up_percent_bits: F32Bits::from_f32(0.0),
+                score_up_percent: 0.0,
             };
         }
         let first = input.teams[0].member_instance_ids[0] as usize;
         let second = input.teams[0].member_instance_ids[1] as usize;
         input.cards[first].skill.behavior = SkillBehaviorV1::Score {
-            score_up_percent_bits: F32Bits::from_f32(100.0),
+            score_up_percent: 100.0,
         };
         input.cards[second].skill.behavior = SkillBehaviorV1::GreatOrWorseHalf {
-            score_up_percent_bits: F32Bits::from_f32(125.0),
+            score_up_percent: 125.0,
         };
         for note in &mut input.songs[0].notes[..6] {
             note.time_micros = 0;
@@ -917,7 +843,7 @@ mod tests {
             .sum::<u32>();
         let final_inner = song.base_note_scores[6].great;
         let final_score =
-            floor_f32_to_u32(final_inner as f32 * 1.5_f32, "test").expect("test score fits");
+            floor_number_to_u32(f64::from(final_inner) * 1.5, "test").expect("test score fits");
         assert_eq!(
             song.permutation_expected_score_bits[0].to_f64(),
             f64::from(trigger_total + final_score),
@@ -931,14 +857,14 @@ mod tests {
             skill_level: 1,
             duration_micros: 1,
             behavior: SkillBehaviorV1::ContinuedPerfect {
-                active_score_up_percent_bits: F32Bits::from_f32(115.0),
-                fallback_score_up_percent_bits: F32Bits::from_f32(80.0),
+                active_score_up_percent: 115.0,
+                fallback_score_up_percent: 80.0,
             },
             rate_up_with_perfect: None,
         };
         let mut state = ActivationState::default();
         let multiplier = skill_multiplier(&skill, &mut state, Judgment::Great);
-        assert_eq!(multiplier.to_bits(), 1.8_f32.to_bits());
+        assert_eq!(multiplier, 1.8);
         assert!(!state.continued_active);
     }
 
@@ -949,7 +875,7 @@ mod tests {
             skill_level: 1,
             duration_micros: 1,
             behavior: SkillBehaviorV1::ScoreOnPerfect {
-                score_up_percent_bits: F32Bits::from_f32(100.0),
+                score_up_percent: 100.0,
             },
             rate_up_with_perfect: None,
         };
@@ -957,11 +883,11 @@ mod tests {
         let mut great_state = ActivationState::default();
         assert_eq!(
             skill_multiplier(&skill, &mut perfect_state, Judgment::Perfect).to_bits(),
-            2.0_f32.to_bits(),
+            2.0_f64.to_bits(),
         );
         assert_eq!(
             skill_multiplier(&skill, &mut great_state, Judgment::Great).to_bits(),
-            1.0_f32.to_bits(),
+            1.0_f64.to_bits(),
         );
     }
 
@@ -978,11 +904,11 @@ mod tests {
         let mut great_state = ActivationState::default();
         assert_eq!(
             skill_multiplier(&skill, &mut perfect_state, Judgment::Perfect).to_bits(),
-            1.0_f32.to_bits(),
+            1.0_f64.to_bits(),
         );
         assert_eq!(
             skill_multiplier(&skill, &mut great_state, Judgment::Great).to_bits(),
-            1.0_f32.to_bits(),
+            1.0_f64.to_bits(),
         );
     }
 
@@ -993,32 +919,32 @@ mod tests {
             skill_level: 1,
             duration_micros: 1,
             behavior: SkillBehaviorV1::Score {
-                score_up_percent_bits: F32Bits::from_f32(100.0),
+                score_up_percent: 100.0,
             },
             rate_up_with_perfect: Some(RateUpWithPerfectV1 {
-                stack_percent_bits: F32Bits::from_f32(0.5),
-                max_score_up_percent_bits: F32Bits::from_f32(150.0),
+                stack_percent: 0.5,
+                max_score_up_percent: 150.0,
             }),
         };
         let mut state = ActivationState::default();
         assert_eq!(
             skill_multiplier(&skill, &mut state, Judgment::Perfect).to_bits(),
-            2.005_f32.to_bits(),
+            2.005_f64.to_bits(),
         );
         assert_eq!(
             skill_multiplier(&skill, &mut state, Judgment::Great).to_bits(),
-            2.005_f32.to_bits(),
+            2.005_f64.to_bits(),
         );
         assert_eq!(
             skill_multiplier(&skill, &mut state, Judgment::Perfect).to_bits(),
-            2.01_f32.to_bits(),
+            2.01_f64.to_bits(),
         );
         for _ in 0..98 {
             let _ = skill_multiplier(&skill, &mut state, Judgment::Perfect);
         }
         assert_eq!(
             skill_multiplier(&skill, &mut state, Judgment::Perfect).to_bits(),
-            2.5_f32.to_bits(),
+            2.5_f64.to_bits(),
         );
     }
 }

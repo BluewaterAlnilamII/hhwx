@@ -5,12 +5,11 @@ use std::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ExactProbabilityV1, F32Bits, FixedMedleyEvaluationInputV1, SCORING_INPUT_SCHEMA_VERSION,
+    ExactProbabilityV1, FixedMedleyEvaluationInputV1, SCORING_INPUT_SCHEMA_VERSION,
     SCORING_RULES_VERSION, SkillBehaviorV1,
 };
 
 const JSON_SAFE_INTEGER_MAX: u64 = 9_007_199_254_740_991;
-const MASTER_MEDLEY_COMBO_MAX: u64 = 9_999;
 
 /// Stable failure category for the normalized boundary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -82,9 +81,8 @@ fn validate_probability(probability: ExactProbabilityV1) -> bool {
     probability.decimal_scale == 0 || !probability.numerator.is_multiple_of(10)
 }
 
-fn validate_non_negative_f32(bits: F32Bits) -> bool {
-    let value = bits.to_f32();
-    value.is_finite() && value >= 0.0 && bits.0 != (-0.0_f32).to_bits()
+fn validate_non_negative_number(value: f64) -> bool {
+    value.is_finite() && value >= 0.0 && !value.is_sign_negative()
 }
 
 fn invalid(
@@ -161,35 +159,29 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
         }
         let skill_rates = match card.skill.behavior {
             SkillBehaviorV1::Neutral => [None, None],
-            SkillBehaviorV1::Score {
-                score_up_percent_bits,
+            SkillBehaviorV1::Score { score_up_percent }
+            | SkillBehaviorV1::ScoreOnPerfect { score_up_percent }
+            | SkillBehaviorV1::PerfectOnly { score_up_percent }
+            | SkillBehaviorV1::GreatOrWorseHalf { score_up_percent } => {
+                [Some(score_up_percent), None]
             }
-            | SkillBehaviorV1::ScoreOnPerfect {
-                score_up_percent_bits,
-            }
-            | SkillBehaviorV1::PerfectOnly {
-                score_up_percent_bits,
-            }
-            | SkillBehaviorV1::GreatOrWorseHalf {
-                score_up_percent_bits,
-            } => [Some(score_up_percent_bits), None],
             SkillBehaviorV1::ContinuedPerfect {
-                active_score_up_percent_bits,
-                fallback_score_up_percent_bits,
+                active_score_up_percent,
+                fallback_score_up_percent,
             } => [
-                Some(active_score_up_percent_bits),
-                Some(fallback_score_up_percent_bits),
+                Some(active_score_up_percent),
+                Some(fallback_score_up_percent),
             ],
         };
         if skill_rates
             .into_iter()
             .flatten()
-            .any(|rate| !validate_non_negative_f32(rate))
+            .any(|rate| !validate_non_negative_number(rate))
         {
             return invalid(
                 ValidationCode::InvalidSkill,
                 format!("{path}.skill.behavior"),
-                "skill percentages must be finite, non-negative, canonical f32 values",
+                "skill percentages must be finite, non-negative JavaScript numbers",
             );
         }
         if card.skill.rate_up_with_perfect.is_some()
@@ -202,14 +194,13 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
             );
         }
         if let Some(rate_up) = card.skill.rate_up_with_perfect
-            && (!validate_non_negative_f32(rate_up.stack_percent_bits)
-                || !validate_non_negative_f32(rate_up.max_score_up_percent_bits)
-                || rate_up.stack_percent_bits.to_f32() == 0.0
+            && (!validate_non_negative_number(rate_up.stack_percent)
+                || !validate_non_negative_number(rate_up.max_score_up_percent)
+                || rate_up.stack_percent == 0.0
                 || skill_rates
                     .into_iter()
                     .flatten()
-                    .map(F32Bits::to_f32)
-                    .any(|base_rate| base_rate > rate_up.max_score_up_percent_bits.to_f32()))
+                    .any(|base_rate| base_rate > rate_up.max_score_up_percent))
         {
             return invalid(
                 ValidationCode::InvalidSkill,
@@ -230,11 +221,11 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
                 "team slots must be ordered 0, 1, 2",
             );
         }
-        if !validate_non_negative_f32(team.deck_total_parameter_bits) {
+        if !validate_non_negative_number(team.deck_total_parameter) {
             return invalid(
                 ValidationCode::InvalidTeam,
-                format!("{path}.deckTotalParameterBits"),
-                "deck total must be a finite, non-negative, canonical f32",
+                format!("{path}.deckTotalParameter"),
+                "deck total must be a finite, non-negative JavaScript number",
             );
         }
         if team.leader_instance_id != team.member_instance_ids[2] {
@@ -277,7 +268,6 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
         );
     }
 
-    let mut medley_note_count = 0_u64;
     for (song_index, song) in input.songs.iter().enumerate() {
         let path = format!("songs[{song_index}]");
         if usize::from(song.slot) != song_index || song.song_id == 0 || song.play_level == 0 {
@@ -294,27 +284,11 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
                 "a normalized chart must contain scoring notes",
             );
         }
-        let song_note_count = u64::try_from(song.notes.len()).map_err(|_| {
-            ValidationError::new(
-                ValidationCode::InvalidChart,
-                format!("{path}.notes"),
-                "note count cannot be represented at the JSON boundary",
-            )
-        })?;
-        medley_note_count = medley_note_count
-            .checked_add(song_note_count)
-            .ok_or_else(|| {
-                ValidationError::new(
-                    ValidationCode::InvalidChart,
-                    "songs",
-                    "medley note count overflowed",
-                )
-            })?;
-        if medley_note_count > MASTER_MEDLEY_COMBO_MAX {
+        if u32::try_from(song.notes.len()).is_err() {
             return invalid(
                 ValidationCode::InvalidChart,
-                "songs",
-                "medley note count exceeds the audited master combo table maximum of 9999",
+                format!("{path}.notes"),
+                "note count must fit the normalized u32 contract",
             );
         }
         let mut previous_time = 0_u64;
@@ -391,7 +365,7 @@ mod tests {
                     skill_level: 1,
                     duration_micros: 2_000_000,
                     behavior: SkillBehaviorV1::Score {
-                        score_up_percent_bits: F32Bits::from_f32(100.0),
+                        score_up_percent: 100.0,
                     },
                     rate_up_with_perfect: None,
                 },
@@ -403,7 +377,7 @@ mod tests {
                 u32::try_from(slot * 5 + member).expect("15 fixture cards fit in u32")
             }),
             leader_instance_id: u32::try_from(slot * 5 + 2).expect("fixture leader fits in u32"),
-            deck_total_parameter_bits: F32Bits::from_f32(17_250.0),
+            deck_total_parameter: 17_250.0,
         });
         let songs = std::array::from_fn(|slot| MedleySongV1 {
             slot: u8::try_from(slot).expect("three slots fit in u8"),
@@ -495,11 +469,11 @@ mod tests {
     fn rate_up_requires_the_audited_unconditional_score_behavior() {
         let mut input = fixture();
         input.cards[0].skill.behavior = SkillBehaviorV1::ScoreOnPerfect {
-            score_up_percent_bits: F32Bits::from_f32(100.0),
+            score_up_percent: 100.0,
         };
         input.cards[0].skill.rate_up_with_perfect = Some(crate::RateUpWithPerfectV1 {
-            stack_percent_bits: F32Bits::from_f32(0.5),
-            max_score_up_percent_bits: F32Bits::from_f32(150.0),
+            stack_percent: 0.5,
+            max_score_up_percent: 150.0,
         });
         let error = input
             .validate()
@@ -526,31 +500,6 @@ mod tests {
         input
             .validate()
             .expect("judge/heal-only source skills are neutral in the fixed P/G model");
-    }
-
-    #[test]
-    fn medley_note_count_stays_inside_the_master_combo_table() {
-        let mut maximum = fixture();
-        maximum.songs[0].notes = (0_u32..9_985)
-            .map(|note_id| ScoringNoteV1 {
-                note_id,
-                time_micros: u64::from(note_id),
-                is_skill_trigger: note_id < 6,
-            })
-            .collect();
-        maximum
-            .validate()
-            .expect("9985 + 7 + 7 notes reaches the exact 9999 maximum");
-
-        maximum.songs[0].notes.push(ScoringNoteV1 {
-            note_id: 9_985,
-            time_micros: 9_985,
-            is_skill_trigger: false,
-        });
-        let error = maximum
-            .validate()
-            .expect_err("10000 notes exceed the audited master table");
-        assert_eq!(error.code, ValidationCode::InvalidChart);
     }
 
     #[test]
