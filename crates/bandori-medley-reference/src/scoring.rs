@@ -302,7 +302,7 @@ fn build_activations<'a>(
         let instance_id = if trigger_index < 5 {
             team.member_instance_ids[order[trigger_index]]
         } else {
-            team.leader_instance_id
+            team.member_instance_ids[2]
         };
         let skill = &input.cards[instance_id as usize].skill;
         let end_time_seconds = trigger_note.time_seconds + skill.duration_seconds + 0.00001;
@@ -851,7 +851,7 @@ mod tests {
                 score_up_percent: 0.0,
             };
         }
-        let leader_instance_id = input.teams[0].leader_instance_id;
+        let leader_instance_id = input.teams[0].member_instance_ids[2];
         input.cards[leader_instance_id as usize].skill.behavior = SkillBehaviorV1::Score {
             score_up_percent: 100.0,
         };

@@ -79,7 +79,6 @@ export type CardScoringInputV1 = {
 export type FixedTeamV1 = {
   slot: number;
   memberInstanceIds: Five<number>;
-  leaderInstanceId: number;
   deckTotalParameter: number;
 };
 
@@ -108,7 +107,7 @@ export type FixedMedleyEvaluationInputV1 = {
 
 export type CalculatedProfileCardV1 = DecodedProfileCardV1 & {
   characterId: number;
-  bandId: number | null;
+  bandId: number;
   attribute: BandoriCardAttribute;
   rarity: number;
   skillId: number;

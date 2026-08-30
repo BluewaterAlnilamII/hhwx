@@ -125,7 +125,7 @@ export function buildFixedTeamSkillContext(
   cards: Five<CalculatedProfileCardV1>,
 ): FixedTeamSkillContextV1 {
   const firstBandId = cards[0].bandId;
-  const sameBandId = firstBandId !== null && cards.every((card) => card.bandId === firstBandId)
+  const sameBandId = cards.every((card) => card.bandId === firstBandId)
     ? firstBandId
     : null;
   const firstAttribute = cards[0].attribute;

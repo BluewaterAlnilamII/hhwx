@@ -251,9 +251,6 @@ export function buildFixedMedleyEvaluationInput(
         characterBonuses,
         `${path}.cardsById.${cardId}`,
       );
-      if (!Number.isSafeInteger(card.bandId) || (card.bandId as number) <= 0) {
-        failInput("INVALID_MASTER", `${path}.charactersById.${characterId}.bandId`, "must be a positive integer");
-      }
       return card;
     }) as Five<CalculatedProfileCardV1>;
     if (new Set(calculatedCards.map((card) => card.characterId)).size !== 5) {
@@ -290,7 +287,6 @@ export function buildFixedMedleyEvaluationInput(
     scoringTeams.push({
       slot: teamSlot,
       memberInstanceIds: instanceIds,
-      leaderInstanceId: instanceIds[2],
       deckTotalParameter: parameters.deckTotalParameter,
     });
   }

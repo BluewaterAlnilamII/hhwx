@@ -264,7 +264,7 @@ function selectedAreaItemPower(
       failInput("INVALID_MASTER", `areaItemsById.${areaItemId}`, "rates must be finite and non-negative");
     }
     return total + cards.reduce((itemPower, card) => {
-      if (!targetAttributes.includes(card.attribute) || card.bandId === null || !targetBands.includes(card.bandId)) {
+      if (!targetAttributes.includes(card.attribute) || !targetBands.includes(card.bandId)) {
         return itemPower;
       }
       return itemPower

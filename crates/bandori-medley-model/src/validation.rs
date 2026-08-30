@@ -220,13 +220,6 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
                 "deck total must be a finite, non-negative JavaScript number",
             );
         }
-        if team.leader_instance_id != team.member_instance_ids[2] {
-            return invalid(
-                ValidationCode::InvalidTeam,
-                format!("{path}.leaderInstanceId"),
-                "leader must be explicit and occupy center member index two",
-            );
-        }
         let mut team_characters = HashSet::with_capacity(5);
         for (member_index, instance_id) in team.member_instance_ids.iter().enumerate() {
             let Some(card) = cards_by_id.get(instance_id) else {
@@ -371,7 +364,6 @@ mod tests {
             member_instance_ids: std::array::from_fn(|member| {
                 u32::try_from(slot * 5 + member).expect("15 fixture cards fit in u32")
             }),
-            leader_instance_id: u32::try_from(slot * 5 + 2).expect("fixture leader fits in u32"),
             deck_total_parameter: 17_250.0,
         });
         let songs = std::array::from_fn(|slot| MedleySongV1 {
@@ -430,16 +422,6 @@ mod tests {
         let error = input
             .validate()
             .expect_err("a physical instance cannot cross teams");
-        assert_eq!(error.code, ValidationCode::InvalidTeam);
-    }
-
-    #[test]
-    fn leader_identity_must_match_the_center_member() {
-        let mut input = fixture();
-        input.teams[0].leader_instance_id = input.teams[0].member_instance_ids[0];
-        let error = input
-            .validate()
-            .expect_err("leader identity must not be inferred from an unverified order");
         assert_eq!(error.code, ValidationCode::InvalidTeam);
     }
 

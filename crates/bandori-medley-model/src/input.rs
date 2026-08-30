@@ -77,8 +77,6 @@ pub struct CardScoringInputV1 {
 pub struct FixedTeamV1 {
     pub slot: u8,
     pub member_instance_ids: [u32; 5],
-    /// Explicit leader identity; v1 also requires it at center member index two.
-    pub leader_instance_id: u32,
     /// Final deck parameter produced by the Bestdori-compatible power pipeline.
     pub deck_total_parameter: f64,
 }

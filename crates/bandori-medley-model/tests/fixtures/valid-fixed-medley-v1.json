@@ -20,9 +20,9 @@
     { "instanceId": 14, "masterCardId": 15, "characterId": 15, "skill": { "masterSkillId": 15, "skillLevel": 1, "durationSeconds": 2, "behavior": { "kind": "score", "scoreUpPercent": 100 }, "rateUpWithPerfect": null } }
   ],
   "teams": [
-    { "slot": 0, "memberInstanceIds": [0, 1, 2, 3, 4], "leaderInstanceId": 2, "deckTotalParameter": 17250 },
-    { "slot": 1, "memberInstanceIds": [5, 6, 7, 8, 9], "leaderInstanceId": 7, "deckTotalParameter": 17250 },
-    { "slot": 2, "memberInstanceIds": [10, 11, 12, 13, 14], "leaderInstanceId": 12, "deckTotalParameter": 17250 }
+    { "slot": 0, "memberInstanceIds": [0, 1, 2, 3, 4], "deckTotalParameter": 17250 },
+    { "slot": 1, "memberInstanceIds": [5, 6, 7, 8, 9], "deckTotalParameter": 17250 },
+    { "slot": 2, "memberInstanceIds": [10, 11, 12, 13, 14], "deckTotalParameter": 17250 }
   ],
   "songs": [
     { "slot": 0, "songId": 1, "difficulty": "expert", "playLevel": 25, "notes": [
