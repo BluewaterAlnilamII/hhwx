@@ -29,6 +29,8 @@ pub(crate) fn skill_orders() -> Vec<[usize; 5]> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::*;
 
     #[test]
@@ -37,5 +39,22 @@ mod tests {
         assert_eq!(orders.len(), 120);
         assert_eq!(orders.first(), Some(&[0, 1, 2, 3, 4]));
         assert_eq!(orders.last(), Some(&[4, 3, 2, 1, 0]));
+
+        let mut member_position_counts = [[0_usize; 5]; 5];
+        for order in &orders {
+            let mut members = *order;
+            members.sort_unstable();
+            assert_eq!(members, [0, 1, 2, 3, 4]);
+            for (position, member) in order.iter().copied().enumerate() {
+                member_position_counts[member][position] += 1;
+            }
+        }
+        assert_eq!(orders.iter().copied().collect::<BTreeSet<_>>().len(), 120);
+        assert!(
+            member_position_counts
+                .into_iter()
+                .flatten()
+                .all(|count| count == 24)
+        );
     }
 }

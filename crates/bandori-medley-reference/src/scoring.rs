@@ -749,6 +749,63 @@ mod tests {
     }
 
     #[test]
+    fn skill_window_includes_the_exact_end_but_not_the_next_f64() {
+        let mut input = fixture();
+        for card in &mut input.cards {
+            card.skill.duration_seconds = 1.0;
+        }
+        for (index, note) in input.songs[0].notes.iter_mut().enumerate() {
+            note.time_seconds = index as f64 * 10.0;
+        }
+        let activations =
+            build_activations(&input, &input.songs[0], &input.teams[0], [0, 1, 2, 3, 4])
+                .expect("window-boundary fixture builds activations");
+        let end_time_seconds = 0.0_f64 + 1.0 + 0.00001;
+        assert_eq!(
+            activations[0].end_time_seconds.to_bits(),
+            end_time_seconds.to_bits()
+        );
+
+        let mut probe_song = input.songs[0].clone();
+        probe_song.notes = vec![
+            ScoringNoteV1 {
+                note_id: 0,
+                time_seconds: end_time_seconds,
+                is_skill_trigger: false,
+            },
+            ScoringNoteV1 {
+                note_id: 1,
+                time_seconds: f64::from_bits(end_time_seconds.to_bits() + 1),
+                is_skill_trigger: false,
+            },
+        ];
+        let base_score = JudgmentScoreTraceV1 {
+            perfect: 100,
+            great: 80,
+        };
+        let at_end = note_score_for_judgment(
+            &probe_song,
+            0,
+            Judgment::Perfect,
+            base_score,
+            &activations,
+            &mut JudgmentState::default(),
+        )
+        .expect("exact skill-window end scores");
+        let after_end = note_score_for_judgment(
+            &probe_song,
+            1,
+            Judgment::Perfect,
+            base_score,
+            &activations,
+            &mut JudgmentState::default(),
+        )
+        .expect("next f64 after skill-window end scores");
+        assert_eq!(at_end, 200);
+        assert_eq!(after_end, 100);
+    }
+
+    #[test]
     fn overlapping_windows_add_percent_deltas_before_one_rounding() {
         let mut input = fixture();
         input.perfect_rate = ExactProbabilityV1 {
@@ -951,5 +1008,84 @@ mod tests {
             skill_multiplier(&skill, &mut state, Judgment::Perfect).to_bits(),
             2.5_f64.to_bits(),
         );
+    }
+
+    #[test]
+    fn one_order_propagates_continued_and_rate_up_pg_states() {
+        let mut input = fixture();
+        input.perfect_rate = ExactProbabilityV1 {
+            numerator: 5,
+            decimal_scale: 1,
+        };
+        for card in &mut input.cards {
+            card.skill.duration_seconds = 10.0;
+            card.skill.behavior = SkillBehaviorV1::Neutral;
+            card.skill.rate_up_with_perfect = None;
+        }
+        let continued = input.teams[0].member_instance_ids[0] as usize;
+        input.cards[continued].skill.behavior = SkillBehaviorV1::ContinuedPerfect {
+            active_score_up_percent: 100.0,
+            fallback_score_up_percent: 0.0,
+        };
+        let rate_up = input.teams[0].member_instance_ids[1] as usize;
+        input.cards[rate_up].skill.behavior = SkillBehaviorV1::Score {
+            score_up_percent: 0.0,
+        };
+        input.cards[rate_up].skill.rate_up_with_perfect = Some(RateUpWithPerfectV1 {
+            stack_percent: 100.0,
+            max_score_up_percent: 100.0,
+        });
+        input.songs[0].notes = (0_u32..6)
+            .map(|note_id| ScoringNoteV1 {
+                note_id,
+                time_seconds: 0.0,
+                is_skill_trigger: true,
+            })
+            .chain([
+                ScoringNoteV1 {
+                    note_id: 6,
+                    time_seconds: 1.0,
+                    is_skill_trigger: false,
+                },
+                ScoringNoteV1 {
+                    note_id: 7,
+                    time_seconds: 2.0,
+                    is_skill_trigger: false,
+                },
+            ])
+            .collect();
+        input
+            .validate()
+            .expect("state-distribution fixture validates");
+
+        let base_note_scores = [JudgmentScoreTraceV1 {
+            perfect: 0,
+            great: 0,
+        }; 6]
+            .into_iter()
+            .chain([
+                JudgmentScoreTraceV1 {
+                    perfect: 100,
+                    great: 100,
+                },
+                JudgmentScoreTraceV1 {
+                    perfect: 100,
+                    great: 100,
+                },
+            ])
+            .collect::<Vec<_>>();
+        let (expected_score, peak_state_count) = score_one_order(
+            &input,
+            &input.songs[0],
+            &input.teams[0],
+            [0, 1, 2, 3, 4],
+            &base_note_scores,
+            0.5,
+        )
+        .expect("stateful P/G fixture scores");
+        // The probes contribute 0.5*(300+100) and
+        // 0.25*(300+200+200+100); three distinct states remain after probe two.
+        assert_eq!(expected_score.to_bits(), 400.0_f64.to_bits());
+        assert_eq!(peak_state_count, 3);
     }
 }
