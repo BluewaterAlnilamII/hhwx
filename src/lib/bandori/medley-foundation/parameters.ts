@@ -207,9 +207,9 @@ export function calculateProfileCard(
       failInput("INVALID_PROFILE", `${path}.profile.characterBonuses`, "must be finite and non-negative");
     }
     const potentialRate = potentialLevel > 1 ? potentialLevel / 1000 : 0;
+    const missionRate = (bonus.collection[index] + bonus.training[index]) / 100;
     return Math.floor(parameter * potentialRate)
-      + Math.floor(parameter * bonus.collection[index] / 100)
-      + Math.floor(parameter * bonus.training[index] / 100);
+      + Math.floor(parameter * missionRate);
   }) as Triple<number>;
   const characterParameter = add(baseParameter, characterBonus, `${path}.profile.characterBonuses`);
   const characterMaster = isRecord(characterMasterValue)

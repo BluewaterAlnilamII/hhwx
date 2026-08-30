@@ -42,7 +42,7 @@ The source adapter derives the complete fixed-team parameter from raw records:
 1. It reads the level-one and overall-maximum P/T/V rows from the Cards aggregate, then reconstructs an intermediate selected level with Bestdori's rarity curve and JavaScript `Math.round`.
 2. It adds `50 * rarity * masterRank` to each parameter.
 3. It adds training and the selected number of episode bonuses.
-4. It converts compact mission units from tenths of a percentage point, then applies character potential, collection-mission, and training-mission bonuses, flooring each supported bonus contribution before addition.
+4. It converts compact mission units from tenths of a percentage point, floors the character-potential contribution separately, then combines collection- and training-mission rates and floors their contribution once. This rule does not change when the P/T/V values happen to match.
 5. It evaluates every explicitly selected, owned area item from its profile level, regional per-level P/T/V rates, target attribute, and target band.
 6. It evaluates raw event attribute, character, canonical member `situationId`, master-rank, matching-parameter, and room-parameter percentages. Their JavaScript-number contributions remain unrounded at this boundary, matching the current Bestdori calculator.
 7. It adds card power, selected area-item power, and event power as JavaScript `Number` values to obtain `deckTotalParameter`.

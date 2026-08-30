@@ -42,7 +42,7 @@ English version: [bandori-medley-foundation.md](bandori-medley-foundation.md)
 1. 从 Cards 聚合读取 1 级与总满级 P/T/V 行；若选择中间等级，则使用 Bestdori 稀有度成长曲线和 JavaScript `Math.round` 还原。
 2. 每项加入 `50 * rarity * masterRank`。
 3. 加入训练值和档案中已完成数量对应的剧情加成。
-4. 先把 compact 任务单位从十分之一百分点转换为百分比，再计算角色潜能、收集任务和训练任务加成；每一种受支持的贡献分别 floor 后再相加。
+4. 先把 compact 任务单位从十分之一百分点转换为百分比；角色潜能贡献单独 floor，收集任务与训练任务倍率先相加，再对合并后的任务贡献 floor 一次。P/T/V 数值是否恰好相同不会改变这条规则。
 5. 按档案等级、区服等级倍率、目标属性和目标乐团计算每个显式选中且拥有的区域道具。
 6. 按原始活动属性、角色、规范 `situationId` 成员、突破、匹配参数与协力房参数计算活动加成；这些 JavaScript-number 贡献在这里不额外取整，与当前 Bestdori 计算器一致。
 7. 用 JavaScript `Number` 直接相加 card power、selected area-item power 和 event power，得到 `deckTotalParameter`。

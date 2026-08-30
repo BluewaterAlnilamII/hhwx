@@ -54,8 +54,8 @@ test("card parameters derive from the profile state and raw min/max master rows"
   );
 
   assert.deepEqual(calculated.baseParameter, [1330, 1430, 1530]);
-  assert.deepEqual(calculated.characterParameter, [1409, 1557, 1711]);
-  assert.equal(calculated.totalPower, 4677);
+  assert.deepEqual(calculated.characterParameter, [1409, 1558, 1712]);
+  assert.equal(calculated.totalPower, 4679);
   assert.equal(calculated.skillId, 1);
   assert.equal(calculated.bandId, 1);
 });
@@ -115,10 +115,10 @@ test("selected area items and event parameters are derived without caller totals
     server: 3,
   });
 
-  assert.equal(trace.cardPower, 23_385);
-  assert.ok(Math.abs(trace.areaItemPower - 4_828) < Number.EPSILON * 40_000);
-  assert.ok(Math.abs(trace.eventPower - 11_006.05) < Number.EPSILON * 40_000);
-  assert.ok(Math.abs(trace.deckTotalParameter - 39_219.05) < Number.EPSILON * 40_000);
+  assert.equal(trace.cardPower, 23_395);
+  assert.ok(Math.abs(trace.areaItemPower - 4_830.5) < Number.EPSILON * 40_000);
+  assert.ok(Math.abs(trace.eventPower - 11_010.8) < Number.EPSILON * 40_000);
+  assert.ok(Math.abs(trace.deckTotalParameter - 39_236.3) < Number.EPSILON * 40_000);
   assert.deepEqual(trace.selectedAreaItemIds, [1]);
 });
 
