@@ -2,6 +2,7 @@ export { decodeMedleyProfile } from "./profile";
 export { normalizeBestdoriScoringChart } from "./chart";
 export { parsePerfectRatePercent, parseSongIdText } from "./numeric";
 export { calculateFixedTeamParameters, calculateProfileCard } from "./parameters";
+export { buildFixedTeamSkillContext, resolveBestdoriScoreSkill } from "./skills";
 export { MedleyFoundationInputError } from "./errors";
 
 export type {
@@ -14,6 +15,7 @@ export type {
   DecodedProfileCardV1,
   Five,
   FixedTeamParameterTraceV1,
+  FixedTeamSkillContextV1,
   Triple,
 } from "./contracts";
 export type { MedleyFoundationInputErrorCode } from "./errors";

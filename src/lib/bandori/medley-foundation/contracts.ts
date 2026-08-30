@@ -129,3 +129,8 @@ export type FixedTeamParameterTraceV1 = {
     characterParameter: Triple<number>;
   }>;
 };
+
+export type FixedTeamSkillContextV1 = {
+  sameBandId: number | null;
+  sameAttribute: BandoriCardAttribute | null;
+};
