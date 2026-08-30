@@ -18,6 +18,12 @@ This file is the canonical shared rule entry point for the `hhwx` repository. Co
 - Start implementation only after an explicit instruction such as "开始实施", "按方案实施", or another unambiguous request to make the changes.
 - After implementation is authorized, continue through the agreed scope without repeatedly asking for confirmation unless a new material decision, destructive action, production operation, or scope expansion appears.
 
+## Greenfield Medley Work
+
+- Before working on or delegating the greenfield medley calculator, read `documents/bandori-medley-foundation.md` and the current greenfield foundation implementation. Require every delegated reviewer to do the same before offering conclusions.
+- Delegated conclusions are evidence, not authority. The primary agent must independently verify them against the documented contract, greenfield code, and authoritative calculation sources before adoption; old solver and experiment code is not architectural authority.
+- Keep changes within the established contract and current phase. Do not add speculative optimization, fallback, validation, abstraction, or compatibility behavior without a concrete requirement and a reviewed need.
+
 ## Repository and Cross-Repository Boundaries
 
 - `hhwx` owns the public Web application, frontend and public API contracts, the canonical Supabase schema and migrations, and public project documentation.

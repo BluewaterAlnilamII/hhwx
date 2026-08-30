@@ -14,7 +14,7 @@ The checkpoint is deliberately fixed and small:
 - one shared, explicitly selected area-item configuration;
 - a transparent reference score, not a team search.
 
-There is no candidate generation, roster enumeration, area-item search, ranking, pruning, proof protocol, time or memory budget, cancellation, or partial-result behavior. A roster near 2,000 cards is a future hard acceptance case, not an early test, default input, or implied memory target. Search architecture starts only after a separate design review.
+There is no candidate generation, roster enumeration, area-item search, ranking, pruning, cancellation, or result protocol in this checkpoint. A roster near 2,000 cards is a future hard acceptance case, not an early or default test; early correctness tests stay deliberately tiny. For that later case, 300 seconds is the performance target, 200–300 MiB is the competitive memory target, and one calculation's incremental peak must stay below 1 GiB. A timeout is incomplete, not success. These are acceptance requirements, not a selected search architecture.
 
 Every completed foundation module has its own traceable commit. Future implementation should continue to commit after each reviewable module so audits and rollback do not depend on reconstructing a large mixed patch.
 
@@ -31,9 +31,21 @@ The executable calculator contract follows Bestdori semantics. Native-client fin
 - three song IDs kept as text until strict positive-u32 parsing, difficulties, and Bestdori-shaped charts;
 - a PERFECT percentage kept as decimal text until conversion to a canonical exact probability.
 
-The boundary requires all 15 selected cards to be owned by the profile, a physical card to appear only once across the medley, and each fixed team to contain five distinct characters as required by the normalized Rust contract. The decoded exclusion flag remains available as profile data but is a search preference and does not change an explicitly fixed score input. Missing selected master rows, malformed profile compression, invalid references, non-canonical decimal input, unsupported foundation-envelope fields, and unsupported schema versions fail with a stable code and field path. Unused fields inside raw master rows remain tolerated. They are input failures, never “no solution.” Temporary cards and search candidates are intentionally absent from this checkpoint.
+The boundary requires all 15 selected cards to be owned by the profile, a physical card to appear only once across the medley, and each fixed team to contain five distinct characters as required by the normalized Rust contract. Future search hard-excludes cards carrying the decoded exclusion flag before candidate construction; the flag does not change the score of an explicitly fixed team. Missing selected master rows, malformed profile compression, invalid references, non-canonical decimal input, unsupported foundation-envelope fields, and unsupported schema versions fail with a stable code and field path. Unused fields inside raw master rows remain tolerated. They are input failures, never “no solution.” Temporary cards and search candidates are intentionally absent from this checkpoint.
 
 The normalized Rust contract is `hhwx-medley-scoring-input-v1`. It contains dense instance IDs `0..14`, three final deck parameters, resolved score skills, three normalized charts, and the exact PERFECT probability. It contains no UI, network, profile-compression, or search state.
+
+## Locked search-facing contract
+
+The fixed-input DTO is not the future search request, but these product rules are already settled:
+
+- Greenfield means no reuse or refactor of old solver code or architecture. It does not discard the established Bestdori/current-main input and calculator contract, and past solver ideas remain non-authoritative.
+- Search uses exactly three ordered song slots, permits duplicate songs, and never reorders them. It outputs the three teams and each leader; member index two remains the leader.
+- Search enumerates the established owned-item configurations: one band group, one attribute group, and an optional parameter item. One selected configuration is shared by all three teams and is an output, not a frontend-supplied final ID list. CN metadata-only items 59, 68, and 72 remain intentionally outside the Bestdori-compatible calculator.
+- The formal objective is one proven top-1 result maximizing total average score. A deterministic tie representative is sufficient; maximum score is not a second objective.
+- Search may passively retain up to ten discovered high-average-score solutions, including the winner. They are not proven global top-10 results; only this small set receives post-search maximum-score evaluation and an in-set maximum label.
+- An official result exists only after the full space is enumerated or safely pruned. Cancellation, time, memory, data, or runtime failure is incomplete; `bestSoFar` may be diagnostic only, with no bounded or gap-based success mode.
+- Evaluation preserves the established member and area-item operation order. Search must not reorder data entering scoring.
 
 ## Parameter derivation
 
@@ -134,4 +146,4 @@ The retained source fixture is a synthetic wiring golden with exactly 15 profile
 
 The reference scorer returns an audit trace containing base P/G note scores, per-order expected scores, combo offsets, peak state count, and exact binary64 words for floating results. It is deliberately transparent rather than optimized.
 
-This checkpoint stops here. Before any roster, candidate layout, pruning rule, cache, dominance relation, parallel search, proof certificate, memory budget, or production result protocol is added, the search architecture must be discussed and reviewed as a separate phase. The current foundation neither recommends nor silently constrains that future design.
+This checkpoint stops before search implementation. The locked product rules above do not select a candidate layout, pruning rule, cache, dominance relation, partition, or parallel strategy; those still require a separate architecture review. The current foundation neither recommends nor silently constrains that design.
