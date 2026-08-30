@@ -82,17 +82,9 @@ test("regional duration and unified values resolve from raw skill master", () =>
   });
 });
 
-test("life-named raw effects never cause a life field read or threshold branch", () => {
+test("life-named Bestdori keys remain ordinary source-ordered score rows", () => {
   const first = { activateEffectValue: regional(160) };
   const second = { activateEffectValue: regional(110) };
-  for (const effect of [first, second]) {
-    Object.defineProperty(effect, "activateConditionLife", {
-      enumerable: true,
-      get() {
-        throw new Error("life condition must not be read");
-      },
-    });
-  }
   const resolved = resolveBestdoriScoreSkill({
     skillId: 82,
     skillLevel: 5,
@@ -105,7 +97,20 @@ test("life-named raw effects never cause a life field read or threshold branch",
   });
 
   assert.deepEqual(resolved.behavior, { kind: "score", scoreUpPercent: 160 });
-  assert.doesNotMatch(JSON.stringify(resolved), /life/iu);
+});
+
+test("a zero-valued first score row keeps Bestdori source ordering", () => {
+  const resolved = resolveBestdoriScoreSkill({
+    skillId: 83,
+    skillLevel: 1,
+    skillMaster: skillWithEffects({
+      score: { activateEffectValue: regional(0) },
+      score_only_perfect: { activateEffectValue: regional(100) },
+    }),
+    context: { sameBandId: null, sameAttribute: null },
+    server: 0,
+  });
+  assert.deepEqual(resolved.behavior, { kind: "score", scoreUpPercent: 0 });
 });
 
 test("continued fallback and PERFECT stacking retain their separate Bestdori behaviors", () => {
@@ -162,4 +167,12 @@ test("malformed selected skill rows fail closed", () => {
     context: { sameBandId: null, sameAttribute: null },
     server: 0,
   }), /rate-up requires an unconditional score effect/u);
+
+  assert.throws(() => resolveBestdoriScoreSkill({
+    skillId: 0x1_0000_0000,
+    skillLevel: 1,
+    skillMaster: skillWithEffects({}),
+    context: { sameBandId: null, sameAttribute: null },
+    server: 0,
+  }), /unsigned 32-bit/u);
 });

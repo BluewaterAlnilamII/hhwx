@@ -30,6 +30,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function finiteNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -66,7 +67,7 @@ function readRawScoreEffects(
   for (const [type, rawEffect] of Object.entries(effectTypes)) {
     if (!SCORE_EFFECT_TYPES.has(type) || !isRecord(rawEffect)) continue;
     const valuePercent = regionalNumber(rawEffect.activateEffectValue, server);
-    if (valuePercent === null || valuePercent === 0) continue;
+    if (valuePercent === null) continue;
     if (valuePercent < 0) {
       failInput("INVALID_SKILL", `${path}.${type}.activateEffectValue`, "must be non-negative");
     }
@@ -136,7 +137,7 @@ export function buildFixedTeamSkillContext(
 
 /**
  * Normalize one raw skill master to the Bestdori-compatible P/G score model.
- * Source fields that describe a life threshold are deliberately never read.
+ * Life is outside this model; life-named Bestdori keys remain ordinary score rows.
  */
 export function resolveBestdoriScoreSkill(options: {
   skillId: number;
@@ -147,8 +148,8 @@ export function resolveBestdoriScoreSkill(options: {
   path?: string;
 }): ResolvedScoreSkillV1 {
   const path = options.path ?? `skillsById.${options.skillId}`;
-  if (!Number.isSafeInteger(options.skillId) || options.skillId <= 0) {
-    failInput("INVALID_SKILL", path, "skill ID must be a positive safe integer");
+  if (!Number.isSafeInteger(options.skillId) || options.skillId <= 0 || options.skillId > 0xffff_ffff) {
+    failInput("INVALID_SKILL", path, "skill ID must be a positive unsigned 32-bit integer");
   }
   const skillLevel = readSkillLevel(options.skillLevel, `${path}.skillLevel`);
   const skill = isRecord(options.skillMaster)
