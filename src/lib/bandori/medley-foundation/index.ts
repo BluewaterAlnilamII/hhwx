@@ -1,4 +1,6 @@
 export { decodeMedleyProfile } from "./profile";
+export { normalizeBestdoriScoringChart } from "./chart";
+export { parsePerfectRatePercent, parseSongIdText } from "./numeric";
 export { MedleyFoundationInputError } from "./errors";
 
 export type {
