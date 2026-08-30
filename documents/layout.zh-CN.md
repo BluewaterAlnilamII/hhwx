@@ -90,6 +90,7 @@ hhwx/
 - `bandori/events/`：活动目录、API 契约与服务、路由/区服/状态辅助逻辑、横幅代理和活动评论目标校验。
 - `bandori/event-tracker/`：Event Tracker 的档线、TOP10、实时序列、投影、历史与预测契约/服务，由活动、歌曲和月度追踪模式共同使用。
 - `bandori/chart-simulator/`：无损谱面编译、带版本的 Worker 传输、定位状态重建、原生演出／效果／音频运行时，以及 CDN manifest 解析；谱面模拟器实体资源不进入 Web 仓库，而是通过逻辑路径解析，同时这里不包含区服选择。
+- `bandori/medley-foundation/`：全新的固定队来源校验，以及向 bit-exact Rust 组曲计分契约的投影；不依赖现有 team-builder 或任何搜索表示。
 - `bandori/team-builder/`：组队搜索实现。`core/` 包含共享计算基础设施，`single/` 包含单曲 exact 搜索编排，`medley/` 包含组曲 exact/bounded 搜索编排，并由公开兼容 facade 对外导出。
 - `comments/`：与目标类型无关的评论契约、表情/贴纸目录、内容解析和特权持久化服务；各目标类型的存在性与可见性校验留在各自领域中。
 - `api-*.ts`：API 响应约定和缓存策略。

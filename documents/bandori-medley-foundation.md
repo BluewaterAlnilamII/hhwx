@@ -2,107 +2,136 @@
 
 中文说明见 [bandori-medley-foundation.zh-CN.md](bandori-medley-foundation.zh-CN.md).
 
-## Checkpoint scope
+## Checkpoint and authority
 
-This specification governs the first independent checkpoint of the new medley team calculator. The checkpoint contains a strict normalized input model and a transparent reference scorer for three explicitly supplied five-card teams. It contains no team generation, candidate search, pruning, ranking, proof protocol, or partial-result behavior, and it does not import any scorer or solver under `src/lib/bandori/team-builder/`.
+This document defines the first independent checkpoint of the new medley team calculator. The implementation was written on `dev/medley-v2-greenfield` from an `origin/main` starting point, but it does not import, wrap, refactor, or otherwise reuse the existing team-builder scorer or search implementation. A recursive source guard enforces that boundary for `src/lib/bandori/medley-foundation/`.
 
-The retained executable fixture has exactly 15 already selected cards and seven normalized notes per song. This is the minimum complete three-team flow, not a 15-card search. A future approximately 2,000-card roster is an end-state hard acceptance case; it is not a normal or early foundation input.
+The checkpoint is deliberately fixed and small:
 
-The audit baseline is the JP 10.1.3 arm64 client and JP master artifact `20260805110509`. The audited skill-effect artifact SHA-256 is `d98e76c0198a6a714be1d38e4696a044242c8384b905426a311c8c2b0961aebc`. The [official game FAQ](https://bang-dream.bushimo.jp/faq/) independently confirms six skill activations per song, random member order, next-note activation, continued-skill break behavior, and trigger-time life checks.
+- exactly 15 already selected, owned cards;
+- exactly three explicit five-card teams;
+- exactly three explicit songs and charts;
+- one shared, explicitly selected area-item configuration;
+- a transparent reference score, not a team search.
 
-## Game-derived score chain
+There is no candidate generation, roster enumeration, area-item search, ranking, pruning, proof protocol, time or memory budget, cancellation, or partial-result behavior. A roster near 2,000 cards is a future hard acceptance case, not an early test, default input, or implied memory target. Search architecture starts only after a separate design review.
 
-The score chain uses explicit IEEE-754 single-precision operations. Every line below produces an `f32`; positive integer conversion truncates toward zero:
+Every completed foundation module has its own traceable commit. Future implementation should continue to commit after each reviewable module so audits and rollback do not depend on reconstructing a large mixed patch.
+
+The executable calculator contract follows Bestdori semantics. Native-client findings are retained below only as a difference log; they must not change code unless the product semantics are explicitly reconsidered.
+
+## Source input boundary
+
+`hhwx-medley-foundation-source-v1` accepts the real fixed-input ingredients rather than caller-computed card or team totals:
+
+- the complete Bestdori compression-v2 profile payload, including card levels, master ranks, skill levels, episodes, training/art/exclusion flags, area-item levels, character potentials, and compact collection/training mission bonuses;
+- raw card, character, skill, area-item, song, and event-bonus records; Cards `serverExtensions` are resolved for the profile server with the established JP-presence fallback before parameters or skills are read;
+- one explicit list of selected area-item IDs shared by all three teams;
+- three ordered lists of five selected card IDs, where member index two is the leader;
+- three song IDs kept as text until strict positive-u32 parsing, difficulties, and Bestdori-shaped charts;
+- a PERFECT percentage kept as decimal text until conversion to a canonical exact probability.
+
+The boundary requires all 15 selected cards to be owned by the profile, a physical card to appear only once across the medley, and each fixed team to contain five distinct characters as required by the normalized Rust contract. The decoded exclusion flag remains available as profile data but is a search preference and does not change an explicitly fixed score input. Missing selected master rows, malformed profile compression, invalid references, non-canonical decimal input, unsupported foundation-envelope fields, and unsupported schema versions fail with a stable code and field path. Unused fields inside raw master rows remain tolerated. They are input failures, never “no solution.” Temporary cards and search candidates are intentionally absent from this checkpoint.
+
+The normalized Rust contract is `hhwx-medley-scoring-input-v1`. It contains dense instance IDs `0..14`, three final deck parameters, resolved score skills, three normalized charts, and the exact PERFECT probability. It contains no UI, network, profile-compression, or search state.
+
+## Parameter derivation
+
+The source adapter derives the complete fixed-team parameter from raw records:
+
+1. It reads the level-one and overall-maximum P/T/V rows from the Cards aggregate, then reconstructs an intermediate selected level with Bestdori's rarity curve and JavaScript `Math.round`.
+2. It adds `50 * rarity * masterRank` to each parameter.
+3. It adds training and the selected number of episode bonuses.
+4. It converts compact mission units from tenths of a percentage point, then applies character potential, collection-mission, and training-mission bonuses, flooring each supported bonus contribution before addition.
+5. It evaluates every explicitly selected, owned area item from its profile level, regional per-level P/T/V rates, target attribute, and target band.
+6. It evaluates raw event attribute, character, canonical member `situationId`, master-rank, matching-parameter, and room-parameter percentages. Their JavaScript-number contributions remain unrounded at this boundary, matching the current Bestdori calculator.
+7. It adds card power, selected area-item power, and event power as JavaScript `Number` values to obtain `deckTotalParameter`.
+
+The level curves and current calculator behavior were independently checked against Bestdori's `app.d390adb1.js` bundle, module `c0f0`, fetched on 2026-08-30 with SHA-256 `ac84605d7889e53c0144ab7c41e379c174b94b8dc31edae07f3483b8a0610778`. This is also consistent with the [Bestdori Cards API contract](https://github.com/windowssov8forus/bestdori-api/blob/main/docs/api/cards.md): the compact Cards response exposes minimum and maximum parameters rather than every selected-level row.
+
+Skill scalar lookup uses the profile server and falls back to JP only when the selected regional slot is missing. An explicit regional zero remains zero. Area-item rates instead stay on the exact profile server and walk down to the nearest available owned level; they do not borrow another server's rate. The adapter does not accept precomputed card P/T/V, area-item totals, event totals, or deck totals from its caller.
+
+## Skill normalization without life state
+
+The scorer accepts only these team-context-resolved behaviors:
+
+- `neutral`;
+- `score`;
+- `score_on_perfect`;
+- `perfect_only`;
+- `continued_perfect`, with separate active and ordinary fallback values;
+- `great_or_worse_half`;
+- optional `rate_up_with_perfect` on an unconditional `score` behavior.
+
+The source adapter reads raw score effects in their Bestdori source order and uses the first recognized score row, including an explicit zero value. Same-band or same-attribute unification may replace that first value after all five cards are known. A continued skill keeps the later ordinary score row as its fallback. PERFECT rate-up adds `0.5` percentage points on the current PERFECT, retains the accumulator across GREAT, and caps total score-up at the base value plus `50`.
+
+There is no life model or life input. Raw Bestdori keys named `score_over_life` and `score_under_life` stay in source order and are normalized as ordinary score rows, exactly as in the current Bestdori calculator; no threshold, assumed life value, inherited life, or life state enters the scoring contract.
+
+## Chart normalization
+
+The chart adapter follows Bestdori entity and property-presence behavior:
+
+- `Single` and `Directional` contribute one scoring note;
+- `Long` contributes its first and last connections;
+- `Slide` contributes both endpoints and each middle connection that does not carry the `hidden` property;
+- `BPM` controls beat-to-second integration;
+- other entity types, including `System`, do not score and are ignored;
+- presence of the `skill` property marks a trigger, even when its value is `false`.
+
+Notes are sorted by beat with triggers first at an equal beat. The output uses finite non-negative JavaScript-number seconds and dense note IDs. Each song must contain exactly six skill triggers. Difficulty and `playLevel` come from the raw song master; level 5 is valid.
+
+## Bestdori-compatible score
+
+All arithmetic before integer score conversion uses JavaScript-number-compatible IEEE-754 binary64 behavior:
 
 ```text
-playRate = f32(1 + f32((playLevel - 5) * f32(0.01)))
+playLevelRate = 1 + (playLevel - 5) / 100
+baseScorePerNote = deckTotalParameter * playLevelRate / noteCount * 3
 
-baseScore = f32(
-  f32(
-    f32(deckTotalParameter * playRate) / f32(noteCount)
-  ) * f32(3)
-)
+innerScore(PERFECT) = floor(baseScorePerNote * 1.1 * comboRate)
+innerScore(GREAT)   = floor(baseScorePerNote * 0.8 * comboRate)
 
-corrected = f32(baseScore * judgeRate)
-innerScore = floor(f32(corrected * comboRate))
-scoreUpRate = f32(feverRate * skillMultiplier)
-noteScore = floor(f32(f32(innerScore) * scoreUpRate))
+finalNoteScore = floor(innerScore * combinedSkillMultiplier)
 ```
 
-The `f32` judgment constants are `1.1` for PERFECT and `0.8` for GREAT. The two per-note truncation points are part of the contract. Tests retain cases where a Float64 rewrite is off by one at each boundary.
-
-The fixed evaluator receives the final deck-level `f32` parameter consumed by the game score utility. The upstream normalization layer must produce it in the audited order:
+The two integer floors are part of the contract. Each realized integer note score must fit an unsigned 32-bit value; a non-finite, negative, or overflowing intermediate fails evaluation rather than wrapping. Combo carries across the three songs because the model contains only PERFECT and GREAT:
 
 ```text
-OriginalAll = f32(f32(originalP + originalT) + originalV)
-AreaItemAll = f32(f32(areaP + areaT) + areaV)
-EventBuffAll = f32(f32(eventP + eventT) + eventV)
-deckTotal = f32(f32(OriginalAll + AreaItemAll) + EventBuffAll)
+combo <= 20    : 1.00
+combo <= 50    : 1.01
+combo <= 100   : 1.02
+combo <= 300   : 1.01 + floor((combo - 1) / 50)  * 0.01
+combo <= 3000  : 1.04 + floor((combo - 1) / 100) * 0.01
+otherwise      : 1.34
 ```
 
-The reference scorer does not recombine per-card values in another order. The future search input needs an independently reviewed representation capable of reproducing this deck total for arbitrary candidate teams; this checkpoint intentionally does not guess that architecture.
+`hhwx-medley-pg-expected-v1` is explicitly a PERFECT/GREAT-only expectation model. It excludes GOOD, BAD, MISS, combo breaks, life loss, and life inheritance. It computes integer note scores on each P/G branch before taking expectations; it does not insert an averaged judgment multiplier before flooring. Continued and PERFECT-rate-up state is propagated through a deterministic state distribution.
 
-Medley combo carries by successful-note count across all three songs. Because the model contains only PERFECT and GREAT, combo never breaks. The medley rate table is applied to `startCombo + noteIndex + 1`; the 20-to-21 boundary is retained as a test.
+The first five skill triggers use all `5! = 120` member orders with equal probability. The sixth trigger always reuses member index two, the leader. One song result is the stable-order mean of all 120 P/G expectations, and the medley objective is the sum of the three song means.
 
-## PERFECT/GREAT-only expected score
-
-`hhwx-medley-pg-expected-v1` deliberately excludes GOOD, BAD, MISS, combo breaks, life loss, and stochastic life inheritance. It is nevertheless the expectation of the two actual integer scoring outcomes, not an average multiplier inserted before truncation:
+A newly triggered skill excludes the trigger note and every note at exactly the same timestamp. Its end time is `triggerSeconds + durationSeconds + 0.00001`, matching the Bestdori calculator boundary. When multiple windows overlap, every active skill advances independently and their percentage deltas are added directly before one final floor:
 
 ```text
-E[noteScore] =
-  p * integerScore(PERFECT, state)
-  + (1 - p) * integerScore(GREAT, state)
+combinedSkillMultiplier = max(0, 1 + sum(skillMultiplier_i - 1))
 ```
 
-The input probability is an exact canonical decimal with at most nine decimal places. The reference oracle propagates a deterministically ordered state distribution in `f64`; every realized P/G note score is first computed through the `f32` chain and both integer truncations. Continued and Crescendo state is part of that distribution. The returned expected averages are serialized by their `f64` bits, and no final floor is applied to the expectation.
+There is no replacement, priority, or life-dependent overlap branch.
 
-The first five activations use every permutation of member indices `0..4` with equal probability. The sixth activation always uses member index `2`, the center leader. The song result is the stable-order mean of those 120 expected scores. The medley objective is the sum of the three song means; no maximum-score value participates as a hidden secondary objective.
+## Native-game difference log
 
-## Resolved skill behaviors
+The earlier native audit used JP client 10.1.3, JP master artifact `20260805110509`, and skill-effect artifact SHA-256 `d98e76c0198a6a714be1d38e4696a044242c8384b905426a311c8c2b0961aebc`. It found behaviors that are intentionally not implemented in this Bestdori-compatible calculator:
 
-The scorer accepts a deliberately small, team-context-resolved skill contract:
+- the native skill-order path uses a biased 1,024-path process with only 96 reachable first-five permutations, while this calculator uses the confirmed 120 equiprobable orders;
+- the native score chain and combo source use single precision and a master table, while this calculator uses Bestdori’s JavaScript-number formula above;
+- the native game has life-conditioned trigger behavior, while this calculator has no life semantics at all;
+- native skill-window timing and conflict handling are frame/runtime concerns, while this calculator uses Bestdori timestamps and direct-add overlap.
 
-- `score`: the same score-up behavior for the supported P/G condition;
-- `score_on_perfect`: PERFECT receives the score-up while GREAT keeps its ordinary score;
-- `perfect_only`: PERFECT uses `1 + value / 100`, GREAT uses absolute multiplier `0`;
-- `continued_perfect`: the current GREAT immediately switches from the active value to the regular fallback, and all later notes remain on that fallback;
-- `great_or_worse_half`: PERFECT uses `1 + value / 100`, GREAT uses absolute multiplier `0.5`;
-- optional `rate_up_with_perfect`: current PERFECT first adds the supplied stack value, capped by the supplied maximum total score-up, then scores the current note; GREAT retains but does not increase the accumulator.
+These are provenance notes, not implementation TODOs. No native difference may be copied into the scorer as a local “accuracy optimization” without a new product-level semantic decision and full architecture review.
 
-Raw master effects are not accepted. The actual-input normalizer must resolve source order, regional scalar fallback, team unification, and life branches before constructing these behaviors. In the v1 P/G-only model, activation life is fixed at 1,000: `over_life` uses `life >= threshold`, while `under_life` uses `life < threshold`. Unified continued skills must keep their regular fallback; for example, a unified high value must not leak into the post-GREAT fallback merely because the source row also carries a unified scalar. Unknown or unsupported source shapes fail closed.
+## Executable evidence and stop line
 
-## Skill-window policy
+The retained source fixture is a synthetic wiring golden with exactly 15 profile cards, raw card/character/skill/song records, three explicit teams, and seven notes per song. The TypeScript tests require its normalized result to equal the Rust JSON fixture field for field. Rust then validates that fixture and evaluates all three songs. A second tiny source-path case adds one owned area item and canonical event rows so non-zero raw area/event inputs are proven end to end without expanding into search. Additional tests cover profile RLE failures, Bestdori intermediate-level reconstruction, Cards regional override and JP fallback, raw parameter derivation, chart property-presence rules, card reuse, the leader’s sixth trigger, continued and rate-up state, combo carry, two-floor arithmetic, 120-order determinism, and direct-add overlaps.
 
-The trigger note and every other note at exactly the same normalized time are excluded from the newly triggered skill. A skill begins only when `note.timeMicros > trigger.timeMicros`.
+The reference scorer returns an audit trace containing base P/G note scores, per-order expected scores, combo offsets, peak state count, and exact binary64 words for floating results. It is deliberately transparent rather than optimized.
 
-The initial calculator end policy is deterministic and timestamp based: a note is included when `note.timeMicros <= trigger.timeMicros + durationMicros`. This is an HHWX calculator policy, not a claim of frame-exact client reproduction. The game client decrements an `f32` timer after note processing and ends the skill on a later frame; a native boundary capture would be required to replace this policy with a proven frame model.
-
-The client queues conflicting skill windows, but the calculator intentionally follows the confirmed HHWX override. For every active skill, the scorer advances its state independently and obtains `m_i`, then combines in stable trigger order:
-
-```text
-skillMultiplier = f32(1 + sum(f32(m_i - 1)))
-skillMultiplier = max(0, skillMultiplier)
-```
-
-Fever is then multiplied once and the second per-note truncation occurs once. Skills are not separately rounded into score deltas. Retained fixtures cover ordinary positive overlap and a `0.5` GREAT multiplier overlapping a positive score-up.
-
-## Input and result boundaries
-
-The normalized fixed input uses:
-
-- dense card `instanceId` values `0..14`;
-- positive master card, character, and skill IDs;
-- unique physical instances across all three teams;
-- unique characters within each team;
-- bit-exact finite non-negative `f32` deck totals and skill rates;
-- exactly three ordered songs and exactly six triggers per song;
-- dense, time-sorted notes using integer microseconds;
-- no search controls or UI/network objects.
-
-Unknown JSON fields, unsupported versions, non-canonical probability, invalid references, duplicate instances, malformed chart ordering, non-finite values, and arithmetic overflow fail closed. Validation failures are input failures, never “no solution.”
-
-The trace records the deck-total, play-rate, and base-score `f32` bits; each P/G first-round integer note score; all 120 expected skill-order scores as `f64` bits; the average score bits; combo offsets; and the peak reference-state count. This trace is an oracle artifact, not a compact production result.
-
-## Deliberately deferred decisions
-
-Before any search algorithm is designed, a later foundation checkpoint must finish and audit the actual UI/source snapshot, regional resolution, card/stat/area/event deck-total pipeline, chart normalization, and source/semantic fingerprints. Browser WASM glue also requires a separate bundler spike and versioned Worker protocol. None of those tasks authorizes a candidate layout, pruning rule, cache, dominance relation, or search-space partition.
+This checkpoint stops here. Before any roster, candidate layout, pruning rule, cache, dominance relation, parallel search, proof certificate, memory budget, or production result protocol is added, the search architecture must be discussed and reviewed as a separate phase. The current foundation neither recommends nor silently constrains that future design.

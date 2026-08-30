@@ -90,6 +90,7 @@ hhwx/
 - `bandori/events/`: event catalogs, API contracts/services, route/region/status helpers, banner proxy logic, and event-specific comment target validation.
 - `bandori/event-tracker/`: Event Tracker cutoff, TOP10, live-series, projection, history, and prediction contracts/services shared by event, song, and monthly tracker modes.
 - `bandori/chart-simulator/`: lossless chart compilation, versioned worker transport, seek-state rebuilding, native presentation/effect/audio runtimes, and CDN manifest resolution. Physical simulator assets stay outside the Web repository and are resolved through logical paths; this module contains no region selection.
+- `bandori/medley-foundation/`: greenfield, fixed-team source validation and projection into the bit-exact Rust medley scoring contract. It has no dependency on the existing team-builder or any search representation.
 - `bandori/team-builder/`: team-search implementation. `core/` contains shared calculation primitives, `single/` contains single-song exact search orchestration, and `medley/` contains medley exact/bounded search orchestration behind the public compatibility facades.
 - `comments/`: target-agnostic comment contracts, emoji/stamp catalogs, content parsing, and privileged comment persistence service. Each target type keeps its existence and visibility validation in its own domain.
 - `api-*.ts`: API response conventions and cache policies.
