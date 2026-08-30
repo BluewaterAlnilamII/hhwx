@@ -157,4 +157,4 @@ combinedSkillMultiplier = max(0, 1 + sum(skillMultiplier_i - 1))
 
 参考计分器返回可审计 trace，其中包含 P/G 基础整数音符分、每个顺序的期望分、combo offset、状态峰值，以及浮点结果的精确 binary64 words。它优先可审查性，不追求搜索吞吐量。
 
-固定队基础检查点本身保持不变。搜索实现按照上文另行审查的设计推进，不得削弱本计分合同或导入旧求解器架构。
+固定队基础检查点本身保持不变。独立搜索检查点现在接受 `hhwx-medley-search-source-v1`：仍然使用同一份 HHWX 档案、原始 master、三首有序歌曲、活动行和 PERFECT 文本，但调用方不提供队伍、leader 或最终区域道具选择。它向独立 Rust 搜索输出完整规范化卡池和既有规则生成的已拥有道具配置。前端／API 接入仍不属于本检查点。

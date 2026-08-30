@@ -13,6 +13,6 @@ The normalized input contains owned physical cards, hard-exclusion flags, card a
 
 Area-item IDs inside each configuration and output member IDs preserve their supplied operation order. Validation does not sort or repair the input. An empty selected-item list is valid when it is supplied as one legal configuration.
 
-The crate contains an independent production scorer behind its private search boundary. It is bit-for-bit checked against the transparent reference scorer and does not expose the reference trace as a runtime dependency.
+The crate contains the independent exact scorer, a proved contextual upper bound, character-group candidate traversal, and a compact three-view exact join. The scorer is bit-for-bit checked against the transparent reference scorer, while tiny whole searches are checked against an independent exhaustive oracle.
 
-Candidate representation, upper bounds, enumeration, join, worker/API adapters, frontend integration, and command-line interfaces enter only in their separately reviewed checkpoints.
+The candidate-memory budget covers compact rows and their three index views. Worker/API adapters, frontend integration, rich-result hydration, and command-line interfaces remain outside this checkpoint.

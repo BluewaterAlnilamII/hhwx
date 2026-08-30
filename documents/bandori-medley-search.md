@@ -4,7 +4,7 @@ Chinese version: [bandori-medley-search.zh-CN.md](bandori-medley-search.zh-CN.md
 
 ## Status and authority
 
-This document records the approved initial engineering design for the greenfield medley search. The scoring and product semantics remain authoritative in [the foundation specification](bandori-medley-foundation.md). Search choices here are reviewable engineering decisions, not game rules; changing them requires another integrated review rather than an isolated optimization.
+This document records the approved and now executable first checkpoint of the greenfield medley search. The scoring and product semantics remain authoritative in [the foundation specification](bandori-medley-foundation.md). Search choices here are reviewable engineering decisions, not game rules; changing them requires another integrated review rather than an isolated optimization.
 
 The implementation remains independent of the existing team-builder and experiment branches. Existing Bestdori/current-main code may be inspected only to verify an already adopted compatibility contract. Calc reverse engineering informs where pruning and compact storage belong, not HHWX scoring, proof, dominance, or record layout.
 
@@ -21,7 +21,7 @@ The only formal objective is the proven top-1 sum of the three Bestdori-compatib
 - A compact leaf row contains five stable physical-card indexes, three exact binary64 song scores, and three leader indexes. Rich card and output objects are reconstructed only for the few retained medleys.
 - Configuration-local candidates and indexes are released as soon as that configuration is proved complete or safely pruned.
 
-Search-generated member order must be fixed before scoring and must not depend on bound ordering or parallel completion. The compatibility audit must derive the existing accumulation behavior; the search must not silently invent an ID sort or reuse an old solver traversal order.
+Dense instance IDs follow decoded HHWX profile-card order. For each physical five-card set, search keeps ascending instance-ID order, removes the selected leader, and reinserts it at member index two; the other four members retain their relative order. Bound ordering and traversal order never enter scoring order.
 
 ## Proof-safe upper bound
 
@@ -32,7 +32,7 @@ floor(x * max(0, 1 + sum(d_i)))
     <= x + sum(ceil(x * max(d_i, 0)))
 ```
 
-The bound may therefore discard negative deltas and upper-bound each activation independently while exact leaves retain every negative delta, state transition, overlap, and floor. Per-card contributions remain contextual: they use the actual ordered chart, medley combo offset, PERFECT/GREAT probability, trigger and inclusive-end timing, continued/rate-up behavior, area configuration, deck-power upper bound, and each still-reachable mixed/same-band/same-attribute team context. They are not permanent scalar card scores.
+The bound may therefore discard negative deltas and upper-bound each activation independently while exact leaves retain every negative delta, state transition, overlap, and floor. The proof path also replaces each P/G inner note by its full-PERFECT inner score; this is an upward relaxation, not a change to exact leaf scoring. Per-card contributions remain contextual: they use the actual ordered chart, medley combo offset, trigger and inclusive-end timing, continued/rate-up behavior, area configuration, deck-power upper bound, and each still-reachable mixed/same-band/same-attribute team context. They are not permanent scalar card scores.
 
 Across the fixed 120 first-five orders, every card occupies every trigger position exactly 24 times. After the note inequality is established, the first-five upper is therefore the sum of each member's five-position average; the selected leader contributes the sixth activation separately.
 
@@ -73,10 +73,10 @@ The minimal evidence suite is deliberately proof-oriented:
 - pruning replay proving every pruned tiny family cannot exceed its recorded upper;
 - one existing small real HHWX profile acceptance run after synthetic correctness is established.
 
-Aggregate counters cover configurations, partial nodes, prune reasons, complete teams, exact scores, compact rows, join checks, conflicts, feasible medleys, incumbent changes, elapsed time, and peak candidate bytes. They diagnose the hard-input boundary but do not themselves prove exactness.
+Aggregate counters cover configurations, partial nodes, pruning, complete teams, exact scores, compact rows, join checks, conflicts, feasible medleys, incumbent changes, unavailable bounds, and peak candidate bytes. The memory budget and peak counter in this core cover compact candidate rows plus their three index views; whole browser/WASM incremental peak remains a later integration acceptance measurement. Counters diagnose the hard-input boundary but do not themselves prove exactness.
 
-## Initial implementation boundary
+## Implemented checkpoint and stop line
 
-The first implementation is single-threaded and adds no dominance relation, same-character replacement, cross-character coverage, SIMD/FMA, score quantization, random retention, candidate cap, external storage, frontend/API connection, or speculative partitioning. If real hard inputs still approach exhaustive growth, the core upper bound is reviewed before any local optimization is proposed.
+The first implementation is single-threaded and includes the strict normalized contract, exact scorer, proved upper bound, character-group traversal, compact three-view join, explicit incomplete outcomes, an independent tiny exhaustive oracle, and an opt-in small real-profile acceptance run. It adds no dominance relation, same-character replacement, cross-character coverage, SIMD/FMA, score quantization, random retention, candidate cap, external storage, frontend/API connection, or speculative partitioning. If real hard inputs still approach exhaustive growth, the core upper bound is reviewed before any local optimization is proposed.
 
-Implementation proceeds as separately reviewable commits: normalized search contract and tiny oracle; production scorer; bound and replay proof; configuration/team generation plus compact join; and resource/result semantics plus retained acceptance evidence.
+This checkpoint stops before frontend/API wiring and before post-search maximum-score hydration for the small diagnostic result set. Those are separate reviewed stages, not hidden work in the search core.

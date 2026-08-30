@@ -157,4 +157,4 @@ The retained source fixture is a synthetic wiring golden with exactly 15 profile
 
 The reference scorer returns an audit trace containing base P/G note scores, per-order expected scores, combo offsets, peak state count, and exact binary64 words for floating results. It is deliberately transparent rather than optimized.
 
-The fixed-team foundation checkpoint remains unchanged. Search implementation proceeds under the separately reviewed design above and must not weaken this scorer's contract or import the old solver architecture.
+The fixed-team foundation checkpoint remains unchanged. The separate search checkpoint now accepts `hhwx-medley-search-source-v1`: the same HHWX profile and raw masters, three ordered songs, event rows, and PERFECT text, but no caller-supplied teams, leaders, or final area-item selection. It emits the whole normalized roster and the established owned-item configurations for the independent Rust search. Frontend/API wiring remains outside the checkpoint.
