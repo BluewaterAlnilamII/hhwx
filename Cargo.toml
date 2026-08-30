@@ -1,0 +1,15 @@
+[workspace]
+members = [
+  "crates/bandori-medley-model",
+  "crates/bandori-medley-reference",
+]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.98"
+license = "AGPL-3.0-only"
+repository = "https://github.com/BluewaterAlnilamII/hhwx"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"

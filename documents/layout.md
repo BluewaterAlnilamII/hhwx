@@ -15,6 +15,7 @@ These local artifacts are not part of the source layout:
 ```text
 hhwx/
 |-- .claude/          # Project rules and collaboration constraints
+|-- crates/           # Greenfield, search-independent Bandori medley Rust workspace members
 |-- documents/        # Product notes, setup notes, and feature SQL
 |-- messages/         # Locale message catalogs for UI translations
 |-- public/           # Static assets served directly by Next.js
@@ -27,8 +28,15 @@ hhwx/
 |   |-- lib/          # Server logic, business services, validation, and utilities
 |   `-- store/        # Shared client-side state
 |-- supabase/         # Supabase CLI config, migrations, legacy schema SQL, and maintenance SQL
+|-- Cargo.toml        # Rust workspace definition for the medley foundation
 `-- package.json      # Frontend dependencies and script entry points
 ```
+
+## crates
+
+- `bandori-medley-model/`: versioned normalized scoring inputs and strict validation. It contains no search controls or UI/network contracts.
+- `bandori-medley-reference/`: transparent evaluation of explicitly supplied five-card teams and fixed three-team medleys. It contains no candidate generation, pruning, enumeration, or optimization logic.
+- The Rust workspace is an independent greenfield boundary. Existing `src/lib/bandori/team-builder/` search or scoring implementations are not dependencies of these crates.
 
 ## src/app
 

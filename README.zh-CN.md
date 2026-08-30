@@ -25,6 +25,7 @@ HHWX 是非官方粉丝/工具项目，不隶属于、未获得、也不代表 B
 
 - Node.js 20.9 或更新版本
 - npm
+- rustup（仓库会锁定组曲基础设施所使用的 Rust 工具链）
 - 用于账号功能的 Supabase 项目
 - 可选：Cloudflare Turnstile site key 和 secret key
 - 可选/私有：兼容的 HHWX user fetcher endpoint，用于游戏账号绑定和手动同步。本仓库不包含该服务。
@@ -60,6 +61,10 @@ npm run dev
 npm run lint
 npm run build
 npm run start
+npm run format:medley-foundation
+npm run lint:medley-foundation
+npm run test:medley-foundation
+npm run check:medley-foundation:wasm
 ```
 
 ## Supabase 设置
@@ -70,6 +75,7 @@ npm run start
 
 ```text
 hhwx/
+|-- crates/         # 全新、与搜索无关的 Bandori 组曲模型和参考计分器
 |-- documents/      # 产品/设置说明及维护、回填、兼容、参考 SQL
 |-- public/         # 由 Next.js 直接提供的静态资源
 |-- src/
@@ -79,6 +85,7 @@ hhwx/
 |   |-- lib/        # 服务端和共享业务逻辑
 |   `-- store/      # 客户端状态
 |-- supabase/       # canonical migrations 与 legacy/reference schema snapshots
+|-- Cargo.toml      # 组曲基础设施的 Rust workspace 边界
 `-- package.json    # 脚本和依赖入口
 ```
 

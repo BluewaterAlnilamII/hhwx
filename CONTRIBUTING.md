@@ -19,6 +19,15 @@ npm run lint
 npm run build
 ```
 
+Changes under `crates/` must also pass the locked native and WASM checks:
+
+```bash
+npm run format:medley-foundation
+npm run lint:medley-foundation
+npm run test:medley-foundation
+npm run check:medley-foundation:wasm
+```
+
 ## Guidelines
 
 - Keep secrets and private deployment details out of commits.

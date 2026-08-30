@@ -15,6 +15,7 @@ English version: [layout.md](layout.md)
 ```text
 hhwx/
 |-- .claude/          # 项目规则和协作约束
+|-- crates/           # 全新、与搜索无关的 Bandori 组曲 Rust workspace members
 |-- documents/        # 产品说明、设置说明和功能 SQL
 |-- messages/         # UI 翻译使用的语言消息目录
 |-- public/           # 由 Next.js 直接提供的静态资源
@@ -27,8 +28,15 @@ hhwx/
 |   |-- lib/          # 服务端逻辑、业务服务、校验和工具函数
 |   `-- store/        # 共享客户端状态
 |-- supabase/         # Supabase CLI 配置、迁移、旧 schema SQL 和维护 SQL
+|-- Cargo.toml        # 组曲基础设施的 Rust workspace 定义
 `-- package.json      # 前端依赖和脚本入口
 ```
+
+## crates
+
+- `bandori-medley-model/`：版本化的规范计分输入与严格校验；不包含搜索控制或 UI／网络契约。
+- `bandori-medley-reference/`：透明计算显式给定的五卡队伍与固定三队组曲；不包含候选生成、剪枝、枚举或优化逻辑。
+- Rust workspace 是独立的全新边界，不依赖现有 `src/lib/bandori/team-builder/` 下的搜索或计分实现。
 
 ## src/app
 
