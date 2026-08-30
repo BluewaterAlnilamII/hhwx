@@ -50,11 +50,6 @@ export function readArray(
   if (!Array.isArray(value)) {
     failInput(code, path, "must be an array");
   }
-  for (let index = 0; index < value.length; index += 1) {
-    if (!Object.hasOwn(value, index)) {
-      failInput(code, `${path}[${index}]`, "array entries must be dense own properties");
-    }
-  }
   return value;
 }
 

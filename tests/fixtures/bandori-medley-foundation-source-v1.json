@@ -588,7 +588,6 @@
   "perfectRatePercentText": "99.5",
   "teams": [
     {
-      "slot": 0,
       "memberCardIds": [
         1,
         2,
@@ -598,7 +597,6 @@
       ]
     },
     {
-      "slot": 1,
       "memberCardIds": [
         6,
         7,
@@ -608,7 +606,6 @@
       ]
     },
     {
-      "slot": 2,
       "memberCardIds": [
         11,
         12,
@@ -620,7 +617,6 @@
   ],
   "songs": [
     {
-      "slot": 0,
       "songIdText": "1",
       "difficulty": "expert",
       "chart": [
@@ -666,7 +662,6 @@
       ]
     },
     {
-      "slot": 1,
       "songIdText": "2",
       "difficulty": "expert",
       "chart": [
@@ -712,7 +707,6 @@
       ]
     },
     {
-      "slot": 2,
       "songIdText": "3",
       "difficulty": "expert",
       "chart": [

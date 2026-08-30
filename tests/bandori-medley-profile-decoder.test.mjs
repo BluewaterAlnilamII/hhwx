@@ -156,6 +156,17 @@ test("profile decoder rejects malformed uint16 and duplicate card IDs", () => {
   );
 });
 
+test("profile decoder does not coerce missing numeric fields to zero", () => {
+  const payload = profilePayload();
+  payload.bestdoriProfile.server = null;
+  assert.throws(
+    () => decodeMedleyProfile(payload),
+    (error) => error instanceof MedleyFoundationInputError
+      && error.code === "INVALID_PROFILE"
+      && error.path.endsWith("bestdoriProfile.server"),
+  );
+});
+
 test("greenfield foundation does not import an existing team solver", () => {
   const root = fileURLToPath(new URL("../src/lib/bandori/medley-foundation/", import.meta.url));
   const pending = [root];

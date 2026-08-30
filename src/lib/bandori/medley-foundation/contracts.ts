@@ -136,12 +136,10 @@ export type FixedTeamSkillContextV1 = {
 };
 
 export type FixedTeamSourceSelectionV1 = {
-  slot: number;
   memberCardIds: Five<number>;
 };
 
 export type FixedSongSourceSelectionV1 = {
-  slot: number;
   songIdText: string;
   difficulty: MedleyDifficulty;
   chart: unknown;

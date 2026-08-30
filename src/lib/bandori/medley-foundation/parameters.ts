@@ -10,6 +10,7 @@ import type {
   Triple,
 } from "./contracts";
 import { failInput } from "./errors";
+import { bestdoriCardLevelGrowthRate } from "./level-growth";
 
 const PARAMETER_KEYS = ["performance", "technique", "visual"] as const;
 
@@ -18,10 +19,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function numberLike(value: unknown, path: string, fallback?: number): number {
+  if (value === null || value === undefined || value === "") {
+    if (fallback !== undefined) return fallback;
+    failInput("INVALID_MASTER", path, "must be a finite number");
+  }
   const parsed = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(parsed)) {
     if (fallback !== undefined) return fallback;
     failInput("INVALID_MASTER", path, "must be a finite number");
+  }
+  return parsed;
+}
+
+function nonNegativeNumberLike(value: unknown, path: string, fallback?: number): number {
+  const parsed = numberLike(value, path, fallback);
+  if (parsed < 0 || Object.is(parsed, -0)) {
+    failInput("INVALID_MASTER", path, "must be non-negative");
   }
   return parsed;
 }
@@ -32,9 +45,11 @@ function integerLike(value: unknown, path: string, fallback?: number): number {
   return parsed;
 }
 
-function positiveInteger(value: unknown, path: string): number {
+function positiveInteger(value: unknown, path: string, maximum = 0xffff_ffff): number {
   const parsed = integerLike(value, path);
-  if (parsed <= 0) failInput("INVALID_MASTER", path, "must be positive");
+  if (parsed <= 0 || parsed > maximum) {
+    failInput("INVALID_MASTER", path, `must be a positive integer no greater than ${maximum}`);
+  }
   return parsed;
 }
 
@@ -47,37 +62,45 @@ function readAttribute(value: unknown, path: string): BandoriCardAttribute {
 
 function readParameterVector(value: unknown, path: string): Triple<number> {
   if (!isRecord(value)) failInput("INVALID_MASTER", path, "must be a parameter object");
-  return PARAMETER_KEYS.map((key) => numberLike(value[key], `${path}.${key}`, 0)) as Triple<number>;
+  return PARAMETER_KEYS.map((key) => nonNegativeNumberLike(value[key], `${path}.${key}`)) as Triple<number>;
 }
 
-function add(left: Triple<number>, right: Triple<number>): Triple<number> {
-  return [left[0] + right[0], left[1] + right[1], left[2] + right[2]];
+function add(left: Triple<number>, right: Triple<number>, path: string): Triple<number> {
+  const result: Triple<number> = [left[0] + right[0], left[1] + right[1], left[2] + right[2]];
+  if (result.some((value) => !Number.isFinite(value) || value < 0)) {
+    failInput("INVALID_PARAMETER", path, "derived parameters must remain finite and non-negative");
+  }
+  return result;
 }
 
 function sum(value: Triple<number>): number {
-  return value[0] + value[1] + value[2];
+  const total = value[0] + value[1] + value[2];
+  if (!Number.isFinite(total) || total < 0) {
+    failInput("INVALID_PARAMETER", "derivedParameters", "sum must remain finite and non-negative");
+  }
+  return total;
 }
 
 function regionalNumber(value: unknown, server: BandoriServer): number | null {
   if (Array.isArray(value)) {
     const selected = value[server];
-    if (selected !== null && selected !== undefined && Number.isFinite(Number(selected))) {
+    if (selected !== null && selected !== undefined && selected !== "" && Number.isFinite(Number(selected))) {
       return Number(selected);
     }
     const jp = value[0];
-    return jp !== null && jp !== undefined && Number.isFinite(Number(jp)) ? Number(jp) : null;
+    return jp !== null && jp !== undefined && jp !== "" && Number.isFinite(Number(jp)) ? Number(jp) : null;
   }
-  return value !== null && value !== undefined && Number.isFinite(Number(value)) ? Number(value) : null;
+  return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
 }
 
 function exactServerRegionalNumber(value: unknown, server: BandoriServer): number | null {
   if (Array.isArray(value)) {
     const selected = value[server];
-    return selected !== null && selected !== undefined && Number.isFinite(Number(selected))
+    return selected !== null && selected !== undefined && selected !== "" && Number.isFinite(Number(selected))
       ? Number(selected)
       : null;
   }
-  return value !== null && value !== undefined && Number.isFinite(Number(value)) ? Number(value) : null;
+  return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
 }
 
 function regionalLevelNumber(
@@ -105,7 +128,7 @@ function bonusForCharacter(
   };
 }
 
-/** Calculate one profile card from its exact selected-level Bestdori master row. */
+/** Reconstruct one profile card from the level-one and maximum Bestdori stat rows. */
 export function calculateProfileCard(
   state: DecodedProfileCardV1,
   cardMasterValue: unknown,
@@ -119,53 +142,95 @@ export function calculateProfileCard(
   const characterId = positiveInteger(cardMaster.characterId, `${path}.characterId`);
   const attribute = readAttribute(cardMaster.attribute, `${path}.attribute`);
   const rarity = positiveInteger(cardMaster.rarity, `${path}.rarity`);
+  if (rarity > 5) failInput("INVALID_MASTER", `${path}.rarity`, "must be an integer from 1 through 5");
   const skillId = positiveInteger(cardMaster.skillId, `${path}.skillId`);
   const stat = isRecord(cardMaster.stat)
     ? cardMaster.stat
     : failInput("INVALID_MASTER", `${path}.stat`, "must be an object");
   const training = isRecord(stat.training) ? stat.training : null;
-  const baseLevelLimit = Math.max(1, integerLike(cardMaster.levelLimit, `${path}.levelLimit`, 1));
-  const trainingLevelLimit = Math.max(
-    0,
-    integerLike(training?.levelLimit, `${path}.stat.training.levelLimit`, 0),
-  );
+  const baseLevelLimit = positiveInteger(cardMaster.levelLimit, `${path}.levelLimit`, 0xffff);
+  const trainingLevelLimit = training === null
+    ? 0
+    : integerLike(training.levelLimit, `${path}.stat.training.levelLimit`);
+  if (trainingLevelLimit < 0) {
+    failInput("INVALID_MASTER", `${path}.stat.training.levelLimit`, "must be non-negative");
+  }
   const maxLevel = baseLevelLimit + trainingLevelLimit;
-  const level = Math.min(maxLevel, Math.max(1, state.level));
-  const levelStat = stat[String(level)];
-  if (!isRecord(levelStat)) {
-    failInput(
-      "INVALID_MASTER",
-      `${path}.stat.${level}`,
-      "the fixed foundation requires an exact selected-level card stat row",
+  if (!Number.isSafeInteger(maxLevel) || maxLevel > 0xffff) {
+    failInput("INVALID_MASTER", `${path}.levelLimit`, "combined level limit is invalid");
+  }
+  if (!Number.isSafeInteger(state.level) || state.level < 1 || state.level > maxLevel) {
+    failInput("INVALID_CARD", `${path}.profile.level`, `must be between 1 and ${maxLevel}`);
+  }
+  if (!Number.isSafeInteger(state.masterRank) || state.masterRank < 0 || state.masterRank > 4) {
+    failInput("INVALID_CARD", `${path}.profile.masterRank`, "must be an integer from 0 through 4");
+  }
+  if (state.isTrained && training === null) {
+    failInput("INVALID_MASTER", `${path}.stat.training`, "is required by the trained profile state");
+  }
+
+  const minimumParameter = readParameterVector(stat["1"], `${path}.stat.1`);
+  const maximumParameter = readParameterVector(stat[String(maxLevel)], `${path}.stat.${maxLevel}`);
+  const growthRate = state.level === maxLevel
+    ? 1
+    : bestdoriCardLevelGrowthRate(rarity, state.level);
+  if (growthRate === null) {
+    failInput("INVALID_CARD", `${path}.profile.level`, "has no Bestdori growth ratio for this rarity");
+  }
+  let baseParameter = minimumParameter.map((minimum, index) => (
+    Math.round(minimum + (maximumParameter[index] - minimum) * growthRate)
+  )) as Triple<number>;
+  const masterRankBonus = 50 * rarity * state.masterRank;
+  baseParameter = add(
+    baseParameter,
+    [masterRankBonus, masterRankBonus, masterRankBonus],
+    `${path}.profile.masterRank`,
+  );
+  if (state.isTrained && training !== null) {
+    baseParameter = add(
+      baseParameter,
+      readParameterVector(training, `${path}.stat.training`),
+      `${path}.stat.training`,
     );
   }
-  let baseParameter = readParameterVector(levelStat, `${path}.stat.${level}`);
-  const masterRankBonus = 50 * rarity * Math.max(0, state.masterRank);
-  baseParameter = add(baseParameter, [masterRankBonus, masterRankBonus, masterRankBonus]);
-  if (state.isTrained && training) {
-    baseParameter = add(baseParameter, readParameterVector(training, `${path}.stat.training`));
-  }
   const episodes = Array.isArray(stat.episodes) ? stat.episodes : [];
-  for (let index = 0; index < Math.min(episodes.length, Math.max(0, state.episodeCount)); index += 1) {
-    baseParameter = add(baseParameter, readParameterVector(episodes[index], `${path}.stat.episodes[${index}]`));
+  if (!Number.isSafeInteger(state.episodeCount) || state.episodeCount < 0 || state.episodeCount > episodes.length) {
+    failInput("INVALID_CARD", `${path}.profile.episodeCount`, `must be between 0 and ${episodes.length}`);
+  }
+  for (let index = 0; index < state.episodeCount; index += 1) {
+    baseParameter = add(
+      baseParameter,
+      readParameterVector(episodes[index], `${path}.stat.episodes[${index}]`),
+      `${path}.stat.episodes[${index}]`,
+    );
   }
 
   const bonus = bonusForCharacter(characterId, characterBonuses);
   const characterBonus = baseParameter.map((parameter, index) => {
     const potentialLevel = bonus.potential[index] ?? 0;
+    if (
+      !Number.isFinite(potentialLevel)
+      || potentialLevel < 0
+      || !Number.isFinite(bonus.collection[index])
+      || bonus.collection[index] < 0
+      || !Number.isFinite(bonus.training[index])
+      || bonus.training[index] < 0
+    ) {
+      failInput("INVALID_PROFILE", `${path}.profile.characterBonuses`, "must be finite and non-negative");
+    }
     const potentialRate = potentialLevel > 1 ? potentialLevel / 1000 : 0;
     return Math.floor(parameter * potentialRate)
       + Math.floor(parameter * bonus.collection[index] / 100)
       + Math.floor(parameter * bonus.training[index] / 100);
   }) as Triple<number>;
-  const characterParameter = add(baseParameter, characterBonus);
-  const characterMaster = isRecord(characterMasterValue) ? characterMasterValue : null;
-  const bandValue = characterMaster ? numberLike(characterMaster.bandId, `${path}.character.bandId`, Number.NaN) : Number.NaN;
-  const bandId = Number.isFinite(bandValue) ? bandValue : null;
+  const characterParameter = add(baseParameter, characterBonus, `${path}.profile.characterBonuses`);
+  const characterMaster = isRecord(characterMasterValue)
+    ? characterMasterValue
+    : failInput("INVALID_MASTER", `${path}.character`, "character master is missing");
+  const bandId = positiveInteger(characterMaster.bandId, `${path}.character.bandId`);
 
   return {
     ...state,
-    level,
     characterId,
     bandId,
     attribute,
@@ -195,6 +260,9 @@ function selectedAreaItemPower(
     const rates = PARAMETER_KEYS.map((key) => (
       regionalLevelNumber(master[key], state.level, server) / 100
     )) as Triple<number>;
+    if (rates.some((rate) => !Number.isFinite(rate) || rate < 0)) {
+      failInput("INVALID_MASTER", `areaItemsById.${areaItemId}`, "rates must be finite and non-negative");
+    }
     return total + cards.reduce((itemPower, card) => {
       if (!targetAttributes.includes(card.attribute) || card.bandId === null || !targetBands.includes(card.bandId)) {
         return itemPower;
@@ -209,40 +277,81 @@ function selectedAreaItemPower(
 
 function matchingPercent(
   values: unknown,
+  path: string,
   predicate: (record: Record<string, unknown>) => boolean,
 ): number {
-  if (!Array.isArray(values)) return 0;
-  const match = values.find((value) => isRecord(value) && predicate(value));
-  return isRecord(match) ? numberLike(match.percent, "eventBonus.percent", 0) / 100 : 0;
+  if (values === undefined || values === null) return 0;
+  if (!Array.isArray(values)) failInput("INVALID_PARAMETER", path, "must be an array");
+  for (let index = 0; index < values.length; index += 1) {
+    const record = values[index];
+    if (!isRecord(record)) failInput("INVALID_PARAMETER", `${path}[${index}]`, "must be an object");
+    if (predicate(record)) return eventNumber(record.percent, `${path}[${index}].percent`) / 100;
+  }
+  return 0;
+}
+
+function eventNumber(value: unknown, path: string, fallback?: number): number {
+  if (value === null || value === undefined || value === "") {
+    if (fallback !== undefined) return fallback;
+    failInput("INVALID_PARAMETER", path, "must be a finite non-negative number");
+  }
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0 || Object.is(parsed, -0)) {
+    failInput("INVALID_PARAMETER", path, "must be a finite non-negative number");
+  }
+  return parsed;
+}
+
+function eventInteger(value: unknown, path: string, allowZero = false): number {
+  const parsed = eventNumber(value, path);
+  if (!Number.isSafeInteger(parsed) || (allowZero ? parsed < 0 : parsed <= 0) || parsed > 0xffff_ffff) {
+    failInput("INVALID_PARAMETER", path, allowZero
+      ? "must be an unsigned 32-bit integer"
+      : "must be a positive unsigned 32-bit integer");
+  }
+  return parsed;
 }
 
 function eventParameterVector(card: CalculatedProfileCardV1, eventBonus: unknown): Triple<number> {
-  if (!isRecord(eventBonus)) return [0, 0, 0];
-  const attributePercent = matchingPercent(eventBonus.attributes, (record) => record.attribute === card.attribute);
+  if (eventBonus === null) return [0, 0, 0];
+  if (!isRecord(eventBonus)) failInput("INVALID_PARAMETER", "eventBonus", "must be an object or null");
+  const attributePercent = matchingPercent(
+    eventBonus.attributes,
+    "eventBonus.attributes",
+    (record) => record.attribute === card.attribute,
+  );
   const characterPercent = matchingPercent(
     eventBonus.characters,
-    (record) => Math.trunc(numberLike(record.characterId, "eventBonus.characters.characterId", 0)) === card.characterId,
+    "eventBonus.characters",
+    (record) => eventInteger(record.characterId, "eventBonus.characters.characterId") === card.characterId,
   );
-  const memberPercent = matchingPercent(eventBonus.members, (record) => {
-    const situationId = Math.trunc(numberLike(record.situationId, "eventBonus.members.situationId", 0));
-    const id = Math.trunc(numberLike(record.id, "eventBonus.members.id", 0));
-    return situationId === card.cardId || id === card.cardId;
+  const memberPercent = matchingPercent(eventBonus.members, "eventBonus.members", (record) => {
+    const situationId = eventInteger(record.situationId, "eventBonus.members.situationId");
+    return situationId === card.cardId;
   });
-  const masterRankPercent = matchingPercent(eventBonus.limitBreaks, (record) => (
-    Math.trunc(numberLike(record.rarity, "eventBonus.limitBreaks.rarity", 0)) === card.rarity
-    && Math.trunc(numberLike(record.rank, "eventBonus.limitBreaks.rank", 0)) === card.masterRank
+  const masterRankPercent = matchingPercent(eventBonus.limitBreaks, "eventBonus.limitBreaks", (record) => (
+    eventInteger(record.rarity, "eventBonus.limitBreaks.rarity") === card.rarity
+    && eventInteger(record.rank, "eventBonus.limitBreaks.rank", true) === card.masterRank
   ));
   const matchesAttributeAndCharacter = attributePercent > 0 && characterPercent > 0;
   const parameterPercent = matchesAttributeAndCharacter
-    ? numberLike(eventBonus.parameterPercent, "eventBonus.parameterPercent", 0) / 100
+    ? eventNumber(eventBonus.parameterPercent, "eventBonus.parameterPercent", 0) / 100
     : 0;
   const baseRate = attributePercent + characterPercent + memberPercent + masterRankPercent + parameterPercent;
   const roomRates = matchesAttributeAndCharacter
-    ? PARAMETER_KEYS.map((key) => numberLike(eventBonus[`${key}Percent`], `eventBonus.${key}Percent`, 0) / 100) as Triple<number>
+    ? PARAMETER_KEYS.map((key) => eventNumber(
+      eventBonus[`${key}Percent`],
+      `eventBonus.${key}Percent`,
+      0,
+    ) / 100) as Triple<number>
     : [0, 0, 0] as Triple<number>;
-  return card.characterParameter.map((parameter, index) => (
+  const result = card.characterParameter.map((parameter, index) => (
     parameter * (baseRate + roomRates[index])
   )) as Triple<number>;
+  if (result.some((value) => !Number.isFinite(value) || value < 0)) {
+    failInput("INVALID_PARAMETER", "eventBonus", "derived parameters must remain finite and non-negative");
+  }
+  return result;
 }
 
 /** Derive Bestdori-compatible card, selected area-item, and event parameters for one fixed team. */
@@ -266,14 +375,20 @@ export function calculateFixedTeamParameters(options: {
     selectedIds,
     options.server,
   );
-  const eventPower = Math.floor(options.cards.reduce((total, card) => (
+  const eventPower = options.cards.reduce((total, card) => (
     total + sum(eventParameterVector(card, options.eventBonus))
-  ), 0));
+  ), 0);
+  const deckTotalParameter = cardPower + areaItemPower + eventPower;
+  if (![cardPower, areaItemPower, eventPower, deckTotalParameter].every((value) => (
+    Number.isFinite(value) && value >= 0
+  ))) {
+    failInput("INVALID_PARAMETER", "teamParameters", "derived totals must remain finite and non-negative");
+  }
   return {
     cardPower,
     areaItemPower,
     eventPower,
-    deckTotalParameter: cardPower + areaItemPower + eventPower,
+    deckTotalParameter,
     selectedAreaItemIds: selectedIds,
     cards: options.cards.map((card) => ({
       cardId: card.cardId,

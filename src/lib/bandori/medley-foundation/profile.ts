@@ -21,6 +21,9 @@ const WRAPPED_CARD_ID_OFFSET = 65_536;
 const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u;
 
 function readIntegerLike(value: unknown, path: string, minimum = 0): number {
+  if (value === null || value === undefined || value === "") {
+    failInput("INVALID_PROFILE", path, `must be an integer greater than or equal to ${minimum}`);
+  }
   const parsed = typeof value === "number" ? value : Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < minimum) {
     failInput("INVALID_PROFILE", path, `must be an integer greater than or equal to ${minimum}`);
@@ -32,6 +35,9 @@ function readNumberLike(value: unknown, path: string, nullable: true): number | 
 function readNumberLike(value: unknown, path: string, nullable?: false): number;
 function readNumberLike(value: unknown, path: string, nullable = false): number | null {
   if (nullable && value === null) return null;
+  if (value === null || value === undefined || value === "") {
+    failInput("INVALID_PROFILE", path, "must be a finite non-negative number");
+  }
   const parsed = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(parsed) || parsed < 0 || Object.is(parsed, -0)) {
     failInput("INVALID_PROFILE", path, "must be a finite non-negative number");

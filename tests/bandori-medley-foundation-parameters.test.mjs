@@ -27,6 +27,7 @@ function cardMaster() {
     skillId: 1,
     levelLimit: 40,
     stat: {
+      1: { performance: 100, technique: 200, visual: 300 },
       60: { performance: 1000, technique: 1100, visual: 1200 },
       training: { levelLimit: 20, performance: 100, technique: 100, visual: 100 },
       episodes: [
@@ -44,7 +45,7 @@ const characterBonuses = new Map([[1, {
   training: [4, 5, 6],
 }]]);
 
-test("card parameters derive from the exact profile state and raw master row", () => {
+test("card parameters derive from the profile state and raw min/max master rows", () => {
   const calculated = calculateProfileCard(
     profileCard(1),
     cardMaster(),
@@ -57,6 +58,30 @@ test("card parameters derive from the exact profile state and raw master row", (
   assert.equal(calculated.totalPower, 4677);
   assert.equal(calculated.skillId, 1);
   assert.equal(calculated.bandId, 1);
+});
+
+test("intermediate card levels use the Bestdori rarity growth curve", () => {
+  const state = {
+    ...profileCard(1),
+    level: 10,
+    masterRank: 0,
+    episodeCount: 0,
+    isTrained: false,
+  };
+  const master = {
+    ...cardMaster(),
+    rarity: 1,
+    levelLimit: 20,
+    stat: {
+      1: { performance: 100, technique: 200, visual: 300 },
+      20: { performance: 1100, technique: 1200, visual: 1300 },
+      episodes: [],
+    },
+  };
+
+  const calculated = calculateProfileCard(state, master, { bandId: 1 }, new Map());
+  assert.deepEqual(calculated.baseParameter, [449, 549, 649]);
+  assert.equal(calculated.totalPower, 1647);
 });
 
 test("selected area items and event parameters are derived without caller totals", () => {
@@ -92,16 +117,41 @@ test("selected area items and event parameters are derived without caller totals
 
   assert.equal(trace.cardPower, 23_385);
   assert.ok(Math.abs(trace.areaItemPower - 4_828) < Number.EPSILON * 40_000);
-  assert.equal(trace.eventPower, 11_006);
-  assert.ok(Math.abs(trace.deckTotalParameter - 39_219) < Number.EPSILON * 40_000);
+  assert.ok(Math.abs(trace.eventPower - 11_006.05) < Number.EPSILON * 40_000);
+  assert.ok(Math.abs(trace.deckTotalParameter - 39_219.05) < Number.EPSILON * 40_000);
   assert.deepEqual(trace.selectedAreaItemIds, [1]);
 });
 
-test("fixed card parameters fail when the selected-level stat row is absent", () => {
+test("fixed card parameters fail when a required min/max stat row is absent", () => {
   const incomplete = cardMaster();
   delete incomplete.stat[60];
   assert.throws(
     () => calculateProfileCard(profileCard(1), incomplete, { bandId: 1 }, characterBonuses),
-    /exact selected-level card stat row/u,
+    /INVALID_MASTER.*stat\.60/u,
   );
+});
+
+test("fixed card parameters reject profile levels above the raw card limit", () => {
+  const state = { ...profileCard(1), level: 61 };
+  assert.throws(
+    () => calculateProfileCard(state, cardMaster(), { bandId: 1 }, characterBonuses),
+    /INVALID_CARD.*profile\.level/u,
+  );
+});
+
+test("malformed event arrays fail instead of becoming an empty bonus", () => {
+  const cards = Array.from({ length: 5 }, (_, index) => calculateProfileCard(
+    profileCard(index + 1),
+    cardMaster(),
+    { bandId: 1 },
+    characterBonuses,
+  ));
+  assert.throws(() => calculateFixedTeamParameters({
+    cards,
+    areaItemsById: {},
+    profileAreaItems: new Map(),
+    selectedAreaItemIds: [],
+    eventBonus: { attributes: "not-an-array" },
+    server: 3,
+  }), /INVALID_PARAMETER.*eventBonus\.attributes/u);
 });

@@ -1,3 +1,5 @@
+import { resolveBandoriCardForServerWithJpFallback } from "@/lib/bandori/cards/regional-extensions";
+
 import {
   MEDLEY_FOUNDATION_SOURCE_SCHEMA_VERSION,
   MEDLEY_SCORING_INPUT_SCHEMA_VERSION,
@@ -74,16 +76,12 @@ function readTeamSelections(value: unknown): Triple<FixedTeamSourceSelectionV1> 
   if (teams.length !== 3) failInput("INVALID_TEAM", "teams", "must contain exactly three teams");
   return teams.map((rawTeam, slot) => {
     const team = readRecord(rawTeam, `teams[${slot}]`, "INVALID_TEAM");
-    assertAllowedKeys(team, ["slot", "memberCardIds"], ["slot", "memberCardIds"], `teams[${slot}]`, "INVALID_TEAM");
-    if (readSafeInteger(team.slot, `teams[${slot}].slot`, "INVALID_TEAM") !== slot) {
-      failInput("INVALID_TEAM", `teams[${slot}].slot`, "must equal its zero-based array position");
-    }
+    assertAllowedKeys(team, ["memberCardIds"], ["memberCardIds"], `teams[${slot}]`, "INVALID_TEAM");
     const memberCardIds = readArray(team.memberCardIds, `teams[${slot}].memberCardIds`, "INVALID_TEAM");
     if (memberCardIds.length !== 5) {
       failInput("INVALID_TEAM", `teams[${slot}].memberCardIds`, "must contain exactly five card IDs");
     }
     return {
-      slot,
       memberCardIds: memberCardIds.map((cardId, index) => (
         readSourcePositiveInteger(cardId, `teams[${slot}].memberCardIds[${index}]`)
       )) as Five<number>,
@@ -98,16 +96,12 @@ function readSongSelections(value: unknown): Triple<FixedSongSourceSelectionV1> 
     const song = readRecord(rawSong, `songs[${slot}]`, "INVALID_SONG");
     assertAllowedKeys(
       song,
-      ["slot", "songIdText", "difficulty", "chart"],
-      ["slot", "songIdText", "difficulty", "chart"],
+      ["songIdText", "difficulty", "chart"],
+      ["songIdText", "difficulty", "chart"],
       `songs[${slot}]`,
       "INVALID_SONG",
     );
-    if (readSafeInteger(song.slot, `songs[${slot}].slot`, "INVALID_SONG") !== slot) {
-      failInput("INVALID_SONG", `songs[${slot}].slot`, "must equal its zero-based array position");
-    }
     return {
-      slot,
       songIdText: typeof song.songIdText === "string"
         ? song.songIdText
         : failInput("INVALID_SONG", `songs[${slot}].songIdText`, "must be a string"),
@@ -143,6 +137,21 @@ function requireMaster(
   return isRecord(value)
     ? value
     : failInput("INVALID_MASTER", `${path}.${id}`, "selected master row is missing");
+}
+
+function resolveCardMaster(
+  card: Record<string, unknown>,
+  server: BandoriServer,
+  path: string,
+): Record<string, unknown> {
+  let resolved: Record<string, unknown> | null;
+  try {
+    resolved = resolveBandoriCardForServerWithJpFallback(card, server);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "card server extension is invalid";
+    failInput("INVALID_MASTER", `${path}.serverExtensions`, message);
+  }
+  return resolved ?? failInput("INVALID_MASTER", path, "card is unavailable on the profile server and JP");
 }
 
 /** Build a fixed 15-card, three-team scoring input without performing any search. */
@@ -218,17 +227,21 @@ export function buildFixedMedleyEvaluationInput(
   const teamParameters: FixedTeamParameterTraceV1[] = [];
   const teamMemberCardIds: Five<number>[] = [];
 
-  for (const teamSelection of teamSelections) {
+  for (const [teamSlot, teamSelection] of teamSelections.entries()) {
     const calculatedCards = teamSelection.memberCardIds.map((cardId, memberIndex) => {
       if (selectedCardIds.has(cardId)) {
-        failInput("INVALID_TEAM", `${path}.teams[${teamSelection.slot}].memberCardIds[${memberIndex}]`, "card is selected more than once");
+        failInput("INVALID_TEAM", `${path}.teams[${teamSlot}].memberCardIds[${memberIndex}]`, "card is selected more than once");
       }
       selectedCardIds.add(cardId);
       const state = profileCards.get(cardId);
-      if (!state || state.isExcluded) {
-        failInput("INVALID_CARD", `${path}.teams[${teamSelection.slot}].memberCardIds[${memberIndex}]`, "card must be owned and not excluded");
+      if (!state) {
+        failInput("INVALID_CARD", `${path}.teams[${teamSlot}].memberCardIds[${memberIndex}]`, "card must be owned");
       }
-      const cardMaster = requireMaster(cardsById, cardId, `${path}.cardsById`);
+      const cardMaster = resolveCardMaster(
+        requireMaster(cardsById, cardId, `${path}.cardsById`),
+        profile.server,
+        `${path}.cardsById.${cardId}`,
+      );
       const characterId = positiveIntegerLike(cardMaster.characterId, `${path}.cardsById.${cardId}.characterId`);
       const characterMaster = requireMaster(charactersById, characterId, `${path}.charactersById`);
       const card = calculateProfileCard(
@@ -244,9 +257,8 @@ export function buildFixedMedleyEvaluationInput(
       return card;
     }) as Five<CalculatedProfileCardV1>;
     if (new Set(calculatedCards.map((card) => card.characterId)).size !== 5) {
-      failInput("INVALID_TEAM", `${path}.teams[${teamSelection.slot}].memberCardIds`, "one team cannot repeat a character");
+      failInput("INVALID_TEAM", `${path}.teams[${teamSlot}].memberCardIds`, "one team cannot repeat a character");
     }
-
     const context = buildFixedTeamSkillContext(calculatedCards);
     const instanceIds = calculatedCards.map((card) => {
       const instanceId = scoringCards.length;
@@ -276,17 +288,17 @@ export function buildFixedMedleyEvaluationInput(
     teamParameters.push(parameters);
     teamMemberCardIds.push(teamSelection.memberCardIds);
     scoringTeams.push({
-      slot: teamSelection.slot,
+      slot: teamSlot,
       memberInstanceIds: instanceIds,
       leaderInstanceId: instanceIds[2],
       deckTotalParameter: parameters.deckTotalParameter,
     });
   }
 
-  const scoringSongs = songSelections.map((selection) => {
-    const songId = parseSongIdText(selection.songIdText, `${path}.songs[${selection.slot}].songIdText`);
+  const scoringSongs = songSelections.map((selection, songSlot) => {
+    const songId = parseSongIdText(selection.songIdText, `${path}.songs[${songSlot}].songIdText`);
     return {
-      slot: selection.slot,
+      slot: songSlot,
       songId,
       difficulty: selection.difficulty,
       playLevel: readPlayLevel(
@@ -294,7 +306,7 @@ export function buildFixedMedleyEvaluationInput(
         songId,
         selection.difficulty,
       ),
-      notes: normalizeBestdoriScoringChart(selection.chart, `${path}.songs[${selection.slot}].chart`),
+      notes: normalizeBestdoriScoringChart(selection.chart, `${path}.songs[${songSlot}].chart`),
     };
   }) as Triple<MedleySongV1>;
 
