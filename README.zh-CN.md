@@ -75,7 +75,7 @@ npm run check:medley-foundation:wasm
 
 ```text
 hhwx/
-|-- crates/         # 全新、与搜索无关的 Bandori 组曲模型和参考计分器
+|-- crates/         # 全新的 Bandori 组曲模型、参考计分器与精确搜索边界
 |-- documents/      # 产品/设置说明及维护、回填、兼容、参考 SQL
 |-- public/         # 由 Next.js 直接提供的静态资源
 |-- src/
@@ -85,7 +85,7 @@ hhwx/
 |   |-- lib/        # 服务端和共享业务逻辑
 |   `-- store/      # 客户端状态
 |-- supabase/       # canonical migrations 与 legacy/reference schema snapshots
-|-- Cargo.toml      # 组曲基础设施的 Rust workspace 边界
+|-- Cargo.toml      # 全新组曲实现的 Rust workspace 边界
 `-- package.json    # 脚本和依赖入口
 ```
 

@@ -75,7 +75,7 @@ New schema changes have one source of truth: [supabase/migrations](supabase/migr
 
 ```text
 hhwx/
-|-- crates/         # greenfield, search-independent Bandori medley model and reference scorer
+|-- crates/         # greenfield Bandori medley model, reference scorer, and exact-search boundary
 |-- documents/      # product/setup notes and maintenance/backfill/reference SQL
 |-- public/         # static assets served directly by Next.js
 |-- src/
@@ -85,7 +85,7 @@ hhwx/
 |   |-- lib/        # server and shared business logic
 |   `-- store/      # client state
 |-- supabase/       # canonical migrations and legacy/reference schema snapshots
-|-- Cargo.toml      # Rust workspace boundary for the medley foundation
+|-- Cargo.toml      # Rust workspace boundary for the greenfield medley implementation
 `-- package.json    # scripts and dependencies
 ```
 
