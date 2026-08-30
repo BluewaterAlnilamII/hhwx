@@ -56,7 +56,7 @@ The following is the current reviewed engineering direction, not a game or produ
 - Keep area-configuration and search-stage work resident only while it is useful; exact-score only surviving complete teams, retain compact index-based candidate data, and hydrate rich output only for the small retained result set.
 - If a bound cannot be proved to cover every completion, it cannot prune. Candidate caps, random selection, approximate comparisons, and false exact success are excluded; on a small input where no bound fires, the search remains complete exhaustive enumeration.
 
-Calc reverse engineering supports the placement and lifetime of pruning and compact data, but does not define HHWX scoring, candidate layout, dominance, or proof semantics. The concrete upper-bound model, partial-family representation, final disjoint-team join, storage layout, and parallel strategy remain subject to one integrated design review before implementation.
+Calc reverse engineering supports the placement and lifetime of pruning and compact data, but does not define HHWX scoring, candidate layout, dominance, or proof semantics. The approved initial integrated design is recorded in [Greenfield Bandori Medley Search](bandori-medley-search.md). Its engineering choices remain reviewable and do not become game semantics.
 
 ## Parameter derivation
 
@@ -157,4 +157,4 @@ The retained source fixture is a synthetic wiring golden with exactly 15 profile
 
 The reference scorer returns an audit trace containing base P/G note scores, per-order expected scores, combo offsets, peak state count, and exact binary64 words for floating results. It is deliberately transparent rather than optimized.
 
-This checkpoint stops before search implementation. The locked product rules and provisional direction above still do not select a concrete upper-bound algorithm, candidate layout, cache, dominance relation, final join, partition, or parallel strategy; those require the integrated architecture review described above.
+The fixed-team foundation checkpoint remains unchanged. Search implementation proceeds under the separately reviewed design above and must not weaken this scorer's contract or import the old solver architecture.
