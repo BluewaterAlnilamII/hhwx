@@ -51,6 +51,8 @@ pub struct RateUpWithPerfectV1 {
     deny_unknown_fields
 )]
 pub enum SkillBehaviorV1 {
+    /// The source skill has no score effect in the P/G-only model.
+    Neutral,
     /// The same score-up percent applies to PERFECT and GREAT.
     Score { score_up_percent_bits: F32Bits },
     /// The score-up percent applies to PERFECT; GREAT keeps its normal score.
@@ -71,6 +73,8 @@ pub enum SkillBehaviorV1 {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ResolvedScoreSkillV1 {
     pub master_skill_id: u32,
+    /// Exact source master row selected by the physical card state.
+    pub skill_level: u8,
     pub duration_micros: u64,
     pub behavior: SkillBehaviorV1,
     pub rate_up_with_perfect: Option<RateUpWithPerfectV1>,
@@ -92,6 +96,8 @@ pub struct CardScoringInputV1 {
 pub struct FixedTeamV1 {
     pub slot: u8,
     pub member_instance_ids: [u32; 5],
+    /// Explicit leader identity; v1 also requires it at center member index two.
+    pub leader_instance_id: u32,
     /// Final deck parameter produced by the audited client-compatible power pipeline.
     pub deck_total_parameter_bits: F32Bits,
 }

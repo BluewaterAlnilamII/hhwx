@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use bandori_medley_model::{
-    CardScoringInputV1, ExactProbabilityV1, FixedMedleyEvaluationInputV1, FixedTeamV1,
-    MedleySongV1, ResolvedScoreSkillV1, SCORING_RULES_VERSION, SkillBehaviorV1,
+    ExactProbabilityV1, FixedMedleyEvaluationInputV1, FixedTeamV1, MedleySongV1,
+    ResolvedScoreSkillV1, SCORING_RULES_VERSION, SkillBehaviorV1,
 };
 use serde::Serialize;
 
@@ -10,9 +10,32 @@ use crate::error::{ScoreError, ScoreErrorCode};
 use crate::permutations::skill_orders;
 
 const SKILL_ORDER_COUNT: u16 = 120;
-const LEADER_MEMBER_INDEX: usize = 2;
 const PERFECT_RATE: f32 = 1.1_f32;
 const GREAT_RATE: f32 = 0.8_f32;
+
+/// JSON-safe IEEE-754 double-precision payload split into two exact u32 words.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct F64BitsV1 {
+    pub high: u32,
+    pub low: u32,
+}
+
+impl F64BitsV1 {
+    #[must_use]
+    pub const fn from_f64(value: f64) -> Self {
+        let bits = value.to_bits();
+        Self {
+            high: (bits >> 32) as u32,
+            low: bits as u32,
+        }
+    }
+
+    #[must_use]
+    pub fn to_f64(self) -> f64 {
+        f64::from_bits((u64::from(self.high) << 32) | u64::from(self.low))
+    }
+}
 
 /// First-round note scores after judgment and medley combo correction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -33,9 +56,9 @@ pub struct SongScoreTraceV1 {
     pub play_level_rate_bits: u32,
     pub base_score_per_note_bits: u32,
     pub base_note_scores: Vec<JudgmentScoreTraceV1>,
-    pub base_expected_score_bits: u64,
-    pub permutation_expected_score_bits: Vec<u64>,
-    pub average_score_bits: u64,
+    pub base_expected_score_bits: F64BitsV1,
+    pub permutation_expected_score_bits: Vec<F64BitsV1>,
+    pub average_score_bits: F64BitsV1,
     pub score_order_count: u16,
     pub peak_judgment_state_count: u32,
 }
@@ -43,8 +66,8 @@ pub struct SongScoreTraceV1 {
 impl SongScoreTraceV1 {
     /// Decode the stable IEEE-754 representation of the average score.
     #[must_use]
-    pub const fn average_score(&self) -> f64 {
-        f64::from_bits(self.average_score_bits)
+    pub fn average_score(&self) -> f64 {
+        self.average_score_bits.to_f64()
     }
 }
 
@@ -54,14 +77,14 @@ impl SongScoreTraceV1 {
 pub struct MedleyScoreTraceV1 {
     pub scoring_rules_version: String,
     pub songs: [SongScoreTraceV1; 3],
-    pub total_average_score_bits: u64,
+    pub total_average_score_bits: F64BitsV1,
 }
 
 impl MedleyScoreTraceV1 {
     /// Decode the stable IEEE-754 representation of the medley objective.
     #[must_use]
-    pub const fn total_average_score(&self) -> f64 {
-        f64::from_bits(self.total_average_score_bits)
+    pub fn total_average_score(&self) -> f64 {
+        self.total_average_score_bits.to_f64()
     }
 }
 
@@ -121,21 +144,59 @@ fn base_score_per_note(deck_total_parameter: f32, play_level: u16, note_count: u
     after_note_count * 3.0_f32
 }
 
+// Exact f32 payloads from JP masterMedleyComboRateList artifact
+// a4a77ff9daee4d0373612044e14d4844343bceed4b32a34843300e81e2d331ab.
+// Reconstructing these values with f32 arithmetic is not equivalent: 1.04 +
+// 3 * 0.01 is one ULP below the stored 1.07 value.
+const MEDLEY_COMBO_RATE_BITS: [u32; 35] = [
+    0x3f80_0000,
+    0x3f81_47ae,
+    0x3f82_8f5c,
+    0x3f83_d70a,
+    0x3f85_1eb8,
+    0x3f86_6666,
+    0x3f87_ae14,
+    0x3f88_f5c3,
+    0x3f8a_3d71,
+    0x3f8b_851f,
+    0x3f8c_cccd,
+    0x3f8e_147b,
+    0x3f8f_5c29,
+    0x3f90_a3d7,
+    0x3f91_eb85,
+    0x3f93_3333,
+    0x3f94_7ae1,
+    0x3f95_c28f,
+    0x3f97_0a3d,
+    0x3f98_51ec,
+    0x3f99_999a,
+    0x3f9a_e148,
+    0x3f9c_28f6,
+    0x3f9d_70a4,
+    0x3f9e_b852,
+    0x3fa0_0000,
+    0x3fa1_47ae,
+    0x3fa2_8f5c,
+    0x3fa3_d70a,
+    0x3fa5_1eb8,
+    0x3fa6_6666,
+    0x3fa7_ae14,
+    0x3fa8_f5c3,
+    0x3faa_3d71,
+    0x3fab_851f,
+];
+
 fn medley_combo_rate(combo: u32) -> f32 {
-    match combo {
-        0..=20 => 1.0_f32,
-        21..=50 => 1.01_f32,
-        51..=100 => 1.02_f32,
-        101..=300 => {
-            let step = (combo - 1) / 50;
-            1.01_f32 + step as f32 * 0.01_f32
-        }
-        301..=3_000 => {
-            let step = (combo - 1) / 100;
-            1.04_f32 + step as f32 * 0.01_f32
-        }
-        _ => 1.34_f32,
-    }
+    let table_index = match combo {
+        0..=20 => 0,
+        21..=50 => 1,
+        51..=100 => 2,
+        101..=300 => 3 + (combo - 101) / 50,
+        301..=3_000 => 7 + (combo - 301) / 100,
+        3_001..=9_999 => 34,
+        _ => 0,
+    };
+    f32::from_bits(MEDLEY_COMBO_RATE_BITS[table_index as usize])
 }
 
 fn floor_f32_to_u32(value: f32, path: &str) -> Result<u32, ScoreError> {
@@ -168,6 +229,7 @@ fn base_skill_multiplier(
     judgment: Judgment,
 ) -> f32 {
     match skill.behavior {
+        SkillBehaviorV1::Neutral => 1.0_f32,
         SkillBehaviorV1::Score {
             score_up_percent_bits,
         } => percent_multiplier(score_up_percent_bits.to_f32()),
@@ -279,15 +341,6 @@ fn build_base_note_scores(
     Ok((level_rate, base, scores))
 }
 
-fn card_for_member<'a>(
-    input: &'a FixedMedleyEvaluationInputV1,
-    team: &FixedTeamV1,
-    member_index: usize,
-) -> &'a CardScoringInputV1 {
-    let instance_id = team.member_instance_ids[member_index];
-    &input.cards[instance_id as usize]
-}
-
 fn build_activations<'a>(
     input: &'a FixedMedleyEvaluationInputV1,
     song: &MedleySongV1,
@@ -301,12 +354,12 @@ fn build_activations<'a>(
         .collect();
     let mut activations = Vec::with_capacity(6);
     for (trigger_index, trigger_note) in trigger_notes.into_iter().enumerate() {
-        let member_index = if trigger_index < 5 {
-            order[trigger_index]
+        let instance_id = if trigger_index < 5 {
+            team.member_instance_ids[order[trigger_index]]
         } else {
-            LEADER_MEMBER_INDEX
+            team.leader_instance_id
         };
-        let skill = &card_for_member(input, team, member_index).skill;
+        let skill = &input.cards[instance_id as usize].skill;
         let end_time_micros = trigger_note
             .time_micros
             .checked_add(skill.duration_micros)
@@ -499,7 +552,7 @@ fn score_song(
             score_one_order(input, song, team, order, &base_note_scores, perfect_rate)?;
         average_accumulator += score;
         peak_judgment_state_count = peak_judgment_state_count.max(peak_states);
-        permutation_expected_score_bits.push(score.to_bits());
+        permutation_expected_score_bits.push(F64BitsV1::from_f64(score));
     }
     let average_score = average_accumulator / f64::from(SKILL_ORDER_COUNT);
     let peak_judgment_state_count = u32::try_from(peak_judgment_state_count).map_err(|_| {
@@ -518,9 +571,9 @@ fn score_song(
         play_level_rate_bits: level_rate.to_bits(),
         base_score_per_note_bits: base.to_bits(),
         base_note_scores,
-        base_expected_score_bits: base_expected.to_bits(),
+        base_expected_score_bits: F64BitsV1::from_f64(base_expected),
         permutation_expected_score_bits,
-        average_score_bits: average_score.to_bits(),
+        average_score_bits: F64BitsV1::from_f64(average_score),
         score_order_count: SKILL_ORDER_COUNT,
         peak_judgment_state_count,
     })
@@ -530,13 +583,7 @@ fn score_song(
 pub fn evaluate_fixed_medley(
     input: &FixedMedleyEvaluationInputV1,
 ) -> Result<MedleyScoreTraceV1, ScoreError> {
-    input.validate().map_err(|error| {
-        ScoreError::new(
-            ScoreErrorCode::InputInvalid,
-            error.path,
-            format!("{:?}: {}", error.code, error.message),
-        )
-    })?;
+    input.validate().map_err(ScoreError::from_validation)?;
 
     let perfect_rate = exact_probability_to_f64(input.perfect_rate);
     let mut start_combo = 0_u32;
@@ -571,14 +618,14 @@ pub fn evaluate_fixed_medley(
     Ok(MedleyScoreTraceV1 {
         scoring_rules_version: SCORING_RULES_VERSION.to_owned(),
         songs,
-        total_average_score_bits: total_average_score.to_bits(),
+        total_average_score_bits: F64BitsV1::from_f64(total_average_score),
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bandori_medley_model::{F32Bits, RateUpWithPerfectV1, ScoringNoteV1};
+    use bandori_medley_model::{F32Bits, RateUpWithPerfectV1, ScoringNoteV1, ValidationCode};
 
     const VALID_FIXED_MEDLEY: &str =
         include_str!("../../bandori-medley-model/tests/fixtures/valid-fixed-medley-v1.json");
@@ -592,10 +639,102 @@ mod tests {
         let input = fixture();
         let first = evaluate_fixed_medley(&input).expect("fixture scores");
         let second = evaluate_fixed_medley(&input).expect("fixture scores again");
+        let checksums: Vec<u64> = first
+            .songs
+            .iter()
+            .map(|song| {
+                song.permutation_expected_score_bits.iter().fold(
+                    0xcbf2_9ce4_8422_2325_u64,
+                    |mut hash, words| {
+                        for byte in words
+                            .high
+                            .to_be_bytes()
+                            .into_iter()
+                            .chain(words.low.to_be_bytes())
+                        {
+                            hash ^= u64::from(byte);
+                            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+                        }
+                        hash
+                    },
+                )
+            })
+            .collect();
+        let average_bits = std::array::from_fn(|slot| first.songs[slot].average_score_bits);
+        assert_eq!(
+            average_bits,
+            [
+                F64BitsV1 {
+                    high: 1_090_873_700,
+                    low: 343_597_390,
+                },
+                F64BitsV1 {
+                    high: 1_090_873_700,
+                    low: 343_597_390,
+                },
+                F64BitsV1 {
+                    high: 1_090_876_048,
+                    low: 3_607_772_541,
+                },
+            ]
+        );
+        assert_eq!(
+            first.total_average_score_bits,
+            F64BitsV1 {
+                high: 1_092_620_630,
+                low: 1_073_741_830,
+            }
+        );
+        assert_eq!(
+            checksums,
+            [
+                678_935_814_051_912_837,
+                678_935_814_051_912_837,
+                7_532_500_273_563_612_261,
+            ]
+        );
         assert_eq!(first, second);
         assert_eq!(first.songs[0].permutation_expected_score_bits.len(), 120);
         assert_eq!(first.songs[1].start_combo, 7);
         assert_eq!(first.songs[2].start_combo, 14);
+    }
+
+    #[test]
+    fn scorer_preserves_structured_input_validation_failures() {
+        let mut input = fixture();
+        input.schema_version = "unsupported".to_owned();
+        let error = evaluate_fixed_medley(&input).expect_err("invalid input must not score");
+        assert_eq!(error.code, ScoreErrorCode::InputInvalid);
+        let validation = error
+            .input_validation
+            .expect("input failure must retain the validation payload");
+        assert_eq!(validation.code, ValidationCode::UnsupportedSchema);
+        assert_eq!(validation.path, "schemaVersion");
+    }
+
+    #[test]
+    fn f64_trace_words_are_json_safe_and_round_trip_exactly() {
+        let value = 12_345_678.901_234_5_f64;
+        let words = F64BitsV1::from_f64(value);
+        assert_eq!(words.to_f64().to_bits(), value.to_bits());
+
+        let trace = evaluate_fixed_medley(&fixture()).expect("fixture scores");
+        let json = serde_json::to_value(trace).expect("trace serializes");
+        let average = &json["songs"][0]["averageScoreBits"];
+        assert!(
+            average["high"]
+                .as_u64()
+                .is_some_and(|word| word <= u64::from(u32::MAX))
+        );
+        assert!(
+            average["low"]
+                .as_u64()
+                .is_some_and(|word| word <= u64::from(u32::MAX))
+        );
+        assert!(
+            average.as_u64().is_none(),
+            "f64 bits must not become one JSON number"
+        );
     }
 
     #[test]
@@ -625,6 +764,24 @@ mod tests {
         assert_eq!(medley_combo_rate(20).to_bits(), 1.0_f32.to_bits());
         assert_eq!(medley_combo_rate(21).to_bits(), 1.01_f32.to_bits());
         assert!(medley_combo_rate(21) > medley_combo_rate(20));
+    }
+
+    #[test]
+    fn medley_combo_rates_use_exact_master_f32_payloads() {
+        assert_eq!(medley_combo_rate(300).to_bits(), 0x3f87_ae14);
+        assert_eq!(medley_combo_rate(301).to_bits(), 0x3f88_f5c3);
+        assert_eq!(medley_combo_rate(400).to_bits(), 0x3f88_f5c3);
+        assert_eq!(medley_combo_rate(401).to_bits(), 0x3f8a_3d71);
+        assert_eq!(medley_combo_rate(700).to_bits(), 0x3f8c_cccd);
+        assert_eq!(medley_combo_rate(701).to_bits(), 0x3f8e_147b);
+        assert_eq!(medley_combo_rate(3_000).to_bits(), 0x3faa_3d71);
+        assert_eq!(medley_combo_rate(3_001).to_bits(), 0x3fab_851f);
+        assert_eq!(medley_combo_rate(9_999).to_bits(), 0x3fab_851f);
+        assert_eq!(medley_combo_rate(10_000).to_bits(), 0x3f80_0000);
+
+        let reconstructed = 1.04_f32 + 3.0_f32 * 0.01_f32;
+        assert_eq!(reconstructed.to_bits(), 0x3f88_f5c2);
+        assert_ne!(medley_combo_rate(301).to_bits(), reconstructed.to_bits());
     }
 
     #[test]
@@ -684,7 +841,7 @@ mod tests {
             .sum::<u32>()
             + expected_final;
         assert_eq!(
-            f64::from_bits(song.permutation_expected_score_bits[0]),
+            song.permutation_expected_score_bits[0].to_f64(),
             f64::from(expected_total),
         );
     }
@@ -702,7 +859,7 @@ mod tests {
                 score_up_percent_bits: F32Bits::from_f32(0.0),
             };
         }
-        let leader_instance_id = input.teams[0].member_instance_ids[LEADER_MEMBER_INDEX];
+        let leader_instance_id = input.teams[0].leader_instance_id;
         input.cards[leader_instance_id as usize].skill.behavior = SkillBehaviorV1::Score {
             score_up_percent_bits: F32Bits::from_f32(100.0),
         };
@@ -762,7 +919,7 @@ mod tests {
         let final_score =
             floor_f32_to_u32(final_inner as f32 * 1.5_f32, "test").expect("test score fits");
         assert_eq!(
-            f64::from_bits(song.permutation_expected_score_bits[0]),
+            song.permutation_expected_score_bits[0].to_f64(),
             f64::from(trigger_total + final_score),
         );
     }
@@ -771,6 +928,7 @@ mod tests {
     fn continued_skill_drops_on_the_current_great() {
         let skill = ResolvedScoreSkillV1 {
             master_skill_id: 1,
+            skill_level: 1,
             duration_micros: 1,
             behavior: SkillBehaviorV1::ContinuedPerfect {
                 active_score_up_percent_bits: F32Bits::from_f32(115.0),
@@ -788,6 +946,7 @@ mod tests {
     fn conditional_score_keeps_the_unboosted_great_score() {
         let skill = ResolvedScoreSkillV1 {
             master_skill_id: 1,
+            skill_level: 1,
             duration_micros: 1,
             behavior: SkillBehaviorV1::ScoreOnPerfect {
                 score_up_percent_bits: F32Bits::from_f32(100.0),
@@ -807,27 +966,56 @@ mod tests {
     }
 
     #[test]
-    fn rate_up_counts_the_current_perfect_and_caps_total_bonus() {
+    fn explicit_neutral_skill_does_not_change_either_judgment() {
+        let skill = ResolvedScoreSkillV1 {
+            master_skill_id: 15,
+            skill_level: 5,
+            duration_micros: 1,
+            behavior: SkillBehaviorV1::Neutral,
+            rate_up_with_perfect: None,
+        };
+        let mut perfect_state = ActivationState::default();
+        let mut great_state = ActivationState::default();
+        assert_eq!(
+            skill_multiplier(&skill, &mut perfect_state, Judgment::Perfect).to_bits(),
+            1.0_f32.to_bits(),
+        );
+        assert_eq!(
+            skill_multiplier(&skill, &mut great_state, Judgment::Great).to_bits(),
+            1.0_f32.to_bits(),
+        );
+    }
+
+    #[test]
+    fn rate_up_matches_the_real_perfect_great_perfect_sequence_and_cap() {
         let skill = ResolvedScoreSkillV1 {
             master_skill_id: 1,
+            skill_level: 1,
             duration_micros: 1,
             behavior: SkillBehaviorV1::Score {
                 score_up_percent_bits: F32Bits::from_f32(100.0),
             },
             rate_up_with_perfect: Some(RateUpWithPerfectV1 {
-                stack_percent_bits: F32Bits::from_f32(30.0),
+                stack_percent_bits: F32Bits::from_f32(0.5),
                 max_score_up_percent_bits: F32Bits::from_f32(150.0),
             }),
         };
         let mut state = ActivationState::default();
         assert_eq!(
             skill_multiplier(&skill, &mut state, Judgment::Perfect).to_bits(),
-            2.3_f32.to_bits(),
+            2.005_f32.to_bits(),
         );
         assert_eq!(
             skill_multiplier(&skill, &mut state, Judgment::Great).to_bits(),
-            2.3_f32.to_bits(),
+            2.005_f32.to_bits(),
         );
+        assert_eq!(
+            skill_multiplier(&skill, &mut state, Judgment::Perfect).to_bits(),
+            2.01_f32.to_bits(),
+        );
+        for _ in 0..98 {
+            let _ = skill_multiplier(&skill, &mut state, Judgment::Perfect);
+        }
         assert_eq!(
             skill_multiplier(&skill, &mut state, Judgment::Perfect).to_bits(),
             2.5_f32.to_bits(),

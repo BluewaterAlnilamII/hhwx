@@ -9,6 +9,9 @@ use crate::{
     SCORING_RULES_VERSION, SkillBehaviorV1,
 };
 
+const JSON_SAFE_INTEGER_MAX: u64 = 9_007_199_254_740_991;
+const MASTER_MEDLEY_COMBO_MAX: u64 = 9_999;
+
 /// Stable failure category for the normalized boundary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -36,12 +39,20 @@ pub struct ValidationError {
 }
 
 impl ValidationError {
-    fn new(code: ValidationCode, path: impl Into<String>, message: impl Into<String>) -> Self {
+    pub(crate) fn new(
+        code: ValidationCode,
+        path: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
         Self {
             code,
             path: path.into(),
             message: message.into(),
         }
+    }
+
+    pub(crate) fn decode_failed(message: impl Into<String>) -> Self {
+        Self::new(ValidationCode::DecodeFailed, "$", message)
     }
 }
 
@@ -131,14 +142,25 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
                 "masterCardId and characterId must be positive",
             );
         }
-        if card.skill.master_skill_id == 0 || card.skill.duration_micros == 0 {
+        if card.skill.master_skill_id == 0
+            || !(1..=5).contains(&card.skill.skill_level)
+            || card.skill.duration_micros == 0
+        {
             return invalid(
                 ValidationCode::InvalidSkill,
                 format!("{path}.skill"),
-                "masterSkillId and durationMicros must be positive",
+                "masterSkillId/durationMicros must be positive and skillLevel must be within 1..=5",
+            );
+        }
+        if card.skill.duration_micros > JSON_SAFE_INTEGER_MAX {
+            return invalid(
+                ValidationCode::InvalidSkill,
+                format!("{path}.skill.durationMicros"),
+                "durationMicros must be exactly representable as a JSON integer in JavaScript",
             );
         }
         let skill_rates = match card.skill.behavior {
+            SkillBehaviorV1::Neutral => [None, None],
             SkillBehaviorV1::Score {
                 score_up_percent_bits,
             }
@@ -168,6 +190,15 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
                 ValidationCode::InvalidSkill,
                 format!("{path}.skill.behavior"),
                 "skill percentages must be finite, non-negative, canonical f32 values",
+            );
+        }
+        if card.skill.rate_up_with_perfect.is_some()
+            && !matches!(card.skill.behavior, SkillBehaviorV1::Score { .. })
+        {
+            return invalid(
+                ValidationCode::InvalidSkill,
+                format!("{path}.skill.rateUpWithPerfect"),
+                "rate-up is only audited with an unconditional score behavior",
             );
         }
         if let Some(rate_up) = card.skill.rate_up_with_perfect
@@ -206,6 +237,13 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
                 "deck total must be a finite, non-negative, canonical f32",
             );
         }
+        if team.leader_instance_id != team.member_instance_ids[2] {
+            return invalid(
+                ValidationCode::InvalidTeam,
+                format!("{path}.leaderInstanceId"),
+                "leader must be explicit and occupy center member index two",
+            );
+        }
         let mut team_characters = HashSet::with_capacity(5);
         for (member_index, instance_id) in team.member_instance_ids.iter().enumerate() {
             let Some(card) = cards_by_id.get(instance_id) else {
@@ -239,6 +277,7 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
         );
     }
 
+    let mut medley_note_count = 0_u64;
     for (song_index, song) in input.songs.iter().enumerate() {
         let path = format!("songs[{song_index}]");
         if usize::from(song.slot) != song_index || song.song_id == 0 || song.play_level == 0 {
@@ -255,6 +294,29 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
                 "a normalized chart must contain scoring notes",
             );
         }
+        let song_note_count = u64::try_from(song.notes.len()).map_err(|_| {
+            ValidationError::new(
+                ValidationCode::InvalidChart,
+                format!("{path}.notes"),
+                "note count cannot be represented at the JSON boundary",
+            )
+        })?;
+        medley_note_count = medley_note_count
+            .checked_add(song_note_count)
+            .ok_or_else(|| {
+                ValidationError::new(
+                    ValidationCode::InvalidChart,
+                    "songs",
+                    "medley note count overflowed",
+                )
+            })?;
+        if medley_note_count > MASTER_MEDLEY_COMBO_MAX {
+            return invalid(
+                ValidationCode::InvalidChart,
+                "songs",
+                "medley note count exceeds the audited master combo table maximum of 9999",
+            );
+        }
         let mut previous_time = 0_u64;
         let mut previous_was_non_trigger = false;
         let mut trigger_count = 0_u8;
@@ -265,6 +327,13 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
                     ValidationCode::InvalidChart,
                     format!("{note_path}.noteId"),
                     "note IDs must be dense and match sorted note order",
+                );
+            }
+            if note.time_micros > JSON_SAFE_INTEGER_MAX {
+                return invalid(
+                    ValidationCode::InvalidChart,
+                    format!("{note_path}.timeMicros"),
+                    "timeMicros must be exactly representable as a JSON integer in JavaScript",
                 );
             }
             if note_index > 0 && note.time_micros < previous_time {
@@ -319,6 +388,7 @@ mod tests {
                 character_id: instance_id + 1,
                 skill: ResolvedScoreSkillV1 {
                     master_skill_id: instance_id + 1,
+                    skill_level: 1,
                     duration_micros: 2_000_000,
                     behavior: SkillBehaviorV1::Score {
                         score_up_percent_bits: F32Bits::from_f32(100.0),
@@ -332,6 +402,7 @@ mod tests {
             member_instance_ids: std::array::from_fn(|member| {
                 u32::try_from(slot * 5 + member).expect("15 fixture cards fit in u32")
             }),
+            leader_instance_id: u32::try_from(slot * 5 + 2).expect("fixture leader fits in u32"),
             deck_total_parameter_bits: F32Bits::from_f32(17_250.0),
         });
         let songs = std::array::from_fn(|slot| MedleySongV1 {
@@ -391,6 +462,95 @@ mod tests {
             .validate()
             .expect_err("a physical instance cannot cross teams");
         assert_eq!(error.code, ValidationCode::InvalidTeam);
+    }
+
+    #[test]
+    fn leader_identity_must_match_the_center_member() {
+        let mut input = fixture();
+        input.teams[0].leader_instance_id = input.teams[0].member_instance_ids[0];
+        let error = input
+            .validate()
+            .expect_err("leader identity must not be inferred from an unverified order");
+        assert_eq!(error.code, ValidationCode::InvalidTeam);
+    }
+
+    #[test]
+    fn json_integer_fields_must_remain_exact_in_javascript() {
+        let mut input = fixture();
+        input.cards[0].skill.duration_micros = JSON_SAFE_INTEGER_MAX + 1;
+        let duration_error = input
+            .validate()
+            .expect_err("unsafe duration JSON integer must fail");
+        assert_eq!(duration_error.code, ValidationCode::InvalidSkill);
+
+        let mut input = fixture();
+        input.songs[0].notes[6].time_micros = JSON_SAFE_INTEGER_MAX + 1;
+        let time_error = input
+            .validate()
+            .expect_err("unsafe time JSON integer must fail");
+        assert_eq!(time_error.code, ValidationCode::InvalidChart);
+    }
+
+    #[test]
+    fn rate_up_requires_the_audited_unconditional_score_behavior() {
+        let mut input = fixture();
+        input.cards[0].skill.behavior = SkillBehaviorV1::ScoreOnPerfect {
+            score_up_percent_bits: F32Bits::from_f32(100.0),
+        };
+        input.cards[0].skill.rate_up_with_perfect = Some(crate::RateUpWithPerfectV1 {
+            stack_percent_bits: F32Bits::from_f32(0.5),
+            max_score_up_percent_bits: F32Bits::from_f32(150.0),
+        });
+        let error = input
+            .validate()
+            .expect_err("unsupported conditional rate-up must fail closed");
+        assert_eq!(error.code, ValidationCode::InvalidSkill);
+    }
+
+    #[test]
+    fn skill_level_identifies_an_exact_master_row() {
+        for invalid_level in [0, 6] {
+            let mut input = fixture();
+            input.cards[0].skill.skill_level = invalid_level;
+            let error = input
+                .validate()
+                .expect_err("only source master levels 1 through 5 are representable");
+            assert_eq!(error.code, ValidationCode::InvalidSkill);
+        }
+    }
+
+    #[test]
+    fn score_neutral_skills_are_explicit_and_valid() {
+        let mut input = fixture();
+        input.cards[0].skill.behavior = SkillBehaviorV1::Neutral;
+        input
+            .validate()
+            .expect("judge/heal-only source skills are neutral in the fixed P/G model");
+    }
+
+    #[test]
+    fn medley_note_count_stays_inside_the_master_combo_table() {
+        let mut maximum = fixture();
+        maximum.songs[0].notes = (0_u32..9_985)
+            .map(|note_id| ScoringNoteV1 {
+                note_id,
+                time_micros: u64::from(note_id),
+                is_skill_trigger: note_id < 6,
+            })
+            .collect();
+        maximum
+            .validate()
+            .expect("9985 + 7 + 7 notes reaches the exact 9999 maximum");
+
+        maximum.songs[0].notes.push(ScoringNoteV1 {
+            note_id: 9_985,
+            time_micros: 9_985,
+            is_skill_trigger: false,
+        });
+        let error = maximum
+            .validate()
+            .expect_err("10000 notes exceed the audited master table");
+        assert_eq!(error.code, ValidationCode::InvalidChart);
     }
 
     #[test]

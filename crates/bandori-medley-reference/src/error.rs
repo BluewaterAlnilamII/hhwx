@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
+use bandori_medley_model::ValidationError;
 use serde::Serialize;
 
 /// Stable reference-scorer failure category.
@@ -19,6 +20,7 @@ pub struct ScoreError {
     pub code: ScoreErrorCode,
     pub path: String,
     pub message: String,
+    pub input_validation: Option<ValidationError>,
 }
 
 impl ScoreError {
@@ -31,6 +33,16 @@ impl ScoreError {
             code,
             path: path.into(),
             message: message.into(),
+            input_validation: None,
+        }
+    }
+
+    pub(crate) fn from_validation(error: ValidationError) -> Self {
+        Self {
+            code: ScoreErrorCode::InputInvalid,
+            path: error.path.clone(),
+            message: error.message.clone(),
+            input_validation: Some(error),
         }
     }
 }

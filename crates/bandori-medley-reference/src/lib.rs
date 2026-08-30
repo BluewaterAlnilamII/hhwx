@@ -11,7 +11,7 @@ mod permutations;
 mod scoring;
 
 pub use error::{ScoreError, ScoreErrorCode};
-pub use scoring::{MedleyScoreTraceV1, SongScoreTraceV1, evaluate_fixed_medley};
+pub use scoring::{F64BitsV1, MedleyScoreTraceV1, SongScoreTraceV1, evaluate_fixed_medley};
 
 /// Return the only normalized input schema accepted by this reference boundary.
 #[must_use]

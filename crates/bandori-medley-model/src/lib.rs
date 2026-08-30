@@ -21,3 +21,13 @@ pub const SCORING_INPUT_SCHEMA_VERSION: &str = "hhwx-medley-scoring-input-v1";
 
 /// Rules identifier for the PERFECT/GREAT-only HHWX expected-score model.
 pub const SCORING_RULES_VERSION: &str = "hhwx-medley-pg-expected-v1";
+
+/// Decode strict JSON and validate the complete fixed-input contract.
+pub fn decode_fixed_medley_evaluation_json(
+    json: &str,
+) -> Result<FixedMedleyEvaluationInputV1, ValidationError> {
+    let input: FixedMedleyEvaluationInputV1 = serde_json::from_str(json)
+        .map_err(|error| ValidationError::decode_failed(error.to_string()))?;
+    input.validate()?;
+    Ok(input)
+}
