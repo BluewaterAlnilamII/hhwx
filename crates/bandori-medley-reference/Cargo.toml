@@ -9,6 +9,10 @@ publish = false
 
 [dependencies]
 bandori-medley-model = { path = "../bandori-medley-model" }
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
 
 [lints]
 workspace = true
