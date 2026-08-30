@@ -24,7 +24,7 @@ The executable calculator contract follows Bestdori semantics. Native-client fin
 
 `hhwx-medley-foundation-source-v1` accepts the real fixed-input ingredients rather than caller-computed card or team totals:
 
-- the complete Bestdori compression-v2 profile payload, including card levels, master ranks, skill levels, episodes, training/art/exclusion flags, area-item levels, character potentials, and compact collection/training mission bonuses;
+- the decompressed HHWX user profile payload: its `bestdoriProfile` subobject uses Bestdori compression v2 for card levels, master ranks, skill levels, episodes, training/art/exclusion flags, and area-item levels, while `characterPotentials` and `characterMissionBonuses` are read only from the HHWX payload's top level;
 - raw card, character, skill, area-item, song, and event-bonus records; Cards `serverExtensions` are resolved for the profile server with the established JP-presence fallback before parameters or skills are read;
 - one explicit list of selected area-item IDs shared by all three teams;
 - three ordered lists of five selected card IDs, where member index two is the leader;

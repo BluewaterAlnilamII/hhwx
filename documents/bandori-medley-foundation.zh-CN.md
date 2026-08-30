@@ -24,7 +24,7 @@ English version: [bandori-medley-foundation.md](bandori-medley-foundation.md)
 
 `hhwx-medley-foundation-source-v1` 接受真实固定输入所需的原始资料，不接受调用方算好的卡牌或队伍总值：
 
-- 完整的 Bestdori compression-v2 档案，包括卡牌等级、突破等级、技能等级、剧情、训练／卡面／排除状态、区域道具等级、角色潜能，以及 compact 收集／训练任务加成；
+- 解压后的 HHWX 用户档案：其中 `bestdoriProfile` 子对象以 Bestdori compression v2 保存卡牌等级、突破等级、技能等级、剧情、训练／卡面／排除状态和区域道具等级；角色潜能与角色任务加成则只读取 HHWX 档案顶层的 `characterPotentials` 和 `characterMissionBonuses`；
 - 原始 card、character、skill、area-item、song 和 event-bonus 记录；读取参数或技能前，Cards `serverExtensions` 会按档案区服解析，区服不存在时沿用既有的 JP 存在性 fallback；
 - 一份由三队共享的显式区域道具 ID 列表；
 - 三份有序的五卡 ID，其中成员索引 2 是 leader；

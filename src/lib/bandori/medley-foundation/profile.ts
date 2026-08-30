@@ -266,7 +266,7 @@ function decodeMissionRecords(
   return result;
 }
 
-/** Strictly decode the complete HHWX/Bestdori profile used by the calculator. */
+/** Strictly decode the decompressed HHWX user profile used by the calculator. */
 export function decodeMedleyProfile(value: unknown, path = "profilePayload"): DecodedMedleyProfileV1 {
   const payload = readRecord(value, path, "INVALID_PROFILE");
   assertAllowedKeys(
@@ -279,7 +279,7 @@ export function decodeMedleyProfile(value: unknown, path = "profilePayload"): De
   const profile = readRecord(payload.bestdoriProfile, `${path}.bestdoriProfile`, "INVALID_PROFILE");
   assertAllowedKeys(
     profile,
-    ["name", "server", "compression", "data", "hhwx"],
+    ["name", "server", "compression", "data"],
     ["name", "server", "compression", "data"],
     `${path}.bestdoriProfile`,
     "INVALID_PROFILE",
