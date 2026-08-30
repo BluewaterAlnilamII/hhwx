@@ -108,24 +108,36 @@ test("life-named raw effects never cause a life field read or threshold branch",
   assert.doesNotMatch(JSON.stringify(resolved), /life/iu);
 });
 
-test("continued fallback and PERFECT stacking retain their Bestdori behavior", () => {
-  const resolved = resolveBestdoriScoreSkill({
+test("continued fallback and PERFECT stacking retain their separate Bestdori behaviors", () => {
+  const continued = resolveBestdoriScoreSkill({
     skillId: 90,
     skillLevel: 1,
     skillMaster: skillWithEffects({
       score_continued_note_judge: { activateEffectValue: regional(115) },
       score: { activateEffectValue: regional(80) },
+    }),
+    context: { sameBandId: null, sameAttribute: null },
+    server: 0,
+  });
+  assert.deepEqual(continued.behavior, {
+    kind: "continued_perfect",
+    activeScoreUpPercent: 115,
+    fallbackScoreUpPercent: 80,
+  });
+  assert.equal(continued.rateUpWithPerfect, null);
+
+  const crescendo = resolveBestdoriScoreSkill({
+    skillId: 91,
+    skillLevel: 1,
+    skillMaster: skillWithEffects({
+      score: { activateEffectValue: regional(115) },
       score_rate_up_with_perfect: { activateEffectValue: regional(0.5) },
     }),
     context: { sameBandId: null, sameAttribute: null },
     server: 0,
   });
-  assert.deepEqual(resolved.behavior, {
-    kind: "continued_perfect",
-    activeScoreUpPercent: 115,
-    fallbackScoreUpPercent: 80,
-  });
-  assert.deepEqual(resolved.rateUpWithPerfect, {
+  assert.deepEqual(crescendo.behavior, { kind: "score", scoreUpPercent: 115 });
+  assert.deepEqual(crescendo.rateUpWithPerfect, {
     stackPercent: 0.5,
     maxScoreUpPercent: 165,
   });
@@ -139,4 +151,15 @@ test("malformed selected skill rows fail closed", () => {
     context: { sameBandId: null, sameAttribute: null },
     server: 0,
   }), /INVALID_SKILL.*duration/u);
+
+  assert.throws(() => resolveBestdoriScoreSkill({
+    skillId: 2,
+    skillLevel: 1,
+    skillMaster: skillWithEffects({
+      score_only_perfect: { activateEffectValue: regional(100) },
+      score_rate_up_with_perfect: { activateEffectValue: regional(0.5) },
+    }),
+    context: { sameBandId: null, sameAttribute: null },
+    server: 0,
+  }), /rate-up requires an unconditional score effect/u);
 });

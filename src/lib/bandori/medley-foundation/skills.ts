@@ -52,8 +52,8 @@ function readDuration(
     ? skill.duration[skillLevel - 1]
     : skill.duration;
   const duration = regionalNumber(durationSource, server);
-  if (duration === null || duration < 0) {
-    failInput("INVALID_SKILL", `${path}.duration[${skillLevel - 1}]`, "must resolve to a non-negative number");
+  if (duration === null || duration <= 0) {
+    failInput("INVALID_SKILL", `${path}.duration[${skillLevel - 1}]`, "must resolve to a positive number");
   }
   return duration;
 }
@@ -183,15 +183,28 @@ export function resolveBestdoriScoreSkill(options: {
     baseScoreUpPercent = resolvedPrimary.valuePercent;
   }
 
+  const hasRateUpWithPerfect = Object.hasOwn(effectTypes, RATE_UP_EFFECT_TYPE);
+  if (hasRateUpWithPerfect && behavior.kind !== "score") {
+    failInput(
+      "INVALID_SKILL",
+      `${path}.activationEffect.activateEffectTypes.${RATE_UP_EFFECT_TYPE}`,
+      "PERFECT rate-up requires an unconditional score effect",
+    );
+  }
+  const maximumScoreUpPercent = baseScoreUpPercent + 50;
+  if (hasRateUpWithPerfect && !Number.isFinite(maximumScoreUpPercent)) {
+    failInput("INVALID_SKILL", path, "resolved score percentages must remain finite");
+  }
+
   return {
     masterSkillId: options.skillId,
     skillLevel,
     durationSeconds,
     behavior,
-    rateUpWithPerfect: Object.hasOwn(effectTypes, RATE_UP_EFFECT_TYPE)
+    rateUpWithPerfect: hasRateUpWithPerfect
       ? {
           stackPercent: 0.5,
-          maxScoreUpPercent: baseScoreUpPercent + 50,
+          maxScoreUpPercent: maximumScoreUpPercent,
         }
       : null,
   };
