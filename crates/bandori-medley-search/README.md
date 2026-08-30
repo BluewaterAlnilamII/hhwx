@@ -2,7 +2,7 @@
 
 This crate is the greenfield boundary for the exact three-team medley search. Its runtime depends on `bandori-medley-model`, not on the existing TypeScript team-builder. The transparent `bandori-medley-reference` scorer is a development-only oracle.
 
-The first checkpoint defines only:
+The public boundary defines:
 
 - a strict, versioned normalized search input;
 - exact versus incomplete result semantics;
@@ -13,4 +13,6 @@ The normalized input contains owned physical cards, hard-exclusion flags, card a
 
 Area-item IDs inside each configuration and output member IDs preserve their supplied operation order. Validation does not sort or repair the input. An empty selected-item list is valid when it is supplied as one legal configuration.
 
-This checkpoint intentionally has no production scorer, candidate representation, upper bound, enumeration, join, cache, worker/API adapter, frontend integration, or command-line interface. Those responsibilities enter only in separately reviewed checkpoints.
+The crate contains an independent production scorer behind its private search boundary. It is bit-for-bit checked against the transparent reference scorer and does not expose the reference trace as a runtime dependency.
+
+Candidate representation, upper bounds, enumeration, join, worker/API adapters, frontend integration, and command-line interfaces enter only in their separately reviewed checkpoints.

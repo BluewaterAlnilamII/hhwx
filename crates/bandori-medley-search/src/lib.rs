@@ -8,6 +8,11 @@
 
 mod control;
 mod error;
+#[allow(
+    dead_code,
+    reason = "the exact scorer is wired into candidate evaluation in the next checkpoint"
+)]
+mod exact_score;
 mod input;
 mod output;
 mod validation;
