@@ -47,6 +47,17 @@ The fixed-input DTO is not the future search request, but these product rules ar
 - An official result exists only after the full space is enumerated or safely pruned. Cancellation, time, memory, data, or runtime failure is incomplete; `bestSoFar` may be diagnostic only, with no bounded or gap-based success mode.
 - Evaluation preserves the established member and area-item operation order. Search must not reorder data entering scoring.
 
+## Provisional search architecture direction
+
+The following is the current reviewed engineering direction, not a game or product semantic requirement. Later architecture review may revise it. Only durable decisions belong in this foundation document; prototype detail and benchmark history must remain elsewhere.
+
+- Organize the roster by character and prune partial team families before complete five-card candidates are created. The core test is a safe upper bound for the complete three-song objective, not a late candidate-pair optimization.
+- Build that bound with an HHWX-native optimistic scorer that retains the real ordered charts and combo offsets, additive deck-parameter monotonicity, reachable same-band/same-attribute contexts, the fixed 120 first-five skill orders, the leader's sixth trigger, and direct-add skill overlap. Unknown choices may be relaxed only upward. A scalar per-card score is not an exact substitute.
+- Keep area-configuration and search-stage work resident only while it is useful; exact-score only surviving complete teams, retain compact index-based candidate data, and hydrate rich output only for the small retained result set.
+- If a bound cannot be proved to cover every completion, it cannot prune. Candidate caps, random selection, approximate comparisons, and false exact success are excluded; on a small input where no bound fires, the search remains complete exhaustive enumeration.
+
+Calc reverse engineering supports the placement and lifetime of pruning and compact data, but does not define HHWX scoring, candidate layout, dominance, or proof semantics. The concrete upper-bound model, partial-family representation, final disjoint-team join, storage layout, and parallel strategy remain subject to one integrated design review before implementation.
+
 ## Parameter derivation
 
 The source adapter derives the complete fixed-team parameter from raw records:
@@ -146,4 +157,4 @@ The retained source fixture is a synthetic wiring golden with exactly 15 profile
 
 The reference scorer returns an audit trace containing base P/G note scores, per-order expected scores, combo offsets, peak state count, and exact binary64 words for floating results. It is deliberately transparent rather than optimized.
 
-This checkpoint stops before search implementation. The locked product rules above do not select a candidate layout, pruning rule, cache, dominance relation, partition, or parallel strategy; those still require a separate architecture review. The current foundation neither recommends nor silently constrains that design.
+This checkpoint stops before search implementation. The locked product rules and provisional direction above still do not select a concrete upper-bound algorithm, candidate layout, cache, dominance relation, final join, partition, or parallel strategy; those require the integrated architecture review described above.
