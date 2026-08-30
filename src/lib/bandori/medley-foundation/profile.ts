@@ -227,7 +227,7 @@ function decodeMissionType(
     record[key],
     ids.length,
     `${path}.${key}`,
-    (item, itemPath) => readNumberLike(item, itemPath),
+    (item, itemPath) => readNumberLike(item, itemPath) / 10,
   )) as Triple<number[]>;
 }
 

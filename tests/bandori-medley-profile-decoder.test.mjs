@@ -111,14 +111,14 @@ test("complete profile decode preserves cards, items, potentials, and mission bo
     {
       characterId: 1,
       potential: [10, 20, 30],
-      collection: [1, 2, 3],
-      training: [7, 8, 9],
+      collection: [0.1, 0.2, 0.3],
+      training: [0.7, 0.8, 0.9],
     },
     {
       characterId: 50,
       potential: [null, 40, 50],
-      collection: [4, 5, 6],
-      training: [10, 11, 12],
+      collection: [0.4, 0.5, 0.6],
+      training: [1, 1.1, 1.2],
     },
   ]);
 });
