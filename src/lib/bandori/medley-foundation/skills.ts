@@ -1,5 +1,4 @@
 import type {
-  BandoriCardAttribute,
   BandoriServer,
   CalculatedProfileCardV1,
   Five,

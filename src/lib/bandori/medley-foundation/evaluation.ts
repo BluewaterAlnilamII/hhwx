@@ -248,7 +248,7 @@ export function buildFixedMedleyEvaluationInput(
     }
 
     const context = buildFixedTeamSkillContext(calculatedCards);
-    const instanceIds = calculatedCards.map((card, memberIndex) => {
+    const instanceIds = calculatedCards.map((card) => {
       const instanceId = scoringCards.length;
       scoringCards.push({
         instanceId,
