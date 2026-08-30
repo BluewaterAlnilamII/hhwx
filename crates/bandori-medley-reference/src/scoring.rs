@@ -90,8 +90,8 @@ impl MedleyScoreTraceV1 {
 
 #[derive(Clone, Copy)]
 struct Activation<'a> {
-    trigger_time_micros: u64,
-    end_time_micros: u64,
+    trigger_time_seconds: f64,
+    end_time_seconds: f64,
     skill: &'a ResolvedScoreSkillV1,
 }
 
@@ -305,19 +305,17 @@ fn build_activations<'a>(
             team.leader_instance_id
         };
         let skill = &input.cards[instance_id as usize].skill;
-        let end_time_micros = trigger_note
-            .time_micros
-            .checked_add(skill.duration_micros)
-            .ok_or_else(|| {
-                ScoreError::new(
-                    ScoreErrorCode::ArithmeticOverflow,
-                    format!("songs[{}].skillTriggers[{trigger_index}]", song.slot),
-                    "skill end time exceeds u64",
-                )
-            })?;
+        let end_time_seconds = trigger_note.time_seconds + skill.duration_seconds + 0.00001;
+        if !end_time_seconds.is_finite() {
+            return Err(ScoreError::new(
+                ScoreErrorCode::ArithmeticNonFinite,
+                format!("songs[{}].skillTriggers[{trigger_index}]", song.slot),
+                "skill end time must remain finite",
+            ));
+        }
         activations.push(Activation {
-            trigger_time_micros: trigger_note.time_micros,
-            end_time_micros,
+            trigger_time_seconds: trigger_note.time_seconds,
+            end_time_seconds,
             skill,
         });
     }
@@ -340,10 +338,10 @@ fn judgment_probability(judgment: Judgment, perfect_rate: f64) -> f64 {
 fn canonicalize_expired_states(
     state: &mut JudgmentState,
     activations: &[Activation<'_>; 6],
-    note_time_micros: u64,
+    note_time_seconds: f64,
 ) {
     for (activation_index, activation) in activations.iter().enumerate() {
-        if note_time_micros > activation.end_time_micros {
+        if note_time_seconds > activation.end_time_seconds {
             state.activations[activation_index] = ActivationState::default();
         }
     }
@@ -364,8 +362,8 @@ fn note_score_for_judgment(
     };
     let mut combined_multiplier = 1.0_f64;
     for (activation_index, activation) in activations.iter().enumerate() {
-        if note.time_micros <= activation.trigger_time_micros
-            || note.time_micros > activation.end_time_micros
+        if note.time_seconds <= activation.trigger_time_seconds
+            || note.time_seconds > activation.end_time_seconds
         {
             continue;
         }
@@ -427,7 +425,7 @@ fn score_one_order(
             canonicalize_expired_states(
                 &mut state,
                 &activations,
-                song.notes[note_index].time_micros,
+                song.notes[note_index].time_seconds,
             );
             for judgment in [Judgment::Perfect, Judgment::Great] {
                 let probability = judgment_probability(judgment, perfect_rate);
@@ -715,13 +713,13 @@ mod tests {
         let mut input = fixture();
         let song = &mut input.songs[0];
         for (index, note) in song.notes.iter_mut().enumerate() {
-            note.time_micros = u64::try_from(index).expect("fixture index fits") * 10_000_000;
+            note.time_seconds = index as f64 * 10.0;
         }
         song.notes.insert(
             6,
             ScoringNoteV1 {
                 note_id: 6,
-                time_micros: 50_000_000,
+                time_seconds: 50.0,
                 is_skill_trigger: false,
             },
         );
@@ -731,7 +729,7 @@ mod tests {
             .songs[0]
             .average_score();
 
-        input.songs[0].notes[6].time_micros = 50_000_001;
+        input.songs[0].notes[6].time_seconds = 50.000_001;
         let with_chord_skills = evaluate_fixed_medley(&input)
             .expect("later chord fixture scores")
             .songs[0]
@@ -747,15 +745,15 @@ mod tests {
             decimal_scale: 0,
         };
         for card in &mut input.cards {
-            card.skill.duration_micros = 10_000_000;
+            card.skill.duration_seconds = 10.0;
             card.skill.behavior = SkillBehaviorV1::Score {
                 score_up_percent: 100.0,
             };
         }
         for note in &mut input.songs[0].notes[..6] {
-            note.time_micros = 0;
+            note.time_seconds = 0.0;
         }
-        input.songs[0].notes[6].time_micros = 1_000_000;
+        input.songs[0].notes[6].time_seconds = 1.0;
         let trace = evaluate_fixed_medley(&input).expect("overlap fixture scores");
         let song = &trace.songs[0];
         let final_inner = song.base_note_scores[6].perfect;
@@ -780,7 +778,7 @@ mod tests {
             decimal_scale: 0,
         };
         for card in &mut input.cards {
-            card.skill.duration_micros = 1_000_000;
+            card.skill.duration_seconds = 1.0;
             card.skill.behavior = SkillBehaviorV1::Score {
                 score_up_percent: 0.0,
             };
@@ -790,11 +788,7 @@ mod tests {
             score_up_percent: 100.0,
         };
         for (index, note) in input.songs[0].notes.iter_mut().enumerate() {
-            note.time_micros = if index < 6 {
-                u64::try_from(index).expect("fixture index fits") * 10_000_000
-            } else {
-                50_500_000
-            };
+            note.time_seconds = if index < 6 { index as f64 * 10.0 } else { 50.5 };
         }
 
         let with_leader = evaluate_fixed_medley(&input).expect("leader fixture scores");
@@ -817,7 +811,7 @@ mod tests {
             decimal_scale: 0,
         };
         for card in &mut input.cards {
-            card.skill.duration_micros = 10_000_000;
+            card.skill.duration_seconds = 10.0;
             card.skill.behavior = SkillBehaviorV1::Score {
                 score_up_percent: 0.0,
             };
@@ -831,9 +825,9 @@ mod tests {
             score_up_percent: 125.0,
         };
         for note in &mut input.songs[0].notes[..6] {
-            note.time_micros = 0;
+            note.time_seconds = 0.0;
         }
-        input.songs[0].notes[6].time_micros = 1_000_000;
+        input.songs[0].notes[6].time_seconds = 1.0;
 
         let trace = evaluate_fixed_medley(&input).expect("mixed overlap fixture scores");
         let song = &trace.songs[0];
@@ -855,7 +849,7 @@ mod tests {
         let skill = ResolvedScoreSkillV1 {
             master_skill_id: 1,
             skill_level: 1,
-            duration_micros: 1,
+            duration_seconds: 1.0,
             behavior: SkillBehaviorV1::ContinuedPerfect {
                 active_score_up_percent: 115.0,
                 fallback_score_up_percent: 80.0,
@@ -873,7 +867,7 @@ mod tests {
         let skill = ResolvedScoreSkillV1 {
             master_skill_id: 1,
             skill_level: 1,
-            duration_micros: 1,
+            duration_seconds: 1.0,
             behavior: SkillBehaviorV1::ScoreOnPerfect {
                 score_up_percent: 100.0,
             },
@@ -896,7 +890,7 @@ mod tests {
         let skill = ResolvedScoreSkillV1 {
             master_skill_id: 15,
             skill_level: 5,
-            duration_micros: 1,
+            duration_seconds: 1.0,
             behavior: SkillBehaviorV1::Neutral,
             rate_up_with_perfect: None,
         };
@@ -917,7 +911,7 @@ mod tests {
         let skill = ResolvedScoreSkillV1 {
             master_skill_id: 1,
             skill_level: 1,
-            duration_micros: 1,
+            duration_seconds: 1.0,
             behavior: SkillBehaviorV1::Score {
                 score_up_percent: 100.0,
             },

@@ -9,8 +9,6 @@ use crate::{
     SCORING_RULES_VERSION, SkillBehaviorV1,
 };
 
-const JSON_SAFE_INTEGER_MAX: u64 = 9_007_199_254_740_991;
-
 /// Stable failure category for the normalized boundary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -142,19 +140,13 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
         }
         if card.skill.master_skill_id == 0
             || !(1..=5).contains(&card.skill.skill_level)
-            || card.skill.duration_micros == 0
+            || !card.skill.duration_seconds.is_finite()
+            || card.skill.duration_seconds <= 0.0
         {
             return invalid(
                 ValidationCode::InvalidSkill,
                 format!("{path}.skill"),
-                "masterSkillId/durationMicros must be positive and skillLevel must be within 1..=5",
-            );
-        }
-        if card.skill.duration_micros > JSON_SAFE_INTEGER_MAX {
-            return invalid(
-                ValidationCode::InvalidSkill,
-                format!("{path}.skill.durationMicros"),
-                "durationMicros must be exactly representable as a JSON integer in JavaScript",
+                "masterSkillId/durationSeconds must be positive and skillLevel must be within 1..=5",
             );
         }
         let skill_rates = match card.skill.behavior {
@@ -291,7 +283,7 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
                 "note count must fit the normalized u32 contract",
             );
         }
-        let mut previous_time = 0_u64;
+        let mut previous_time = 0.0_f64;
         let mut previous_was_non_trigger = false;
         let mut trigger_count = 0_u8;
         for (note_index, note) in song.notes.iter().enumerate() {
@@ -303,22 +295,25 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
                     "note IDs must be dense and match sorted note order",
                 );
             }
-            if note.time_micros > JSON_SAFE_INTEGER_MAX {
+            if !note.time_seconds.is_finite()
+                || note.time_seconds < 0.0
+                || note.time_seconds.is_sign_negative()
+            {
                 return invalid(
                     ValidationCode::InvalidChart,
-                    format!("{note_path}.timeMicros"),
-                    "timeMicros must be exactly representable as a JSON integer in JavaScript",
+                    format!("{note_path}.timeSeconds"),
+                    "timeSeconds must be a finite non-negative JavaScript number",
                 );
             }
-            if note_index > 0 && note.time_micros < previous_time {
+            if note_index > 0 && note.time_seconds < previous_time {
                 return invalid(
                     ValidationCode::InvalidChart,
-                    format!("{note_path}.timeMicros"),
+                    format!("{note_path}.timeSeconds"),
                     "note times must be non-decreasing",
                 );
             }
             if note_index > 0
-                && note.time_micros == previous_time
+                && note.time_seconds == previous_time
                 && note.is_skill_trigger
                 && previous_was_non_trigger
             {
@@ -331,7 +326,7 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
             if note.is_skill_trigger {
                 trigger_count = trigger_count.saturating_add(1);
             }
-            previous_time = note.time_micros;
+            previous_time = note.time_seconds;
             previous_was_non_trigger = !note.is_skill_trigger;
         }
         if trigger_count != 6 {
@@ -363,7 +358,7 @@ mod tests {
                 skill: ResolvedScoreSkillV1 {
                     master_skill_id: instance_id + 1,
                     skill_level: 1,
-                    duration_micros: 2_000_000,
+                    duration_seconds: 2.0,
                     behavior: SkillBehaviorV1::Score {
                         score_up_percent: 100.0,
                     },
@@ -387,7 +382,7 @@ mod tests {
             notes: (0_u32..7)
                 .map(|note_id| ScoringNoteV1 {
                     note_id,
-                    time_micros: u64::from(note_id) * 1_000_000,
+                    time_seconds: f64::from(note_id),
                     is_skill_trigger: note_id < 6,
                 })
                 .collect(),
@@ -449,19 +444,15 @@ mod tests {
     }
 
     #[test]
-    fn json_integer_fields_must_remain_exact_in_javascript() {
+    fn timing_numbers_must_remain_finite() {
         let mut input = fixture();
-        input.cards[0].skill.duration_micros = JSON_SAFE_INTEGER_MAX + 1;
-        let duration_error = input
-            .validate()
-            .expect_err("unsafe duration JSON integer must fail");
+        input.cards[0].skill.duration_seconds = f64::INFINITY;
+        let duration_error = input.validate().expect_err("non-finite duration must fail");
         assert_eq!(duration_error.code, ValidationCode::InvalidSkill);
 
         let mut input = fixture();
-        input.songs[0].notes[6].time_micros = JSON_SAFE_INTEGER_MAX + 1;
-        let time_error = input
-            .validate()
-            .expect_err("unsafe time JSON integer must fail");
+        input.songs[0].notes[6].time_seconds = f64::INFINITY;
+        let time_error = input.validate().expect_err("non-finite time must fail");
         assert_eq!(time_error.code, ValidationCode::InvalidChart);
     }
 
@@ -518,7 +509,7 @@ mod tests {
     #[test]
     fn trigger_after_same_time_non_trigger_fails_closed() {
         let mut input = fixture();
-        input.songs[0].notes[1].time_micros = 0;
+        input.songs[0].notes[1].time_seconds = 0.0;
         input.songs[0].notes[0].is_skill_trigger = false;
         input.songs[0].notes[1].is_skill_trigger = true;
         let error = input

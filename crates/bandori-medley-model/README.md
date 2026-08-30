@@ -9,7 +9,7 @@ This crate defines the first executable boundary of the greenfield medley founda
 - exact decimal PERFECT probability;
 - one finite Bestdori-compatible deck-total parameter per already selected team;
 - finite Bestdori master skill-rate values;
-- normalized integer-microsecond note times with exactly six skill triggers per song.
+- Bestdori-compatible second timestamps with exactly six skill triggers per song.
 
 It is not a search request. There are no candidate limits, result counts, time budgets, memory budgets, pruning switches, or solver modes in the schema. Unknown JSON fields and unsupported schema/rules versions fail closed.
 

@@ -56,7 +56,7 @@ pub struct ResolvedScoreSkillV1 {
     pub master_skill_id: u32,
     /// Exact source master row selected by the physical card state.
     pub skill_level: u8,
-    pub duration_micros: u64,
+    pub duration_seconds: f64,
     pub behavior: SkillBehaviorV1,
     pub rate_up_with_perfect: Option<RateUpWithPerfectV1>,
 }
@@ -99,7 +99,7 @@ pub enum DifficultyV1 {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ScoringNoteV1 {
     pub note_id: u32,
-    pub time_micros: u64,
+    pub time_seconds: f64,
     pub is_skill_trigger: bool,
 }
 
