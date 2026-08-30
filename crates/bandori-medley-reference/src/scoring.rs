@@ -359,6 +359,29 @@ fn canonicalize_expired_states(
     }
 }
 
+fn floor_final_note_score_to_u32(
+    value: f64,
+    song_slot: u8,
+    note_index: usize,
+) -> Result<u32, ScoreError> {
+    if !value.is_finite() || value < 0.0 {
+        return Err(ScoreError::new(
+            ScoreErrorCode::ArithmeticNonFinite,
+            format!("songs[{song_slot}].notes[{note_index}].finalScore"),
+            "score intermediate must be finite and non-negative",
+        ));
+    }
+    let floored = value.floor();
+    if floored > f64::from(u32::MAX) {
+        return Err(ScoreError::new(
+            ScoreErrorCode::ArithmeticOverflow,
+            format!("songs[{song_slot}].notes[{note_index}].finalScore"),
+            "per-note score exceeds the client uint32 boundary",
+        ));
+    }
+    Ok(floored as u32)
+}
+
 fn note_score_for_judgment(
     song: &MedleySongV1,
     note_index: usize,
@@ -389,10 +412,7 @@ fn note_score_for_judgment(
     }
     combined_multiplier = combined_multiplier.max(0.0);
     let with_skill = f64::from(inner_score) * combined_multiplier;
-    floor_number_to_u32(
-        with_skill,
-        &format!("songs[{}].notes[{note_index}].finalScore", song.slot),
-    )
+    floor_final_note_score_to_u32(with_skill, song.slot, note_index)
 }
 
 fn merge_branch(
