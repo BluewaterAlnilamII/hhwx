@@ -105,3 +105,27 @@ export type FixedMedleyEvaluationInputV1 = {
   teams: Triple<FixedTeamV1>;
   songs: Triple<MedleySongV1>;
 };
+
+export type CalculatedProfileCardV1 = DecodedProfileCardV1 & {
+  characterId: number;
+  bandId: number | null;
+  attribute: BandoriCardAttribute;
+  rarity: number;
+  skillId: number;
+  baseParameter: Triple<number>;
+  characterParameter: Triple<number>;
+  totalPower: number;
+};
+
+export type FixedTeamParameterTraceV1 = {
+  cardPower: number;
+  areaItemPower: number;
+  eventPower: number;
+  deckTotalParameter: number;
+  selectedAreaItemIds: number[];
+  cards: Five<{
+    cardId: number;
+    baseParameter: Triple<number>;
+    characterParameter: Triple<number>;
+  }>;
+};
