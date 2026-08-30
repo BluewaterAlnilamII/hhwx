@@ -80,3 +80,5 @@ Aggregate counters cover configurations, partial nodes, pruning, complete teams,
 The first implementation is single-threaded and includes the strict normalized contract, exact scorer, proved upper bound, character-group traversal, compact three-view join, explicit incomplete outcomes, an independent tiny exhaustive oracle, and an opt-in small real-profile acceptance run. It adds no dominance relation, same-character replacement, cross-character coverage, SIMD/FMA, score quantization, random retention, candidate cap, external storage, frontend/API connection, or speculative partitioning. If real hard inputs still approach exhaustive growth, the core upper bound is reviewed before any local optimization is proposed.
 
 This checkpoint stops before frontend/API wiring and before post-search maximum-score hydration for the small diagnostic result set. Those are separate reviewed stages, not hidden work in the search core.
+
+Historical profiles, data snapshots, and selected main/dev results are retained locally under the [regression evidence procedure](bandori-medley-fixtures.md). Archiving them does not run score comparisons or change the search algorithm.
