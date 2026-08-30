@@ -142,6 +142,9 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
             SkillBehaviorV1::Score {
                 score_up_percent_bits,
             }
+            | SkillBehaviorV1::ScoreOnPerfect {
+                score_up_percent_bits,
+            }
             | SkillBehaviorV1::PerfectOnly {
                 score_up_percent_bits,
             }

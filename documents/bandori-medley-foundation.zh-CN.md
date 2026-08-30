@@ -63,6 +63,7 @@ E[noteScore] =
 计分器只接受一套刻意缩小、已经按队伍上下文解析完成的技能契约：
 
 - `score`：在受支持的 P/G 条件下使用同一加分行为；
+- `score_on_perfect`：PERFECT 获得加分，GREAT 保留普通分数；
 - `perfect_only`：PERFECT 使用 `1 + value / 100`，GREAT 使用绝对倍率 `0`；
 - `continued_perfect`：当前 GREAT 当场从高倍率切到普通 fallback，之后所有音符继续使用 fallback；
 - `great_or_worse_half`：PERFECT 使用 `1 + value / 100`，GREAT 使用绝对倍率 `0.5`；

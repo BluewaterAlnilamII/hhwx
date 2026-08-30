@@ -63,6 +63,7 @@ The first five activations use every permutation of member indices `0..4` with e
 The scorer accepts a deliberately small, team-context-resolved skill contract:
 
 - `score`: the same score-up behavior for the supported P/G condition;
+- `score_on_perfect`: PERFECT receives the score-up while GREAT keeps its ordinary score;
 - `perfect_only`: PERFECT uses `1 + value / 100`, GREAT uses absolute multiplier `0`;
 - `continued_perfect`: the current GREAT immediately switches from the active value to the regular fallback, and all later notes remain on that fallback;
 - `great_or_worse_half`: PERFECT uses `1 + value / 100`, GREAT uses absolute multiplier `0.5`;

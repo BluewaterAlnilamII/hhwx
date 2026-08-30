@@ -171,6 +171,12 @@ fn base_skill_multiplier(
         SkillBehaviorV1::Score {
             score_up_percent_bits,
         } => percent_multiplier(score_up_percent_bits.to_f32()),
+        SkillBehaviorV1::ScoreOnPerfect {
+            score_up_percent_bits,
+        } => match judgment {
+            Judgment::Perfect => percent_multiplier(score_up_percent_bits.to_f32()),
+            Judgment::Great => 1.0_f32,
+        },
         SkillBehaviorV1::PerfectOnly {
             score_up_percent_bits,
         } => match judgment {
@@ -776,6 +782,28 @@ mod tests {
         let multiplier = skill_multiplier(&skill, &mut state, Judgment::Great);
         assert_eq!(multiplier.to_bits(), 1.8_f32.to_bits());
         assert!(!state.continued_active);
+    }
+
+    #[test]
+    fn conditional_score_keeps_the_unboosted_great_score() {
+        let skill = ResolvedScoreSkillV1 {
+            master_skill_id: 1,
+            duration_micros: 1,
+            behavior: SkillBehaviorV1::ScoreOnPerfect {
+                score_up_percent_bits: F32Bits::from_f32(100.0),
+            },
+            rate_up_with_perfect: None,
+        };
+        let mut perfect_state = ActivationState::default();
+        let mut great_state = ActivationState::default();
+        assert_eq!(
+            skill_multiplier(&skill, &mut perfect_state, Judgment::Perfect).to_bits(),
+            2.0_f32.to_bits(),
+        );
+        assert_eq!(
+            skill_multiplier(&skill, &mut great_state, Judgment::Great).to_bits(),
+            1.0_f32.to_bits(),
+        );
     }
 
     #[test]

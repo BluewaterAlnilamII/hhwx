@@ -53,6 +53,8 @@ pub struct RateUpWithPerfectV1 {
 pub enum SkillBehaviorV1 {
     /// The same score-up percent applies to PERFECT and GREAT.
     Score { score_up_percent_bits: F32Bits },
+    /// The score-up percent applies to PERFECT; GREAT keeps its normal score.
+    ScoreOnPerfect { score_up_percent_bits: F32Bits },
     /// PERFECT receives the score-up multiplier and GREAT scores zero.
     PerfectOnly { score_up_percent_bits: F32Bits },
     /// The high value remains only while all earlier active notes were PERFECT.
