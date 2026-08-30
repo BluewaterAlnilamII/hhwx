@@ -5,24 +5,14 @@
 
 #![forbid(unsafe_code)]
 
+mod candidate;
 mod control;
 mod error;
-#[allow(
-    dead_code,
-    reason = "the exact scorer is wired into candidate evaluation in the next checkpoint"
-)]
 mod exact_score;
 mod input;
 mod output;
-#[allow(
-    dead_code,
-    reason = "team parameter derivation is wired into candidate scoring in the next checkpoint"
-)]
 mod parameters;
-#[allow(
-    dead_code,
-    reason = "proved bounds are wired into traversal and join pruning in the next checkpoint"
-)]
+mod search;
 mod upper_bound;
 mod validation;
 
@@ -33,8 +23,10 @@ pub use input::{
     SearchCardSkillContextsV1, SearchCardV1,
 };
 pub use output::{
-    MedleySearchOutcomeV1, MedleySearchSolutionV1, MedleySearchTeamV1, SearchIncompleteReasonV1,
+    MedleySearchDiagnosticsV1, MedleySearchOutcomeV1, MedleySearchSolutionV1, MedleySearchTeamV1,
+    SearchIncompleteReasonV1,
 };
+pub use search::search_medley;
 
 /// Schema identifier for the first normalized medley search input.
 pub const SEARCH_INPUT_SCHEMA_VERSION: &str = "hhwx-medley-search-input-v1";

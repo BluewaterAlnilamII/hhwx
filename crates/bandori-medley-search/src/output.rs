@@ -19,6 +19,29 @@ pub struct MedleySearchSolutionV1 {
     pub total_average_score: f64,
 }
 
+/// Aggregate evidence from one run. These counters diagnose scale and pruning;
+/// they are not an alternative completion proof.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MedleySearchDiagnosticsV1 {
+    pub configurations_total: u64,
+    pub configurations_completed: u64,
+    pub configurations_pruned: u64,
+    pub partial_nodes: u64,
+    pub partial_nodes_pruned: u64,
+    pub complete_teams: u64,
+    pub exact_song_scores: u64,
+    pub compact_rows: u64,
+    pub rows_pruned: u64,
+    pub join_pair_checks: u64,
+    pub join_third_checks: u64,
+    pub card_conflicts: u64,
+    pub feasible_medleys: u64,
+    pub incumbent_changes: u64,
+    pub unknown_bound_evaluations: u64,
+    pub peak_candidate_bytes: u64,
+}
+
 /// Why a run ended without an exact result.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -50,10 +73,12 @@ pub enum MedleySearchOutcomeV1 {
     Exact {
         best: Option<MedleySearchSolutionV1>,
         discovered: Vec<MedleySearchSolutionV1>,
+        diagnostics: MedleySearchDiagnosticsV1,
     },
     Incomplete {
         reason: SearchIncompleteReasonV1,
         best_so_far: Option<MedleySearchSolutionV1>,
         discovered: Vec<MedleySearchSolutionV1>,
+        diagnostics: MedleySearchDiagnosticsV1,
     },
 }
