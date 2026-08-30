@@ -1,5 +1,7 @@
 export const MEDLEY_FOUNDATION_SOURCE_SCHEMA_VERSION = "hhwx-medley-foundation-source-v1" as const;
 export const MEDLEY_SCORING_INPUT_SCHEMA_VERSION = "hhwx-medley-scoring-input-v1" as const;
+export const MEDLEY_SEARCH_SOURCE_SCHEMA_VERSION = "hhwx-medley-search-source-v1" as const;
+export const MEDLEY_SEARCH_INPUT_SCHEMA_VERSION = "hhwx-medley-search-input-v1" as const;
 export const MEDLEY_SCORING_RULES_VERSION = "hhwx-medley-pg-expected-v1" as const;
 
 export type BandoriServer = 0 | 1 | 2 | 3;
@@ -116,6 +118,46 @@ export type CalculatedProfileCardV1 = DecodedProfileCardV1 & {
   totalPower: number;
 };
 
+export type CalculatedAreaItemV1 = {
+  areaItemId: number;
+  targetBandIds: number[];
+  targetAttributes: BandoriCardAttribute[];
+  parameterRates: Triple<number>;
+};
+
+export type SearchCardSkillContextsV1 = {
+  mixed: ResolvedScoreSkillV1;
+  sameBand: ResolvedScoreSkillV1;
+  sameAttribute: ResolvedScoreSkillV1;
+  sameBandAndAttribute: ResolvedScoreSkillV1;
+};
+
+export type SearchCardV1 = {
+  instanceId: number;
+  masterCardId: number;
+  characterId: number;
+  bandId: number;
+  attribute: BandoriCardAttribute;
+  isExcluded: boolean;
+  characterParameter: Triple<number>;
+  eventParameter: Triple<number>;
+  skillContexts: SearchCardSkillContextsV1;
+};
+
+export type AreaItemConfigurationV1 = {
+  selectedAreaItemIds: number[];
+};
+
+export type MedleySearchInputV1 = {
+  schemaVersion: typeof MEDLEY_SEARCH_INPUT_SCHEMA_VERSION;
+  scoringRulesVersion: typeof MEDLEY_SCORING_RULES_VERSION;
+  perfectRate: ExactProbabilityV1;
+  cards: SearchCardV1[];
+  areaItems: CalculatedAreaItemV1[];
+  areaConfigurations: AreaItemConfigurationV1[];
+  songs: Triple<MedleySongV1>;
+};
+
 export type FixedTeamParameterTraceV1 = {
   cardPower: number;
   areaItemPower: number;
@@ -156,6 +198,19 @@ export type FixedMedleySourceInputV1 = {
   selectedAreaItemIds: number[];
   perfectRatePercentText: string;
   teams: Triple<FixedTeamSourceSelectionV1>;
+  songs: Triple<FixedSongSourceSelectionV1>;
+};
+
+export type MedleySearchSourceInputV1 = {
+  schemaVersion: typeof MEDLEY_SEARCH_SOURCE_SCHEMA_VERSION;
+  profilePayload: unknown;
+  cardsById: Record<string, unknown>;
+  charactersById: Record<string, unknown>;
+  skillsById: Record<string, unknown>;
+  areaItemsById: Record<string, unknown>;
+  songsById: Record<string, unknown>;
+  eventBonus: unknown;
+  perfectRatePercentText: string;
   songs: Triple<FixedSongSourceSelectionV1>;
 };
 

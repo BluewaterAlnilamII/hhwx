@@ -1,6 +1,7 @@
 import type {
   BandoriCardAttribute,
   BandoriServer,
+  CalculatedAreaItemV1,
   CalculatedProfileCardV1,
   DecodedAreaItemStateV1,
   DecodedCharacterBonusV1,
@@ -230,6 +231,40 @@ export function calculateProfileCard(
   };
 }
 
+/** Resolve one owned area-item row at its profile level and exact server. */
+export function calculateProfileAreaItem(
+  state: DecodedAreaItemStateV1,
+  masterValue: unknown,
+  server: BandoriServer,
+  path = `areaItemsById.${state.areaItemId}`,
+): CalculatedAreaItemV1 {
+  const master = isRecord(masterValue)
+    ? masterValue
+    : failInput("INVALID_MASTER", path, "area-item master is missing");
+  const targetAttributes = Array.isArray(master.targetAttributes)
+    ? master.targetAttributes.map((value, index) => (
+      readAttribute(value, `${path}.targetAttributes[${index}]`)
+    ))
+    : [];
+  const targetBandIds = Array.isArray(master.targetBandIds)
+    ? master.targetBandIds.map((value, index) => (
+      positiveInteger(value, `${path}.targetBandIds[${index}]`)
+    ))
+    : [];
+  const parameterRates = PARAMETER_KEYS.map((key) => (
+    regionalLevelNumber(master[key], state.level, server) / 100
+  )) as Triple<number>;
+  if (parameterRates.some((rate) => !Number.isFinite(rate) || rate < 0)) {
+    failInput("INVALID_MASTER", path, "rates must be finite and non-negative");
+  }
+  return {
+    areaItemId: state.areaItemId,
+    targetBandIds,
+    targetAttributes,
+    parameterRates,
+  };
+}
+
 function selectedAreaItemPower(
   cards: readonly CalculatedProfileCardV1[],
   areaItemsById: Record<string, unknown>,
@@ -241,24 +276,18 @@ function selectedAreaItemPower(
     const state = profileAreaItems.get(areaItemId);
     const master = areaItemsById[String(areaItemId)];
     if (!state || !isRecord(master) || state.level <= 0) return total;
-    const targetAttributes = Array.isArray(master.targetAttributes) ? master.targetAttributes : [];
-    const targetBands = Array.isArray(master.targetBandIds)
-      ? master.targetBandIds.map((value) => Math.trunc(numberLike(value, `areaItemsById.${areaItemId}.targetBandIds`, 0)))
-      : [];
-    const rates = PARAMETER_KEYS.map((key) => (
-      regionalLevelNumber(master[key], state.level, server) / 100
-    )) as Triple<number>;
-    if (rates.some((rate) => !Number.isFinite(rate) || rate < 0)) {
-      failInput("INVALID_MASTER", `areaItemsById.${areaItemId}`, "rates must be finite and non-negative");
-    }
+    const resolved = calculateProfileAreaItem(state, master, server);
     return total + cards.reduce((itemPower, card) => {
-      if (!targetAttributes.includes(card.attribute) || !targetBands.includes(card.bandId)) {
+      if (
+        !resolved.targetAttributes.includes(card.attribute)
+        || !resolved.targetBandIds.includes(card.bandId)
+      ) {
         return itemPower;
       }
       return itemPower
-        + card.characterParameter[0] * rates[0]
-        + card.characterParameter[1] * rates[1]
-        + card.characterParameter[2] * rates[2];
+        + card.characterParameter[0] * resolved.parameterRates[0]
+        + card.characterParameter[1] * resolved.parameterRates[1]
+        + card.characterParameter[2] * resolved.parameterRates[2];
     }, 0);
   }, 0);
 }
@@ -300,7 +329,10 @@ function eventInteger(value: unknown, path: string, allowZero = false): number {
   return parsed;
 }
 
-function eventParameterVector(card: CalculatedProfileCardV1, eventBonus: unknown): Triple<number> {
+export function calculateCardEventParameter(
+  card: CalculatedProfileCardV1,
+  eventBonus: unknown,
+): Triple<number> {
   if (eventBonus === null) return [0, 0, 0];
   if (!isRecord(eventBonus)) failInput("INVALID_PARAMETER", "eventBonus", "must be an object or null");
   const attributePercent = matchingPercent(
@@ -364,7 +396,7 @@ export function calculateFixedTeamParameters(options: {
     options.server,
   );
   const eventPower = options.cards.reduce((total, card) => (
-    total + sum(eventParameterVector(card, options.eventBonus))
+    total + sum(calculateCardEventParameter(card, options.eventBonus))
   ), 0);
   const deckTotalParameter = cardPower + areaItemPower + eventPower;
   if (![cardPower, areaItemPower, eventPower, deckTotalParameter].every((value) => (

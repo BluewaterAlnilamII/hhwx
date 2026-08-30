@@ -1,5 +1,3 @@
-import { resolveBandoriCardForServerWithJpFallback } from "@/lib/bandori/cards/regional-extensions";
-
 import {
   MEDLEY_FOUNDATION_SOURCE_SCHEMA_VERSION,
   MEDLEY_SCORING_INPUT_SCHEMA_VERSION,
@@ -16,7 +14,6 @@ import type {
   FixedTeamParameterTraceV1,
   FixedTeamSourceSelectionV1,
   FixedTeamV1,
-  MedleyDifficulty,
   MedleySongV1,
   Triple,
 } from "./contracts";
@@ -32,12 +29,12 @@ import { parsePerfectRatePercent, parseSongIdText } from "./numeric";
 import { calculateFixedTeamParameters, calculateProfileCard } from "./parameters";
 import { decodeMedleyProfile } from "./profile";
 import { buildFixedTeamSkillContext, resolveBestdoriScoreSkill } from "./skills";
-
-const DIFFICULTIES = ["easy", "normal", "hard", "expert", "special"] as const;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+import {
+  readSourceDifficulty,
+  readSourcePlayLevel,
+  requireSourceMaster,
+  resolveSourceCardMaster,
+} from "./source-masters";
 
 function positiveIntegerLike(value: unknown, path: string, maximum = 0xffff_ffff): number {
   const parsed = typeof value === "number" ? value : Number(value);
@@ -53,13 +50,6 @@ function readSourcePositiveInteger(value: unknown, path: string): number {
     failInput("INVALID_PARAMETER", path, "must be a positive unsigned 32-bit integer");
   }
   return parsed;
-}
-
-function readDifficulty(value: unknown, path: string): MedleyDifficulty {
-  if (typeof value === "string" && (DIFFICULTIES as readonly string[]).includes(value)) {
-    return value as MedleyDifficulty;
-  }
-  failInput("INVALID_SONG", path, "must be a Bestdori difficulty");
 }
 
 function readAreaItemIds(value: unknown): number[] {
@@ -105,53 +95,10 @@ function readSongSelections(value: unknown): Triple<FixedSongSourceSelectionV1> 
       songIdText: typeof song.songIdText === "string"
         ? song.songIdText
         : failInput("INVALID_SONG", `songs[${slot}].songIdText`, "must be a string"),
-      difficulty: readDifficulty(song.difficulty, `songs[${slot}].difficulty`),
+      difficulty: readSourceDifficulty(song.difficulty, `songs[${slot}].difficulty`),
       chart: song.chart,
     };
   }) as Triple<FixedSongSourceSelectionV1>;
-}
-
-function readPlayLevel(
-  songMasterValue: unknown,
-  songId: number,
-  difficulty: MedleyDifficulty,
-): number {
-  const masterPath = `songsById.${songId}`;
-  const master = readRecord(songMasterValue, masterPath, "INVALID_MASTER");
-  const difficulties = readRecord(master.difficulty, `${masterPath}.difficulty`, "INVALID_MASTER");
-  const difficultyIndex = DIFFICULTIES.indexOf(difficulty);
-  const row = readRecord(
-    difficulties[String(difficultyIndex)],
-    `${masterPath}.difficulty.${difficultyIndex}`,
-    "INVALID_MASTER",
-  );
-  return positiveIntegerLike(row.playLevel, `${masterPath}.difficulty.${difficultyIndex}.playLevel`, 0xffff);
-}
-
-function requireMaster(
-  map: Record<string, unknown>,
-  id: number,
-  path: string,
-): Record<string, unknown> {
-  const value = map[String(id)];
-  return isRecord(value)
-    ? value
-    : failInput("INVALID_MASTER", `${path}.${id}`, "selected master row is missing");
-}
-
-function resolveCardMaster(
-  card: Record<string, unknown>,
-  server: BandoriServer,
-  path: string,
-): Record<string, unknown> {
-  let resolved: Record<string, unknown> | null;
-  try {
-    resolved = resolveBandoriCardForServerWithJpFallback(card, server);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "card server extension is invalid";
-    failInput("INVALID_MASTER", `${path}.serverExtensions`, message);
-  }
-  return resolved ?? failInput("INVALID_MASTER", path, "card is unavailable on the profile server and JP");
 }
 
 /** Build a fixed 15-card, three-team scoring input without performing any search. */
@@ -218,7 +165,7 @@ export function buildFixedMedleyEvaluationInput(
     if (!profileAreaItems.has(areaItemId)) {
       failInput("INVALID_PARAMETER", `${path}.selectedAreaItemIds`, `area item ${areaItemId} is not owned`);
     }
-    requireMaster(areaItemsById, areaItemId, `${path}.areaItemsById`);
+    requireSourceMaster(areaItemsById, areaItemId, `${path}.areaItemsById`);
   }
 
   const selectedCardIds = new Set<number>();
@@ -237,13 +184,17 @@ export function buildFixedMedleyEvaluationInput(
       if (!state) {
         failInput("INVALID_CARD", `${path}.teams[${teamSlot}].memberCardIds[${memberIndex}]`, "card must be owned");
       }
-      const cardMaster = resolveCardMaster(
-        requireMaster(cardsById, cardId, `${path}.cardsById`),
+      const cardMaster = resolveSourceCardMaster(
+        requireSourceMaster(cardsById, cardId, `${path}.cardsById`),
         profile.server,
         `${path}.cardsById.${cardId}`,
       );
       const characterId = positiveIntegerLike(cardMaster.characterId, `${path}.cardsById.${cardId}.characterId`);
-      const characterMaster = requireMaster(charactersById, characterId, `${path}.charactersById`);
+      const characterMaster = requireSourceMaster(
+        charactersById,
+        characterId,
+        `${path}.charactersById`,
+      );
       const card = calculateProfileCard(
         state,
         cardMaster,
@@ -266,7 +217,7 @@ export function buildFixedMedleyEvaluationInput(
         skill: resolveBestdoriScoreSkill({
           skillId: card.skillId,
           skillLevel: card.skillLevel,
-          skillMaster: requireMaster(skillsById, card.skillId, `${path}.skillsById`),
+          skillMaster: requireSourceMaster(skillsById, card.skillId, `${path}.skillsById`),
           context,
           server: profile.server,
           path: `${path}.skillsById.${card.skillId}`,
@@ -297,7 +248,7 @@ export function buildFixedMedleyEvaluationInput(
       slot: songSlot,
       songId,
       difficulty: selection.difficulty,
-      playLevel: readPlayLevel(
+      playLevel: readSourcePlayLevel(
         songsById[String(songId)],
         songId,
         selection.difficulty,
