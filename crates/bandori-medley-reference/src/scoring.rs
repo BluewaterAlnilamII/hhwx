@@ -133,7 +133,7 @@ fn exact_probability_to_f64(probability: ExactProbabilityV1) -> f64 {
 }
 
 fn play_level_rate(play_level: u16) -> f64 {
-    1.0 + (f64::from(play_level) - 5.0) * 0.01
+    1.0 + (f64::from(play_level) - 5.0) / 100.0
 }
 
 fn base_score_per_note(deck_total_parameter: f64, play_level: u16, note_count: u32) -> f64 {
@@ -688,6 +688,17 @@ mod tests {
         let final_score = floor_number_to_u32(f64::from(inner) * percent_multiplier(15.0), "test")
             .expect("second rounding fixture fits");
         assert_eq!(final_score, 114);
+    }
+
+    #[test]
+    fn play_level_rate_keeps_bestdori_division_rounding() {
+        let rate = play_level_rate(46);
+        assert_eq!(rate.to_bits(), 1.41_f64.to_bits());
+
+        let base = base_score_per_note(37.395_228_884_590_59, 46, 6);
+        let inner = floor_number_to_u32(base * PERFECT_RATE, "test")
+            .expect("division-rounding fixture fits");
+        assert_eq!(inner, 28);
     }
 
     #[test]
