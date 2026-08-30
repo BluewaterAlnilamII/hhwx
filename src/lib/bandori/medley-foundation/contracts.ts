@@ -134,3 +134,45 @@ export type FixedTeamSkillContextV1 = {
   sameBandId: number | null;
   sameAttribute: BandoriCardAttribute | null;
 };
+
+export type FixedTeamSourceSelectionV1 = {
+  slot: number;
+  memberCardIds: Five<number>;
+};
+
+export type FixedSongSourceSelectionV1 = {
+  slot: number;
+  songIdText: string;
+  difficulty: MedleyDifficulty;
+  chart: unknown;
+};
+
+export type FixedMedleySourceInputV1 = {
+  schemaVersion: typeof MEDLEY_FOUNDATION_SOURCE_SCHEMA_VERSION;
+  profilePayload: unknown;
+  cardsById: Record<string, unknown>;
+  charactersById: Record<string, unknown>;
+  skillsById: Record<string, unknown>;
+  areaItemsById: Record<string, unknown>;
+  songsById: Record<string, unknown>;
+  eventBonus: unknown;
+  selectedAreaItemIds: number[];
+  perfectRatePercentText: string;
+  teams: Triple<FixedTeamSourceSelectionV1>;
+  songs: Triple<FixedSongSourceSelectionV1>;
+};
+
+export type FixedMedleyFoundationAuditV1 = {
+  sourceSchemaVersion: typeof MEDLEY_FOUNDATION_SOURCE_SCHEMA_VERSION;
+  profileName: string;
+  server: BandoriServer;
+  selectedCardIds: number[];
+  selectedAreaItemIds: number[];
+  teamMemberCardIds: Triple<Five<number>>;
+  teamParameters: Triple<FixedTeamParameterTraceV1>;
+};
+
+export type FixedMedleyFoundationResultV1 = {
+  scoringInput: FixedMedleyEvaluationInputV1;
+  audit: FixedMedleyFoundationAuditV1;
+};
