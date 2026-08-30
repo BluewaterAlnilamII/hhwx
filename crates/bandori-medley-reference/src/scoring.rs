@@ -286,46 +286,58 @@ fn build_base_note_scores(
     Ok((level_rate, base, scores))
 }
 
-fn build_activations<'a>(
-    input: &'a FixedMedleyEvaluationInputV1,
-    song: &MedleySongV1,
-    team: &FixedTeamV1,
-    order: [usize; 5],
-) -> Result<[Activation<'a>; 6], ScoreError> {
-    let trigger_notes: Vec<_> = song
-        .notes
-        .iter()
-        .filter(|note| note.is_skill_trigger)
-        .collect();
-    let mut activations = Vec::with_capacity(6);
-    for (trigger_index, trigger_note) in trigger_notes.into_iter().enumerate() {
-        let instance_id = if trigger_index < 5 {
-            team.member_instance_ids[order[trigger_index]]
-        } else {
-            team.member_instance_ids[2]
-        };
-        let skill = &input.cards[instance_id as usize].skill;
-        let end_time_seconds = trigger_note.time_seconds + skill.duration_seconds + 0.00001;
-        if !end_time_seconds.is_finite() {
+fn skill_trigger_times(song: &MedleySongV1) -> Result<[f64; 6], ScoreError> {
+    let mut trigger_times = [0.0_f64; 6];
+    let mut trigger_count = 0_usize;
+    for note in song.notes.iter().filter(|note| note.is_skill_trigger) {
+        let Some(trigger_time) = trigger_times.get_mut(trigger_count) else {
             return Err(ScoreError::new(
-                ScoreErrorCode::ArithmeticNonFinite,
-                format!("songs[{}].skillTriggers[{trigger_index}]", song.slot),
-                "skill end time must remain finite",
+                ScoreErrorCode::InputInvalid,
+                format!("songs[{}].skillTriggers", song.slot),
+                "validated song did not contain six skill triggers",
             ));
-        }
-        activations.push(Activation {
-            trigger_time_seconds: trigger_note.time_seconds,
-            end_time_seconds,
-            skill,
-        });
+        };
+        *trigger_time = note.time_seconds;
+        trigger_count += 1;
     }
-    activations.try_into().map_err(|_| {
-        ScoreError::new(
+    if trigger_count != trigger_times.len() {
+        return Err(ScoreError::new(
             ScoreErrorCode::InputInvalid,
             format!("songs[{}].skillTriggers", song.slot),
             "validated song did not contain six skill triggers",
-        )
-    })
+        ));
+    }
+    Ok(trigger_times)
+}
+
+fn build_activations<'a>(
+    input: &'a FixedMedleyEvaluationInputV1,
+    song_slot: u8,
+    trigger_times: &[f64; 6],
+    team: &FixedTeamV1,
+    order: [usize; 5],
+) -> Result<[Activation<'a>; 6], ScoreError> {
+    let member_positions = [order[0], order[1], order[2], order[3], order[4], 2];
+    let instance_ids = member_positions.map(|position| team.member_instance_ids[position]);
+    let mut end_times = [0.0_f64; 6];
+    for trigger_index in 0..6 {
+        let instance_id = instance_ids[trigger_index];
+        let skill = &input.cards[instance_id as usize].skill;
+        let end_time_seconds = trigger_times[trigger_index] + skill.duration_seconds + 0.00001;
+        if !end_time_seconds.is_finite() {
+            return Err(ScoreError::new(
+                ScoreErrorCode::ArithmeticNonFinite,
+                format!("songs[{song_slot}].skillTriggers[{trigger_index}]"),
+                "skill end time must remain finite",
+            ));
+        }
+        end_times[trigger_index] = end_time_seconds;
+    }
+    Ok(std::array::from_fn(|trigger_index| Activation {
+        trigger_time_seconds: trigger_times[trigger_index],
+        end_time_seconds: end_times[trigger_index],
+        skill: &input.cards[instance_ids[trigger_index] as usize].skill,
+    }))
 }
 
 fn judgment_probability(judgment: Judgment, perfect_rate: f64) -> f64 {
@@ -405,11 +417,12 @@ fn score_one_order(
     input: &FixedMedleyEvaluationInputV1,
     song: &MedleySongV1,
     team: &FixedTeamV1,
+    trigger_times: &[f64; 6],
     order: [usize; 5],
     base_note_scores: &[JudgmentScoreTraceV1],
     perfect_rate: f64,
 ) -> Result<(f64, usize), ScoreError> {
-    let activations = build_activations(input, song, team, order)?;
+    let activations = build_activations(input, song.slot, trigger_times, team, order)?;
     let mut states = BTreeMap::from([(
         JudgmentState::default(),
         WeightedScore {
@@ -485,13 +498,21 @@ fn score_song(
     })?;
     let (level_rate, base, base_note_scores) = build_base_note_scores(song, team, start_combo)?;
     let base_expected = base_expected_score(&base_note_scores, perfect_rate);
+    let trigger_times = skill_trigger_times(song)?;
     let orders = skill_orders();
     let mut permutation_expected_score_bits = Vec::with_capacity(orders.len());
     let mut average_accumulator = 0.0_f64;
     let mut peak_judgment_state_count = 0_usize;
     for order in orders {
-        let (score, peak_states) =
-            score_one_order(input, song, team, order, &base_note_scores, perfect_rate)?;
+        let (score, peak_states) = score_one_order(
+            input,
+            song,
+            team,
+            &trigger_times,
+            order,
+            &base_note_scores,
+            perfect_rate,
+        )?;
         average_accumulator += score;
         peak_judgment_state_count = peak_judgment_state_count.max(peak_states);
         permutation_expected_score_bits.push(F64BitsV1::from_f64(score));
@@ -757,9 +778,16 @@ mod tests {
         for (index, note) in input.songs[0].notes.iter_mut().enumerate() {
             note.time_seconds = index as f64 * 10.0;
         }
-        let activations =
-            build_activations(&input, &input.songs[0], &input.teams[0], [0, 1, 2, 3, 4])
-                .expect("window-boundary fixture builds activations");
+        let trigger_times =
+            skill_trigger_times(&input.songs[0]).expect("fixture has six skill triggers");
+        let activations = build_activations(
+            &input,
+            input.songs[0].slot,
+            &trigger_times,
+            &input.teams[0],
+            [0, 1, 2, 3, 4],
+        )
+        .expect("window-boundary fixture builds activations");
         let end_time_seconds = 0.0_f64 + 1.0 + 0.00001;
         assert_eq!(
             activations[0].end_time_seconds.to_bits(),
@@ -803,6 +831,36 @@ mod tests {
         .expect("next f64 after skill-window end scores");
         assert_eq!(at_end, 200);
         assert_eq!(after_end, 100);
+    }
+
+    #[test]
+    fn activation_order_maps_distinct_skills_to_the_six_triggers() {
+        let mut input = fixture();
+        for (index, card) in input.cards[..5].iter_mut().enumerate() {
+            card.skill.behavior = SkillBehaviorV1::Score {
+                score_up_percent: (index as f64 + 1.0) * 10.0,
+            };
+        }
+        let trigger_times =
+            skill_trigger_times(&input.songs[0]).expect("fixture has six skill triggers");
+        let activations = build_activations(
+            &input,
+            input.songs[0].slot,
+            &trigger_times,
+            &input.teams[0],
+            [4, 2, 0, 3, 1],
+        )
+        .expect("distinct skills map to activations");
+
+        let actual_score_up: Vec<f64> = activations
+            .iter()
+            .map(|activation| match activation.skill.behavior {
+                SkillBehaviorV1::Score { score_up_percent } => score_up_percent,
+                _ => panic!("fixture skills remain unconditional score skills"),
+            })
+            .collect();
+        assert_eq!(trigger_times, [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]);
+        assert_eq!(actual_score_up, [50.0, 30.0, 10.0, 40.0, 20.0, 30.0]);
     }
 
     #[test]
@@ -1074,10 +1132,13 @@ mod tests {
                 },
             ])
             .collect::<Vec<_>>();
+        let trigger_times =
+            skill_trigger_times(&input.songs[0]).expect("fixture has six skill triggers");
         let (expected_score, peak_state_count) = score_one_order(
             &input,
             &input.songs[0],
             &input.teams[0],
+            &trigger_times,
             [0, 1, 2, 3, 4],
             &base_note_scores,
             0.5,
