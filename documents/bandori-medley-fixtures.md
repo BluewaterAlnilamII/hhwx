@@ -63,7 +63,7 @@ On 2026-08-31, clean code commit `eb66f9b` completed all fourteen scenes after t
 
 Native search time totaled 159.922 seconds; the longest case took 35.232 seconds. Sampled native peak working set was 29.30 MiB; maximum budgeted search storage was 20.34 MiB. Both 119-card runs finished before the first memory sample, so their process memory is unavailable, not zero. Raw profiles, masters, charts, settings and historical references matched the preceding matrix; normalized-input changes were confined to character/event parameters affected by the approved bonus rule.
 
-Full results, checks and the next-stage case list remain in the private archive under `runs/2026-08-31-final-low-pressure/`, referring to the two raw runs `2026-08-31T14-48-26.892Z` and `2026-08-31T14-48-29.719Z`. The separate 972/event244 investigation explains its higher score; this rerun changes neither solver. Acceptance covers these fourteen scenes only.
+Full results and checks remain in the private archive under `runs/2026-08-31-final-low-pressure/`, referring to the two raw runs `2026-08-31T14-48-26.892Z` and `2026-08-31T14-48-29.719Z`. The separate 972/event244 investigation explains its higher score; this rerun changes neither solver. Acceptance covers these fourteen scenes only.
 
 ## Completed-profile stage
 
@@ -75,7 +75,11 @@ node --import tsx scripts/compare-bandori-medley-search.mjs --completed-profiles
 
 This reuses the existing runner, input normalization and resource recording. Card counts uniquely identify these archived profiles; each run records their payload hashes. All scenes use the retained main-directory data, expert songs 385/193/619, full PERFECT, no fever and all owned area configurations. Keep the existing per-case 300-second / 256-MiB search-storage / 1-GiB sampled-process limits. Finish all 48 scenes sequentially, recording individual failures without increasing budgets or changing the algorithm.
 
-All four 1229-card scenes and 1513/event323 also have higher reports from a directory without a retained data snapshot. Run them, but preserve those higher references separately: a pass against the main-snapshot reference alone does not resolve that input discrepancy. Old exact flags select the batch; they do not prove that the old scores are optimal.
+The batch finished on 2026-09-01 at clean commit `8c758bf`: all 48 scenes ran, with **45 exact passes** against the primary references (42 equal, 3 higher). The higher scores were 1211/no-event (+193), 1211/event260 (+155) and 1252/event323 (+154). **1229/event244, 1513/event244 and 1703/event260 timed out** at 300 seconds. All three reached their primary reference scores, but incomplete proof is still a failure. There were no lower primary scores, process failures or memory-limit stops.
+
+Native search totaled 3,606.484 seconds; the across-scene median was 28.550 seconds. Sampled process peak was 40.36 MiB; budgeted search-storage peak was 32.16 MiB. All scenes had memory samples. Input/file hashes, saved-output consistency, team legality and integer song-score sums were checked without rescoring. Full per-scene scores, timing, memory, diagnostic counters and report references are retained under `runs/2026-08-31T15-20-54.142Z/`, including `report.md`, `run.json` and `summary.json`.
+
+All four 1229-card scenes and 1513/event323 remain below higher reports from a directory without a retained data snapshot. Their differences and original completion flags are recorded separately; the cause is not established, and missing data is not itself an explanation. Primary-reference passes do not settle those gaps. The three timeouts and five higher-reference discrepancies mean this stage is **not fully accepted**. No scoring/search changes, budget increases or historical-team replays were made.
 
 ## Final high-pressure stage
 
