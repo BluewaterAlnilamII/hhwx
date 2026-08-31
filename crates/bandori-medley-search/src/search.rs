@@ -228,9 +228,10 @@ impl<'a> SearchDomain<'a> {
         self.removed.len()
     }
 
-    fn remove(&mut self, id: u32) {
+    /// Return whether any ordered head read by a bound query changed.
+    fn remove(&mut self, id: u32) -> bool {
         if !self.available[id as usize] {
-            return;
+            return false;
         }
         self.available[id as usize] = false;
         self.counts[self.character_indexes[id as usize]] -= 1;
@@ -238,9 +239,10 @@ impl<'a> SearchDomain<'a> {
             .engine
             .as_ref()
             .map_or(0, FastUpperBoundEngine::checkpoint);
-        if let Some(engine) = &mut self.engine {
+        let heads_changed = self.engine.as_mut().is_some_and(|engine| {
             engine.remove(id, &self.available);
-        }
+            engine.checkpoint() != checkpoint
+        });
         #[cfg(test)]
         let previous_capacity = self.removed.capacity();
         self.removed.push((id, checkpoint));
@@ -248,6 +250,7 @@ impl<'a> SearchDomain<'a> {
         if previous_capacity != self.removed.capacity() {
             self.record_storage();
         }
+        heads_changed
     }
 
     fn restore(&mut self, checkpoint: usize) {
@@ -881,7 +884,7 @@ fn join_block(
 struct SearchNode {
     families: [TeamFamily; 3],
     bounds: [TeamUpper; 3],
-    bounds_ready: bool,
+    refresh_bounds: [bool; 3],
 }
 
 struct OwnershipSplit {
@@ -896,7 +899,7 @@ impl OwnershipSplit {
     fn child(&self, parent: SearchNode, owner: usize) -> Option<SearchNode> {
         let mut child = SearchNode {
             bounds: self.excluded,
-            bounds_ready: true,
+            refresh_bounds: [false; 3],
             ..parent
         };
         if owner < 3 {
@@ -905,9 +908,6 @@ impl OwnershipSplit {
             }
             child.families[owner] = parent.families[owner].with_required(self.card);
             child.bounds[owner] = self.included[owner];
-            if child.families[owner].member_count == TEAM_SIZE {
-                child.families[owner].fixed_score = Some(child.bounds[owner].score);
-            }
         }
         Some(child)
     }
@@ -948,11 +948,13 @@ impl SearchFrame {
                 let &(group, id) = choices.get(self.next)?;
                 self.next += 1;
                 let mut child = SearchNode {
-                    bounds_ready: false,
+                    refresh_bounds: [domain.remove(id); 3],
                     ..self.node
                 };
                 child.families[*slot] = child.families[*slot].with_member(id, group);
-                domain.remove(id);
+                // Unchanged heads preserve both the other teams' numeric
+                // bounds and their selected hints. This team's prefix changed.
+                child.refresh_bounds[*slot] = true;
                 Some(child)
             }
         }
@@ -968,24 +970,17 @@ struct JointSearch<'input, 'state, 'control, 'callback> {
 impl JointSearch<'_, '_, '_, '_> {
     fn family_bound(
         &mut self,
-        family: &mut TeamFamily,
+        family: TeamFamily,
         slot: usize,
         inherited: TeamUpper,
     ) -> Result<TeamUpper, SearchAbort> {
-        if family.member_count == TEAM_SIZE {
-            let score = if let Some(score) = family.fixed_score {
-                score
-            } else {
-                let score = self.evaluation.evaluate(family.members)?.song_scores[slot];
-                family.fixed_score = Some(score);
-                score
-            };
+        if let Some(score) = family.fixed_score {
             return Ok(TeamUpper {
                 score,
                 members: Some(family.members),
             });
         }
-        let mut bound = team_upper(&self.domain, *family, slot, self.evaluation.state)?;
+        let mut bound = team_upper(&self.domain, family, slot, self.evaluation.state)?;
         // A child is a subset of its parent. Keep a fresh, feasible hint even
         // when the parent's numeric upper is tighter than this query's upper.
         bound.score = bound.score.min(inherited.score);
@@ -1036,22 +1031,41 @@ impl JointSearch<'_, '_, '_, '_> {
         let eligible = node
             .families
             .map(|family| family.can_include(&self.domain, card));
-        self.domain.remove(card);
+        let heads_changed = self.domain.remove(card);
         let mut split = OwnershipSplit {
             card,
             eligible,
-            included: [TeamUpper::default(); 3],
-            excluded: [TeamUpper::default(); 3],
+            // A skipped include query leaves a valid inherited number, but no
+            // hint. Its whole child is already below the incumbent.
+            included: node.bounds.map(|bound| TeamUpper {
+                members: None,
+                ..bound
+            }),
+            excluded: node.bounds,
             order: [0, 1, 2, 3],
         };
         // All four branches hide the card from unfilled slots. Compute each
         // team's include/exclude bound once and reuse it across children.
+        if heads_changed {
+            for slot in 0..3 {
+                split.excluded[slot] =
+                    self.family_bound(node.families[slot], slot, node.bounds[slot])?;
+            }
+        }
         for (slot, can_include) in eligible.into_iter().enumerate() {
-            let mut excluded = node.families[slot];
-            split.excluded[slot] = self.family_bound(&mut excluded, slot, node.bounds[slot])?;
             if can_include {
-                let mut included = node.families[slot].with_required(card);
-                split.included[slot] = self.family_bound(&mut included, slot, node.bounds[slot])?;
+                let mut uppers = split.excluded.map(|bound| bound.score);
+                uppers[slot] = node.bounds[slot].score;
+                if self
+                    .evaluation
+                    .state
+                    .incumbent_score()
+                    .is_some_and(|incumbent| finite_slot_sum(uppers) < incumbent)
+                {
+                    continue;
+                }
+                let included = node.families[slot].with_required(card);
+                split.included[slot] = self.family_bound(included, slot, node.bounds[slot])?;
             }
         }
         let scores: [f64; 4] = std::array::from_fn(|owner| {
@@ -1193,9 +1207,30 @@ impl JointSearch<'_, '_, '_, '_> {
         add_counter(&mut self.evaluation.state.diagnostics.local_blocks, 1)
     }
 
+    fn prune_node(&mut self, bounds: [TeamUpper; 3]) -> Result<bool, SearchAbort> {
+        if self
+            .evaluation
+            .state
+            .incumbent_score()
+            .is_some_and(|incumbent| finite_slot_sum(bounds.map(|bound| bound.score)) < incumbent)
+        {
+            add_counter(
+                &mut self.evaluation.state.diagnostics.partial_nodes_pruned,
+                1,
+            )?;
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
     fn expand(&mut self, mut node: SearchNode) -> Result<Option<SearchFrame>, SearchAbort> {
         self.evaluation.state.poll_stop()?;
         add_counter(&mut self.evaluation.state.diagnostics.partial_nodes, 1)?;
+        // Parent bounds remain valid after restricting a family. Check them
+        // before doing any fresh query, and stop after the first sufficient cut.
+        if self.prune_node(node.bounds)? {
+            return Ok(None);
+        }
         let limit = self.evaluation.cache.local_row_limit;
         let counts = node
             .families
@@ -1203,26 +1238,33 @@ impl JointSearch<'_, '_, '_, '_> {
         if counts.contains(&0) {
             return Ok(None);
         }
-        if !node.bounds_ready {
-            for slot in 0..3 {
+        for slot in 0..3 {
+            if node.refresh_bounds[slot] {
                 node.bounds[slot] =
-                    self.family_bound(&mut node.families[slot], slot, node.bounds[slot])?;
+                    self.family_bound(node.families[slot], slot, node.bounds[slot])?;
+                if self.prune_node(node.bounds)? {
+                    return Ok(None);
+                }
             }
-            node.bounds_ready = true;
+        }
+        node.refresh_bounds = [false; 3];
+        // Newly completed teams first pass the whole-medley bound filter.
+        // Only survivors pay for exact scoring; descendants retain that value.
+        for slot in 0..3 {
+            let family = &mut node.families[slot];
+            if family.member_count == TEAM_SIZE && family.fixed_score.is_none() {
+                let score = self.evaluation.evaluate(family.members)?.song_scores[slot];
+                family.fixed_score = Some(score);
+                node.bounds[slot] = TeamUpper {
+                    score,
+                    members: Some(family.members),
+                };
+                if self.prune_node(node.bounds)? {
+                    return Ok(None);
+                }
+            }
         }
         let uppers = node.bounds.map(|bound| bound.score);
-        if self
-            .evaluation
-            .state
-            .incumbent_score()
-            .is_some_and(|incumbent| finite_slot_sum(uppers) < incumbent)
-        {
-            add_counter(
-                &mut self.evaluation.state.diagnostics.partial_nodes_pruned,
-                1,
-            )?;
-            return Ok(None);
-        }
         if self
             .evaluation
             .state
@@ -1435,7 +1477,7 @@ fn run_search(
         search.visit(SearchNode {
             families,
             bounds: plan.root_bounds,
-            bounds_ready: true,
+            refresh_bounds: [false; 3],
         })?;
         add_counter(&mut state.diagnostics.configurations_completed, 1)?;
     }
@@ -1496,7 +1538,7 @@ mod tests {
         let parent = SearchNode {
             families: [TeamFamily::default(); 3],
             bounds: [TeamUpper::default(); 3],
-            bounds_ready: true,
+            refresh_bounds: [false; 3],
         };
         let total = parent.families[0].completion_count(&domain);
         let card = 15;
