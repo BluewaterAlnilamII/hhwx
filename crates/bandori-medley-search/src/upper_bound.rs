@@ -1,10 +1,6 @@
-//! Bestdori skill envelopes and the stable 120-order mean rounding proof.
+//! Bestdori skill envelopes and the independent-window mean rounding proof.
 
 use bandori_medley_model::{MedleySongV1, ResolvedScoreSkillV1, SkillBehaviorV1};
-
-const REFERENCE_ERROR_DENOMINATOR: u128 = 1_u128 << 52;
-const ORDER_MEAN_OPERATIONS: u128 = 121;
-pub(crate) const MAX_EXACT_SCORE_INTEGER: u64 = 1_u64 << 53;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum UpperBoundFailure {
@@ -99,7 +95,12 @@ pub(crate) fn skill_delta(
         }
     };
     checked_finite(maximum_multiplier)?;
-    checked_finite((maximum_multiplier - 1.0).max(0.0))
+    if maximum_multiplier <= 1.0 {
+        return Ok(0.0);
+    }
+    // B is an exact u32 integer. One upward step of m covers rounding in
+    // B*m; the second covers subtraction of 1, so floor(B*m)-B <= B*delta.
+    checked_finite((maximum_multiplier.next_up() - 1.0).next_up())
 }
 
 pub(crate) fn combo_rate(combo: u32) -> f64 {
@@ -113,42 +114,24 @@ pub(crate) fn combo_rate(combo: u32) -> f64 {
     }
 }
 
-pub(crate) fn trigger_times(song: &MedleySongV1) -> Result<[f64; 6], UpperBoundFailure> {
-    let times = song
+pub(crate) fn trigger_indexes(song: &MedleySongV1) -> Result<[usize; 6], UpperBoundFailure> {
+    let indexes = song
         .notes
         .iter()
-        .filter(|note| note.is_skill_trigger)
-        .map(|note| note.time_seconds)
+        .enumerate()
+        .filter(|(_, note)| note.is_skill_trigger)
+        .map(|(index, _)| index)
         .collect::<Vec<_>>();
-    times.try_into().map_err(|_| UpperBoundFailure::Unknown)
-}
-
-fn ceil_div(numerator: u128, denominator: u128) -> Result<u128, UpperBoundFailure> {
-    numerator
-        .checked_add(denominator - 1)
-        .map(|value| value / denominator)
-        .ok_or(UpperBoundFailure::Unknown)
+    indexes.try_into().map_err(|_| UpperBoundFailure::Unknown)
 }
 
 pub(crate) fn reference_ceiling(path_ceiling: u128) -> Result<f64, UpperBoundFailure> {
-    // Every order's note sum is an exactly representable integer (the caller
-    // separately proves the 2^53 range). Only the stable 120 additions and
-    // division can round. Positive results are at least 1/120, so there are no
-    // subnormal probability operations and no absolute '+1' error allowance.
-    // A common gamma_121 bounds the ideal mean, not just its largest order.
+    // The exact mean numerator is <= 5*path_ceiling. Integer-to-f64 conversion
+    // and division by positive five are monotone, including at large values.
     let numerator = path_ceiling
-        .checked_mul(REFERENCE_ERROR_DENOMINATOR)
+        .checked_mul(5)
         .ok_or(UpperBoundFailure::Unknown)?;
-    let denominator = REFERENCE_ERROR_DENOMINATOR - ORDER_MEAN_OPERATIONS;
-    let integer_ceiling = ceil_div(numerator, denominator)?;
-    let mut value = integer_ceiling as f64;
-    if !value.is_finite() {
-        return Err(UpperBoundFailure::Unknown);
-    }
-    if (value as u128) < integer_ceiling {
-        value = value.next_up();
-    }
-    Ok(value)
+    checked_finite(numerator as f64 / 5.0)
 }
 
 pub(crate) fn add_song_uppers(values: [f64; 3]) -> Result<f64, UpperBoundFailure> {
@@ -160,26 +143,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn reference_ceiling_covers_stable_order_sum_rounding() {
-        let base = 2_f64.powi(60);
-        let last = base + 45.0 * 256.0;
-        let mut stable_sum = 0.0_f64;
-        for _ in 0..119 {
-            stable_sum += base;
+    fn reference_ceiling_covers_integer_numerator_rounding() {
+        for ceiling in [0_u128, 1_234_567, (1_u128 << 53) + 1, 1_u128 << 65] {
+            let upper = reference_ceiling(ceiling).unwrap();
+            for offset in 0..=4 {
+                let numerator = (5 * ceiling).saturating_sub(offset);
+                assert!(numerator as f64 / 5.0 <= upper);
+            }
         }
-        stable_sum += last;
-        let stable_average = stable_sum / 120.0;
-
-        let exact_sum = 120_u128
-            .checked_mul(1_u128 << 60)
-            .and_then(|value| value.checked_add(45 * 256))
-            .expect("regression sum fits u128");
-        let ideal_average_ceiling = ceil_div(exact_sum, 120).expect("division is defined");
-        let upper = reference_ceiling(ideal_average_ceiling)
-            .expect("the regression operation count has a proof ceiling");
-
-        assert!(stable_average > ideal_average_ceiling as f64);
-        assert!(stable_average <= upper);
     }
 
     #[test]
@@ -194,7 +165,7 @@ mod tests {
             is_rate_up_with_perfect: true,
         };
         let delta = skill_delta(rate_up, 1.0, 1.1, [1.0; 2]).unwrap();
-        assert_eq!(delta.to_bits(), 0.500_220_000_000_000_1_f64.to_bits());
+        assert!(delta >= 0.500_220_000_000_000_1_f64);
 
         let perfect_only = ResolvedScoreSkillV1 {
             behavior: SkillBehaviorV1::PerfectOnly {

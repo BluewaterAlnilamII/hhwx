@@ -12,22 +12,21 @@ For each legal owned area configuration shared by all teams, choose three five-c
 
 Dense instance IDs follow HHWX profile order. A five-card set is sorted by instance ID; the selected leader is moved to member index two without changing other members' relative order. Equal song scores retain the first leader. Area-item order and the final `(song0 + song1) + song2` sum stay fixed.
 
-The scorer follows `hhwx-medley-bestdori-v1`: average judgment/skill multipliers before the two floors, 120 equiprobable first-five orders, the leader's sixth trigger and direct-add overlaps. There is no P/G history state. Reference code explicitly scans every order; production reuses the same arithmetic:
+The scorer follows `hhwx-medley-bestdori-v2`: Bestdori base operation order and average judgment/skill multipliers, with independently rounded window extras. The 120 first-five orders remain equiprobable; the sixth repeats the leader. There is no P/G history state or joint-overlap path.
 
-- Prepare combo multipliers and trigger boundaries once per search input.
-- Resolve full-team skill conditions once per five-card set. For each song, prepare covered-note skill multipliers once and reuse them across orders and leaders.
-- At notes covered by at most one possible window, calculate each member/window's integer contribution once. The first five positions average equally; the sixth uses the chosen leader. Do not average multipliers before the final floor.
-- At overlapping notes, combine the active deltas in trigger order before flooring. Reuse the first-five work across leaders; only overlap with the sixth window depends on the leader.
+- Prepare combo segments and trigger indexes once per input; the existing note order is unchanged.
+- Resolve full-team skills once per five-card set. Per song, find each skill's six endpoints once. Constant multipliers are evaluated once; rate-up varies only before covered note 100; continued PERFECT may vary for the whole window. Reuse the varying prefix across all six windows and leaders.
+- Floor each combo segment's base score once. For a constant multiplier, calculate one integer extra per intersecting combo segment and multiply by its note count. Only genuinely varying multipliers retain individual note floors.
+- Sum the 30 member/window integer extras, including overlaps. For leader `l`, convert `5*(baseTotal + extra[5][l]) + sum(firstFiveExtras)` once to binary64 and divide by five. No 120-order materialization or final mean floor remains.
 - Reuse base-score work only when the final parameter has identical binary64 bits. Member reordering can affect parameter addition; do not normalize away that difference.
-- Reconstruct the 120 order totals from those contributions and keep the established order of the 120 additions and division. These are small numeric sums, not 120 full-chart scans per leader.
 
-Integer regrouping is used when `noteCount * u32::MAX <= 2^53`, which guarantees all intermediate note sums are exactly representable. Outside that range, the same prepared multipliers are summed chronologically. This preserves existing arithmetic and accepted inputs rather than introducing a different large-input score.
+Signed i128 accumulation covers every permitted u32 note count and note score, including negative skill extras. It avoids a second chronological-scoring fallback. The independent 120-order reference cancels its common factor of 24 before the same final conversion/division and checks production results bitwise.
 
 ## Partial-team upper bound
 
 An input-local model prepares chart/combo coefficients and duration coverage. Each area configuration supplies additive per-card parameter uppers. Partial nodes do not rescan charts.
 
-For any reachable whole-team skill context, the ideal average is at most `P * K`. `P` sums five per-card parameter uppers; `K` includes a base coefficient, the first-five contributions and exactly one sixth-trigger leader contribution. The bound uses full-P inner-score coefficients and a nonnegative upper for each skill's actual average-rate formula. Dropping negative deltas only raises the result. Each card appears in each first-five position in 24/120 orders, so its coefficient is the five-window sum divided by five.
+For any reachable whole-team skill context, the ideal average is at most `P * K`. `P` sums five per-card parameter uppers; `K` includes a base coefficient, the first-five contributions and exactly one sixth-trigger leader contribution. The bound uses the input's average judgment coefficient and a nonnegative upper for each skill's actual average-rate formula. Dropping negative deltas only raises the result. Each card appears in each first-five position in 24/120 orders, so its coefficient is the five-window sum divided by five.
 
 For any positive weight `t`:
 
@@ -41,9 +40,10 @@ Binary64 proof obligations are explicit:
 
 - Treat already-rounded card/event sums and area products as atoms; cover the remaining parameter additions upward for every leader order.
 - Calculate skill multiplier limits in the same scalar operation order as scoring. Rate-up uses the capped endpoint. Continued uses the extrema of actual `powf` results over chart note counts, computed once, without an invented library epsilon.
-- Upward chart coefficients cover the five base-note operations and six overlap additions plus final multiplication. A subnormal base intermediate cannot reach an integer note score of one.
-- Independently bound the whole family's parameter to prove per-note u32 safety and each order's integer total at most `2^53`. The weighted maximizing team alone is not sufficient.
-- Once order totals are exact integers, only the stable 120 additions and division need the remaining rounding envelope. No probability-state count or historical-state error allowance remains.
+- Treat the materialized Bestdori base coefficient as an atom. Upward chart coefficients cover the three following multiplications; a subnormal intermediate cannot reach an integer note score of one.
+- For an upper skill multiplier above one, one upward floating step covers `innerScore * multiplier` rounding and a second covers subtracting one. This bounds each independent integer extra without assuming exact multiplication.
+- Independently bound the whole family's parameter to prove each base/skill-scored note fits u32. The weighted maximizing team alone is not sufficient.
+- Totals use exact signed integers. If `C` bounds the ideal mean, monotone conversion and division give the actual-mean bound `f64(5*C) / 5`; the old 120-addition rounding envelope is unnecessary.
 
 Unavailable proof means positive infinity, not an infeasible family. Only a strict whole-medley upper below the exactly scored incumbent prunes; equality remains searchable.
 
@@ -71,6 +71,8 @@ Stop checks occur between nodes/candidates, not inside model preparation or one 
 
 For scoring corrections, use the small upstream formula vectors, bitwise reference parity (including overlapping windows and leader parameter groups), existing tiny exhaustive search across budgets/configurations, bound coverage, ties and incomplete outcomes. Run necessary type/compile checks. Do not routinely replay historical teams or rerun long profile benchmarks for a scoring-only change.
 
-Approved real-case benchmarks are retained separately for search/throughput work with unchanged inputs and budgets; historical results are never search seeds. Private evidence follows [the fixture procedure](bandori-medley-fixtures.md).
+For a scoring-only real-chart check, run `node --import tsx scripts/benchmark-bandori-medley-score.mjs --main <clean-main-worktree>`. It uses the retained 119/961-card data and six real expert charts, tests 100%/95% PERFECT with reset/carried combo, and includes two legal real-card skill variants. It times one fixed-power, best-leader score against main with computed-answer caches disabled; accuracy uses the unchanged pinned Bestdori functions. Original single-window/ordinary-combo results and the deliberately different HHWX rules are reported separately. Private inputs, source hashes, timings and results stay under `temp/medley-score-benchmark/`; this is native Rust versus Node, not browser/WASM or full-search throughput.
+
+Approved full-search benchmarks remain separate and retain unchanged inputs and budgets; historical results are never search seeds. Private evidence follows [the fixture procedure](bandori-medley-fixtures.md).
 
 The current scoring cleanup changes no traversal, AM-GM strategy, heuristic effort or storage capacity. It adds no dominance, quantization, SIMD/FMA, approximate retention, external storage, dependency, frontend/API integration or maximum-score output hydration. Further search optimization requires a separately reviewed scope.

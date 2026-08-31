@@ -252,7 +252,7 @@ fn candidate_solution(
         .map_err(|_| abort(SearchIncompleteReasonV1::InternalFailure))?;
     let total_average_score =
         (teams[0].average_score + teams[1].average_score) + teams[2].average_score;
-    if !total_average_score.is_finite() || total_average_score < 0.0 {
+    if !total_average_score.is_finite() {
         return Err(abort(SearchIncompleteReasonV1::ArithmeticOverflow));
     }
     Ok(MedleySearchSolutionV1 {
@@ -1024,16 +1024,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn join_keeps_the_smallest_output_identity_across_total_score_ties() {
-        for alternative_score in [10.0_f64, 10.0_f64.next_down()] {
+    fn join_keeps_signed_scores_and_smallest_output_identity_across_ties() {
+        // Independently additive negative extras can also produce negative totals.
+        for (base_score, alternative_score) in [100.0, -100.0].into_iter().flat_map(|base| {
+            [10.0_f64, 10.0_f64.next_down()].map(|alternative| (base, alternative))
+        }) {
             let row = |member_instance_ids, leader, score| CompactCandidate {
                 member_instance_ids,
                 leader_instance_ids: [leader; 3],
                 song_scores: [score; 3],
             };
             let rows = [
-                vec![row([0, 1, 2, 3, 4], 0, 100.0)],
-                vec![row([5, 6, 7, 8, 9], 5, 100.0)],
+                vec![row([0, 1, 2, 3, 4], 0, base_score)],
+                vec![row([5, 6, 7, 8, 9], 5, base_score)],
                 vec![
                     row([10, 12, 13, 14, 15], 10, 10.0),
                     row([11, 12, 13, 14, 15], 14, alternative_score),
@@ -1057,7 +1060,7 @@ mod tests {
             )
             .unwrap();
             let best = state.best.unwrap();
-            assert_eq!(best.total_average_score, 210.0);
+            assert_eq!(best.total_average_score, 2.0 * base_score + 10.0);
             assert_eq!(best.teams[2].member_instance_ids, [11, 12, 14, 13, 15]);
             assert_eq!(
                 best.teams[2].average_score.to_bits(),

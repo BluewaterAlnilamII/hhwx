@@ -1,6 +1,6 @@
 //! A chart-free partial-team bound, separate from exact leaf scoring.
 //!
-//! Every real team has score <= P*K before the 120-order mean-rounding
+//! Every real team has score <= P*K before the final mean-rounding
 //! envelope. P is an additive per-card parameter upper; K is the full-P base
 //! coefficient plus five real card contributions and exactly one leader bonus.
 //! For any positive t, P*K <= (t*P + K/t)^2/4. Maximizing that additive quantity
@@ -15,8 +15,8 @@ use crate::candidate::member_order_for_leader;
 use crate::exact_score::exact_probability_to_f64;
 use crate::parameters::calculate_team_parameters;
 use crate::upper_bound::{
-    MAX_EXACT_SCORE_INTEGER, UpperBoundFailure, checked_finite, combo_rate, continued_power_range,
-    reference_ceiling, skill_delta, trigger_times,
+    UpperBoundFailure, checked_finite, combo_rate, continued_power_range, reference_ceiling,
+    skill_delta, trigger_indexes,
 };
 use crate::{AreaItemConfigurationV1, CardAttributeV1, MedleySearchInputV1, SearchCardV1};
 
@@ -97,8 +97,7 @@ struct SkillContribution {
 struct SongModel {
     base: f64,
     maximum_alpha: f64,
-    level_rate: f64,
-    note_count: u32,
+    coefficient: f64,
 }
 
 /// One input-local copy of chart work, shared by every area configuration.
@@ -169,17 +168,15 @@ impl<'a> FastScoreModel<'a> {
 
         let mut song_models = Vec::with_capacity(3);
         let mut alphas: [Vec<f64>; 3] = std::array::from_fn(|_| Vec::new());
-        let mut times = [[0.0; 6]; 3];
+        let mut triggers = [[0; 6]; 3];
         let mut start_combo = 0_u32;
-        let note_factor = mul_up(rounding_factor(5)?, rounding_factor(7)?)?;
+        let note_factor = rounding_factor(3)?;
         for (slot, song) in input.songs.iter().enumerate() {
             let note_count =
                 u32::try_from(song.notes.len()).map_err(|_| UpperBoundFailure::Unknown)?;
-            let level_rate = 1.0 + (f64::from(song.play_level) - 5.0) / 100.0;
-            let fixed_rate = mul_up(
-                mul_up(div_up(level_rate, f64::from(note_count))?, 3.0)?,
-                1.1_f64.max(judgment_multiplier),
-            )?;
+            let coefficient =
+                (3.0 + 0.03 * (f64::from(song.play_level) - 5.0)) / f64::from(note_count);
+            let fixed_rate = mul_up(coefficient, judgment_multiplier)?;
             let mut base = 0.0_f64;
             let mut maximum_alpha = 0.0_f64;
             for note_index in 0..note_count {
@@ -191,12 +188,11 @@ impl<'a> FastScoreModel<'a> {
                 base = add_up(base, alpha)?;
                 maximum_alpha = maximum_alpha.max(alpha);
             }
-            times[slot] = trigger_times(song)?;
+            triggers[slot] = trigger_indexes(song)?;
             song_models.push(SongModel {
                 base,
                 maximum_alpha,
-                level_rate,
-                note_count,
+                coefficient,
             });
             start_combo = start_combo
                 .checked_add(note_count)
@@ -217,10 +213,15 @@ impl<'a> FastScoreModel<'a> {
                     let mut coverage = [[0.0; 6]; 3];
                     for slot in 0..3 {
                         for activation_index in 0..6 {
-                            let trigger = times[slot][activation_index];
-                            let end = checked_finite(trigger + skill.duration_seconds + 0.00001)?;
-                            for (note, alpha) in input.songs[slot].notes.iter().zip(&alphas[slot]) {
-                                if note.time_seconds > trigger && note.time_seconds <= end {
+                            let trigger = triggers[slot][activation_index];
+                            let song = &input.songs[slot];
+                            let end = checked_finite(
+                                song.notes[trigger].time_seconds + skill.duration_seconds,
+                            )?;
+                            for (note, alpha) in
+                                song.notes.iter().zip(&alphas[slot]).skip(trigger + 1)
+                            {
+                                if note.time_seconds <= end {
                                     coverage[slot][activation_index] =
                                         add_up(coverage[slot][activation_index], *alpha)?;
                                 }
@@ -246,10 +247,7 @@ impl<'a> FastScoreModel<'a> {
                 }
             }
         }
-        let mut maximum_multiplier = 1.0;
-        for _ in 0..6 {
-            maximum_multiplier = add_up(maximum_multiplier, maximum_delta)?;
-        }
+        let maximum_multiplier = add_up(1.0, maximum_delta)?;
         Ok(Self {
             input,
             songs: song_models
@@ -572,14 +570,11 @@ impl<'a> FastUpperBoundEngine<'a> {
         let characters = self.selected_characters(selected)?;
         let parameter = self.maximum_parameter(selected, remaining, &characters)?;
 
-        // A nonzero integer inner score implies that all five base operations
-        // were normal: after any subnormal result the remaining gain is <64,
-        // so the final raw base stays far below 1. Thus gamma_5 needs no absolute
-        // term. After dropping negative deltas, six additions start from 1;
-        // multiplying a nonzero inner is normal too, so gamma_7 suffices.
-        // The alphas include both factors. This independent whole-family P
-        // maximum proves u32 safety, not the AM-GM maximizing team's parameter.
-        checked_finite(parameter * song.level_rate)?;
+        // The three base multiplications are covered by gamma_3. A subnormal
+        // intermediate cannot reach an integer score of one. Each independent
+        // skill multiplication is covered by skill_delta, not joint addition.
+        // Use the whole family's parameter maximum to prove per-window u32 safety.
+        checked_finite(parameter * song.coefficient)?;
         let range_upper = mul_up(
             mul_up(parameter, song.maximum_alpha)?,
             self.model.maximum_multiplier,
@@ -587,15 +582,6 @@ impl<'a> FastUpperBoundEngine<'a> {
         if range_upper.floor() > f64::from(u32::MAX) {
             return Err(UpperBoundFailure::Unknown);
         }
-        // Integer note sums are independent of reuse/reassociation only in
-        // this range. Larger families remain searchable with an unknown bound.
-        let maximum_order_score = (range_upper.floor() as u64)
-            .checked_mul(u64::from(song.note_count))
-            .ok_or(UpperBoundFailure::Unknown)?;
-        if maximum_order_score > MAX_EXACT_SCORE_INTEGER {
-            return Err(UpperBoundFailure::Unknown);
-        }
-
         let mut family_upper = None::<f64>;
         for weighted in &self.contexts {
             let mut context_upper = None::<f64>;
@@ -789,7 +775,7 @@ mod tests {
             .collect();
         let mut songs = fixed.songs;
         for song in &mut songs {
-            let boundary = 0.0_f64 + 2.0 + 0.00001;
+            let boundary = 2.0_f64;
             song.notes
                 .extend(
                     [0.0, boundary, boundary.next_up()]

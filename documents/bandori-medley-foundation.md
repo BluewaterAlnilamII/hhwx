@@ -60,13 +60,15 @@ Chart normalization keeps Single/Directional notes, Long endpoints, and Slide en
 
 ## Scoring formulas
 
-The rule identifier is `hhwx-medley-bestdori-v1`. Let `p` be PERFECT probability and `n` the covered-note count within one activation, including the current note and starting at one:
+The rule identifier is `hhwx-medley-bestdori-v2`. Let `p` be PERFECT probability and `n` the covered-note count within one activation, including the current note and starting at one:
 
 ```text
 judge = 1.1 * p + 0.8 * (1 - p)
-base = deckTotalParameter * (1 + (playLevel - 5) / 100) / noteCount * 3
-innerScore = floor(base * judge * comboRate)
-finalNoteScore = floor(innerScore * max(0, 1 + sum(activeMultiplier - 1)))
+coefficient = (3 + 0.03 * (playLevel - 5)) / noteCount
+base = deckTotalParameter * coefficient
+innerScore = floor((base * comboRate) * judge)
+windowExtra = floor(innerScore * skillMultiplier) - innerScore
+songScore = sum(innerScore) + sum(windowExtra)
 ```
 
 Probabilities enter the multipliers before the two floors. There is no P/G branch tree, history distribution or per-branch flooring.
@@ -90,15 +92,17 @@ combo <= 3000  : 1.04 + floor((combo - 1) / 100) * 0.01
 otherwise      : 1.34
 ```
 
-The first five triggers use all 120 member orders equally; the sixth repeats the leader. Average the 120 order scores in stable order, then add song means as `(song0 + song1) + song2`. A window excludes notes at its trigger timestamp and includes notes up to `trigger + duration + 0.00001`. Overlapping activations each keep their own note count; their deltas are added in trigger order before the final floor. No replacement or priority applies.
+The first five triggers use all 120 member orders equally; the sixth repeats the leader. Each window starts at the note immediately after its trigger in the existing sorted array, including following notes at the same timestamp, and ends at `time <= triggerTime + duration` with no epsilon. Overlapping windows keep separate covered-note counts and add their independently rounded extras. No replacement, joint multiplier floor or additional clamp is applied.
 
-Arithmetic uses binary64 without reassociating the defined operations. Each integer note score must fit u32; invalid or overflowing arithmetic fails rather than wrapping. GOOD/BAD/MISS, combo breaks and life behavior are absent.
+Let `B` be the integer base-song total and `E[slot][member]` each integer window extra. Calculate a song mean as `(5 * (B + E[5][leader]) + sum(E[0..5][all members])) / 5`: accumulate the numerator in signed i128, convert it once to binary64, then divide by five. This is the 120-order expectation with the common factor 24 cancelled, not an approximation of the random-order distribution. Do not floor the final mean. Add song means as `(song0 + song1) + song2`.
+
+Multiplier arithmetic uses binary64 without reassociating the defined operations. Each base or independently skill-scored note must fit u32; window extras may be negative. Signed i128 safely holds every total and mean numerator for u32 note counts. Invalid or overflowing scalar arithmetic fails rather than wrapping. GOOD/BAD/MISS, combo breaks and life behavior are absent.
 
 ## Source evidence and deliberate boundaries
 
 The pinned [Bestdori app bundle](https://bestdori.com/js/app.d390adb1.js), module `c0f0`, has SHA-256 `ac84605d7889e53c0144ab7c41e379c174b94b8dc31edae07f3483b8a0610778` (verified 2026-08-31). Its `st → lt → ct` path is called for final results by [ToolTeamBuilder](https://bestdori.com/js/ToolTeamBuilder.6367a448.js), not merely a preview. It supports the average-multiplier method, two floors and the continued/rate-up formulas.
 
-That upstream path is a single-song calculator with ordinary combo, a different leader position and one active window. HHWX keeps the medley combo, leader index two and additive overlap defined here, and preserves first-recognized-row/explicit-zero normalization rather than upstream's truthy fallback. By explicit product decision, HHWX also retains `score_only_perfect` (`perfect_only`, GREAT multiplier zero) so future cards using that existing master definition remain supported, although upstream `st` does not recognize it. These are deliberate compatibility boundaries; “aligned” does not mean identical implementations.
+That upstream path is a single-song calculator with ordinary combo, a different leader position and one active window. HHWX keeps the medley combo, leader index two and independently rounded additive overlap defined here, and preserves first-recognized-row/explicit-zero normalization rather than upstream's truthy fallback. By explicit product decision, HHWX also retains `score_only_perfect` (`perfect_only`, GREAT multiplier zero) so future cards using that existing master definition remain supported, although upstream `st` does not recognize it. Independent window rounding deliberately gives up the tiny joint-floor difference to keep complete-team scoring cheap during search. These are deliberate compatibility boundaries; “aligned” does not mean identical implementations. The rule version distinguishes this scorer from old normalized inputs and results; input field shapes are unchanged.
 
 The earlier native audit used JP client 10.1.3, master `20260805110509`, and skill-effect SHA-256 `d98e76c0198a6a714be1d38e4696a044242c8384b905426a311c8c2b0961aebc`. Its findings stay unimplemented: biased 1,024-path skill ordering with 96 reachable permutations, single-precision scoring and a combo master table, life-conditioned triggers, and frame/runtime window conflicts. They are provenance notes, not TODOs.
 
@@ -106,4 +110,4 @@ The earlier native audit used JP client 10.1.3, master `20260805110509`, and ski
 
 The retained 15-card/seven-note fixture checks raw HHWX input through TypeScript normalization into Rust. Focused existing cases cover parameters and bonus rounding, charts, skill formulas, window boundaries and direct-add overlap. Six small golden vectors from the pinned upstream function check average judgment, conditional skills, continued, capped rate-up and two-floor results.
 
-The reference deliberately scores each of 120 orders note by note. Its trace contains one integer base score per note, per-order scores, combo offsets and binary64 result words; it has no judgment-state trace. Production reuses window contributions and is checked against this reference on tiny inputs. Formula changes use these focused checks and tiny exhaustive search, not automatic re-runs of long real-profile benchmarks. Frontend/API integration and further search changes require their own scope.
+The reference deliberately scores each of 120 orders note by note. Its trace contains one integer base score per note, per-order scores, combo offsets and binary64 result words; it has no judgment-state trace. Production groups constant multipliers by combo segment and reuses independent window contributions; it is checked against this reference on tiny inputs. Formula changes use these focused checks and tiny exhaustive search, not automatic re-runs of long real-profile benchmarks. Frontend/API integration and further search changes require their own scope.

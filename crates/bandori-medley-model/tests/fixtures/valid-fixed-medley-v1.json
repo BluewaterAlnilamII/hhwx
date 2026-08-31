@@ -1,6 +1,6 @@
 {
   "schemaVersion": "hhwx-medley-scoring-input-v1",
-  "scoringRulesVersion": "hhwx-medley-bestdori-v1",
+  "scoringRulesVersion": "hhwx-medley-bestdori-v2",
   "perfectRate": { "numerator": 995, "decimalScale": 3 },
   "cards": [
     { "instanceId": 0, "masterCardId": 1, "characterId": 1, "skill": { "masterSkillId": 1, "skillLevel": 1, "durationSeconds": 2, "behavior": { "kind": "score", "scoreUpPercent": 100 }, "isRateUpWithPerfect": false } },

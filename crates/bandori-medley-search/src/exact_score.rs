@@ -1,20 +1,9 @@
-use std::sync::OnceLock;
-
 use bandori_medley_model::{
     ExactProbabilityV1, MedleySongV1, ResolvedScoreSkillV1, SkillBehaviorV1,
 };
 
-const SKILL_ORDER_COUNT: usize = 120;
 const PERFECT_RATE: f64 = 1.1;
 const GREAT_RATE: f64 = 0.8;
-// Member indexes in the established scoring order, with the leader at index two.
-const LEADER_MEMBER_ORDERS: [[usize; 5]; 5] = [
-    [1, 2, 0, 3, 4],
-    [0, 2, 1, 3, 4],
-    [0, 1, 2, 3, 4],
-    [0, 1, 3, 2, 4],
-    [0, 1, 4, 2, 3],
-];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum ExactScoreFailure {
@@ -23,80 +12,29 @@ pub(crate) enum ExactScoreFailure {
     ArithmeticOverflow,
 }
 
+struct ComboGroup {
+    start: usize,
+    end: usize,
+    rate: f64,
+}
+
 /// Chart-only work is shared by every candidate and area configuration in a run.
 pub(crate) struct PreparedSong<'input> {
     song: &'input MedleySongV1,
-    combo_rates: Vec<f64>,
+    combo_groups: Vec<ComboGroup>,
+    coefficient: f64,
     trigger_times: [f64; 6],
     window_starts: [usize; 6],
     perfect_rate: f64,
     judgment_multiplier: f64,
 }
 
-struct SkillWindow {
-    start: usize,
-    // One row per covered note; expired members contribute zero. The same
-    // multipliers serve all leaders, orders and parameter rounding variants.
-    deltas: Vec<[f64; 5]>,
-}
-
-impl SkillWindow {
-    fn at(&self, note_index: usize) -> Option<&[f64; 5]> {
-        note_index
-            .checked_sub(self.start)
-            .and_then(|offset| self.deltas.get(offset))
-    }
-}
-
-struct SkillWindows {
-    windows: [SkillWindow; 6],
-    note_masks: Vec<u8>,
-}
-
-pub(crate) fn skill_orders() -> &'static [[usize; 5]] {
-    static ORDERS: OnceLock<Vec<[usize; 5]>> = OnceLock::new();
-    ORDERS
-        .get_or_init(|| {
-            fn visit(
-                depth: usize,
-                current: &mut [usize; 5],
-                used: &mut [bool; 5],
-                output: &mut Vec<[usize; 5]>,
-            ) {
-                if depth == current.len() {
-                    output.push(*current);
-                    return;
-                }
-                for member_index in 0..5 {
-                    if used[member_index] {
-                        continue;
-                    }
-                    used[member_index] = true;
-                    current[depth] = member_index;
-                    visit(depth + 1, current, used, output);
-                    used[member_index] = false;
-                }
-            }
-            let mut output = Vec::with_capacity(SKILL_ORDER_COUNT);
-            visit(0, &mut [0; 5], &mut [false; 5], &mut output);
-            output
-        })
-        .as_slice()
-}
-
-fn leader_order_indexes() -> &'static [[usize; SKILL_ORDER_COUNT]; 5] {
-    static INDEXES: OnceLock<[[usize; SKILL_ORDER_COUNT]; 5]> = OnceLock::new();
-    INDEXES.get_or_init(|| {
-        LEADER_MEMBER_ORDERS.map(|members| {
-            std::array::from_fn(|index| {
-                let order = skill_orders()[index].map(|member| members[member]);
-                skill_orders()
-                    .iter()
-                    .position(|candidate| *candidate == order)
-                    .expect("permuting member indexes preserves a complete order")
-            })
-        })
-    })
+struct PreparedSkill {
+    ends: [usize; 6],
+    // Only the note-count-dependent prefix varies. Rate-up is constant from
+    // covered note 100; continued PERFECT may vary for the entire window.
+    varying_multipliers: Vec<f64>,
+    constant_multiplier: f64,
 }
 
 pub(crate) fn exact_probability_to_f64(probability: ExactProbabilityV1) -> f64 {
@@ -178,12 +116,19 @@ impl<'input> PreparedSong<'input> {
         perfect_rate: f64,
     ) -> Result<Self, ExactScoreFailure> {
         let mut trigger_times = [0.0; 6];
+        let mut window_starts = [0; 6];
         let mut count = 0;
-        for note in song.notes.iter().filter(|note| note.is_skill_trigger) {
+        for (index, note) in song
+            .notes
+            .iter()
+            .enumerate()
+            .filter(|(_, note)| note.is_skill_trigger)
+        {
             let Some(time) = trigger_times.get_mut(count) else {
                 return Err(ExactScoreFailure::InvalidSong);
             };
             *time = note.time_seconds;
+            window_starts[count] = index + 1;
             count += 1;
         }
         if count != 6 || song.notes.is_empty() {
@@ -194,162 +139,147 @@ impl<'input> PreparedSong<'input> {
         let end_combo = start_combo
             .checked_add(note_count)
             .ok_or(ExactScoreFailure::ArithmeticOverflow)?;
+        let mut combo_groups: Vec<ComboGroup> = Vec::new();
+        for (index, combo) in (start_combo + 1..=end_combo).enumerate() {
+            let rate = combo_rate(combo);
+            if let Some(group) = combo_groups.last_mut().filter(|group| group.rate == rate) {
+                group.end = index + 1;
+            } else {
+                combo_groups.push(ComboGroup {
+                    start: index,
+                    end: index + 1,
+                    rate,
+                });
+            }
+        }
         Ok(Self {
             song,
-            combo_rates: (start_combo + 1..=end_combo).map(combo_rate).collect(),
+            combo_groups,
+            coefficient: (3.0 + 0.03 * (f64::from(song.play_level) - 5.0)) / f64::from(note_count),
             trigger_times,
-            window_starts: trigger_times
-                .map(|time| song.notes.partition_point(|note| note.time_seconds <= time)),
+            window_starts,
             perfect_rate,
             judgment_multiplier: PERFECT_RATE * perfect_rate + GREAT_RATE * (1.0 - perfect_rate),
         })
     }
 
     fn base_scores(&self, parameter: f64) -> Result<Vec<u32>, ExactScoreFailure> {
-        let level_rate = 1.0 + (f64::from(self.song.play_level) - 5.0) / 100.0;
-        let base = parameter * level_rate / self.song.notes.len() as f64 * 3.0;
-        self.combo_rates
+        let base = parameter * self.coefficient;
+        self.combo_groups
             .iter()
-            .map(|combo| floor_to_u32(base * self.judgment_multiplier * combo))
+            .map(|group| floor_to_u32((base * group.rate) * self.judgment_multiplier))
             .collect()
     }
 
-    fn skill_windows(
+    fn prepare_skills(
         &self,
         skills: [ResolvedScoreSkillV1; 5],
-    ) -> Result<SkillWindows, ExactScoreFailure> {
-        let mut note_masks = vec![0_u8; self.song.notes.len()];
-        let mut windows = std::array::from_fn(|slot| SkillWindow {
-            start: self.window_starts[slot],
-            deltas: Vec::new(),
+    ) -> Result<[PreparedSkill; 5], ExactScoreFailure> {
+        let mut prepared = std::array::from_fn(|_| PreparedSkill {
+            ends: [0; 6],
+            varying_multipliers: Vec::new(),
+            constant_multiplier: 1.0,
         });
-        for (slot, window) in windows.iter_mut().enumerate() {
-            let mut ends = [0; 5];
-            for (member, skill) in skills.iter().enumerate() {
-                let end = self.trigger_times[slot] + skill.duration_seconds + 0.00001;
+        for (member, skill) in skills.into_iter().enumerate() {
+            let result = &mut prepared[member];
+            for (slot, end_index) in result.ends.iter_mut().enumerate() {
+                let end = self.trigger_times[slot] + skill.duration_seconds;
                 if !end.is_finite() {
                     return Err(ExactScoreFailure::ArithmeticNonFinite);
                 }
-                ends[member] = self
+                *end_index = self
                     .song
                     .notes
                     .partition_point(|note| note.time_seconds <= end);
             }
-            let last_end = *ends.iter().max().expect("five skills");
-            window.deltas.reserve(last_end - window.start);
-            for (note_index, mask) in note_masks
-                .iter_mut()
-                .enumerate()
-                .take(last_end)
-                .skip(window.start)
-            {
-                *mask |= 1 << slot;
-                window.deltas.push(std::array::from_fn(|member| {
-                    if note_index < ends[member] {
-                        skill_multiplier(
-                            skills[member],
-                            note_index - window.start + 1,
-                            self.perfect_rate,
-                            self.judgment_multiplier,
-                        ) - 1.0
-                    } else {
-                        0.0
-                    }
-                }));
-            }
+            let maximum_count = (0..6)
+                .map(|slot| result.ends[slot] - self.window_starts[slot])
+                .max()
+                .unwrap_or(0);
+            let varying_count = match skill.behavior {
+                SkillBehaviorV1::Score { .. }
+                    if skill.is_rate_up_with_perfect && self.perfect_rate > 0.0 =>
+                {
+                    maximum_count.min(99)
+                }
+                SkillBehaviorV1::ContinuedPerfect {
+                    active_score_up_percent,
+                    fallback_score_up_percent,
+                } if self.perfect_rate > 0.0
+                    && self.perfect_rate < 1.0
+                    && active_score_up_percent != fallback_score_up_percent =>
+                {
+                    maximum_count
+                }
+                _ => 0,
+            };
+            result.varying_multipliers = (1..=varying_count)
+                .map(|count| {
+                    skill_multiplier(skill, count, self.perfect_rate, self.judgment_multiplier)
+                })
+                .collect();
+            result.constant_multiplier = skill_multiplier(
+                skill,
+                varying_count + 1,
+                self.perfect_rate,
+                self.judgment_multiplier,
+            );
         }
-        Ok(SkillWindows {
-            windows,
-            note_masks,
-        })
+        Ok(prepared)
     }
 
-    /// The first five windows use each skill with probability 1/5. Accumulate
-    /// already-floored contributions once; only overlapping notes need joint
-    /// evaluation. The sixth window is shared work for all possible leaders.
-    fn score_orders(
+    fn window_contributions(
         &self,
         base_scores: &[u32],
-        skills: &SkillWindows,
+        skills: &[PreparedSkill; 5],
         leaders: [bool; 5],
-    ) -> Result<[[f64; SKILL_ORDER_COUNT]; 5], ExactScoreFailure> {
-        let mut scores = [[0.0; SKILL_ORDER_COUNT]; 5];
-        // Regroup integer contributions only where every possible note sum is
-        // exactly representable as f64. Otherwise keep chronological addition
-        // using the same prepared multipliers, without changing accepted input.
-        let can_group = base_scores.len() as u64 * u64::from(u32::MAX) <= (1_u64 << 53);
-        let mut single_totals = [[0_i64; 5]; 6];
-        let mut base_total = 0_i64;
-        if can_group {
-            base_total = base_scores.iter().map(|score| i64::from(*score)).sum();
-            for (slot, window) in skills.windows.iter().enumerate() {
-                for (offset, deltas) in window.deltas.iter().enumerate() {
-                    let note_index = window.start + offset;
-                    if skills.note_masks[note_index].count_ones() != 1 {
+    ) -> Result<[[i128; 5]; 6], ExactScoreFailure> {
+        let mut totals = [[0_i128; 5]; 6];
+        for (member, skill) in skills.iter().enumerate() {
+            for (slot, total) in totals.iter_mut().enumerate() {
+                if slot == 5 && !leaders[member] {
+                    continue;
+                }
+                let start = self.window_starts[slot];
+                let end = skill.ends[slot];
+                for (group, base) in self.combo_groups.iter().zip(base_scores) {
+                    let first = start.max(group.start);
+                    let last = end.min(group.end);
+                    if first >= last {
                         continue;
                     }
-                    let base = base_scores[note_index];
-                    for (member, delta) in deltas.iter().enumerate() {
-                        if slot == 5 && !leaders[member] {
-                            continue;
-                        }
-                        let score = floor_to_u32(f64::from(base) * (1.0 + delta).max(0.0))?;
-                        single_totals[slot][member] += i64::from(score) - i64::from(base);
-                    }
-                }
-            }
-        }
-        let joint_notes: Vec<usize> = skills
-            .note_masks
-            .iter()
-            .enumerate()
-            .filter_map(|(index, mask)| (!can_group || mask.count_ones() > 1).then_some(index))
-            .collect();
-        for (order_index, order) in skill_orders().iter().enumerate() {
-            let first_five = base_total
-                + (0..5)
-                    .map(|slot| single_totals[slot][order[slot]])
-                    .sum::<i64>();
-            for (leader, row) in scores
-                .iter_mut()
-                .enumerate()
-                .filter(|(leader, _)| leaders[*leader])
-            {
-                row[order_index] = (first_five + single_totals[5][leader]) as f64;
-            }
-            for &note_index in &joint_notes {
-                let mut combined = 1.0;
-                for (slot, window) in skills.windows[..5].iter().enumerate() {
-                    if let Some(deltas) = window.at(note_index) {
-                        combined += deltas[order[slot]];
-                    }
-                }
-                let last = skills.windows[5].at(note_index);
-                let base = f64::from(base_scores[note_index]);
-                for (leader, row) in scores
-                    .iter_mut()
-                    .enumerate()
-                    .filter(|(leader, _)| leaders[*leader])
-                {
-                    let multiplier = last.map_or(combined, |deltas| combined + deltas[leader]);
-                    let note_score = f64::from(floor_to_u32(base * multiplier.max(0.0))?);
-                    row[order_index] += if can_group {
-                        note_score - base
-                    } else {
-                        note_score
+                    let extra = |multiplier| {
+                        floor_to_u32(f64::from(*base) * multiplier)
+                            .map(|score| i128::from(score) - i128::from(*base))
                     };
+                    let varying_end = (start + skill.varying_multipliers.len()).min(last);
+                    if first < varying_end {
+                        for multiplier in
+                            &skill.varying_multipliers[first - start..varying_end - start]
+                        {
+                            total[member] += extra(*multiplier)?;
+                        }
+                    }
+                    let constant_start = first.max(varying_end);
+                    if constant_start < last {
+                        total[member] +=
+                            extra(skill.constant_multiplier)? * (last - constant_start) as i128;
+                    }
                 }
             }
         }
-        Ok(scores)
+        Ok(totals)
     }
 
+    /// Each member occupies each of the first five slots in 24/120 orders.
+    /// Independent integer extras therefore need only a denominator of five.
+    /// i128 covers u32 note counts/scores, signed extras and this numerator.
     pub(crate) fn score_leaders(
         &self,
         skills: [ResolvedScoreSkillV1; 5],
         parameters: [f64; 5],
     ) -> Result<[f64; 5], ExactScoreFailure> {
-        let windows = self.skill_windows(skills)?;
+        let skills = self.prepare_skills(skills)?;
         let mut averages = [0.0; 5];
         for leader in 0..5 {
             if parameters[..leader]
@@ -358,52 +288,23 @@ impl<'input> PreparedSong<'input> {
             {
                 continue;
             }
-            // Changing the leader preserves the members, but the established
-            // parameter summation order can differ in its last bit. Reuse only
-            // genuinely identical values, never normalize their arithmetic.
+            // Leader placement can change parameter summation's last bit.
             let leaders = parameters.map(|value| value.to_bits() == parameters[leader].to_bits());
             let base_scores = self.base_scores(parameters[leader])?;
-            let scores = self.score_orders(&base_scores, &windows, leaders)?;
+            let base_total: i128 = self
+                .combo_groups
+                .iter()
+                .zip(&base_scores)
+                .map(|(group, score)| i128::from(*score) * (group.end - group.start) as i128)
+                .sum();
+            let windows = self.window_contributions(&base_scores, &skills, leaders)?;
+            let first_five: i128 = windows[..5].iter().flatten().sum();
             for index in (0..5).filter(|index| leaders[*index]) {
-                averages[index] = leader_order_indexes()[index]
-                    .iter()
-                    .fold(0.0, |sum, order| sum + scores[index][*order])
-                    / SKILL_ORDER_COUNT as f64;
+                averages[index] = (5 * (base_total + windows[5][index]) + first_five) as f64 / 5.0;
             }
         }
         Ok(averages)
     }
-}
-
-#[cfg(test)]
-#[derive(Clone, Copy)]
-pub(crate) struct ExactTeamScoreInput {
-    pub(crate) deck_total_parameter: f64,
-    pub(crate) skills: [ResolvedScoreSkillV1; 5],
-}
-
-#[cfg(test)]
-pub(crate) struct ExactSongScore {
-    pub(crate) average_score: f64,
-    pub(crate) order_scores: Vec<f64>,
-}
-
-#[cfg(test)]
-pub(crate) fn score_song(
-    song: &MedleySongV1,
-    team: ExactTeamScoreInput,
-    start_combo: u32,
-    perfect_rate: f64,
-) -> Result<ExactSongScore, ExactScoreFailure> {
-    let prepared = PreparedSong::new(song, start_combo, perfect_rate)?;
-    let windows = prepared.skill_windows(team.skills)?;
-    let base_scores = prepared.base_scores(team.deck_total_parameter)?;
-    let scores =
-        prepared.score_orders(&base_scores, &windows, [false, false, true, false, false])?;
-    Ok(ExactSongScore {
-        average_score: scores[2].iter().sum::<f64>() / SKILL_ORDER_COUNT as f64,
-        order_scores: scores[2].to_vec(),
-    })
 }
 
 #[cfg(test)]
@@ -413,8 +314,89 @@ mod tests {
 
     use super::*;
 
+    const LEADER_MEMBER_ORDERS: [[usize; 5]; 5] = [
+        [1, 2, 0, 3, 4],
+        [0, 2, 1, 3, 4],
+        [0, 1, 2, 3, 4],
+        [0, 1, 3, 2, 4],
+        [0, 1, 4, 2, 3],
+    ];
+
     const FIXTURE: &str =
         include_str!("../../bandori-medley-model/tests/fixtures/valid-fixed-medley-v1.json");
+
+    #[test]
+    #[ignore = "real-chart microbenchmark; run scripts/benchmark-bandori-medley-score.mjs"]
+    fn benchmark_real_song_scores() {
+        use std::{hint::black_box, time::Instant};
+
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Case {
+            label: String,
+            song: MedleySongV1,
+            skills: [ResolvedScoreSkillV1; 5],
+            deck_total_parameter: f64,
+            perfect_rate: f64,
+            start_combo: u32,
+        }
+        let path = std::env::var("HHWX_MEDLEY_SCORE_BENCHMARK_INPUT").unwrap();
+        let cases: Vec<Case> =
+            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        for case in cases {
+            let prepared =
+                PreparedSong::new(&case.song, case.start_combo, case.perfect_rate).unwrap();
+            let score = || {
+                prepared
+                    .score_leaders(
+                        black_box(case.skills),
+                        black_box([case.deck_total_parameter; 5]),
+                    )
+                    .unwrap()
+                    .into_iter()
+                    .fold(f64::NEG_INFINITY, f64::max)
+            };
+            for _ in 0..2_000 {
+                black_box(score());
+            }
+            let mut samples = Vec::with_capacity(7);
+            for _ in 0..7 {
+                let start = Instant::now();
+                for _ in 0..10_000 {
+                    black_box(score());
+                }
+                samples.push(start.elapsed().as_secs_f64() * 1e9 / 10_000.0);
+            }
+            samples.sort_by(f64::total_cmp);
+            let skills = prepared.prepare_skills(case.skills).unwrap();
+            let mut window_floors = 0_usize;
+            for skill in &skills {
+                for slot in 0..6 {
+                    let start = prepared.window_starts[slot];
+                    for group in &prepared.combo_groups {
+                        let first = start.max(group.start);
+                        let last = skill.ends[slot].min(group.end);
+                        if first >= last {
+                            continue;
+                        }
+                        let varying_end = (start + skill.varying_multipliers.len()).min(last);
+                        window_floors += varying_end.saturating_sub(first);
+                        window_floors += usize::from(first.max(varying_end) < last);
+                    }
+                }
+            }
+            println!(
+                "MEDLEY_SCORE_BENCH:{}",
+                serde_json::json!({
+                    "label": case.label,
+                    "scores": prepared.score_leaders(case.skills, [case.deck_total_parameter; 5]).unwrap(),
+                    "medianNs": samples[3], "samplesNs": samples,
+                    "baseFloors": prepared.combo_groups.len(), "windowFloors": window_floors,
+                    "multiplierEvaluations": skills.iter().map(|skill| skill.varying_multipliers.len() + 1).sum::<usize>(),
+                })
+            );
+        }
+    }
 
     fn assert_leader_parity(
         input: &FixedMedleyEvaluationInputV1,
@@ -447,35 +429,9 @@ mod tests {
     }
 
     fn assert_reference_parity(input: &FixedMedleyEvaluationInputV1) {
-        let reference = evaluate_fixed_medley(input).expect("reference fixture scores");
-        let perfect_rate = exact_probability_to_f64(input.perfect_rate);
         let mut start_combo = 0_u32;
         for slot in 0..3 {
             let team = &input.teams[slot];
-            let skills = team
-                .member_instance_ids
-                .map(|instance_id| input.cards[instance_id as usize].skill);
-            let production = score_song(
-                &input.songs[slot],
-                ExactTeamScoreInput {
-                    deck_total_parameter: team.deck_total_parameter,
-                    skills,
-                },
-                start_combo,
-                perfect_rate,
-            )
-            .expect("production fixture scores");
-            assert_eq!(
-                production.average_score.to_bits(),
-                reference.songs[slot].average_score().to_bits()
-            );
-            for (actual, expected) in production
-                .order_scores
-                .iter()
-                .zip(&reference.songs[slot].permutation_expected_score_bits)
-            {
-                assert_eq!(actual.to_bits(), expected.to_f64().to_bits());
-            }
             let parameter = team.deck_total_parameter;
             assert_leader_parity(
                 input,

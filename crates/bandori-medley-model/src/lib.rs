@@ -18,7 +18,7 @@ pub use validation::{ValidationCode, ValidationError};
 pub const SCORING_INPUT_SCHEMA_VERSION: &str = "hhwx-medley-scoring-input-v1";
 
 /// Rules identifier for the Bestdori-compatible HHWX medley calculator.
-pub const SCORING_RULES_VERSION: &str = "hhwx-medley-bestdori-v1";
+pub const SCORING_RULES_VERSION: &str = "hhwx-medley-bestdori-v2";
 
 /// Decode strict JSON and validate the complete fixed-input contract.
 pub fn decode_fixed_medley_evaluation_json(

@@ -43,7 +43,7 @@ pub struct SongScoreTraceV1 {
     pub start_combo: u32,
     pub note_count: u32,
     pub deck_total_parameter_bits: F64BitsV1,
-    pub play_level_rate_bits: F64BitsV1,
+    pub score_coefficient_bits: F64BitsV1,
     pub base_score_per_note_bits: F64BitsV1,
     pub base_note_scores: Vec<u32>,
     pub base_expected_score_bits: F64BitsV1,
@@ -79,7 +79,7 @@ impl MedleyScoreTraceV1 {
 
 #[derive(Clone, Copy)]
 struct Activation<'a> {
-    trigger_time_seconds: f64,
+    start_note_index: usize,
     end_time_seconds: f64,
     skill: &'a ResolvedScoreSkillV1,
 }
@@ -89,12 +89,12 @@ fn exact_probability_to_f64(probability: ExactProbabilityV1) -> f64 {
     probability.numerator as f64 / denominator as f64
 }
 
-fn play_level_rate(play_level: u16) -> f64 {
-    1.0 + (f64::from(play_level) - 5.0) / 100.0
+fn score_coefficient(play_level: u16, note_count: u32) -> f64 {
+    (3.0 + 0.03 * (f64::from(play_level) - 5.0)) / f64::from(note_count)
 }
 
 fn base_score_per_note(deck_total_parameter: f64, play_level: u16, note_count: u32) -> f64 {
-    deck_total_parameter * play_level_rate(play_level) / f64::from(note_count) * 3.0
+    deck_total_parameter * score_coefficient(play_level, note_count)
 }
 
 /// The locked HHWX medley combo formula. Native-client table differences are
@@ -198,9 +198,9 @@ fn build_base_note_scores(
         )
     })?;
     let deck_total_parameter = team.deck_total_parameter;
-    let level_rate = play_level_rate(song.play_level);
+    let coefficient = score_coefficient(song.play_level, note_count);
     let base = base_score_per_note(deck_total_parameter, song.play_level, note_count);
-    if !level_rate.is_finite() || !base.is_finite() || base < 0.0 {
+    if !coefficient.is_finite() || !base.is_finite() || base < 0.0 {
         return Err(ScoreError::new(
             ScoreErrorCode::ArithmeticNonFinite,
             format!("songs[{}].baseScorePerNote", song.slot),
@@ -219,43 +219,47 @@ fn build_base_note_scores(
             )
         })?;
         let combo_rate = medley_combo_rate(combo);
-        let judgment_corrected = base * judge;
-        let with_combo = judgment_corrected * combo_rate;
-        scores.push(floor_number_to_u32(with_combo, || {
+        let with_judgment = (base * combo_rate) * judge;
+        scores.push(floor_number_to_u32(with_judgment, || {
             format!("songs[{}].notes[{note_index}].baseScore", song.slot)
         })?);
     }
-    Ok((level_rate, base, scores))
+    Ok((coefficient, base, scores))
 }
 
-fn skill_trigger_times(song: &MedleySongV1) -> Result<[f64; 6], ScoreError> {
-    let mut trigger_times = [0.0_f64; 6];
+fn skill_trigger_indexes(song: &MedleySongV1) -> Result<[usize; 6], ScoreError> {
+    let mut trigger_indexes = [0; 6];
     let mut trigger_count = 0_usize;
-    for note in song.notes.iter().filter(|note| note.is_skill_trigger) {
-        let Some(trigger_time) = trigger_times.get_mut(trigger_count) else {
+    for (index, _) in song
+        .notes
+        .iter()
+        .enumerate()
+        .filter(|(_, note)| note.is_skill_trigger)
+    {
+        let Some(trigger_index) = trigger_indexes.get_mut(trigger_count) else {
             return Err(ScoreError::new(
                 ScoreErrorCode::InputInvalid,
                 format!("songs[{}].skillTriggers", song.slot),
                 "validated song did not contain six skill triggers",
             ));
         };
-        *trigger_time = note.time_seconds;
+        *trigger_index = index;
         trigger_count += 1;
     }
-    if trigger_count != trigger_times.len() {
+    if trigger_count != trigger_indexes.len() {
         return Err(ScoreError::new(
             ScoreErrorCode::InputInvalid,
             format!("songs[{}].skillTriggers", song.slot),
             "validated song did not contain six skill triggers",
         ));
     }
-    Ok(trigger_times)
+    Ok(trigger_indexes)
 }
 
 fn build_activations<'a>(
     input: &'a FixedMedleyEvaluationInputV1,
-    song_slot: u8,
-    trigger_times: &[f64; 6],
+    song: &MedleySongV1,
+    trigger_indexes: &[usize; 6],
     team: &FixedTeamV1,
     order: [usize; 5],
 ) -> Result<[Activation<'a>; 6], ScoreError> {
@@ -265,18 +269,19 @@ fn build_activations<'a>(
     for trigger_index in 0..6 {
         let instance_id = instance_ids[trigger_index];
         let skill = &input.cards[instance_id as usize].skill;
-        let end_time_seconds = trigger_times[trigger_index] + skill.duration_seconds + 0.00001;
+        let end_time_seconds =
+            song.notes[trigger_indexes[trigger_index]].time_seconds + skill.duration_seconds;
         if !end_time_seconds.is_finite() {
             return Err(ScoreError::new(
                 ScoreErrorCode::ArithmeticNonFinite,
-                format!("songs[{song_slot}].skillTriggers[{trigger_index}]"),
+                format!("songs[{}].skillTriggers[{trigger_index}]", song.slot),
                 "skill end time must remain finite",
             ));
         }
         end_times[trigger_index] = end_time_seconds;
     }
     Ok(std::array::from_fn(|trigger_index| Activation {
-        trigger_time_seconds: trigger_times[trigger_index],
+        start_note_index: trigger_indexes[trigger_index] + 1,
         end_time_seconds: end_times[trigger_index],
         skill: &input.cards[instance_ids[trigger_index] as usize].skill,
     }))
@@ -289,11 +294,11 @@ fn note_score(
     activations: &[Activation<'_>; 6],
     covered_note_counts: &mut [u32; 6],
     perfect_rate: f64,
-) -> Result<u32, ScoreError> {
+) -> Result<i64, ScoreError> {
     let note = &song.notes[note_index];
-    let mut combined_multiplier = 1.0_f64;
+    let mut score = i64::from(base_score);
     for (activation_index, activation) in activations.iter().enumerate() {
-        if note.time_seconds <= activation.trigger_time_seconds
+        if note_index < activation.start_note_index
             || note.time_seconds > activation.end_time_seconds
         {
             continue;
@@ -304,31 +309,31 @@ fn note_score(
             covered_note_counts[activation_index],
             perfect_rate,
         );
-        let additive_delta = multiplier - 1.0;
-        combined_multiplier += additive_delta;
+        // ponytail: overlaps add independently rounded extras. Joint flooring
+        // is deliberately not the search objective; changing it needs review.
+        let with_skill = floor_number_to_u32(f64::from(base_score) * multiplier, || {
+            format!("songs[{}].notes[{note_index}].skillScore", song.slot)
+        })?;
+        score += i64::from(with_skill) - i64::from(base_score);
     }
-    combined_multiplier = combined_multiplier.max(0.0);
-    let with_skill = f64::from(base_score) * combined_multiplier;
-    floor_number_to_u32(with_skill, || {
-        format!("songs[{}].notes[{note_index}].finalScore", song.slot)
-    })
+    Ok(score)
 }
 
 fn score_one_order(
     input: &FixedMedleyEvaluationInputV1,
     song: &MedleySongV1,
     team: &FixedTeamV1,
-    trigger_times: &[f64; 6],
+    trigger_indexes: &[usize; 6],
     order: [usize; 5],
     base_note_scores: &[u32],
     perfect_rate: f64,
-) -> Result<f64, ScoreError> {
-    let activations = build_activations(input, song.slot, trigger_times, team, order)?;
+) -> Result<i128, ScoreError> {
+    let activations = build_activations(input, song, trigger_indexes, team, order)?;
     let mut covered_note_counts = [0_u32; 6];
-    let mut score = 0.0_f64;
+    let mut score = 0_i128;
 
     for (note_index, base_score) in base_note_scores.iter().copied().enumerate() {
-        score += f64::from(note_score(
+        score += i128::from(note_score(
             song,
             note_index,
             base_score,
@@ -355,39 +360,42 @@ fn score_song(
             "note count exceeds u32",
         )
     })?;
-    let (level_rate, base, base_note_scores) =
+    let (coefficient, base, base_note_scores) =
         build_base_note_scores(song, team, start_combo, perfect_rate)?;
-    let base_expected = base_note_scores
+    let base_expected: i128 = base_note_scores
         .iter()
-        .fold(0.0_f64, |sum, score| sum + f64::from(*score));
-    let trigger_times = skill_trigger_times(song)?;
+        .map(|score| i128::from(*score))
+        .sum();
+    let trigger_indexes = skill_trigger_indexes(song)?;
     let orders = skill_orders();
     let mut permutation_expected_score_bits = Vec::with_capacity(orders.len());
-    let mut average_accumulator = 0.0_f64;
+    let mut average_accumulator = 0_i128;
     for order in orders {
         let score = score_one_order(
             input,
             song,
             team,
-            &trigger_times,
+            &trigger_indexes,
             order,
             &base_note_scores,
             perfect_rate,
         )?;
         average_accumulator += score;
-        permutation_expected_score_bits.push(F64BitsV1::from_f64(score));
+        permutation_expected_score_bits.push(F64BitsV1::from_f64(score as f64));
     }
-    let average_score = average_accumulator / f64::from(SKILL_ORDER_COUNT);
+    // Independent windows make the 120-order integer sum divisible by 24.
+    // Reduce before the only integer-to-f64 conversion, as production does.
+    let average_score = (average_accumulator / 24) as f64 / 5.0;
 
     Ok(SongScoreTraceV1 {
         slot: song.slot,
         start_combo,
         note_count,
         deck_total_parameter_bits: F64BitsV1::from_f64(team.deck_total_parameter),
-        play_level_rate_bits: F64BitsV1::from_f64(level_rate),
+        score_coefficient_bits: F64BitsV1::from_f64(coefficient),
         base_score_per_note_bits: F64BitsV1::from_f64(base),
         base_note_scores,
-        base_expected_score_bits: F64BitsV1::from_f64(base_expected),
+        base_expected_score_bits: F64BitsV1::from_f64(base_expected as f64),
         permutation_expected_score_bits,
         average_score_bits: F64BitsV1::from_f64(average_score),
         score_order_count: SKILL_ORDER_COUNT,
@@ -528,14 +536,14 @@ mod tests {
     }
 
     #[test]
-    fn play_level_rate_keeps_the_defined_division_rounding() {
-        let rate = play_level_rate(46);
-        assert_eq!(rate.to_bits(), 1.41_f64.to_bits());
+    fn base_score_keeps_bestdori_operation_order() {
+        let coefficient = score_coefficient(46, 6);
+        assert_eq!(coefficient.to_bits(), 0.705_000_000_000_000_1_f64.to_bits());
 
         let base = base_score_per_note(37.395_228_884_590_59, 46, 6);
         let inner = floor_number_to_u32(base * PERFECT_RATE, || "test".to_owned())
             .expect("division-rounding fixture fits");
-        assert_eq!(inner, 28);
+        assert_eq!(inner, 29);
     }
 
     #[test]
@@ -557,7 +565,7 @@ mod tests {
     }
 
     #[test]
-    fn same_time_chord_does_not_receive_new_skill() {
+    fn same_time_note_after_trigger_receives_new_skill() {
         let mut input = fixture();
         let song = &mut input.songs[0];
         for (index, note) in song.notes.iter_mut().enumerate() {
@@ -572,17 +580,17 @@ mod tests {
             },
         );
         song.notes[7].note_id = 7;
-        let without_chord_skills = evaluate_fixed_medley(&input)
+        let same_time_score = evaluate_fixed_medley(&input)
             .expect("same-time chord fixture scores")
             .songs[0]
             .average_score();
 
         input.songs[0].notes[6].time_seconds = 50.000_001;
-        let with_chord_skills = evaluate_fixed_medley(&input)
+        let later_score = evaluate_fixed_medley(&input)
             .expect("later chord fixture scores")
             .songs[0]
             .average_score();
-        assert!(with_chord_skills > without_chord_skills);
+        assert_eq!(same_time_score, later_score);
     }
 
     #[test]
@@ -594,38 +602,28 @@ mod tests {
         for (index, note) in input.songs[0].notes.iter_mut().enumerate() {
             note.time_seconds = index as f64 * 10.0;
         }
-        let trigger_times =
-            skill_trigger_times(&input.songs[0]).expect("fixture has six skill triggers");
+        let trigger_indexes =
+            skill_trigger_indexes(&input.songs[0]).expect("fixture has six skill triggers");
         let activations = build_activations(
             &input,
-            input.songs[0].slot,
-            &trigger_times,
+            &input.songs[0],
+            &trigger_indexes,
             &input.teams[0],
             [0, 1, 2, 3, 4],
         )
         .expect("window-boundary fixture builds activations");
-        let end_time_seconds = 0.0_f64 + 1.0 + 0.00001;
+        let end_time_seconds = 51.0_f64;
         assert_eq!(
-            activations[0].end_time_seconds.to_bits(),
+            activations[5].end_time_seconds.to_bits(),
             end_time_seconds.to_bits()
         );
 
         let mut probe_song = input.songs[0].clone();
-        probe_song.notes = vec![
-            ScoringNoteV1 {
-                note_id: 0,
-                time_seconds: end_time_seconds,
-                is_skill_trigger: false,
-            },
-            ScoringNoteV1 {
-                note_id: 1,
-                time_seconds: f64::from_bits(end_time_seconds.to_bits() + 1),
-                is_skill_trigger: false,
-            },
-        ];
-        let at_end = note_score(&probe_song, 0, 100, &activations, &mut [0; 6], 1.0)
+        probe_song.notes[6].time_seconds = end_time_seconds;
+        let at_end = note_score(&probe_song, 6, 100, &activations, &mut [0; 6], 1.0)
             .expect("exact skill-window end scores");
-        let after_end = note_score(&probe_song, 1, 100, &activations, &mut [0; 6], 1.0)
+        probe_song.notes[6].time_seconds = end_time_seconds.next_up();
+        let after_end = note_score(&probe_song, 6, 100, &activations, &mut [0; 6], 1.0)
             .expect("next f64 after skill-window end scores");
         assert_eq!(at_end, 200);
         assert_eq!(after_end, 100);
@@ -639,12 +637,12 @@ mod tests {
                 score_up_percent: (index as f64 + 1.0) * 10.0,
             };
         }
-        let trigger_times =
-            skill_trigger_times(&input.songs[0]).expect("fixture has six skill triggers");
+        let trigger_indexes =
+            skill_trigger_indexes(&input.songs[0]).expect("fixture has six skill triggers");
         let activations = build_activations(
             &input,
-            input.songs[0].slot,
-            &trigger_times,
+            &input.songs[0],
+            &trigger_indexes,
             &input.teams[0],
             [4, 2, 0, 3, 1],
         )
@@ -657,12 +655,12 @@ mod tests {
                 _ => panic!("fixture skills remain unconditional score skills"),
             })
             .collect();
-        assert_eq!(trigger_times, [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]);
+        assert_eq!(trigger_indexes, [0, 1, 2, 3, 4, 5]);
         assert_eq!(actual_score_up, [50.0, 30.0, 10.0, 40.0, 20.0, 30.0]);
     }
 
     #[test]
-    fn overlapping_windows_add_percent_deltas_before_one_rounding() {
+    fn overlapping_windows_add_independently_rounded_extras() {
         let mut input = fixture();
         input.perfect_rate = ExactProbabilityV1 {
             numerator: 1,
@@ -671,7 +669,7 @@ mod tests {
         for card in &mut input.cards {
             card.skill.duration_seconds = 10.0;
             card.skill.behavior = SkillBehaviorV1::Score {
-                score_up_percent: 100.0,
+                score_up_percent: 33.3,
             };
         }
         for note in &mut input.songs[0].notes[..6] {
@@ -680,15 +678,19 @@ mod tests {
         input.songs[0].notes[6].time_seconds = 1.0;
         let trace = evaluate_fixed_medley(&input).expect("overlap fixture scores");
         let song = &trace.songs[0];
-        let final_inner = song.base_note_scores[6];
-        let expected_final =
-            floor_number_to_u32(f64::from(final_inner) * 7.0, || "test".to_owned())
-                .expect("test score fits");
-        let expected_total: u32 =
-            song.base_note_scores[..6].iter().copied().sum::<u32>() + expected_final;
+        let expected_total: i64 = song
+            .base_note_scores
+            .iter()
+            .enumerate()
+            .map(|(index, base)| {
+                let extra =
+                    (f64::from(*base) * (1.0 + 33.3 / 100.0)).floor() as i64 - i64::from(*base);
+                i64::from(*base) + index.min(6) as i64 * extra
+            })
+            .sum();
         assert_eq!(
             song.permutation_expected_score_bits[0].to_f64(),
-            f64::from(expected_total),
+            expected_total as f64,
         );
     }
 
@@ -753,13 +755,23 @@ mod tests {
 
         let trace = evaluate_fixed_medley(&input).expect("mixed overlap fixture scores");
         let song = &trace.songs[0];
-        let trigger_total = song.base_note_scores[..6].iter().copied().sum::<u32>();
-        let final_inner = song.base_note_scores[6];
-        let final_score = floor_number_to_u32(f64::from(final_inner) * 1.5, || "test".to_owned())
-            .expect("test score fits");
+        let expected_total: i64 = song
+            .base_note_scores
+            .iter()
+            .enumerate()
+            .map(|(index, base)| {
+                i64::from(*base)
+                    + if index > 0 { i64::from(*base) } else { 0 }
+                    + if index > 1 {
+                        (f64::from(*base) * 0.5).floor() as i64 - i64::from(*base)
+                    } else {
+                        0
+                    }
+            })
+            .sum();
         assert_eq!(
             song.permutation_expected_score_bits[0].to_f64(),
-            f64::from(trigger_total + final_score),
+            expected_total as f64,
         );
     }
 
@@ -865,20 +877,20 @@ mod tests {
             .validate()
             .expect("overlapping-window fixture validates");
 
-        let trigger_times =
-            skill_trigger_times(&input.songs[0]).expect("fixture has six skill triggers");
+        let trigger_indexes =
+            skill_trigger_indexes(&input.songs[0]).expect("fixture has six skill triggers");
         let score = score_one_order(
             &input,
             &input.songs[0],
             &input.teams[0],
-            &trigger_times,
+            &trigger_indexes,
             [0, 1, 2, 3, 4],
             &[0, 0, 0, 0, 0, 0, 100, 100],
             0.5,
         )
         .expect("overlapping-window fixture scores");
-        // Official st gives (1.5, 1.0025) then (1.25, 1.005). Under the
-        // approved direct-add overlap rule, the two integer scores are 150, 125.
-        assert_eq!(score, 275.0);
+        // Later same-time trigger notes count as covered notes too: the two
+        // scored notes use counts (6,5) and (7,6), giving 102 and 101.
+        assert_eq!(score, 203);
     }
 }
