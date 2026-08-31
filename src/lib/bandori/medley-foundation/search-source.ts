@@ -91,7 +91,7 @@ function buildAreaConfigurations(ownedAreaItemIds: ReadonlySet<number>): AreaIte
 
   for (const bandIds of bandChoices.length > 0 ? bandChoices : [[]]) {
     for (const attributeIds of attributeChoices.length > 0 ? attributeChoices : [[]]) {
-      for (const parameterIds of [[], ...parameterChoices]) {
+      for (const parameterIds of parameterChoices.length > 0 ? parameterChoices : [[]]) {
         const selectedAreaItemIds = [...bandIds, ...attributeIds, ...parameterIds];
         const key = [...selectedAreaItemIds].sort((left, right) => left - right).join(",");
         if (!unique.has(key)) unique.set(key, { selectedAreaItemIds });

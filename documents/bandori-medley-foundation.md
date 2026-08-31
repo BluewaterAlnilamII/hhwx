@@ -29,7 +29,7 @@ Malformed profile compression, missing selected master rows, invalid references,
 
 - Exactly three ordered song slots; repeats are allowed, reordering is not.
 - Five distinct characters per team; no physical card repeats across the three teams. The leader occupies member index two in output.
-- All teams share one algorithm-selected owned-item configuration: one band group, one attribute group and an optional parameter item. CN metadata-only IDs 59, 68 and 72 remain outside the calculator.
+- All teams share one algorithm-selected owned-item configuration: one band group, one attribute group and one owned parameter item. A category is empty only when no item in it is owned; do not add an unequipped parameter choice alongside owned ones. Full ownership gives 9 band groups × 4 attributes × 3 parameter items = 108 configurations. CN metadata-only IDs 59, 68 and 72 remain outside the calculator.
 - The formal objective is a proven top-1 total average score, with a deterministic representative on ties. Maximum possible score is not a second objective.
 - At most ten discovered solutions may be retained passively, including the winner. They are not proven global top-10. Only that small set is intended to receive post-search maximum-score evaluation; that output hydration is not implemented yet.
 - Official success requires exhausting or safely pruning the whole space. Cancellation, timeout, memory, data or runtime failure is incomplete; `bestSoFar` is diagnostic only. There is no gap-based success.

@@ -102,7 +102,7 @@ test("HHWX profile input becomes the normalized search roster without caller tea
   assert.equal("leader" in result, false);
 });
 
-test("owned area items form the established band, attribute, and optional-parameter choices", () => {
+test("owned area items choose one owned parameter item when available", () => {
   const fixture = searchFixture();
   fixture.profilePayload.bestdoriProfile.data.items = {
     PoppinParty: [7, 1],
@@ -121,10 +121,8 @@ test("owned area items form the established band, attribute, and optional-parame
   const secondBand = [2, 7, 12, 17, 22, 27, 32, 70, 56];
 
   assert.deepEqual(result.areaConfigurations, [
-    { selectedAreaItemIds: firstBand },
     { selectedAreaItemIds: [...firstBand, 80] },
     { selectedAreaItemIds: [...firstBand, 81] },
-    { selectedAreaItemIds: secondBand },
     { selectedAreaItemIds: [...secondBand, 80] },
     { selectedAreaItemIds: [...secondBand, 81] },
   ]);
