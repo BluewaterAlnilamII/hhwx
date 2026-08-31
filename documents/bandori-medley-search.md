@@ -36,6 +36,8 @@ P * K <= (t * P + K / t)^2 / 4
 
 A small dynamic program maximizes the additive quantity: one card per remaining character, exactly one leader, fixed cards kept, and parameter/skill contributions still attached to their card. Maximize across reachable band/attribute contexts; minimize across valid weights within each context. This is an upper bound, not a claim that its favorable choices can all be attained together.
 
+For the current area configuration only, prepare the three weights per song and complete ordered regular/leader card lists per character and context. A card belongs to at most four contexts. Removing a card advances only affected available heads; a change trail restores them on return. Bounds and temporary proposals share that availability. The parameter-range check has its own ordered heads. No list is truncated, and no remaining-roster scan is needed per support calculation. Reuse the bound's five-card selection as an ordering hint; it is not an exact optimum.
+
 Binary64 proof obligations are explicit:
 
 - Treat already-rounded card/event sums and area products as atoms; cover the remaining parameter additions upward for every leader order.
@@ -63,7 +65,7 @@ The 256-row switch, cache capacity and heuristic effort are work controls, not c
 
 Exact success requires every configuration and family to be exhausted or safely pruned. Cancellation, timeout, memory exhaustion, invalid data, arithmetic overflow, scorer disagreement, count/index overflow or internal failure returns incomplete, optionally with diagnostic `bestSoFar`. A high score is not proof of completion.
 
-The storage budget covers local compact rows, sorting indexes and the bounded score cache. `peakCandidateBytes`, `peakCacheBytes` and `peakSearchStorageBytes` report those peaks. They exclude input/model/configuration data, chart-sized scoring scratch and bounded-depth traversal scratch, so they are not total native or browser/WASM memory.
+The storage budget covers local compact rows, sorting indexes and the bounded score cache. `peakCandidateBytes`, `peakCacheBytes` and `peakSearchStorageBytes` report those peaks. They exclude input/model/configuration data, the ordered bound index and its undo trail, chart-sized scoring scratch and traversal scratch. Native diagnosis reports index/domain allocations separately; none of these counters is total native or browser/WASM memory.
 
 Stop checks occur between nodes/candidates, not inside model preparation or one complete-team evaluation; the deadline is not a hard real-time guarantee. Diagnostics count bounds, cuts, blocks, cache hits, joins, heuristic work, scores and storage. Complete-team evaluations count cache misses. `exactSongScores` counts the 15 song/leader results per evaluated set, not chart scans.
 
@@ -77,4 +79,4 @@ Approved full-search benchmarks remain separate and retain unchanged inputs and 
 
 For current-search diagnosis, run `node --import tsx scripts/compare-bandori-medley-search.mjs --diagnose`. It regenerates the retained 119/961-card no-event inputs from raw profiles and masters under the current rule version, then runs each for 60 seconds with the existing 256 MiB storage and 1 GiB sampled-process limits. It neither reads historical scores nor runs an old solver. Test-only native timers report exclusive wall-clock phases, additive-bound passes/card visits and strict score-improvement timestamps; nested work is counted once. Timings include instrumentation overhead and are not an uninstrumented throughput benchmark. Input hashes, commit, outcomes, counters and native process memory remain in the private `runs/` archive. Reaching the diagnostic deadline is a completed measurement, not exact search success.
 
-The current scoring cleanup changes no traversal, AM-GM strategy, heuristic effort or storage capacity. It adds no dominance, quantization, SIMD/FMA, approximate retention, external storage, dependency, frontend/API integration or maximum-score output hydration. Further search optimization requires a separately reviewed scope.
+No dominance, quantization, SIMD/FMA, approximate retention, external storage, new dependency, frontend/API integration or maximum-score output hydration is part of this search scope.

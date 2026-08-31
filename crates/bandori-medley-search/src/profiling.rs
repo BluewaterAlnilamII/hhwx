@@ -41,6 +41,9 @@ struct Profile {
     support_cards: [u64; 8],
     improvements: Vec<Value>,
     warm_start_ms: Option<f64>,
+    peak_bound_index_bytes: usize,
+    peak_domain_bytes: usize,
+    peak_stack_bytes: usize,
 }
 
 impl Profile {
@@ -87,6 +90,22 @@ pub(crate) fn support_pass(card_count: usize) {
     });
 }
 
+pub(crate) fn bound_storage(bytes: usize) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            profile.peak_bound_index_bytes = profile.peak_bound_index_bytes.max(bytes);
+        }
+    });
+}
+
+pub(crate) fn domain_storage(bytes: usize) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            profile.peak_domain_bytes = profile.peak_domain_bytes.max(bytes);
+        }
+    });
+}
+
 pub(crate) fn improvement(score: f64, diagnostics: &MedleySearchDiagnosticsV1) {
     PROFILE.with_borrow_mut(|profile| {
         if let Some(profile) = profile {
@@ -122,6 +141,9 @@ pub(crate) fn start() {
             support_cards: [0; 8],
             improvements: Vec::new(),
             warm_start_ms: None,
+            peak_bound_index_bytes: 0,
+            peak_domain_bytes: 0,
+            peak_stack_bytes: 0,
         });
     });
 }
@@ -142,6 +164,9 @@ pub(crate) fn finish() -> Value {
                 "supportCards": profile.support_cards[index],
             })).collect::<Vec<_>>(),
             "warmStartMs": profile.warm_start_ms,
+            "peakBoundIndexBytes": profile.peak_bound_index_bytes,
+            "peakDomainBytes": profile.peak_domain_bytes,
+            "peakStackBytes": profile.peak_stack_bytes,
             "improvements": profile.improvements,
         })
     })

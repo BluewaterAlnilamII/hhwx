@@ -7,7 +7,7 @@ use crate::candidate::{
     member_order_for_leader,
 };
 use crate::exact_score::{PreparedSong, exact_probability_to_f64};
-use crate::fast_upper::{FastScoreModel, FastUpperBoundEngine};
+use crate::fast_upper::{FastScoreModel, FastUpperBoundEngine, TeamUpper};
 use crate::upper_bound::add_song_uppers;
 use crate::{
     AreaItemConfigurationV1, MedleySearchDiagnosticsV1, MedleySearchInputV1, MedleySearchOutcomeV1,
@@ -159,24 +159,112 @@ fn start_combos(input: &MedleySearchInputV1) -> Result<[u32; 3], SearchAbort> {
     ])
 }
 
-fn build_groups(input: &MedleySearchInputV1) -> (Vec<CharacterGroup>, Vec<u32>) {
+fn build_groups(input: &MedleySearchInputV1) -> Vec<CharacterGroup> {
     let mut by_character = BTreeMap::<u32, Vec<u32>>::new();
-    let mut eligible = Vec::new();
     for card in &input.cards {
+        // Match the input-local bound model's character indexes, including
+        // empty groups when every owned card of a character is excluded.
+        let group = by_character.entry(card.character_id).or_default();
         if card.is_excluded {
             continue;
         }
-        by_character
-            .entry(card.character_id)
-            .or_default()
-            .push(card.instance_id);
-        eligible.push(card.instance_id);
+        group.push(card.instance_id);
     }
-    let groups = by_character
+    by_character
         .into_values()
         .map(|instance_ids| CharacterGroup { instance_ids })
-        .collect();
-    (groups, eligible)
+        .collect()
+}
+
+/// One availability state shared by traversal, bounds and temporary proposals.
+/// The trail stores changes, not a roster copy for every search node.
+struct SearchDomain<'a> {
+    engine: Option<FastUpperBoundEngine<'a>>,
+    available: Vec<bool>,
+    character_indexes: Vec<usize>,
+    counts: Vec<u64>,
+    removed: Vec<(u32, usize)>,
+}
+
+impl<'a> SearchDomain<'a> {
+    fn new(
+        input: &MedleySearchInputV1,
+        groups: &[CharacterGroup],
+        model: Option<&'a FastScoreModel<'a>>,
+        configuration: &'a AreaItemConfigurationV1,
+    ) -> Self {
+        let mut available = vec![false; input.cards.len()];
+        let mut character_indexes = vec![0; input.cards.len()];
+        for (character, group) in groups.iter().enumerate() {
+            for &id in &group.instance_ids {
+                available[id as usize] = true;
+                character_indexes[id as usize] = character;
+            }
+        }
+        let domain = Self {
+            engine: model.and_then(|model| FastUpperBoundEngine::new(model, configuration).ok()),
+            available,
+            character_indexes,
+            counts: groups
+                .iter()
+                .map(|group| group.instance_ids.len() as u64)
+                .collect(),
+            removed: Vec::new(),
+        };
+        #[cfg(test)]
+        domain.record_storage();
+        domain
+    }
+
+    fn checkpoint(&self) -> usize {
+        self.removed.len()
+    }
+
+    fn remove(&mut self, id: u32) {
+        if !self.available[id as usize] {
+            return;
+        }
+        self.available[id as usize] = false;
+        self.counts[self.character_indexes[id as usize]] -= 1;
+        let checkpoint = self
+            .engine
+            .as_ref()
+            .map_or(0, FastUpperBoundEngine::checkpoint);
+        if let Some(engine) = &mut self.engine {
+            engine.remove(id, &self.available);
+        }
+        #[cfg(test)]
+        let previous_capacity = self.removed.capacity();
+        self.removed.push((id, checkpoint));
+        #[cfg(test)]
+        if previous_capacity != self.removed.capacity() {
+            self.record_storage();
+        }
+    }
+
+    fn restore(&mut self, checkpoint: usize) {
+        while self.removed.len() > checkpoint {
+            let (id, heads) = self.removed.pop().unwrap();
+            if let Some(engine) = &mut self.engine {
+                engine.restore(heads);
+            }
+            self.available[id as usize] = true;
+            self.counts[self.character_indexes[id as usize]] += 1;
+        }
+    }
+
+    #[cfg(test)]
+    fn record_storage(&self) {
+        crate::profiling::domain_storage(
+            self.available.capacity() * size_of::<bool>()
+                + self.character_indexes.capacity() * size_of::<usize>()
+                + self.counts.capacity() * size_of::<u64>()
+                + self.removed.capacity() * size_of::<(u32, usize)>(),
+        );
+        if let Some(engine) = &self.engine {
+            crate::profiling::bound_storage(engine.storage_bytes());
+        }
+    }
 }
 
 struct FeasibilityContext<'groups, 'state, 'control, 'callback> {
@@ -380,32 +468,28 @@ impl TeamFamily {
         self
     }
 
-    fn remaining(&self, groups: &[CharacterGroup], used: &[bool]) -> Vec<u32> {
-        #[cfg(test)]
-        let _timing = crate::profiling::enter(crate::profiling::Phase::Domains);
-        groups[self.next_group..]
+    fn has_character(&self, domain: &SearchDomain<'_>, character: usize) -> bool {
+        self.selected()
             .iter()
-            .flat_map(|group| group.instance_ids.iter().copied())
-            .filter(|id| !used[*id as usize])
-            .collect()
+            .any(|id| domain.character_indexes[*id as usize] == character)
     }
 
-    fn completion_count(&self, groups: &[CharacterGroup], used: &[bool], cap: usize) -> usize {
+    fn completion_count(&self, domain: &SearchDomain<'_>) -> u64 {
         #[cfg(test)]
         let _timing = crate::profiling::enter(crate::profiling::Phase::Domains);
         let needed = TEAM_SIZE - self.member_count;
-        let mut counts = [0_usize; TEAM_SIZE + 1];
+        if needed == 0 {
+            return 1;
+        }
+        let mut counts = [0_u64; TEAM_SIZE + 1];
         counts[0] = 1;
-        for group in &groups[self.next_group..] {
-            let available = group
-                .instance_ids
-                .iter()
-                .filter(|id| !used[**id as usize])
-                .count();
+        for (character, &available) in domain.counts.iter().enumerate().skip(self.next_group) {
+            if self.has_character(domain, character) {
+                continue;
+            }
             for depth in (1..=needed).rev() {
-                counts[depth] = counts[depth]
-                    .saturating_add(counts[depth - 1].saturating_mul(available))
-                    .min(cap);
+                counts[depth] =
+                    counts[depth].saturating_add(counts[depth - 1].saturating_mul(available));
             }
         }
         counts[needed]
@@ -413,12 +497,11 @@ impl TeamFamily {
 }
 
 fn team_upper(
-    engine: Option<&FastUpperBoundEngine<'_>>,
+    domain: &SearchDomain<'_>,
     family: TeamFamily,
-    remaining: &[u32],
     song_slot: usize,
     state: &mut RunState<'_, '_>,
-) -> Result<f64, SearchAbort> {
+) -> Result<TeamUpper, SearchAbort> {
     #[cfg(test)]
     let _timing = crate::profiling::enter(if family.member_count == TEAM_SIZE {
         crate::profiling::Phase::CompleteBounds
@@ -426,47 +509,50 @@ fn team_upper(
         crate::profiling::Phase::PartialBounds
     });
     add_counter(&mut state.diagnostics.bound_evaluations, 1)?;
-    match engine.and_then(|engine| {
+    match domain.engine.as_ref().and_then(|engine| {
         engine
-            .team_upper(family.selected(), remaining, song_slot)
+            .team_upper(family.selected(), family.next_group, song_slot)
             .ok()
     }) {
         Some(value) => Ok(value),
         None => {
             add_counter(&mut state.diagnostics.unknown_bound_evaluations, 1)?;
-            Ok(f64::INFINITY)
+            Ok(TeamUpper::default())
         }
     }
 }
 
 fn propose_assignment(
-    engine: &FastUpperBoundEngine<'_>,
+    domain: &mut SearchDomain<'_>,
     families: [TeamFamily; 3],
-    domains: &[Vec<u32>; 3],
     order: [usize; 3],
     rank: usize,
 ) -> Option<[[u32; 5]; 3]> {
-    let mut assignment = [[0; 5]; 3];
-    let mut occupied = families
-        .iter()
-        .flat_map(|family| family.selected().iter().copied())
-        .collect::<Vec<_>>();
-    for song_slot in order {
-        let remaining = domains[song_slot]
-            .iter()
-            .copied()
-            .filter(|id| !occupied.contains(id))
-            .collect::<Vec<_>>();
-        let team =
-            engine.propose_team(families[song_slot].selected(), &remaining, song_slot, rank)?;
-        for id in team {
-            if !families[song_slot].selected().contains(&id) {
-                occupied.push(id);
-            }
+    let checkpoint = domain.checkpoint();
+    for family in families {
+        for &id in family.selected() {
+            domain.remove(id);
         }
-        assignment[song_slot] = team;
     }
-    Some(assignment)
+    let result = (|| {
+        let mut assignment = [[0; 5]; 3];
+        for song_slot in order {
+            let family = families[song_slot];
+            let team = domain.engine.as_ref()?.propose_team(
+                family.selected(),
+                family.next_group,
+                song_slot,
+                rank,
+            )?;
+            for id in team {
+                domain.remove(id);
+            }
+            assignment[song_slot] = team;
+        }
+        Some(assignment)
+    })();
+    domain.restore(checkpoint);
+    result
 }
 
 struct EvaluationContext<'input, 'state, 'control, 'callback> {
@@ -512,14 +598,10 @@ impl EvaluationContext<'_, '_, '_, '_> {
 
     fn probe_completions(
         &mut self,
-        engine: Option<&FastUpperBoundEngine<'_>>,
+        domain: &mut SearchDomain<'_>,
         families: [TeamFamily; 3],
-        domains: &[Vec<u32>; 3],
         trials: usize,
     ) -> Result<(), SearchAbort> {
-        let Some(engine) = engine else {
-            return Ok(());
-        };
         // Construction order allocates contested cards; song slots never move.
         const ORDERS: [[usize; 3]; 6] = [
             [0, 1, 2],
@@ -532,9 +614,7 @@ impl EvaluationContext<'_, '_, '_, '_> {
         let mut seen = Vec::new();
         for (trial, order) in ORDERS.into_iter().take(trials).enumerate() {
             self.state.poll_stop()?;
-            if let Some(mut assignment) =
-                propose_assignment(engine, families, domains, order, trial / 3)
-            {
+            if let Some(mut assignment) = propose_assignment(domain, families, order, trial / 3) {
                 for team in &mut assignment {
                     team.sort_unstable();
                 }
@@ -551,30 +631,23 @@ impl EvaluationContext<'_, '_, '_, '_> {
 fn plan_configurations(
     input: &MedleySearchInputV1,
     model: Option<&FastScoreModel<'_>>,
-    eligible: &[u32],
+    groups: &[CharacterGroup],
     state: &mut RunState<'_, '_>,
 ) -> Result<Vec<ConfigurationPlan>, SearchAbort> {
     let mut plans = Vec::with_capacity(input.area_configurations.len());
-    let domains = std::array::from_fn(|_| eligible.to_vec());
     let families = [TeamFamily::default(); 3];
     for (configuration_index, configuration) in input.area_configurations.iter().enumerate() {
         state.poll_stop()?;
-        let engine = model.and_then(|model| FastUpperBoundEngine::new(model, configuration).ok());
+        let mut domain = SearchDomain::new(input, groups, model, configuration);
         let mut root_song_uppers = [f64::INFINITY; 3];
         for song_slot in 0..3 {
-            root_song_uppers[song_slot] = team_upper(
-                engine.as_ref(),
-                families[song_slot],
-                eligible,
-                song_slot,
-                state,
-            )?;
+            root_song_uppers[song_slot] =
+                team_upper(&domain, families[song_slot], song_slot, state)?.score;
         }
-        let proposed_assignment = engine
-            .as_ref()
-            .and_then(|engine| propose_assignment(engine, families, &domains, [0, 1, 2], 0));
+        let proposed_assignment = propose_assignment(&mut domain, families, [0, 1, 2], 0);
         let estimated_score =
-            engine
+            domain
+                .engine
                 .as_ref()
                 .zip(proposed_assignment)
                 .map_or(0.0, |(engine, assignment)| {
@@ -687,24 +760,23 @@ fn join_block(
     Ok(())
 }
 
-struct JointSearch<'input, 'engine, 'state, 'control, 'callback> {
+struct JointSearch<'input, 'state, 'control, 'callback> {
     evaluation: EvaluationContext<'input, 'state, 'control, 'callback>,
     groups: &'input [CharacterGroup],
-    engine: Option<&'engine FastUpperBoundEngine<'input>>,
+    domain: SearchDomain<'input>,
 }
 
-impl JointSearch<'_, '_, '_, '_, '_> {
+impl JointSearch<'_, '_, '_, '_> {
     fn generate_rows(
         &mut self,
         family: TeamFamily,
-        used: &[bool],
         song_slot: usize,
         family_uppers: [f64; 3],
         rows: &mut Vec<CompactCandidate>,
     ) -> Result<(), SearchAbort> {
         self.evaluation.state.poll_stop()?;
         if family.member_count == TEAM_SIZE {
-            let upper = team_upper(self.engine, family, &[], song_slot, self.evaluation.state)?;
+            let upper = team_upper(&self.domain, family, song_slot, self.evaluation.state)?.score;
             let mut uppers = family_uppers;
             uppers[song_slot] = upper;
             if self
@@ -740,11 +812,13 @@ impl JointSearch<'_, '_, '_, '_, '_> {
             return Ok(());
         }
         for group in family.next_group..=self.groups.len() - needed {
+            if family.has_character(&self.domain, group) {
+                continue;
+            }
             for &id in &self.groups[group].instance_ids {
-                if !used[id as usize] {
+                if self.domain.available[id as usize] {
                     self.generate_rows(
                         family.with_member(id, group),
-                        used,
                         song_slot,
                         family_uppers,
                         rows,
@@ -759,7 +833,6 @@ impl JointSearch<'_, '_, '_, '_, '_> {
         &mut self,
         families: [TeamFamily; 3],
         counts: [usize; 3],
-        used: &[bool],
         uppers: [f64; 3],
     ) -> Result<(), SearchAbort> {
         let mut rows: [Vec<CompactCandidate>; 3] = std::array::from_fn(|_| Vec::new());
@@ -795,7 +868,7 @@ impl JointSearch<'_, '_, '_, '_, '_> {
             return Err(abort(SearchIncompleteReasonV1::MemoryExhausted));
         }
         for slot in 0..3 {
-            self.generate_rows(families[slot], used, slot, uppers, &mut rows[slot])?;
+            self.generate_rows(families[slot], slot, uppers, &mut rows[slot])?;
             if rows[slot].is_empty() {
                 add_counter(&mut self.evaluation.state.diagnostics.local_blocks, 1)?;
                 return Ok(());
@@ -814,25 +887,19 @@ impl JointSearch<'_, '_, '_, '_, '_> {
         add_counter(&mut self.evaluation.state.diagnostics.local_blocks, 1)
     }
 
-    fn visit(&mut self, families: [TeamFamily; 3], used: &mut [bool]) -> Result<(), SearchAbort> {
+    fn visit(&mut self, families: [TeamFamily; 3]) -> Result<(), SearchAbort> {
         self.evaluation.state.poll_stop()?;
         add_counter(&mut self.evaluation.state.diagnostics.partial_nodes, 1)?;
         let limit = self.evaluation.cache.local_row_limit;
-        let counts = families.map(|family| family.completion_count(self.groups, used, limit + 1));
+        let counts = families.map(|family| family.completion_count(&self.domain));
         if counts.contains(&0) {
             return Ok(());
         }
-        let domains = families.map(|family| family.remaining(self.groups, used));
-        let mut uppers = [f64::INFINITY; 3];
+        let mut bounds = [TeamUpper::default(); 3];
         for slot in 0..3 {
-            uppers[slot] = team_upper(
-                self.engine,
-                families[slot],
-                &domains[slot],
-                slot,
-                self.evaluation.state,
-            )?;
+            bounds[slot] = team_upper(&self.domain, families[slot], slot, self.evaluation.state)?;
         }
+        let uppers = bounds.map(|bound| bound.score);
         if self
             .evaluation
             .state
@@ -853,10 +920,10 @@ impl JointSearch<'_, '_, '_, '_, '_> {
             .is_multiple_of(COMPLETION_PROBE_INTERVAL)
         {
             self.evaluation
-                .probe_completions(self.engine, families, &domains, 3)?;
+                .probe_completions(&mut self.domain, families, 3)?;
         }
-        if counts.iter().sum::<usize>() <= limit {
-            return self.finish_block(families, counts, used, uppers);
+        if counts.into_iter().fold(0_u64, u64::saturating_add) <= limit as u64 {
+            return self.finish_block(families, counts.map(|count| count as usize), uppers);
         }
 
         // Split one family, then visit every disjoint child. A completed triple
@@ -875,28 +942,28 @@ impl JointSearch<'_, '_, '_, '_, '_> {
             })
             .ok_or_else(|| abort(SearchIncompleteReasonV1::InternalFailure))?;
         let family = families[slot];
-        let hint = self
-            .engine
-            .and_then(|engine| engine.propose_team(family.selected(), &domains[slot], slot, 0));
+        let hint = bounds[slot].members;
         let needed = TEAM_SIZE - family.member_count;
         let mut choices = Vec::new();
         for group in family.next_group..=self.groups.len() - needed {
+            if family.has_character(&self.domain, group) {
+                continue;
+            }
             for &id in &self.groups[group].instance_ids {
-                if !used[id as usize] {
+                if self.domain.available[id as usize] {
                     choices.push((group, id));
                 }
             }
         }
         choices
             .sort_by_key(|(group, id)| (!hint.is_some_and(|team| team.contains(id)), *group, *id));
-        // Domain vectors are not a persistent best-first frontier.
-        drop(domains);
         for (group, id) in choices {
             let mut children = families;
             children[slot] = family.with_member(id, group);
-            used[id as usize] = true;
-            let result = self.visit(children, used);
-            used[id as usize] = false;
+            let checkpoint = self.domain.checkpoint();
+            self.domain.remove(id);
+            let result = self.visit(children);
+            self.domain.restore(checkpoint);
             result?;
         }
         Ok(())
@@ -912,7 +979,7 @@ fn run_search(
     state.diagnostics.configurations_total = u64::try_from(input.area_configurations.len())
         .map_err(|_| abort(SearchIncompleteReasonV1::CountOrIndexOverflow))?;
     let combos = start_combos(input)?;
-    let (groups, eligible) = build_groups(input);
+    let groups = build_groups(input);
     let mut assignment = [[0; TEAM_SIZE]; MEDLEY_TEAM_COUNT];
     let mut used = vec![false; input.cards.len()];
     let has_assignment = FeasibilityContext {
@@ -933,9 +1000,8 @@ fn run_search(
     };
     let songs = [prepare_song(0)?, prepare_song(1)?, prepare_song(2)?];
     let model = FastScoreModel::new(input).ok();
-    let plans = plan_configurations(input, model.as_ref(), &eligible, state)?;
+    let plans = plan_configurations(input, model.as_ref(), &groups, state)?;
     let families = [TeamFamily::default(); 3];
-    let domains = std::array::from_fn(|_| eligible.clone());
     if let Some(first) = plans.first()
         && first.root_song_uppers.iter().all(|value| value.is_finite())
     {
@@ -949,9 +1015,7 @@ fn run_search(
     for plan in plans.iter().take(WARM_CONFIGURATION_COUNT) {
         state.poll_stop()?;
         let configuration = &input.area_configurations[plan.configuration_index];
-        let engine = model
-            .as_ref()
-            .and_then(|model| FastUpperBoundEngine::new(model, configuration).ok());
+        let mut domain = SearchDomain::new(input, &groups, model.as_ref(), configuration);
         let mut cache = ScoreCache::new(state)?;
         let mut evaluation = EvaluationContext {
             input,
@@ -965,7 +1029,7 @@ fn run_search(
         } else if evaluation.state.best.is_none() {
             evaluation.score_assignment(assignment)?;
         }
-        evaluation.probe_completions(engine.as_ref(), families, &domains, 6)?;
+        evaluation.probe_completions(&mut domain, families, 6)?;
     }
     state.diagnostics.warm_start_average_score = state.incumbent_score();
     #[cfg(test)]
@@ -982,9 +1046,7 @@ fn run_search(
             continue;
         }
         let configuration = &input.area_configurations[plan.configuration_index];
-        let engine = model
-            .as_ref()
-            .and_then(|model| FastUpperBoundEngine::new(model, configuration).ok());
+        let domain = SearchDomain::new(input, &groups, model.as_ref(), configuration);
         let mut cache = ScoreCache::new(state)?;
         let evaluation = EvaluationContext {
             input,
@@ -996,14 +1058,14 @@ fn run_search(
         let mut search = JointSearch {
             evaluation,
             groups: &groups,
-            engine: engine.as_ref(),
+            domain,
         };
         if index >= WARM_CONFIGURATION_COUNT {
             search
                 .evaluation
-                .probe_completions(engine.as_ref(), families, &domains, 3)?;
+                .probe_completions(&mut search.domain, families, 3)?;
         }
-        search.visit(families, &mut used)?;
+        search.visit(families)?;
         add_counter(&mut state.diagnostics.configurations_completed, 1)?;
     }
     Ok(())

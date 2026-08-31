@@ -265,14 +265,40 @@ impl<'a> FastScoreModel<'a> {
 struct ContextWeights {
     context: TeamContext,
     scales: [f64; 3],
+    groups: Vec<(usize, usize)>,
 }
 
-/// Configuration-local additive card parameters; no chart or candidate cache.
+struct RankedCards {
+    ids: Vec<u32>,
+    head: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct TeamUpper {
+    pub(crate) score: f64,
+    pub(crate) members: Option<[u32; 5]>,
+}
+
+impl Default for TeamUpper {
+    fn default() -> Self {
+        Self {
+            score: f64::INFINITY,
+            members: None,
+        }
+    }
+}
+
+/// One configuration's full ordered card lists. Removing a card advances only
+/// affected heads; undo restores them. No candidate is discarded by its rank.
 pub(crate) struct FastUpperBoundEngine<'a> {
     model: &'a FastScoreModel<'a>,
     configuration: &'a AreaItemConfigurationV1,
     parameters: Vec<f64>,
     contexts: Vec<ContextWeights>,
+    weights: Vec<[[[[f64; 2]; 3]; 3]; 4]>,
+    lists: Vec<RankedCards>,
+    card_list_starts: Vec<[usize; 4]>,
+    undo: Vec<(usize, usize)>,
 }
 
 #[derive(Clone, Copy)]
@@ -285,15 +311,6 @@ struct Choice {
 struct Support {
     value: f64,
     members: [u32; 5],
-}
-
-fn retain_choice(target: &mut Option<Choice>, choice: Choice) {
-    if target.is_none_or(|previous| {
-        choice.value > previous.value
-            || (choice.value == previous.value && choice.instance_id < previous.instance_id)
-    }) {
-        *target = Some(choice);
-    }
 }
 
 fn retain_support(target: &mut Option<Support>, candidate: Support) {
@@ -386,14 +403,157 @@ impl<'a> FastUpperBoundEngine<'a> {
                     1.0
                 }
             });
-            weighted_contexts.push(ContextWeights { context, scales });
+            weighted_contexts.push(ContextWeights {
+                context,
+                scales,
+                groups: Vec::new(),
+            });
+        }
+        let mut weights = vec![[[[[0.0; 2]; 3]; 3]; 4]; input.cards.len()];
+        let mut lists = Vec::new();
+        let mut card_list_starts = vec![[usize::MAX; 4]; input.cards.len()];
+        let mut by_character = vec![Vec::new(); model.character_count];
+        for card in input.cards.iter().filter(|card| !card.is_excluded) {
+            by_character[model.character_indexes[card.instance_id as usize]].push(card.instance_id);
+        }
+        for ids in &by_character {
+            let mut ids = ids.clone();
+            ids.sort_unstable_by(|left, right| {
+                parameters[*right as usize]
+                    .total_cmp(&parameters[*left as usize])
+                    .then(left.cmp(right))
+            });
+            lists.push(RankedCards { ids, head: 0 });
+        }
+        for weighted in &mut weighted_contexts {
+            let context = weighted.context;
+            let context_index = context.skill_index();
+            for (character, ids) in by_character.iter().enumerate() {
+                let ids = ids
+                    .iter()
+                    .copied()
+                    .filter(|id| context.accepts(&input.cards[*id as usize]))
+                    .collect::<Vec<_>>();
+                if ids.is_empty() {
+                    continue;
+                }
+                let start = lists.len();
+                weighted.groups.push((character, start));
+                for &id in &ids {
+                    card_list_starts[id as usize][context_index] = start;
+                    for (song, song_weights) in
+                        weights[id as usize][context_index].iter_mut().enumerate()
+                    {
+                        let coefficient = model.contributions[id as usize][context_index][song];
+                        for (weight, factor) in WEIGHT_FACTORS.into_iter().enumerate() {
+                            let scale = weighted.scales[song] * factor;
+                            let regular = add_up(
+                                mul_up(scale, parameters[id as usize])?,
+                                div_up(coefficient.first_five, scale)?,
+                            )?;
+                            song_weights[weight] = [
+                                regular,
+                                add_up(regular, div_up(coefficient.leader, scale)?)?,
+                            ];
+                        }
+                    }
+                }
+                for (song, _) in model.songs.iter().enumerate() {
+                    for (weight, _) in WEIGHT_FACTORS.iter().enumerate() {
+                        for role in [0, 1] {
+                            let mut ordered = ids.clone();
+                            ordered.sort_unstable_by(|left, right| {
+                                weights[*right as usize][context_index][song][weight][role]
+                                    .total_cmp(
+                                        &weights[*left as usize][context_index][song][weight][role],
+                                    )
+                                    .then(left.cmp(right))
+                            });
+                            lists.push(RankedCards {
+                                ids: ordered,
+                                head: 0,
+                            });
+                        }
+                    }
+                }
+            }
         }
         Ok(Self {
             model,
             configuration,
             parameters,
             contexts: weighted_contexts,
+            weights,
+            lists,
+            card_list_starts,
+            undo: Vec::new(),
         })
+    }
+
+    pub(crate) fn checkpoint(&self) -> usize {
+        self.undo.len()
+    }
+
+    pub(crate) fn remove(&mut self, id: u32, available: &[bool]) {
+        #[cfg(test)]
+        let previous_capacity = self.undo.capacity();
+        let character = self.model.character_indexes[id as usize];
+        self.advance_head(character, available);
+        for start in self.card_list_starts[id as usize] {
+            if start != usize::MAX {
+                for list in start..start + 18 {
+                    self.advance_head(list, available);
+                }
+            }
+        }
+        #[cfg(test)]
+        if previous_capacity != self.undo.capacity() {
+            crate::profiling::bound_storage(self.storage_bytes());
+        }
+    }
+
+    fn advance_head(&mut self, index: usize, available: &[bool]) {
+        let list = &mut self.lists[index];
+        let previous = list.head;
+        while list.head < list.ids.len() && !available[list.ids[list.head] as usize] {
+            list.head += 1;
+        }
+        if previous != list.head {
+            self.undo.push((index, previous));
+        }
+    }
+
+    pub(crate) fn restore(&mut self, checkpoint: usize) {
+        while self.undo.len() > checkpoint {
+            let (index, head) = self.undo.pop().unwrap();
+            self.lists[index].head = head;
+        }
+    }
+
+    fn head(&self, index: usize) -> Option<u32> {
+        let list = &self.lists[index];
+        list.ids.get(list.head).copied()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn storage_bytes(&self) -> usize {
+        use std::mem::size_of;
+        self.parameters.capacity() * size_of::<f64>()
+            + self.contexts.capacity() * size_of::<ContextWeights>()
+            + self
+                .contexts
+                .iter()
+                .map(|context| context.groups.capacity() * size_of::<(usize, usize)>())
+                .sum::<usize>()
+            + self.weights.capacity() * size_of::<[[[[f64; 2]; 3]; 3]; 4]>()
+            + self.lists.capacity() * size_of::<RankedCards>()
+            + self
+                .lists
+                .iter()
+                .map(|list| list.ids.capacity() * size_of::<u32>())
+                .sum::<usize>()
+            + self.card_list_starts.capacity() * size_of::<[usize; 4]>()
+            + self.undo.capacity() * size_of::<(usize, usize)>()
     }
 
     fn selected_characters(&self, selected: &[u32]) -> Result<Vec<usize>, UpperBoundFailure> {
@@ -420,33 +580,24 @@ impl<'a> FastUpperBoundEngine<'a> {
     fn maximum_parameter(
         &self,
         selected: &[u32],
-        remaining: &[u32],
+        next_group: usize,
         selected_characters: &[usize],
     ) -> Result<f64, UpperBoundFailure> {
-        let mut by_character = vec![None::<f64>; self.model.character_count];
-        for id in remaining {
-            let card = self
-                .model
-                .input
-                .cards
-                .get(*id as usize)
-                .ok_or(UpperBoundFailure::Unknown)?;
-            let character = self.model.character_indexes[*id as usize];
-            if card.is_excluded || selected_characters.contains(&character) {
-                continue;
-            }
-            let value = self.parameters[*id as usize];
-            by_character[character] =
-                Some(by_character[character].map_or(value, |old| old.max(value)));
-        }
-        let mut largest = by_character.into_iter().flatten().collect::<Vec<_>>();
-        largest.sort_unstable_by(|left, right| right.total_cmp(left));
-        if largest.len() < 5 - selected.len() {
-            return Err(UpperBoundFailure::Unknown);
-        }
         let mut result = 0.0;
         for id in selected {
             result = add_up(result, self.parameters[*id as usize])?;
+        }
+        if selected.len() == 5 {
+            return Ok(result);
+        }
+        let mut largest = (next_group..self.model.character_count)
+            .filter(|character| !selected_characters.contains(character))
+            .filter_map(|character| self.head(character))
+            .map(|id| self.parameters[id as usize])
+            .collect::<Vec<_>>();
+        largest.sort_unstable_by(|left, right| right.total_cmp(left));
+        if largest.len() < 5 - selected.len() {
+            return Err(UpperBoundFailure::Unknown);
         }
         for value in largest.into_iter().take(5 - selected.len()) {
             result = add_up(result, value)?;
@@ -457,12 +608,14 @@ impl<'a> FastUpperBoundEngine<'a> {
     fn support(
         &self,
         selected: &[u32],
-        remaining: &[u32],
+        next_group: usize,
         selected_characters: &[usize],
         song_slot: usize,
-        context: TeamContext,
-        scale: f64,
+        weighted: &ContextWeights,
+        weight: usize,
     ) -> Result<Option<Support>, UpperBoundFailure> {
+        let context = weighted.context;
+        let scale = weighted.scales[song_slot] * WEIGHT_FACTORS[weight];
         let mut fixed = Support {
             value: div_up(self.model.songs[song_slot].base, scale)?,
             members: [0; 5],
@@ -474,10 +627,7 @@ impl<'a> FastUpperBoundEngine<'a> {
                 return Ok(None);
             }
             let coefficient = self.model.contributions[id as usize][coefficient_index][song_slot];
-            let value = add_up(
-                mul_up(scale, self.parameters[id as usize])?,
-                div_up(coefficient.first_five, scale)?,
-            )?;
+            let value = self.weights[id as usize][coefficient_index][song_slot][weight][0];
             fixed.value = add_up(fixed.value, value)?;
             fixed.members[position] = id;
             let leader = div_up(coefficient.leader, scale)?;
@@ -487,43 +637,7 @@ impl<'a> FastUpperBoundEngine<'a> {
         // A character contributes at most one card. For a fixed positive scale,
         // only its best regular-card and best leader-card weights are needed.
         #[cfg(test)]
-        crate::profiling::support_pass(remaining.len());
-        let mut choices = vec![[None::<Choice>; 2]; self.model.character_count];
-        for id in remaining.iter().copied() {
-            let card = self
-                .model
-                .input
-                .cards
-                .get(id as usize)
-                .ok_or(UpperBoundFailure::Unknown)?;
-            let character = self.model.character_indexes[id as usize];
-            if card.is_excluded
-                || selected_characters.contains(&character)
-                || !context.accepts(card)
-            {
-                continue;
-            }
-            let coefficient = self.model.contributions[id as usize][coefficient_index][song_slot];
-            let regular = add_up(
-                mul_up(scale, self.parameters[id as usize])?,
-                div_up(coefficient.first_five, scale)?,
-            )?;
-            let leader = add_up(regular, div_up(coefficient.leader, scale)?)?;
-            retain_choice(
-                &mut choices[character][0],
-                Choice {
-                    value: regular,
-                    instance_id: id,
-                },
-            );
-            retain_choice(
-                &mut choices[character][1],
-                Choice {
-                    value: leader,
-                    instance_id: id,
-                },
-            );
-        }
+        crate::profiling::support_pass(0);
         let required = 5 - selected.len();
         let mut states = [[None::<Support>; 2]; 6];
         states[0][0] = Some(fixed);
@@ -533,7 +647,21 @@ impl<'a> FastUpperBoundEngine<'a> {
                 ..fixed
             });
         }
-        for group in choices {
+        if required == 0 {
+            return Ok(states[0][1]);
+        }
+        for &(character, start) in &weighted.groups {
+            if character < next_group || selected_characters.contains(&character) {
+                continue;
+            }
+            let group = std::array::from_fn::<_, 2, _>(|role| {
+                self.head(start + song_slot * 6 + weight * 2 + role)
+                    .map(|id| Choice {
+                        value: self.weights[id as usize][coefficient_index][song_slot][weight]
+                            [role],
+                        instance_id: id,
+                    })
+            });
             let previous = states;
             for count in 0..required {
                 for used_leader in 0..2 {
@@ -561,16 +689,16 @@ impl<'a> FastUpperBoundEngine<'a> {
     pub(crate) fn team_upper(
         &self,
         selected: &[u32],
-        remaining: &[u32],
+        next_group: usize,
         song_slot: usize,
-    ) -> Result<f64, UpperBoundFailure> {
+    ) -> Result<TeamUpper, UpperBoundFailure> {
         let song = self
             .model
             .songs
             .get(song_slot)
             .ok_or(UpperBoundFailure::Unknown)?;
         let characters = self.selected_characters(selected)?;
-        let parameter = self.maximum_parameter(selected, remaining, &characters)?;
+        let parameter = self.maximum_parameter(selected, next_group, &characters)?;
 
         // The three base multiplications are covered by gamma_3. A subnormal
         // intermediate cannot reach an integer score of one. Each independent
@@ -584,38 +712,44 @@ impl<'a> FastUpperBoundEngine<'a> {
         if range_upper.floor() > f64::from(u32::MAX) {
             return Err(UpperBoundFailure::Unknown);
         }
-        let mut family_upper = None::<f64>;
+        let mut family_upper = None::<(f64, [u32; 5])>;
         for weighted in &self.contexts {
-            let mut context_upper = None::<f64>;
-            for factor in WEIGHT_FACTORS {
-                let scale = weighted.scales[song_slot] * factor;
+            let mut context_upper = None::<(f64, [u32; 5])>;
+            for weight in 0..3 {
                 let Some(support) = self.support(
                     selected,
-                    remaining,
+                    next_group,
                     &characters,
                     song_slot,
-                    weighted.context,
-                    scale,
+                    weighted,
+                    weight,
                 )?
                 else {
                     continue;
                 };
                 let upper = div_up(mul_up(support.value, support.value)?, 4.0)?;
-                context_upper = Some(context_upper.map_or(upper, |previous| previous.min(upper)));
+                if context_upper.is_none_or(|previous| upper < previous.0) {
+                    context_upper = Some((upper, support.members));
+                }
             }
-            if let Some(upper) = context_upper {
-                family_upper = Some(family_upper.map_or(upper, |previous| previous.max(upper)));
+            if let Some(upper) = context_upper
+                && family_upper.is_none_or(|previous| upper.0 > previous.0)
+            {
+                family_upper = Some(upper);
             }
         }
         // Each actual team occurs in its actual context. Cases without a band
         // or attribute equality may include additional homogeneous teams; that
         // is only an upward relaxation, never per-card context mixing.
-        let upper = family_upper.ok_or(UpperBoundFailure::Unknown)?;
+        let (upper, members) = family_upper.ok_or(UpperBoundFailure::Unknown)?;
         let path_ceiling = upper.ceil();
         if path_ceiling >= (1_u128 << 64) as f64 {
             return Err(UpperBoundFailure::Unknown);
         }
-        reference_ceiling(path_ceiling as u128)
+        Ok(TeamUpper {
+            score: reference_ceiling(path_ceiling as u128)?,
+            members: Some(members),
+        })
     }
 
     /// A full-team, actual-context estimate for ordering only, never a proof.
@@ -666,7 +800,7 @@ impl<'a> FastUpperBoundEngine<'a> {
     pub(crate) fn propose_team(
         &self,
         selected: &[u32],
-        remaining: &[u32],
+        next_group: usize,
         song_slot: usize,
         rank: usize,
     ) -> Option<[u32; 5]> {
@@ -678,15 +812,15 @@ impl<'a> FastUpperBoundEngine<'a> {
         let characters = self.selected_characters(selected).ok()?;
         let mut candidates = Vec::<([u32; 5], f64)>::new();
         for weighted in &self.contexts {
-            for factor in WEIGHT_FACTORS {
+            for weight in 0..3 {
                 let Some(mut support) = self
                     .support(
                         selected,
-                        remaining,
+                        next_group,
                         &characters,
                         song_slot,
-                        weighted.context,
-                        weighted.scales[song_slot] * factor,
+                        weighted,
+                        weight,
                     )
                     .ok()
                     .flatten()
@@ -857,20 +991,17 @@ mod tests {
         input.validate().unwrap();
         let model = FastScoreModel::new(&input).unwrap();
         let engine = FastUpperBoundEngine::new(&model, &input.area_configurations[0]).unwrap();
-        let remaining = (0_u32..8).collect::<Vec<_>>();
         let roots: [f64; 3] =
-            std::array::from_fn(|slot| engine.team_upper(&[], &remaining, slot).unwrap());
+            std::array::from_fn(|slot| engine.team_upper(&[], 0, slot).unwrap().score);
         for first in [0, 5] {
             for second in [1, 6] {
                 for third in [2, 7] {
                     let mut set = [first, second, third, 3, 4];
                     set.sort_unstable();
                     let complete: [f64; 3] =
-                        std::array::from_fn(|slot| engine.team_upper(&set, &[], slot).unwrap());
+                        std::array::from_fn(|slot| engine.team_upper(&set, 0, slot).unwrap().score);
                     let partial: [f64; 3] = std::array::from_fn(|slot| {
-                        engine
-                            .team_upper(&[first, second], &[2, 7, 3, 4], slot)
-                            .unwrap()
+                        engine.team_upper(&[first, second], 0, slot).unwrap().score
                     });
                     for leader in set {
                         let exact = reference_scores(&input, set, leader);
@@ -883,13 +1014,55 @@ mod tests {
                 }
             }
         }
-        let best = engine.propose_team(&[0], &remaining, 0, 0).unwrap();
+        let best = engine.propose_team(&[0], 0, 0, 0).unwrap();
         assert!(best.contains(&0));
         let mut rank = 1;
-        while let Some(next) = engine.propose_team(&[0], &remaining, 0, rank) {
+        while let Some(next) = engine.propose_team(&[0], 0, 0, rank) {
             assert!(next.contains(&0));
             assert!(engine.estimate_team(best, 0) >= engine.estimate_team(next, 0));
             rank += 1;
+        }
+    }
+
+    #[test]
+    fn ordered_heads_match_available_cards_and_restore_the_original_bounds() {
+        let input = fixture();
+        let model = FastScoreModel::new(&input).unwrap();
+        let mut engine = FastUpperBoundEngine::new(&model, &input.area_configurations[0]).unwrap();
+        let baseline =
+            std::array::from_fn::<_, 3, _>(|slot| engine.team_upper(&[], 0, slot).unwrap());
+        let mut available = vec![true; input.cards.len()];
+        let assert_heads = |engine: &FastUpperBoundEngine<'_>, available: &[bool]| {
+            for (index, list) in engine.lists.iter().enumerate() {
+                assert_eq!(
+                    engine.head(index),
+                    list.ids.iter().copied().find(|id| available[*id as usize])
+                );
+            }
+        };
+        for first in 0..input.cards.len() {
+            available[first] = false;
+            engine.remove(first as u32, &available);
+            let checkpoint = engine.checkpoint();
+            assert_heads(&engine, &available);
+            for second in 0..input.cards.len() {
+                if second == first {
+                    continue;
+                }
+                available[second] = false;
+                engine.remove(second as u32, &available);
+                assert_heads(&engine, &available);
+                engine.restore(checkpoint);
+                available[second] = true;
+                assert_heads(&engine, &available);
+            }
+            engine.restore(0);
+            available[first] = true;
+            assert_heads(&engine, &available);
+            assert_eq!(
+                std::array::from_fn::<_, 3, _>(|slot| engine.team_upper(&[], 0, slot).unwrap()),
+                baseline
+            );
         }
     }
 
@@ -930,13 +1103,13 @@ mod tests {
             let engine = FastUpperBoundEngine::new(&model, &input.area_configurations[0]).unwrap();
             if parameter == 4_000_000_000.0 {
                 assert_eq!(
-                    engine.team_upper(&[0, 1, 2, 3, 4], &[], 0),
+                    engine.team_upper(&[0, 1, 2, 3, 4], 0, 0),
                     Err(UpperBoundFailure::Unknown)
                 );
             } else {
                 let exact = reference_scores(&input, [0, 1, 2, 3, 4], 2);
                 for (slot, score) in exact.into_iter().enumerate() {
-                    assert!(score <= engine.team_upper(&[0, 1, 2, 3, 4], &[], slot).unwrap());
+                    assert!(score <= engine.team_upper(&[0, 1, 2, 3, 4], 0, slot).unwrap().score);
                     if parameter == f64::from_bits(1) {
                         assert_eq!(score, 0.0);
                     }
