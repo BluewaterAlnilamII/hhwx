@@ -11,7 +11,7 @@ This crate defines the first executable boundary of the greenfield medley founda
 - finite Bestdori master skill-rate values;
 - Bestdori-compatible second timestamps with exactly six skill triggers per song.
 
-`isRateUpWithPerfect` enables Bestdori's fixed note-count formula. Callers do not supply stack amounts or maximum percentages. The scoring rule identifier is `hhwx-medley-bestdori-v2`; v2 uses independently rounded window extras and Bestdori's base operation order and window endpoints. The input shape is unchanged; previously normalized v1 inputs must be regenerated from their sources.
+`isRateUpWithPerfect` enables Bestdori's fixed note-count formula. Callers do not supply stack amounts or maximum percentages. The scoring rule identifier is `hhwx-medley-bestdori-v3`: BPM-anchored chart times, Bestdori's base operation order and exact window endpoints, independently rounded window extras, and a floor of each song mean before summing the medley. The input shape is unchanged; older normalized inputs must be regenerated from their raw sources.
 
 It is not a search request. There are no candidate limits, result counts, time budgets, memory budgets, pruning switches, or solver modes in the schema. Unknown JSON fields and unsupported schema/rules versions fail closed.
 

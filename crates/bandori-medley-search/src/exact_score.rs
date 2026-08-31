@@ -300,7 +300,8 @@ impl<'input> PreparedSong<'input> {
             let windows = self.window_contributions(&base_scores, &skills, leaders)?;
             let first_five: i128 = windows[..5].iter().flatten().sum();
             for index in (0..5).filter(|index| leaders[*index]) {
-                averages[index] = (5 * (base_total + windows[5][index]) + first_five) as f64 / 5.0;
+                averages[index] =
+                    ((5 * (base_total + windows[5][index]) + first_five) as f64 / 5.0).floor();
             }
         }
         Ok(averages)
@@ -421,6 +422,13 @@ mod tests {
                 LEADER_MEMBER_ORDERS[leader].map(|position| team.member_instance_ids[position]);
             reordered.teams[slot].deck_total_parameter = parameters[leader];
             let expected = evaluate_fixed_medley(&reordered).unwrap();
+            let raw_mean = expected.songs[slot]
+                .permutation_expected_score_bits
+                .iter()
+                .map(|bits| bits.to_f64())
+                .sum::<f64>()
+                / 120.0;
+            assert_eq!(expected.songs[slot].average_score(), raw_mean.floor());
             assert_eq!(
                 averages[leader].to_bits(),
                 expected.songs[slot].average_score().to_bits()

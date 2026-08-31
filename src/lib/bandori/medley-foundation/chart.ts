@@ -71,25 +71,23 @@ export function normalizeBestdoriScoringChart(
   if (notes.length === 0) failInput("INVALID_CHART", path, "must contain scoring notes");
 
   let bpmIndex = 0;
-  let currentBpm = 1;
-  let currentTime = 0;
-  let previousBeat = 0;
+  let bpmBeat = 0;
+  let bpmTime = 0;
+  let timePerBeat = 0;
   const normalized = notes.map((note, noteId) => {
-    while (bpmIndex < bpms.length && bpms[bpmIndex].beat < note.beat) {
+    while (bpmIndex < bpms.length && bpms[bpmIndex].beat <= note.beat) {
       const bpm = bpms[bpmIndex];
-      currentTime += (bpm.beat - previousBeat) * 60 / currentBpm;
-      previousBeat = bpm.beat;
-      currentBpm = bpm.bpm;
+      bpmTime += (bpm.beat - bpmBeat) * timePerBeat;
+      bpmBeat = bpm.beat;
+      timePerBeat = 60 / bpm.bpm;
       bpmIndex += 1;
     }
-    if (previousBeat < note.beat) {
-      currentTime += (note.beat - previousBeat) * 60 / currentBpm;
-      previousBeat = note.beat;
-    }
-    if (!Number.isFinite(currentTime) || currentTime < 0 || Object.is(currentTime, -0)) {
+    // Bestdori anchors time at BPM changes; per-note accumulation drifts at skill endpoints.
+    const timeSeconds = bpmTime + (note.beat - bpmBeat) * timePerBeat;
+    if (!Number.isFinite(timeSeconds) || timeSeconds < 0 || Object.is(timeSeconds, -0)) {
       failInput("INVALID_CHART", `${path}[${noteId}]`, "normalized note time is invalid");
     }
-    return { noteId, timeSeconds: currentTime, isSkillTrigger: note.isSkillTrigger };
+    return { noteId, timeSeconds, isSkillTrigger: note.isSkillTrigger };
   });
 
   if (normalized.filter((note) => note.isSkillTrigger).length !== 6) {

@@ -22,6 +22,7 @@ const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const git = (cwd, args) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 const measuredSources = [
+  [root, "src/lib/bandori/medley-foundation/chart.ts"],
   [root, "crates/bandori-medley-search/src/exact_score.rs"],
   [mainRoot, "src/lib/bandori/team-builder/core/scoring.ts"],
   [mainRoot, "src/lib/bandori/team-builder/core/chart.ts"],
@@ -52,7 +53,8 @@ const cases = [];
 for (const count of [119, 961]) {
   const profile = manifest.profiles.find((entry) => entry.aliases.includes(`sample-${count}`));
   const oldInput = readJson(join(archive, "runs", values.teams, `${count}-no-event.input.json`));
-  const selected = readJson(join(archive, "runs", values.teams, `${count}-no-event.result.json`)).native.outcome.bestSoFar;
+  const outcome = readJson(join(archive, "runs", values.teams, `${count}-no-event.result.json`)).native.outcome;
+  const selected = outcome.status === "exact" ? outcome.best : outcome.bestSoFar;
   const base = {
     ...source, profilePayload: readArchived(profile.path), selectedAreaItemIds: selected.selectedAreaItemIds,
     songs: oldInput.songs.map((song) => ({ songIdText: String(song.songId), difficulty: song.difficulty, chart: asset(`chart-${song.songId}-${song.difficulty}.json`) })),
@@ -93,13 +95,13 @@ const save = (name, value) => writeFileSync(join(runDirectory, name), `${JSON.st
 const bestdoriUrl = "https://bestdori.com/js/app.d390adb1.js";
 const bundle = await (await fetch(bestdoriUrl)).text();
 assert.equal(hash(bundle), "ac84605d7889e53c0144ab7c41e379c174b94b8dc31edae07f3483b8a0610778");
-// Extract only the five audited functions, never execute the application bundle.
-function extractFunction(name, from) {
-  const start = bundle.indexOf(`function ${name}(`, from);
+// Extract only the audited functions, never execute either application bundle.
+function extractFunction(name, from, source = bundle) {
+  const start = source.indexOf(`function${name ? ` ${name}` : ""}(`, from);
   assert(start >= 0, `missing original ${name}`);
-  let end = bundle.indexOf("{", start), depth = 1;
-  while (depth) { end += 1; if (bundle[end] === "{") depth += 1; if (bundle[end] === "}") depth -= 1; }
-  return { source: bundle.slice(start, end + 1), end };
+  let end = source.indexOf("{", start), depth = 1;
+  while (depth) { end += 1; if (source[end] === "{") depth += 1; if (source[end] === "}") depth -= 1; }
+  return { source: source.slice(start, end + 1), end };
 }
 let cursor = bundle.indexOf("function st(t,e,n,o,i){if(t.activationEffect");
 assert(cursor >= 0);
@@ -110,6 +112,26 @@ const functions = ["st", "mt", "ut", "lt", "ct"].map((name) => {
 }).join("\n");
 writeFileSync(join(runDirectory, "bestdori-functions.js"), functions);
 const bestdori = new Function(`${functions}; return {st, ut, ct};`)();
+const chartUrl = "https://bestdori.com/js/ToolTeamBuilder.6367a448.js";
+const chartBundle = await (await fetch(chartUrl)).text();
+assert.equal(hash(chartBundle), "060930307c802accbd754ac2a6b87eb6294e66cb44646e4cfdff9784670e659b");
+const getterStart = chartBundle.indexOf("songNotes:function(){if(this.apiChart)");
+assert(getterStart >= 0);
+const chartFunctions = `${extractFunction("B", chartBundle.lastIndexOf("function B(", getterStart), chartBundle).source}\nconst prepareChart = ${extractFunction("", getterStart, chartBundle).source};`;
+writeFileSync(join(runDirectory, "bestdori-chart.js"), chartFunctions);
+const prepareBestdoriChart = new Function(`${chartFunctions}; return prepareChart;`)();
+const checkedCharts = new Set();
+for (const { song } of cases) {
+  const key = `${song.songId}/${song.difficulty}`;
+  if (checkedCharts.has(key)) continue;
+  const original = prepareBestdoriChart.call({ apiChart: asset(`chart-${song.songId}-${song.difficulty}.json`) });
+  assert.deepEqual(
+    song.notes.map((note) => [note.timeSeconds, note.isSkillTrigger]),
+    original.map((note) => [note.time, Boolean(note.skill)]),
+    `${key}: raw chart times and trigger order must match original Bestdori`,
+  );
+  checkedCharts.add(key);
+}
 
 function effectRows(skill) {
   const value = skill.behavior;
@@ -225,24 +247,24 @@ const rows = cases.map((testCase, i) => {
   const native = nativeRows[i];
   assert.equal(native.label, testCase.label);
   const accuracy = compareBestdori(testCase);
-  assert.deepEqual(native.scores, accuracy.independentScores, `${testCase.label}: unchanged upstream skill formulas + agreed medley rules`);
-  if (accuracy.directlyComparable) assert.deepEqual(native.scores, accuracy.originalScores, `${testCase.label}: original Bestdori ct`);
+  assert.deepEqual(native.scores, accuracy.independentScores.map(Math.floor), `${testCase.label}: unchanged upstream skill formulas + agreed medley rules and song floor`);
+  if (accuracy.directlyComparable) assert.deepEqual(native.scores, accuracy.originalScores.map(Math.floor), `${testCase.label}: original Bestdori ct, floored per song`);
   const main = timeMain(testCase);
   const row = { label: testCase.label, songId: testCase.song.songId, noteCount: testCase.song.notes.length,
     native, main, speedup: main.medianNs / native.medianNs, ...accuracy,
-    originalDifferences: native.scores.map((score, leader) => score - accuracy.originalScores[leader]),
-    jointFloorDifferences: native.scores.map((score, leader) => score - accuracy.jointScores[leader]),
+    originalDifferences: native.scores.map((score, leader) => score - Math.floor(accuracy.originalScores[leader])),
+    jointFloorDifferences: native.scores.map((score, leader) => score - Math.floor(accuracy.jointScores[leader])),
   };
   console.log(`${row.label}: ${native.medianNs.toFixed(0)} ns vs main ${main.medianNs.toFixed(0)} ns (${row.speedup.toFixed(2)}x), Bestdori comparable=${accuracy.directlyComparable}`);
   return row;
 });
 save("report.json", {
   generatedAt: new Date().toISOString(), sourceCommit: git(root, ["rev-parse", "HEAD"]), sourceChanges: git(root, ["diff", "--stat"]),
-  scoringRulesVersion: "hhwx-medley-bestdori-v2", mainCommit: git(mainRoot, ["rev-parse", "HEAD"]),
-  bestdori: { url: bestdoriUrl, bundleSha256: hash(bundle), functionsSha256: hash(functions) },
+  scoringRulesVersion: "hhwx-medley-bestdori-v3", mainCommit: git(mainRoot, ["rev-parse", "HEAD"]),
+  bestdori: { url: bestdoriUrl, bundleSha256: hash(bundle), functionsSha256: hash(functions), chartUrl, chartBundleSha256: hash(chartBundle), chartFunctionsSha256: hash(chartFunctions) },
   runtime: { node: process.version, rust: execFileSync("rustc", ["--version"], { encoding: "utf8" }).trim(), cpu: cpus()[0]?.model },
   method: "Native release Rust vs main TypeScript/Node, 2000 warmups + median of 7x10000 evaluations. Identical normalized chart, one fixed power value and resolved real skills; same five-member set with best leader. Chart and parameter preparation excluded, main chart/skill formula caches warm, computed-score caches disabled. Not a browser/WASM or full-search speed claim; leader-dependent power variants are not timed. All five leader scores checked, no historical score threshold and no search run.",
-  precision: "originalScores execute unchanged Bestdori ct (ordinary combo, one active window); independentScores use unchanged st with agreed medley combo/independent windows; jointScores use unchanged st with medley combo and sum multipliers before flooring, isolating the approved overlap-rounding tradeoff. All consume the same normalized real note array; no chart-preprocessor comparison is claimed.",
+  precision: "Real chart times and trigger order are checked against the original ToolTeamBuilder songNotes getter before scoring. originalScores execute unchanged Bestdori ct (ordinary combo, one active window); independentScores use unchanged st with agreed medley combo/independent windows; jointScores sum multipliers before the note floor. Those arrays retain upstream raw means; native scores and reported differences floor each song mean before comparison, as HHWX requires.",
   measuredSources, files: [...usedFiles.values()], rows,
 });
 console.log(`All ${rows.length * 5} leader-score comparisons passed. Report: ${join(runDirectory, "report.json")}`);

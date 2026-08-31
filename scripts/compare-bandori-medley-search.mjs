@@ -18,6 +18,7 @@ const { values } = parseArgs({ options: {
   remaining: { type: "boolean", default: false },
   six: { type: "boolean", default: false },
   diagnose: { type: "boolean", default: false },
+  case: { type: "string" },
 } });
 assert([values.remaining, values.six, values.diagnose].filter(Boolean).length <= 1, "choose one run mode");
 const DURATION_MS = values.diagnose ? 60_000 : 300_000;
@@ -27,7 +28,9 @@ const CASES = (values.remaining ? [119, 961, 962, 972] : values.six || values.di
     id: `${cardCount}-${eventId === null ? "no-event" : `event-${eventId}`}`,
     cardCount, eventId, songIds: cardCount === 119 ? [295, 300, 703] : [385, 193, 619],
   }))
-)).filter((testCase) => !values.remaining || testCase.id !== "119-no-event");
+)).filter((testCase) => (!values.remaining || testCase.id !== "119-no-event")
+  && (!values.case || testCase.id === values.case));
+assert(CASES.length > 0, "no case matches the selected run mode");
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const writeJson = (path, value) => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 const manifest = JSON.parse(readFileSync(join(ARCHIVE_ROOT, "manifest.json"), "utf8"));

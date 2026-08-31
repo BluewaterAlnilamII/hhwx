@@ -385,7 +385,8 @@ fn score_song(
     }
     // Independent windows make the 120-order integer sum divisible by 24.
     // Reduce before the only integer-to-f64 conversion, as production does.
-    let average_score = (average_accumulator / 24) as f64 / 5.0;
+    // Settle each song before its score enters the medley sum.
+    let average_score = ((average_accumulator / 24) as f64 / 5.0).floor();
 
     Ok(SongScoreTraceV1 {
         slot: song.slot,
