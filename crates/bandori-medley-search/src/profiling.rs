@@ -106,6 +106,14 @@ pub(crate) fn domain_storage(bytes: usize) {
     });
 }
 
+pub(crate) fn stack_storage(bytes: usize) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            profile.peak_stack_bytes = profile.peak_stack_bytes.max(bytes);
+        }
+    });
+}
+
 pub(crate) fn improvement(score: f64, diagnostics: &MedleySearchDiagnosticsV1) {
     PROFILE.with_borrow_mut(|profile| {
         if let Some(profile) = profile {

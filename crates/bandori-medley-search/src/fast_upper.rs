@@ -535,6 +535,33 @@ impl<'a> FastUpperBoundEngine<'a> {
         list.ids.get(list.head).copied()
     }
 
+    /// A cheap replacement penalty for branch ordering only. It is not a bound:
+    /// the actual team may change characters or whole-team skill context.
+    pub(crate) fn replacement_loss(&self, id: u32, song: usize, available: &[bool]) -> f64 {
+        let mut loss = 0.0_f64;
+        for (context, start) in self.card_list_starts[id as usize].into_iter().enumerate() {
+            if start == usize::MAX {
+                continue;
+            }
+            for role in [0, 1] {
+                let list = &self.lists[start + song * 6 + 2 + role];
+                if list.ids.get(list.head) != Some(&id) {
+                    continue;
+                }
+                let next = list.ids[list.head + 1..]
+                    .iter()
+                    .copied()
+                    .find(|other| available[*other as usize]);
+                let value = self.weights[id as usize][context][song][1][role];
+                let alternative = next.map_or(0.0, |other| {
+                    self.weights[other as usize][context][song][1][role]
+                });
+                loss = loss.max(value - alternative);
+            }
+        }
+        loss
+    }
+
     #[cfg(test)]
     pub(crate) fn storage_bytes(&self) -> usize {
         use std::mem::size_of;
