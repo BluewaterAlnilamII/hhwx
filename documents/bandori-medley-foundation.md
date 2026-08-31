@@ -37,7 +37,7 @@ Malformed profile compression, missing selected master rows, invalid references,
 
 Around 2,000 cards is a difficult future acceptance case, not the early/default test size. Its targets remain 300 seconds, competitive incremental memory of 200–300 MiB, and a hard incremental peak below 1 GiB. Tiny inputs establish correctness first; timeout never counts as success.
 
-The provisional search direction is early whole-medley bounds with reusable card indexes, partitioning contested-card ownership including non-use, bounded complete-solution construction and one-sweep improvements, and short-lived exhaustive candidate blocks with a bounded score cache. These are revisable engineering decisions, not game rules. Calc informs pruning placement and data lifetime, not HHWX scoring or proof semantics. Details belong in [the search design](bandori-medley-search.md).
+The provisional search direction is joint three-team allocation bounds, forward/backward reuse to prune card destinations including non-use, bounded complete-solution construction and one-sweep improvements, and short-lived exhaustive blocks with budgeted caches. Useful memory reuse takes priority over minimum RSS. These are revisable engineering decisions, not game rules. Calc informs pruning placement and data lifetime, not HHWX scoring or proof semantics. Details belong in [the search design](bandori-medley-search.md).
 
 ## Parameters, skills and charts
 

@@ -128,6 +128,7 @@ const metadata = {
     timingMeasurement: "Exclusive wall-clock phases in the native test build, including instrumentation overhead. Production search has no timers. Saved historical scores are compared only after search; no old solver or team replay is run.",
   } : {}),
   memoryMeasurement: "Windows native process PeakWorkingSet64 sampled every second; excludes input preparation and is not browser/WASM incremental memory. The last interval before exit may be missed.",
+  storageAccounting: "candidateBudgetBytes retains its archive field name; the budget covers rows/indexes, score cache, joint workspace reservations and live conditional tables. peakSearchStorageBytes includes conservative workspace reservations, not a sampled heap total.",
   cases: cases.map(({ id, cardCount, eventId, input, baseline, profilePayloadSha256 }) => {
     const inputPath = join(runDirectory, `${id}.input.json`);
     writeJson(inputPath, input);

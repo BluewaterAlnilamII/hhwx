@@ -11,6 +11,7 @@ mod error;
 mod exact_score;
 mod fast_upper;
 mod input;
+mod joint_upper;
 mod output;
 mod parameters;
 #[cfg(test)]

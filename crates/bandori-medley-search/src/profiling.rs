@@ -14,6 +14,7 @@ pub(crate) enum Phase {
     Domains,
     PartialBounds,
     CompleteBounds,
+    JointBounds,
     Proposals,
     Improvements,
     Scoring,
@@ -21,11 +22,12 @@ pub(crate) enum Phase {
     Other,
 }
 
-const PHASE_NAMES: [&str; 9] = [
+const PHASE_NAMES: [&str; 10] = [
     "setup",
     "domains",
     "partialBounds",
     "completeBounds",
+    "jointBounds",
     "proposals",
     "improvements",
     "scoring",
@@ -37,15 +39,20 @@ struct Profile {
     started: Instant,
     last: Instant,
     phase: Phase,
-    elapsed: [Duration; 9],
-    calls: [u64; 9],
-    support_passes: [u64; 9],
-    support_heads: [u64; 9],
+    elapsed: [Duration; 10],
+    calls: [u64; 10],
+    support_passes: [u64; 10],
+    support_heads: [u64; 10],
     improvements: Vec<Value>,
     warm_start_ms: Option<f64>,
     peak_bound_index_bytes: usize,
     peak_domain_bytes: usize,
     peak_stack_bytes: usize,
+    joint_destinations_pruned: u64,
+    joint_cards_fixed: u64,
+    joint_reuses: u64,
+    peak_joint_bytes: usize,
+    first_joint_upper: Option<f64>,
 }
 
 impl Profile {
@@ -116,6 +123,27 @@ pub(crate) fn stack_storage(bytes: usize) {
     });
 }
 
+pub(crate) fn joint_bound(score: f64, bytes: usize, reused: bool) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            profile.peak_joint_bytes = profile.peak_joint_bytes.max(bytes);
+            profile.joint_reuses += u64::from(reused);
+            if profile.first_joint_upper.is_none() && score.is_finite() {
+                profile.first_joint_upper = Some(score);
+            }
+        }
+    });
+}
+
+pub(crate) fn joint_cuts(destinations: u32, fixed: bool) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            profile.joint_destinations_pruned += u64::from(destinations);
+            profile.joint_cards_fixed += u64::from(fixed);
+        }
+    });
+}
+
 pub(crate) fn improvement(score: f64, diagnostics: &MedleySearchDiagnosticsV1) {
     PROFILE.with_borrow_mut(|profile| {
         if let Some(profile) = profile {
@@ -145,15 +173,20 @@ pub(crate) fn start() {
             started: now,
             last: now,
             phase: Phase::Other,
-            elapsed: [Duration::ZERO; 9],
-            calls: [0; 9],
-            support_passes: [0; 9],
-            support_heads: [0; 9],
+            elapsed: [Duration::ZERO; 10],
+            calls: [0; 10],
+            support_passes: [0; 10],
+            support_heads: [0; 10],
             improvements: Vec::new(),
             warm_start_ms: None,
             peak_bound_index_bytes: 0,
             peak_domain_bytes: 0,
             peak_stack_bytes: 0,
+            joint_destinations_pruned: 0,
+            joint_cards_fixed: 0,
+            joint_reuses: 0,
+            peak_joint_bytes: 0,
+            first_joint_upper: None,
         });
     });
 }
@@ -177,6 +210,11 @@ pub(crate) fn finish() -> Value {
             "peakBoundIndexBytes": profile.peak_bound_index_bytes,
             "peakDomainBytes": profile.peak_domain_bytes,
             "peakStackBytes": profile.peak_stack_bytes,
+            "jointDestinationsPruned": profile.joint_destinations_pruned,
+            "jointCardsFixed": profile.joint_cards_fixed,
+            "jointReuses": profile.joint_reuses,
+            "peakJointReservedBytes": profile.peak_joint_bytes,
+            "firstJointUpper": profile.first_joint_upper,
             "improvements": profile.improvements,
         })
     })

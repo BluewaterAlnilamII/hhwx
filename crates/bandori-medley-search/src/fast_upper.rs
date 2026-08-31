@@ -23,7 +23,7 @@ use crate::{AreaItemConfigurationV1, CardAttributeV1, MedleySearchInputV1, Searc
 const ERROR_DENOMINATOR: u128 = 1_u128 << 52;
 const WEIGHT_FACTORS: [f64; 3] = [0.8, 1.0, 1.25];
 
-fn add_up(left: f64, right: f64) -> Result<f64, UpperBoundFailure> {
+pub(crate) fn add_up(left: f64, right: f64) -> Result<f64, UpperBoundFailure> {
     if left == 0.0 {
         return checked_finite(right);
     }
@@ -33,14 +33,14 @@ fn add_up(left: f64, right: f64) -> Result<f64, UpperBoundFailure> {
     checked_finite(checked_finite(left + right)?.next_up())
 }
 
-fn mul_up(left: f64, right: f64) -> Result<f64, UpperBoundFailure> {
+pub(crate) fn mul_up(left: f64, right: f64) -> Result<f64, UpperBoundFailure> {
     if left == 0.0 || right == 0.0 {
         return Ok(0.0);
     }
     checked_finite(checked_finite(left * right)?.next_up())
 }
 
-fn div_up(numerator: f64, denominator: f64) -> Result<f64, UpperBoundFailure> {
+pub(crate) fn div_up(numerator: f64, denominator: f64) -> Result<f64, UpperBoundFailure> {
     if !denominator.is_finite() || denominator <= 0.0 {
         return Err(UpperBoundFailure::Unknown);
     }
@@ -50,7 +50,7 @@ fn div_up(numerator: f64, denominator: f64) -> Result<f64, UpperBoundFailure> {
     checked_finite(checked_finite(numerator / denominator)?.next_up())
 }
 
-fn rounding_factor(operations: u128) -> Result<f64, UpperBoundFailure> {
+pub(crate) fn rounding_factor(operations: u128) -> Result<f64, UpperBoundFailure> {
     if operations >= ERROR_DENOMINATOR {
         return Err(UpperBoundFailure::Unknown);
     }
@@ -323,6 +323,176 @@ fn retain_support(target: &mut Option<Support>, candidate: Support) {
 }
 
 impl<'a> FastUpperBoundEngine<'a> {
+    /// Linear score uppers for a joint allocation. Unknown whole-team contexts
+    /// are relaxed per card, never enumerated as a three-context product.
+    pub(crate) fn joint_weights(
+        &self,
+        owners: &[u8],
+        groups: &[Vec<u32>],
+    ) -> Result<Option<crate::joint_upper::JointWeights>, UpperBoundFailure> {
+        let mut result = crate::joint_upper::JointWeights {
+            cards: vec![[[0.0; 2]; 3]; owners.len()],
+            constant: 0.0,
+        };
+        for slot in 0..3 {
+            let bit = 1 << slot;
+            let forced = owners
+                .iter()
+                .enumerate()
+                .filter_map(|(id, &mask)| (mask == bit).then_some(id))
+                .collect::<Vec<_>>();
+            let reachable = self
+                .contexts
+                .iter()
+                .filter(|weighted| {
+                    forced
+                        .iter()
+                        .all(|&id| weighted.context.accepts(&self.model.input.cards[id]))
+                        && groups
+                            .iter()
+                            .filter(|group| {
+                                group.iter().any(|&id| {
+                                    owners[id as usize] & bit != 0
+                                        && weighted
+                                            .context
+                                            .accepts(&self.model.input.cards[id as usize])
+                                })
+                            })
+                            .count()
+                            >= 5
+                })
+                .collect::<Vec<_>>();
+            let mut coefficients = vec![[0.0_f64; 2]; owners.len()];
+            for (id, &mask) in owners.iter().enumerate() {
+                if mask & bit == 0 {
+                    continue;
+                }
+                for weighted in &reachable {
+                    if weighted.context.accepts(&self.model.input.cards[id]) {
+                        let contribution =
+                            self.model.contributions[id][weighted.context.skill_index()][slot];
+                        coefficients[id][0] = coefficients[id][0].max(contribution.first_five);
+                        coefficients[id][1] = coefficients[id][1].max(contribution.leader);
+                    }
+                }
+            }
+            let mut parameter_maxima = groups
+                .iter()
+                .filter_map(|group| {
+                    group
+                        .iter()
+                        .filter(|&&id| owners[id as usize] & bit != 0)
+                        .map(|&id| self.parameters[id as usize])
+                        .max_by(f64::total_cmp)
+                })
+                .collect::<Vec<_>>();
+            parameter_maxima.sort_unstable_by(|left, right| right.total_cmp(left));
+            if parameter_maxima.len() < 5 {
+                return Ok(None);
+            }
+            let parameter = parameter_maxima[..5]
+                .iter()
+                .try_fold(0.0, |sum, &p| add_up(sum, p))?;
+            self.check_parameter_range(parameter, slot)?;
+            let max_first = coefficients
+                .iter()
+                .map(|value| value[0])
+                .fold(0.0_f64, f64::max);
+            let max_leader = coefficients
+                .iter()
+                .map(|value| value[1])
+                .fold(0.0_f64, f64::max);
+            let scale =
+                ((self.model.songs[slot].base + 5.0 * max_first + max_leader) / parameter).sqrt();
+            let scale = if scale.is_finite() && scale > 0.0 {
+                scale
+            } else {
+                1.0
+            };
+            let mut best = None::<(f64, f64, Vec<[f64; 2]>)>;
+            for factor in WEIGHT_FACTORS {
+                let t = scale * factor;
+                let base = div_up(self.model.songs[slot].base, t)?;
+                let mut weights = vec![[0.0; 2]; owners.len()];
+                for (id, &mask) in owners.iter().enumerate() {
+                    if mask & bit != 0 {
+                        let regular = add_up(
+                            mul_up(t, self.parameters[id])?,
+                            div_up(coefficients[id][0], t)?,
+                        )?;
+                        weights[id] = [regular, add_up(regular, div_up(coefficients[id][1], t)?)?];
+                    }
+                }
+                let mut states = [f64::NEG_INFINITY; 10];
+                states[0] = base;
+                for group in groups {
+                    let required = group.iter().find(|&&id| owners[id as usize] == bit);
+                    let mut choices = [f64::NEG_INFINITY; 2];
+                    for &id in group {
+                        if owners[id as usize] & bit != 0
+                            && required.is_none_or(|&fixed| fixed == id)
+                        {
+                            for role in 0..2 {
+                                choices[role] = choices[role].max(weights[id as usize][role]);
+                            }
+                        }
+                    }
+                    let mut next = if required.is_some() {
+                        [f64::NEG_INFINITY; 10]
+                    } else {
+                        states
+                    };
+                    for (state, &value) in states.iter().enumerate() {
+                        if !value.is_finite() {
+                            continue;
+                        }
+                        for (role, &choice) in choices.iter().enumerate() {
+                            if choice.is_finite()
+                                && (if role == 0 { state % 5 < 4 } else { state < 5 })
+                            {
+                                let destination = state + if role == 0 { 1 } else { 5 };
+                                next[destination] = next[destination].max(add_up(value, choice)?);
+                            }
+                        }
+                    }
+                    states = next;
+                }
+                let maximum = states[9];
+                if !maximum.is_finite() {
+                    return Ok(None);
+                }
+                if best.as_ref().is_none_or(|previous| maximum < previous.0) {
+                    best = Some((maximum, base, weights));
+                }
+            }
+            let (maximum, base, weights) = best.unwrap();
+            // A = base + sum(w), base <= A <= maximum. The chord of A²/4
+            // is base²/4 + (maximum+base)*sum(w)/4: no negative intercept
+            // or cancellation enters the proof arithmetic.
+            let slope = div_up(add_up(maximum, base)?, 4.0)?;
+            result.constant = add_up(result.constant, div_up(mul_up(base, base)?, 4.0)?)?;
+            for (id, roles) in weights.into_iter().enumerate() {
+                for (role, value) in roles.into_iter().enumerate() {
+                    result.cards[id][slot][role] = mul_up(slope, value)?;
+                }
+            }
+        }
+        Ok(Some(result))
+    }
+
+    fn check_parameter_range(&self, parameter: f64, slot: usize) -> Result<(), UpperBoundFailure> {
+        let song = &self.model.songs[slot];
+        checked_finite(parameter * song.coefficient)?;
+        let range_upper = mul_up(
+            mul_up(parameter, song.maximum_alpha)?,
+            self.model.maximum_multiplier,
+        )?;
+        if range_upper.floor() > f64::from(u32::MAX) {
+            return Err(UpperBoundFailure::Unknown);
+        }
+        Ok(())
+    }
+
     pub(crate) fn new(
         model: &'a FastScoreModel<'a>,
         configuration: &'a AreaItemConfigurationV1,
@@ -739,14 +909,7 @@ impl<'a> FastUpperBoundEngine<'a> {
         // intermediate cannot reach an integer score of one. Each independent
         // skill multiplication is covered by skill_delta, not joint addition.
         // Use the whole family's parameter maximum to prove per-window u32 safety.
-        checked_finite(parameter * song.coefficient)?;
-        let range_upper = mul_up(
-            mul_up(parameter, song.maximum_alpha)?,
-            self.model.maximum_multiplier,
-        )?;
-        if range_upper.floor() > f64::from(u32::MAX) {
-            return Err(UpperBoundFailure::Unknown);
-        }
+        self.check_parameter_range(parameter, song_slot)?;
         let (upper, members) = if let Ok(members) = <[u32; 5]>::try_from(selected) {
             // With all five cards fixed, P*K is already a bound. No weighted
             // maximization or relaxation of the actual team context is needed.
