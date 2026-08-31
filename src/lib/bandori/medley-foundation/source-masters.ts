@@ -1,7 +1,15 @@
 import { resolveBandoriCardForServerWithJpFallback } from "@/lib/bandori/cards/regional-extensions";
 
-import type { BandoriServer, MedleyDifficulty } from "./contracts";
-import { failInput, readRecord } from "./errors";
+import { normalizeBestdoriScoringChart } from "./chart";
+import type {
+  BandoriServer,
+  FixedSongSourceSelectionV1,
+  MedleyDifficulty,
+  MedleySongV1,
+  Triple,
+} from "./contracts";
+import { assertAllowedKeys, failInput, readArray, readRecord } from "./errors";
+import { parseSongIdText } from "./numeric";
 
 const DIFFICULTIES = ["easy", "normal", "hard", "expert", "special"] as const;
 
@@ -35,6 +43,46 @@ export function readSourcePlayLevel(
     "INVALID_MASTER",
   );
   return positiveIntegerLike(row.playLevel, `${masterPath}.difficulty.${difficultyIndex}.playLevel`, 0xffff);
+}
+
+export function readSongSelections(value: unknown, path: string): Triple<FixedSongSourceSelectionV1> {
+  const songs = readArray(value, path, "INVALID_SONG");
+  if (songs.length !== 3) failInput("INVALID_SONG", path, "must contain exactly three songs");
+  return songs.map((rawSong, slot) => {
+    const songPath = `${path}[${slot}]`;
+    const song = readRecord(rawSong, songPath, "INVALID_SONG");
+    assertAllowedKeys(
+      song,
+      ["songIdText", "difficulty", "chart"],
+      ["songIdText", "difficulty", "chart"],
+      songPath,
+      "INVALID_SONG",
+    );
+    return {
+      songIdText: typeof song.songIdText === "string"
+        ? song.songIdText
+        : failInput("INVALID_SONG", `${songPath}.songIdText`, "must be a string"),
+      difficulty: readSourceDifficulty(song.difficulty, `${songPath}.difficulty`),
+      chart: song.chart,
+    };
+  }) as Triple<FixedSongSourceSelectionV1>;
+}
+
+export function buildSongs(
+  selections: Triple<FixedSongSourceSelectionV1>,
+  songsById: Record<string, unknown>,
+  path: string,
+): Triple<MedleySongV1> {
+  return selections.map((selection, slot) => {
+    const songId = parseSongIdText(selection.songIdText, `${path}[${slot}].songIdText`);
+    return {
+      slot,
+      songId,
+      difficulty: selection.difficulty,
+      playLevel: readSourcePlayLevel(songsById[String(songId)], songId, selection.difficulty),
+      notes: normalizeBestdoriScoringChart(selection.chart, `${path}[${slot}].chart`),
+    };
+  }) as Triple<MedleySongV1>;
 }
 
 export function requireSourceMaster(

@@ -9,20 +9,11 @@ import type {
   AreaItemConfigurationV1,
   BandoriCardAttribute,
   CalculatedProfileCardV1,
-  FixedSongSourceSelectionV1,
   MedleySearchInputV1,
-  MedleySongV1,
   SearchCardSkillContextsV1,
-  Triple,
 } from "./contracts";
-import { normalizeBestdoriScoringChart } from "./chart";
-import {
-  assertAllowedKeys,
-  failInput,
-  readArray,
-  readRecord,
-} from "./errors";
-import { parsePerfectRatePercent, parseSongIdText } from "./numeric";
+import { assertAllowedKeys, failInput, readRecord } from "./errors";
+import { parsePerfectRatePercent } from "./numeric";
 import {
   calculateCardEventParameter,
   calculateProfileAreaItem,
@@ -31,8 +22,8 @@ import {
 import { decodeMedleyProfile } from "./profile";
 import { resolveBestdoriScoreSkill } from "./skills";
 import {
-  readSourceDifficulty,
-  readSourcePlayLevel,
+  buildSongs,
+  readSongSelections,
   requireSourceMaster,
   resolveSourceCardMaster,
 } from "./source-masters";
@@ -57,46 +48,6 @@ const ATTRIBUTE_AREA_ITEM_IDS: Record<BandoriCardAttribute, readonly number[]> =
 };
 
 const PARAMETER_AREA_ITEM_IDS = [[80], [81], [82]] as const;
-
-function readSongSelections(value: unknown, path: string): Triple<FixedSongSourceSelectionV1> {
-  const songs = readArray(value, path, "INVALID_SONG");
-  if (songs.length !== 3) failInput("INVALID_SONG", path, "must contain exactly three songs");
-  return songs.map((rawSong, slot) => {
-    const songPath = `${path}[${slot}]`;
-    const song = readRecord(rawSong, songPath, "INVALID_SONG");
-    assertAllowedKeys(
-      song,
-      ["songIdText", "difficulty", "chart"],
-      ["songIdText", "difficulty", "chart"],
-      songPath,
-      "INVALID_SONG",
-    );
-    return {
-      songIdText: typeof song.songIdText === "string"
-        ? song.songIdText
-        : failInput("INVALID_SONG", `${songPath}.songIdText`, "must be a string"),
-      difficulty: readSourceDifficulty(song.difficulty, `${songPath}.difficulty`),
-      chart: song.chart,
-    };
-  }) as Triple<FixedSongSourceSelectionV1>;
-}
-
-function buildSongs(
-  selections: Triple<FixedSongSourceSelectionV1>,
-  songsById: Record<string, unknown>,
-  path: string,
-): Triple<MedleySongV1> {
-  return selections.map((selection, slot) => {
-    const songId = parseSongIdText(selection.songIdText, `${path}[${slot}].songIdText`);
-    return {
-      slot,
-      songId,
-      difficulty: selection.difficulty,
-      playLevel: readSourcePlayLevel(songsById[String(songId)], songId, selection.difficulty),
-      notes: normalizeBestdoriScoringChart(selection.chart, `${path}[${slot}].chart`),
-    };
-  }) as Triple<MedleySongV1>;
-}
 
 function resolveSkillContexts(
   card: CalculatedProfileCardV1,

@@ -10,11 +10,9 @@ import type {
   Five,
   FixedMedleyEvaluationInputV1,
   FixedMedleyFoundationResultV1,
-  FixedSongSourceSelectionV1,
   FixedTeamParameterTraceV1,
   FixedTeamSourceSelectionV1,
   FixedTeamV1,
-  MedleySongV1,
   Triple,
 } from "./contracts";
 import {
@@ -24,14 +22,13 @@ import {
   readRecord,
   readSafeInteger,
 } from "./errors";
-import { normalizeBestdoriScoringChart } from "./chart";
-import { parsePerfectRatePercent, parseSongIdText } from "./numeric";
+import { parsePerfectRatePercent } from "./numeric";
 import { calculateFixedTeamParameters, calculateProfileCard } from "./parameters";
 import { decodeMedleyProfile } from "./profile";
 import { buildFixedTeamSkillContext, resolveBestdoriScoreSkill } from "./skills";
 import {
-  readSourceDifficulty,
-  readSourcePlayLevel,
+  buildSongs,
+  readSongSelections,
   requireSourceMaster,
   resolveSourceCardMaster,
 } from "./source-masters";
@@ -77,28 +74,6 @@ function readTeamSelections(value: unknown): Triple<FixedTeamSourceSelectionV1> 
       )) as Five<number>,
     };
   }) as Triple<FixedTeamSourceSelectionV1>;
-}
-
-function readSongSelections(value: unknown): Triple<FixedSongSourceSelectionV1> {
-  const songs = readArray(value, "songs", "INVALID_SONG");
-  if (songs.length !== 3) failInput("INVALID_SONG", "songs", "must contain exactly three songs");
-  return songs.map((rawSong, slot) => {
-    const song = readRecord(rawSong, `songs[${slot}]`, "INVALID_SONG");
-    assertAllowedKeys(
-      song,
-      ["songIdText", "difficulty", "chart"],
-      ["songIdText", "difficulty", "chart"],
-      `songs[${slot}]`,
-      "INVALID_SONG",
-    );
-    return {
-      songIdText: typeof song.songIdText === "string"
-        ? song.songIdText
-        : failInput("INVALID_SONG", `songs[${slot}].songIdText`, "must be a string"),
-      difficulty: readSourceDifficulty(song.difficulty, `songs[${slot}].difficulty`),
-      chart: song.chart,
-    };
-  }) as Triple<FixedSongSourceSelectionV1>;
 }
 
 /** Build a fixed 15-card, three-team scoring input without performing any search. */
@@ -152,7 +127,7 @@ export function buildFixedMedleyEvaluationInput(
   const songsById = readRecord(source.songsById, `${path}.songsById`, "INVALID_MASTER");
   const selectedAreaItemIds = readAreaItemIds(source.selectedAreaItemIds);
   const teamSelections = readTeamSelections(source.teams);
-  const songSelections = readSongSelections(source.songs);
+  const songSelections = readSongSelections(source.songs, "songs");
   const perfectRate = parsePerfectRatePercent(
     source.perfectRatePercentText,
     `${path}.perfectRatePercentText`,
@@ -242,28 +217,13 @@ export function buildFixedMedleyEvaluationInput(
     });
   }
 
-  const scoringSongs = songSelections.map((selection, songSlot) => {
-    const songId = parseSongIdText(selection.songIdText, `${path}.songs[${songSlot}].songIdText`);
-    return {
-      slot: songSlot,
-      songId,
-      difficulty: selection.difficulty,
-      playLevel: readSourcePlayLevel(
-        songsById[String(songId)],
-        songId,
-        selection.difficulty,
-      ),
-      notes: normalizeBestdoriScoringChart(selection.chart, `${path}.songs[${songSlot}].chart`),
-    };
-  }) as Triple<MedleySongV1>;
-
   const scoringInput: FixedMedleyEvaluationInputV1 = {
     schemaVersion: MEDLEY_SCORING_INPUT_SCHEMA_VERSION,
     scoringRulesVersion: MEDLEY_SCORING_RULES_VERSION,
     perfectRate,
     cards: scoringCards,
     teams: scoringTeams as Triple<FixedTeamV1>,
-    songs: scoringSongs,
+    songs: buildSongs(songSelections, songsById, `${path}.songs`),
   };
   return {
     scoringInput,

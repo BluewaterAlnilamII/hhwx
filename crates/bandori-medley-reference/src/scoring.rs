@@ -110,11 +110,12 @@ fn medley_combo_rate(combo: u32) -> f64 {
     }
 }
 
-fn floor_number_to_u32(value: f64, path: &str) -> Result<u32, ScoreError> {
+// Format per-note paths only on failure.
+fn floor_number_to_u32(value: f64, path: impl FnOnce() -> String) -> Result<u32, ScoreError> {
     if !value.is_finite() || value < 0.0 {
         return Err(ScoreError::new(
             ScoreErrorCode::ArithmeticNonFinite,
-            path,
+            path(),
             "score intermediate must be finite and non-negative",
         ));
     }
@@ -122,7 +123,7 @@ fn floor_number_to_u32(value: f64, path: &str) -> Result<u32, ScoreError> {
     if floored > f64::from(u32::MAX) {
         return Err(ScoreError::new(
             ScoreErrorCode::ArithmeticOverflow,
-            path,
+            path(),
             "per-note score exceeds the client uint32 boundary",
         ));
     }
@@ -220,10 +221,9 @@ fn build_base_note_scores(
         let combo_rate = medley_combo_rate(combo);
         let judgment_corrected = base * judge;
         let with_combo = judgment_corrected * combo_rate;
-        scores.push(floor_number_to_u32(
-            with_combo,
-            &format!("songs[{}].notes[{note_index}].baseScore", song.slot),
-        )?);
+        scores.push(floor_number_to_u32(with_combo, || {
+            format!("songs[{}].notes[{note_index}].baseScore", song.slot)
+        })?);
     }
     Ok((level_rate, base, scores))
 }
@@ -282,29 +282,6 @@ fn build_activations<'a>(
     }))
 }
 
-fn floor_final_note_score_to_u32(
-    value: f64,
-    song_slot: u8,
-    note_index: usize,
-) -> Result<u32, ScoreError> {
-    if !value.is_finite() || value < 0.0 {
-        return Err(ScoreError::new(
-            ScoreErrorCode::ArithmeticNonFinite,
-            format!("songs[{song_slot}].notes[{note_index}].finalScore"),
-            "score intermediate must be finite and non-negative",
-        ));
-    }
-    let floored = value.floor();
-    if floored > f64::from(u32::MAX) {
-        return Err(ScoreError::new(
-            ScoreErrorCode::ArithmeticOverflow,
-            format!("songs[{song_slot}].notes[{note_index}].finalScore"),
-            "per-note score exceeds the client uint32 boundary",
-        ));
-    }
-    Ok(floored as u32)
-}
-
 fn note_score(
     song: &MedleySongV1,
     note_index: usize,
@@ -332,7 +309,9 @@ fn note_score(
     }
     combined_multiplier = combined_multiplier.max(0.0);
     let with_skill = f64::from(base_score) * combined_multiplier;
-    floor_final_note_score_to_u32(with_skill, song.slot, note_index)
+    floor_number_to_u32(with_skill, || {
+        format!("songs[{}].notes[{note_index}].finalScore", song.slot)
+    })
 }
 
 fn score_one_order(
@@ -359,13 +338,6 @@ fn score_one_order(
         )?);
     }
 
-    if !score.is_finite() || score < 0.0 {
-        return Err(ScoreError::new(
-            ScoreErrorCode::ArithmeticNonFinite,
-            format!("songs[{}].expectedScore", song.slot),
-            "expected score must remain finite and non-negative",
-        ));
-    }
     Ok(score)
 }
 
@@ -545,11 +517,13 @@ mod tests {
     #[test]
     fn score_chain_keeps_both_integer_rounding_points() {
         let base = base_score_per_note(126.0, 26, 5);
-        let inner =
-            floor_number_to_u32(base * PERFECT_RATE, "test").expect("first rounding fixture fits");
+        let inner = floor_number_to_u32(base * PERFECT_RATE, || "test".to_owned())
+            .expect("first rounding fixture fits");
         assert_eq!(inner, 100);
-        let final_score = floor_number_to_u32(f64::from(inner) * percent_multiplier(15.0), "test")
-            .expect("second rounding fixture fits");
+        let final_score = floor_number_to_u32(f64::from(inner) * percent_multiplier(15.0), || {
+            "test".to_owned()
+        })
+        .expect("second rounding fixture fits");
         assert_eq!(final_score, 114);
     }
 
@@ -559,7 +533,7 @@ mod tests {
         assert_eq!(rate.to_bits(), 1.41_f64.to_bits());
 
         let base = base_score_per_note(37.395_228_884_590_59, 46, 6);
-        let inner = floor_number_to_u32(base * PERFECT_RATE, "test")
+        let inner = floor_number_to_u32(base * PERFECT_RATE, || "test".to_owned())
             .expect("division-rounding fixture fits");
         assert_eq!(inner, 28);
     }
@@ -708,7 +682,8 @@ mod tests {
         let song = &trace.songs[0];
         let final_inner = song.base_note_scores[6];
         let expected_final =
-            floor_number_to_u32(f64::from(final_inner) * 7.0, "test").expect("test score fits");
+            floor_number_to_u32(f64::from(final_inner) * 7.0, || "test".to_owned())
+                .expect("test score fits");
         let expected_total: u32 =
             song.base_note_scores[..6].iter().copied().sum::<u32>() + expected_final;
         assert_eq!(
@@ -780,8 +755,8 @@ mod tests {
         let song = &trace.songs[0];
         let trigger_total = song.base_note_scores[..6].iter().copied().sum::<u32>();
         let final_inner = song.base_note_scores[6];
-        let final_score =
-            floor_number_to_u32(f64::from(final_inner) * 1.5, "test").expect("test score fits");
+        let final_score = floor_number_to_u32(f64::from(final_inner) * 1.5, || "test".to_owned())
+            .expect("test score fits");
         assert_eq!(
             song.permutation_expected_score_bits[0].to_f64(),
             f64::from(trigger_total + final_score),
@@ -833,11 +808,14 @@ mod tests {
                 "{}",
                 case.name,
             );
-            let inner = floor_number_to_u32(case.base_before_judgment * judge, "golden.inner")
-                .expect("official base score fits u32");
+            let inner = floor_number_to_u32(case.base_before_judgment * judge, || {
+                "golden.inner".to_owned()
+            })
+            .expect("official base score fits u32");
             assert_eq!(inner, case.inner_score, "{}", case.name);
-            let score = floor_number_to_u32(f64::from(inner) * multiplier, "golden.final")
-                .expect("official final score fits u32");
+            let score =
+                floor_number_to_u32(f64::from(inner) * multiplier, || "golden.final".to_owned())
+                    .expect("official final score fits u32");
             assert_eq!(score, case.note_score, "{}", case.name);
         }
     }
