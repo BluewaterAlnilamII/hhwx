@@ -747,36 +747,54 @@ impl<'a> FastUpperBoundEngine<'a> {
         if range_upper.floor() > f64::from(u32::MAX) {
             return Err(UpperBoundFailure::Unknown);
         }
-        let mut family_upper = None::<(f64, [u32; 5])>;
-        for weighted in &self.contexts {
-            let mut context_upper = None::<(f64, [u32; 5])>;
-            for weight in 0..3 {
-                let Some(support) = self.support(
-                    selected,
-                    next_group,
-                    &characters,
-                    song_slot,
-                    weighted,
-                    weight,
-                )?
-                else {
-                    continue;
-                };
-                let upper = div_up(mul_up(support.value, support.value)?, 4.0)?;
-                if context_upper.is_none_or(|previous| upper < previous.0) {
-                    context_upper = Some((upper, support.members));
+        let (upper, members) = if let Ok(members) = <[u32; 5]>::try_from(selected) {
+            // With all five cards fixed, P*K is already a bound. No weighted
+            // maximization or relaxation of the actual team context is needed.
+            let cards = members.map(|id| &self.model.input.cards[id as usize]);
+            let same_band = cards.iter().all(|card| card.band_id == cards[0].band_id);
+            let same_attribute = cards
+                .iter()
+                .all(|card| card.attribute == cards[0].attribute);
+            let context = usize::from(same_band) + 2 * usize::from(same_attribute);
+            let mut coefficient = song.base;
+            let mut leader = 0.0_f64;
+            for id in members {
+                let contribution = self.model.contributions[id as usize][context][song_slot];
+                coefficient = add_up(coefficient, contribution.first_five)?;
+                leader = leader.max(contribution.leader);
+            }
+            (mul_up(parameter, add_up(coefficient, leader)?)?, members)
+        } else {
+            let mut family_upper = None::<(f64, [u32; 5])>;
+            for weighted in &self.contexts {
+                let mut context_upper = None::<(f64, [u32; 5])>;
+                for weight in 0..3 {
+                    let Some(support) = self.support(
+                        selected,
+                        next_group,
+                        &characters,
+                        song_slot,
+                        weighted,
+                        weight,
+                    )?
+                    else {
+                        continue;
+                    };
+                    let upper = div_up(mul_up(support.value, support.value)?, 4.0)?;
+                    if context_upper.is_none_or(|previous| upper < previous.0) {
+                        context_upper = Some((upper, support.members));
+                    }
+                }
+                if let Some(upper) = context_upper
+                    && family_upper.is_none_or(|previous| upper.0 > previous.0)
+                {
+                    family_upper = Some(upper);
                 }
             }
-            if let Some(upper) = context_upper
-                && family_upper.is_none_or(|previous| upper.0 > previous.0)
-            {
-                family_upper = Some(upper);
-            }
-        }
-        // Each actual team occurs in its actual context. Cases without a band
-        // or attribute equality may include additional homogeneous teams; that
-        // is only an upward relaxation, never per-card context mixing.
-        let (upper, members) = family_upper.ok_or(UpperBoundFailure::Unknown)?;
+            // Each actual team occurs in its actual context. Cases without a
+            // band or attribute equality can only enlarge the completion set.
+            family_upper.ok_or(UpperBoundFailure::Unknown)?
+        };
         let path_ceiling = upper.ceil();
         if path_ceiling >= (1_u128 << 64) as f64 {
             return Err(UpperBoundFailure::Unknown);
