@@ -2,7 +2,7 @@ export const MEDLEY_FOUNDATION_SOURCE_SCHEMA_VERSION = "hhwx-medley-foundation-s
 export const MEDLEY_SCORING_INPUT_SCHEMA_VERSION = "hhwx-medley-scoring-input-v1" as const;
 export const MEDLEY_SEARCH_SOURCE_SCHEMA_VERSION = "hhwx-medley-search-source-v1" as const;
 export const MEDLEY_SEARCH_INPUT_SCHEMA_VERSION = "hhwx-medley-search-input-v1" as const;
-export const MEDLEY_SCORING_RULES_VERSION = "hhwx-medley-pg-expected-v1" as const;
+export const MEDLEY_SCORING_RULES_VERSION = "hhwx-medley-bestdori-v1" as const;
 
 export type BandoriServer = 0 | 1 | 2 | 3;
 export type BandoriCardAttribute = "powerful" | "cool" | "happy" | "pure";
@@ -46,11 +46,6 @@ export type ExactProbabilityV1 = {
   decimalScale: number;
 };
 
-export type RateUpWithPerfectV1 = {
-  stackPercent: number;
-  maxScoreUpPercent: number;
-};
-
 export type SkillBehaviorV1 =
   | { kind: "neutral" }
   | { kind: "score"; scoreUpPercent: number }
@@ -68,7 +63,7 @@ export type ResolvedScoreSkillV1 = {
   skillLevel: number;
   durationSeconds: number;
   behavior: SkillBehaviorV1;
-  rateUpWithPerfect: RateUpWithPerfectV1 | null;
+  isRateUpWithPerfect: boolean;
 };
 
 export type CardScoringInputV1 = {

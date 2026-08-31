@@ -179,7 +179,6 @@ export function resolveBestdoriScoreSkill(options: {
     : null;
 
   let behavior: SkillBehaviorV1 = { kind: "neutral" };
-  let baseScoreUpPercent = 0;
   if (primary !== null) {
     const unifiedValue = regionalNumber(activationEffect.unificationActivateEffectValue, options.server);
     const resolvedPrimary = unifiedValue !== null
@@ -188,32 +187,21 @@ export function resolveBestdoriScoreSkill(options: {
       ? { ...primary, valuePercent: unifiedValue }
       : primary;
     behavior = resolveBehavior(resolvedPrimary, fallback);
-    baseScoreUpPercent = resolvedPrimary.valuePercent;
   }
 
-  const hasRateUpWithPerfect = Object.hasOwn(effectTypes, RATE_UP_EFFECT_TYPE);
-  if (hasRateUpWithPerfect && behavior.kind !== "score") {
+  const isRateUpWithPerfect = Object.hasOwn(effectTypes, RATE_UP_EFFECT_TYPE);
+  if (isRateUpWithPerfect && behavior.kind !== "score") {
     failInput(
       "INVALID_SKILL",
       `${path}.activationEffect.activateEffectTypes.${RATE_UP_EFFECT_TYPE}`,
       "PERFECT rate-up requires an unconditional score effect",
     );
   }
-  const maximumScoreUpPercent = baseScoreUpPercent + 50;
-  if (hasRateUpWithPerfect && !Number.isFinite(maximumScoreUpPercent)) {
-    failInput("INVALID_SKILL", path, "resolved score percentages must remain finite");
-  }
-
   return {
     masterSkillId: options.skillId,
     skillLevel,
     durationSeconds,
     behavior,
-    rateUpWithPerfect: hasRateUpWithPerfect
-      ? {
-          stackPercent: 0.5,
-          maxScoreUpPercent: maximumScoreUpPercent,
-        }
-      : null,
+    isRateUpWithPerfect,
   };
 }

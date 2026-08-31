@@ -53,7 +53,7 @@ test("HHWX profile input becomes the normalized search roster without caller tea
   const result = buildMedleySearchInput(fixture);
 
   assert.equal(result.schemaVersion, "hhwx-medley-search-input-v1");
-  assert.equal(result.scoringRulesVersion, "hhwx-medley-pg-expected-v1");
+  assert.equal(result.scoringRulesVersion, "hhwx-medley-bestdori-v1");
   assert.deepEqual(result.cards.map((card) => card.instanceId), Array.from({ length: 15 }, (_, index) => index));
   assert.deepEqual(result.cards[0], {
     instanceId: 0,
@@ -70,28 +70,28 @@ test("HHWX profile input becomes the normalized search roster without caller tea
         skillLevel: 1,
         durationSeconds: 2,
         behavior: { kind: "score", scoreUpPercent: 100 },
-        rateUpWithPerfect: null,
+        isRateUpWithPerfect: false,
       },
       sameBand: {
         masterSkillId: 1,
         skillLevel: 1,
         durationSeconds: 2,
         behavior: { kind: "score", scoreUpPercent: 100 },
-        rateUpWithPerfect: null,
+        isRateUpWithPerfect: false,
       },
       sameAttribute: {
         masterSkillId: 1,
         skillLevel: 1,
         durationSeconds: 2,
         behavior: { kind: "score", scoreUpPercent: 100 },
-        rateUpWithPerfect: null,
+        isRateUpWithPerfect: false,
       },
       sameBandAndAttribute: {
         masterSkillId: 1,
         skillLevel: 1,
         durationSeconds: 2,
         behavior: { kind: "score", scoreUpPercent: 100 },
-        rateUpWithPerfect: null,
+        isRateUpWithPerfect: false,
       },
     },
   });

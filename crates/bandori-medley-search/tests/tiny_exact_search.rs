@@ -28,7 +28,7 @@ fn score_skill(master_skill_id: u32, score_up_percent: f64) -> ResolvedScoreSkil
         skill_level: 1,
         duration_seconds: 1.5,
         behavior: SkillBehaviorV1::Score { score_up_percent },
-        rate_up_with_perfect: None,
+        is_rate_up_with_perfect: false,
     }
 }
 

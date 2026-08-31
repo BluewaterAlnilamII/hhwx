@@ -10,16 +10,15 @@ mod validation;
 
 pub use input::{
     CardScoringInputV1, DifficultyV1, ExactProbabilityV1, FixedMedleyEvaluationInputV1,
-    FixedTeamV1, MedleySongV1, RateUpWithPerfectV1, ResolvedScoreSkillV1, ScoringNoteV1,
-    SkillBehaviorV1,
+    FixedTeamV1, MedleySongV1, ResolvedScoreSkillV1, ScoringNoteV1, SkillBehaviorV1,
 };
 pub use validation::{ValidationCode, ValidationError};
 
 /// Schema identifier reserved for the first normalized scoring input contract.
 pub const SCORING_INPUT_SCHEMA_VERSION: &str = "hhwx-medley-scoring-input-v1";
 
-/// Rules identifier for the PERFECT/GREAT-only HHWX expected-score model.
-pub const SCORING_RULES_VERSION: &str = "hhwx-medley-pg-expected-v1";
+/// Rules identifier for the Bestdori-compatible HHWX medley calculator.
+pub const SCORING_RULES_VERSION: &str = "hhwx-medley-bestdori-v1";
 
 /// Decode strict JSON and validate the complete fixed-input contract.
 pub fn decode_fixed_medley_evaluation_json(

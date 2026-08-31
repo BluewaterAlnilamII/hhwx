@@ -127,7 +127,7 @@ mod tests {
             skill_level: 1,
             duration_seconds: 1.0,
             behavior: SkillBehaviorV1::Neutral,
-            rate_up_with_perfect: None,
+            is_rate_up_with_perfect: false,
         }
     }
 

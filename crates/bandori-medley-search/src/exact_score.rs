@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
 use bandori_medley_model::{
@@ -8,13 +7,14 @@ use bandori_medley_model::{
 const SKILL_ORDER_COUNT: usize = 120;
 const PERFECT_RATE: f64 = 1.1;
 const GREAT_RATE: f64 = 0.8;
-
-#[derive(Clone, Copy)]
-pub(crate) struct ExactTeamScoreInput {
-    pub(crate) deck_total_parameter: f64,
-    /// Stable scoring order; index two is the leader.
-    pub(crate) skills: [ResolvedScoreSkillV1; 5],
-}
+// Member indexes in the established scoring order, with the leader at index two.
+const LEADER_MEMBER_ORDERS: [[usize; 5]; 5] = [
+    [1, 2, 0, 3, 4],
+    [0, 2, 1, 3, 4],
+    [0, 1, 2, 3, 4],
+    [0, 1, 3, 2, 4],
+    [0, 1, 4, 2, 3],
+];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum ExactScoreFailure {
@@ -23,50 +23,34 @@ pub(crate) enum ExactScoreFailure {
     ArithmeticOverflow,
 }
 
-#[derive(Clone, Debug)]
-pub(crate) struct ExactSongScore {
-    pub(crate) average_score: f64,
-    #[cfg(test)]
-    pub(crate) order_scores: Vec<f64>,
+/// Chart-only work is shared by every candidate and area configuration in a run.
+pub(crate) struct PreparedSong<'input> {
+    song: &'input MedleySongV1,
+    combo_rates: Vec<f64>,
+    trigger_times: [f64; 6],
+    window_starts: [usize; 6],
+    perfect_rate: f64,
+    judgment_multiplier: f64,
 }
 
-#[derive(Clone, Copy)]
-struct Activation {
-    trigger_time_seconds: f64,
-    end_time_seconds: f64,
-    skill: ResolvedScoreSkillV1,
+struct SkillWindow {
+    start: usize,
+    // One row per covered note; expired members contribute zero. The same
+    // multipliers serve all leaders, orders and parameter rounding variants.
+    deltas: Vec<[f64; 5]>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct ActivationState {
-    continued_active: bool,
-    rate_up_accumulator_bits: u64,
-}
-
-impl Default for ActivationState {
-    fn default() -> Self {
-        Self {
-            continued_active: true,
-            rate_up_accumulator_bits: 0.0_f64.to_bits(),
-        }
+impl SkillWindow {
+    fn at(&self, note_index: usize) -> Option<&[f64; 5]> {
+        note_index
+            .checked_sub(self.start)
+            .and_then(|offset| self.deltas.get(offset))
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
-struct JudgmentState {
-    activations: [ActivationState; 6],
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-struct WeightedScore {
-    probability: f64,
-    weighted_score: f64,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Judgment {
-    Perfect,
-    Great,
+struct SkillWindows {
+    windows: [SkillWindow; 6],
+    note_masks: Vec<u8>,
 }
 
 pub(crate) fn skill_orders() -> &'static [[usize; 5]] {
@@ -93,22 +77,31 @@ pub(crate) fn skill_orders() -> &'static [[usize; 5]] {
                     used[member_index] = false;
                 }
             }
-
             let mut output = Vec::with_capacity(SKILL_ORDER_COUNT);
             visit(0, &mut [0; 5], &mut [false; 5], &mut output);
-            debug_assert_eq!(output.len(), SKILL_ORDER_COUNT);
             output
         })
         .as_slice()
 }
 
+fn leader_order_indexes() -> &'static [[usize; SKILL_ORDER_COUNT]; 5] {
+    static INDEXES: OnceLock<[[usize; SKILL_ORDER_COUNT]; 5]> = OnceLock::new();
+    INDEXES.get_or_init(|| {
+        LEADER_MEMBER_ORDERS.map(|members| {
+            std::array::from_fn(|index| {
+                let order = skill_orders()[index].map(|member| members[member]);
+                skill_orders()
+                    .iter()
+                    .position(|candidate| *candidate == order)
+                    .expect("permuting member indexes preserves a complete order")
+            })
+        })
+    })
+}
+
 pub(crate) fn exact_probability_to_f64(probability: ExactProbabilityV1) -> f64 {
     let denominator = 10_u64.pow(u32::from(probability.decimal_scale));
     probability.numerator as f64 / denominator as f64
-}
-
-fn play_level_rate(play_level: u16) -> f64 {
-    1.0 + (f64::from(play_level) - 5.0) / 100.0
 }
 
 fn combo_rate(combo: u32) -> f64 {
@@ -133,286 +126,289 @@ fn floor_to_u32(value: f64) -> Result<u32, ExactScoreFailure> {
     Ok(floored as u32)
 }
 
-fn build_base_note_scores(
-    song: &MedleySongV1,
-    deck_total_parameter: f64,
-    start_combo: u32,
-) -> Result<Vec<[u32; 2]>, ExactScoreFailure> {
-    let note_count =
-        u32::try_from(song.notes.len()).map_err(|_| ExactScoreFailure::ArithmeticOverflow)?;
-    let level_rate = play_level_rate(song.play_level);
-    let multiplied_parameter = deck_total_parameter * level_rate;
-    let divided_by_notes = multiplied_parameter / f64::from(note_count);
-    let base_score_per_note = divided_by_notes * 3.0;
-    if !level_rate.is_finite() || !base_score_per_note.is_finite() || base_score_per_note < 0.0 {
-        return Err(ExactScoreFailure::ArithmeticNonFinite);
-    }
-
-    let mut scores = Vec::with_capacity(song.notes.len());
-    for note_index in 0..note_count {
-        let combo = start_combo
-            .checked_add(note_index + 1)
-            .ok_or(ExactScoreFailure::ArithmeticOverflow)?;
-        let note_combo_rate = combo_rate(combo);
-        let perfect_corrected = base_score_per_note * PERFECT_RATE;
-        let great_corrected = base_score_per_note * GREAT_RATE;
-        let perfect_with_combo = perfect_corrected * note_combo_rate;
-        let great_with_combo = great_corrected * note_combo_rate;
-        scores.push([
-            floor_to_u32(perfect_with_combo)?,
-            floor_to_u32(great_with_combo)?,
-        ]);
-    }
-    Ok(scores)
-}
-
-fn trigger_times(song: &MedleySongV1) -> Result<[f64; 6], ExactScoreFailure> {
-    let mut times = [0.0_f64; 6];
-    let mut count = 0_usize;
-    for note in song.notes.iter().filter(|note| note.is_skill_trigger) {
-        let Some(time) = times.get_mut(count) else {
-            return Err(ExactScoreFailure::InvalidSong);
-        };
-        *time = note.time_seconds;
-        count += 1;
-    }
-    if count != times.len() {
-        return Err(ExactScoreFailure::InvalidSong);
-    }
-    Ok(times)
-}
-
-fn build_activations(
-    team: ExactTeamScoreInput,
-    times: &[f64; 6],
-    order: [usize; 5],
-) -> Result<[Activation; 6], ExactScoreFailure> {
-    let positions = [order[0], order[1], order[2], order[3], order[4], 2];
-    let mut end_times = [0.0_f64; 6];
-    for activation_index in 0..6 {
-        let skill = team.skills[positions[activation_index]];
-        let end_time = times[activation_index] + skill.duration_seconds + 0.00001;
-        if !end_time.is_finite() {
-            return Err(ExactScoreFailure::ArithmeticNonFinite);
-        }
-        end_times[activation_index] = end_time;
-    }
-    Ok(std::array::from_fn(|activation_index| Activation {
-        trigger_time_seconds: times[activation_index],
-        end_time_seconds: end_times[activation_index],
-        skill: team.skills[positions[activation_index]],
-    }))
-}
-
-fn base_skill_multiplier(
+fn skill_multiplier(
     skill: ResolvedScoreSkillV1,
-    state: &mut ActivationState,
-    judgment: Judgment,
+    covered_note_count: usize,
+    perfect_rate: f64,
+    judge: f64,
 ) -> f64 {
     let percent_multiplier = |percent: f64| 1.0 + percent / 100.0;
+    let weighted = |perfect: f64, great: f64| {
+        if perfect == great {
+            perfect
+        } else {
+            (PERFECT_RATE * perfect * perfect_rate + GREAT_RATE * great * (1.0 - perfect_rate))
+                / judge
+        }
+    };
     match skill.behavior {
         SkillBehaviorV1::Neutral => 1.0,
-        SkillBehaviorV1::Score { score_up_percent } => percent_multiplier(score_up_percent),
-        SkillBehaviorV1::ScoreOnPerfect { score_up_percent } => match judgment {
-            Judgment::Perfect => percent_multiplier(score_up_percent),
-            Judgment::Great => 1.0,
-        },
-        SkillBehaviorV1::PerfectOnly { score_up_percent } => match judgment {
-            Judgment::Perfect => percent_multiplier(score_up_percent),
-            Judgment::Great => 0.0,
-        },
+        SkillBehaviorV1::Score {
+            mut score_up_percent,
+        } => {
+            if skill.is_rate_up_with_perfect {
+                score_up_percent += 0.5 * covered_note_count.min(100) as f64 * perfect_rate;
+            }
+            percent_multiplier(score_up_percent)
+        }
+        SkillBehaviorV1::ScoreOnPerfect { score_up_percent } => {
+            weighted(percent_multiplier(score_up_percent), 1.0)
+        }
+        SkillBehaviorV1::PerfectOnly { score_up_percent } => {
+            weighted(percent_multiplier(score_up_percent), 0.0)
+        }
         SkillBehaviorV1::ContinuedPerfect {
             active_score_up_percent,
             fallback_score_up_percent,
         } => {
-            if judgment == Judgment::Great {
-                state.continued_active = false;
-            }
-            if state.continued_active {
-                percent_multiplier(active_score_up_percent)
-            } else {
-                percent_multiplier(fallback_score_up_percent)
-            }
+            let active = percent_multiplier(active_score_up_percent);
+            let fallback = percent_multiplier(fallback_score_up_percent);
+            fallback + perfect_rate.powf(covered_note_count as f64) * (active - fallback)
         }
-        SkillBehaviorV1::GreatOrWorseHalf { score_up_percent } => match judgment {
-            Judgment::Perfect => percent_multiplier(score_up_percent),
-            Judgment::Great => 0.5,
-        },
-    }
-}
-
-fn skill_multiplier(
-    skill: ResolvedScoreSkillV1,
-    state: &mut ActivationState,
-    judgment: Judgment,
-) -> f64 {
-    let mut multiplier = base_skill_multiplier(skill, state, judgment);
-    let Some(rate_up) = skill.rate_up_with_perfect else {
-        return multiplier;
-    };
-    let base_bonus_percent = (multiplier - 1.0) * 100.0;
-    let accumulator_cap = rate_up.max_score_up_percent - base_bonus_percent;
-    let mut accumulator = f64::from_bits(state.rate_up_accumulator_bits);
-    if judgment == Judgment::Perfect {
-        let incremented = accumulator + rate_up.stack_percent;
-        accumulator = incremented.min(accumulator_cap);
-        state.rate_up_accumulator_bits = accumulator.to_bits();
-    }
-    let accumulator_rate = accumulator / 100.0;
-    multiplier += accumulator_rate;
-    multiplier
-}
-
-fn canonicalize_expired_states(
-    state: &mut JudgmentState,
-    activations: &[Activation; 6],
-    note_time_seconds: f64,
-) {
-    for (activation_index, activation) in activations.iter().enumerate() {
-        if note_time_seconds > activation.end_time_seconds {
-            state.activations[activation_index] = ActivationState::default();
+        SkillBehaviorV1::GreatOrWorseHalf { score_up_percent } => {
+            weighted(percent_multiplier(score_up_percent), 0.5)
         }
     }
 }
 
-fn score_note(
-    song: &MedleySongV1,
-    note_index: usize,
-    judgment: Judgment,
-    base_score: [u32; 2],
-    activations: &[Activation; 6],
-    state: &mut JudgmentState,
-) -> Result<u32, ExactScoreFailure> {
-    let note = &song.notes[note_index];
-    let inner_score = match judgment {
-        Judgment::Perfect => base_score[0],
-        Judgment::Great => base_score[1],
-    };
-    let mut combined_multiplier = 1.0_f64;
-    for (activation_index, activation) in activations.iter().enumerate() {
-        if note.time_seconds <= activation.trigger_time_seconds
-            || note.time_seconds > activation.end_time_seconds
-        {
-            continue;
+impl<'input> PreparedSong<'input> {
+    pub(crate) fn new(
+        song: &'input MedleySongV1,
+        start_combo: u32,
+        perfect_rate: f64,
+    ) -> Result<Self, ExactScoreFailure> {
+        let mut trigger_times = [0.0; 6];
+        let mut count = 0;
+        for note in song.notes.iter().filter(|note| note.is_skill_trigger) {
+            let Some(time) = trigger_times.get_mut(count) else {
+                return Err(ExactScoreFailure::InvalidSong);
+            };
+            *time = note.time_seconds;
+            count += 1;
         }
-        let multiplier = skill_multiplier(
-            activation.skill,
-            &mut state.activations[activation_index],
-            judgment,
-        );
-        let additive_delta = multiplier - 1.0;
-        combined_multiplier += additive_delta;
+        if count != 6 || song.notes.is_empty() {
+            return Err(ExactScoreFailure::InvalidSong);
+        }
+        let note_count =
+            u32::try_from(song.notes.len()).map_err(|_| ExactScoreFailure::ArithmeticOverflow)?;
+        let end_combo = start_combo
+            .checked_add(note_count)
+            .ok_or(ExactScoreFailure::ArithmeticOverflow)?;
+        Ok(Self {
+            song,
+            combo_rates: (start_combo + 1..=end_combo).map(combo_rate).collect(),
+            trigger_times,
+            window_starts: trigger_times
+                .map(|time| song.notes.partition_point(|note| note.time_seconds <= time)),
+            perfect_rate,
+            judgment_multiplier: PERFECT_RATE * perfect_rate + GREAT_RATE * (1.0 - perfect_rate),
+        })
     }
-    combined_multiplier = combined_multiplier.max(0.0);
-    let with_skill = f64::from(inner_score) * combined_multiplier;
-    floor_to_u32(with_skill)
-}
 
-fn merge_branch(
-    next: &mut BTreeMap<JudgmentState, WeightedScore>,
-    state: JudgmentState,
-    previous: WeightedScore,
-    branch_probability: f64,
-    note_score: u32,
-) {
-    if branch_probability == 0.0 {
-        return;
+    fn base_scores(&self, parameter: f64) -> Result<Vec<u32>, ExactScoreFailure> {
+        let level_rate = 1.0 + (f64::from(self.song.play_level) - 5.0) / 100.0;
+        let base = parameter * level_rate / self.song.notes.len() as f64 * 3.0;
+        self.combo_rates
+            .iter()
+            .map(|combo| floor_to_u32(base * self.judgment_multiplier * combo))
+            .collect()
     }
-    let weighted_probability = previous.probability * branch_probability;
-    let carried_score = previous.weighted_score * branch_probability;
-    let branch_score = weighted_probability * f64::from(note_score);
-    let entry = next.entry(state).or_default();
-    entry.probability += weighted_probability;
-    entry.weighted_score += carried_score + branch_score;
-}
 
-fn score_one_order(
-    song: &MedleySongV1,
-    team: ExactTeamScoreInput,
-    times: &[f64; 6],
-    order: [usize; 5],
-    base_scores: &[[u32; 2]],
-    perfect_rate: f64,
-) -> Result<f64, ExactScoreFailure> {
-    let activations = build_activations(team, times, order)?;
-    let mut states = BTreeMap::from([(
-        JudgmentState::default(),
-        WeightedScore {
-            probability: 1.0,
-            weighted_score: 0.0,
-        },
-    )]);
-
-    for (note_index, base_score) in base_scores.iter().copied().enumerate() {
-        let mut next = BTreeMap::new();
-        for (mut state, weighted) in states {
-            canonicalize_expired_states(
-                &mut state,
-                &activations,
-                song.notes[note_index].time_seconds,
-            );
-            for judgment in [Judgment::Perfect, Judgment::Great] {
-                let probability = match judgment {
-                    Judgment::Perfect => perfect_rate,
-                    Judgment::Great => 1.0_f64 - perfect_rate,
-                };
-                if probability == 0.0 {
-                    continue;
+    fn skill_windows(
+        &self,
+        skills: [ResolvedScoreSkillV1; 5],
+    ) -> Result<SkillWindows, ExactScoreFailure> {
+        let mut note_masks = vec![0_u8; self.song.notes.len()];
+        let mut windows = std::array::from_fn(|slot| SkillWindow {
+            start: self.window_starts[slot],
+            deltas: Vec::new(),
+        });
+        for (slot, window) in windows.iter_mut().enumerate() {
+            let mut ends = [0; 5];
+            for (member, skill) in skills.iter().enumerate() {
+                let end = self.trigger_times[slot] + skill.duration_seconds + 0.00001;
+                if !end.is_finite() {
+                    return Err(ExactScoreFailure::ArithmeticNonFinite);
                 }
-                let mut branch_state = state;
-                let note_score = score_note(
-                    song,
-                    note_index,
-                    judgment,
-                    base_score,
-                    &activations,
-                    &mut branch_state,
-                )?;
-                merge_branch(&mut next, branch_state, weighted, probability, note_score);
+                ends[member] = self
+                    .song
+                    .notes
+                    .partition_point(|note| note.time_seconds <= end);
+            }
+            let last_end = *ends.iter().max().expect("five skills");
+            window.deltas.reserve(last_end - window.start);
+            for (note_index, mask) in note_masks
+                .iter_mut()
+                .enumerate()
+                .take(last_end)
+                .skip(window.start)
+            {
+                *mask |= 1 << slot;
+                window.deltas.push(std::array::from_fn(|member| {
+                    if note_index < ends[member] {
+                        skill_multiplier(
+                            skills[member],
+                            note_index - window.start + 1,
+                            self.perfect_rate,
+                            self.judgment_multiplier,
+                        ) - 1.0
+                    } else {
+                        0.0
+                    }
+                }));
             }
         }
-        states = next;
+        Ok(SkillWindows {
+            windows,
+            note_masks,
+        })
     }
 
-    let expected_score = states
-        .values()
-        .fold(0.0_f64, |sum, state| sum + state.weighted_score);
-    if !expected_score.is_finite() || expected_score < 0.0 {
-        return Err(ExactScoreFailure::ArithmeticNonFinite);
+    /// The first five windows use each skill with probability 1/5. Accumulate
+    /// already-floored contributions once; only overlapping notes need joint
+    /// evaluation. The sixth window is shared work for all possible leaders.
+    fn score_orders(
+        &self,
+        base_scores: &[u32],
+        skills: &SkillWindows,
+        leaders: [bool; 5],
+    ) -> Result<[[f64; SKILL_ORDER_COUNT]; 5], ExactScoreFailure> {
+        let mut scores = [[0.0; SKILL_ORDER_COUNT]; 5];
+        // Regroup integer contributions only where every possible note sum is
+        // exactly representable as f64. Otherwise keep chronological addition
+        // using the same prepared multipliers, without changing accepted input.
+        let can_group = base_scores.len() as u64 * u64::from(u32::MAX) <= (1_u64 << 53);
+        let mut single_totals = [[0_i64; 5]; 6];
+        let mut base_total = 0_i64;
+        if can_group {
+            base_total = base_scores.iter().map(|score| i64::from(*score)).sum();
+            for (slot, window) in skills.windows.iter().enumerate() {
+                for (offset, deltas) in window.deltas.iter().enumerate() {
+                    let note_index = window.start + offset;
+                    if skills.note_masks[note_index].count_ones() != 1 {
+                        continue;
+                    }
+                    let base = base_scores[note_index];
+                    for (member, delta) in deltas.iter().enumerate() {
+                        if slot == 5 && !leaders[member] {
+                            continue;
+                        }
+                        let score = floor_to_u32(f64::from(base) * (1.0 + delta).max(0.0))?;
+                        single_totals[slot][member] += i64::from(score) - i64::from(base);
+                    }
+                }
+            }
+        }
+        let joint_notes: Vec<usize> = skills
+            .note_masks
+            .iter()
+            .enumerate()
+            .filter_map(|(index, mask)| (!can_group || mask.count_ones() > 1).then_some(index))
+            .collect();
+        for (order_index, order) in skill_orders().iter().enumerate() {
+            let first_five = base_total
+                + (0..5)
+                    .map(|slot| single_totals[slot][order[slot]])
+                    .sum::<i64>();
+            for (leader, row) in scores
+                .iter_mut()
+                .enumerate()
+                .filter(|(leader, _)| leaders[*leader])
+            {
+                row[order_index] = (first_five + single_totals[5][leader]) as f64;
+            }
+            for &note_index in &joint_notes {
+                let mut combined = 1.0;
+                for (slot, window) in skills.windows[..5].iter().enumerate() {
+                    if let Some(deltas) = window.at(note_index) {
+                        combined += deltas[order[slot]];
+                    }
+                }
+                let last = skills.windows[5].at(note_index);
+                let base = f64::from(base_scores[note_index]);
+                for (leader, row) in scores
+                    .iter_mut()
+                    .enumerate()
+                    .filter(|(leader, _)| leaders[*leader])
+                {
+                    let multiplier = last.map_or(combined, |deltas| combined + deltas[leader]);
+                    let note_score = f64::from(floor_to_u32(base * multiplier.max(0.0))?);
+                    row[order_index] += if can_group {
+                        note_score - base
+                    } else {
+                        note_score
+                    };
+                }
+            }
+        }
+        Ok(scores)
     }
-    Ok(expected_score)
+
+    pub(crate) fn score_leaders(
+        &self,
+        skills: [ResolvedScoreSkillV1; 5],
+        parameters: [f64; 5],
+    ) -> Result<[f64; 5], ExactScoreFailure> {
+        let windows = self.skill_windows(skills)?;
+        let mut averages = [0.0; 5];
+        for leader in 0..5 {
+            if parameters[..leader]
+                .iter()
+                .any(|value| value.to_bits() == parameters[leader].to_bits())
+            {
+                continue;
+            }
+            // Changing the leader preserves the members, but the established
+            // parameter summation order can differ in its last bit. Reuse only
+            // genuinely identical values, never normalize their arithmetic.
+            let leaders = parameters.map(|value| value.to_bits() == parameters[leader].to_bits());
+            let base_scores = self.base_scores(parameters[leader])?;
+            let scores = self.score_orders(&base_scores, &windows, leaders)?;
+            for index in (0..5).filter(|index| leaders[*index]) {
+                averages[index] = leader_order_indexes()[index]
+                    .iter()
+                    .fold(0.0, |sum, order| sum + scores[index][*order])
+                    / SKILL_ORDER_COUNT as f64;
+            }
+        }
+        Ok(averages)
+    }
 }
 
+#[cfg(test)]
+#[derive(Clone, Copy)]
+pub(crate) struct ExactTeamScoreInput {
+    pub(crate) deck_total_parameter: f64,
+    pub(crate) skills: [ResolvedScoreSkillV1; 5],
+}
+
+#[cfg(test)]
+pub(crate) struct ExactSongScore {
+    pub(crate) average_score: f64,
+    pub(crate) order_scores: Vec<f64>,
+}
+
+#[cfg(test)]
 pub(crate) fn score_song(
     song: &MedleySongV1,
     team: ExactTeamScoreInput,
     start_combo: u32,
     perfect_rate: f64,
 ) -> Result<ExactSongScore, ExactScoreFailure> {
-    let base_scores = build_base_note_scores(song, team.deck_total_parameter, start_combo)?;
-    let times = trigger_times(song)?;
-    let mut average_accumulator = 0.0_f64;
-    #[cfg(test)]
-    let mut order_scores = Vec::with_capacity(SKILL_ORDER_COUNT);
-    for order in skill_orders() {
-        let score = score_one_order(song, team, &times, *order, &base_scores, perfect_rate)?;
-        average_accumulator += score;
-        #[cfg(test)]
-        order_scores.push(score);
-    }
-    let average_score = average_accumulator / SKILL_ORDER_COUNT as f64;
+    let prepared = PreparedSong::new(song, start_combo, perfect_rate)?;
+    let windows = prepared.skill_windows(team.skills)?;
+    let base_scores = prepared.base_scores(team.deck_total_parameter)?;
+    let scores =
+        prepared.score_orders(&base_scores, &windows, [false, false, true, false, false])?;
     Ok(ExactSongScore {
-        average_score,
-        #[cfg(test)]
-        order_scores,
+        average_score: scores[2].iter().sum::<f64>() / SKILL_ORDER_COUNT as f64,
+        order_scores: scores[2].to_vec(),
     })
 }
 
 #[cfg(test)]
 mod tests {
-    use bandori_medley_model::{
-        FixedMedleyEvaluationInputV1, RateUpWithPerfectV1, SkillBehaviorV1,
-    };
+    use bandori_medley_model::{FixedMedleyEvaluationInputV1, ScoringNoteV1, SkillBehaviorV1};
     use bandori_medley_reference::evaluate_fixed_medley;
 
     use super::*;
@@ -420,11 +416,40 @@ mod tests {
     const FIXTURE: &str =
         include_str!("../../bandori-medley-model/tests/fixtures/valid-fixed-medley-v1.json");
 
+    fn assert_leader_parity(
+        input: &FixedMedleyEvaluationInputV1,
+        slot: usize,
+        start_combo: u32,
+        parameters: [f64; 5],
+    ) {
+        let team = &input.teams[slot];
+        let skills = team
+            .member_instance_ids
+            .map(|instance_id| input.cards[instance_id as usize].skill);
+        let prepared = PreparedSong::new(
+            &input.songs[slot],
+            start_combo,
+            exact_probability_to_f64(input.perfect_rate),
+        )
+        .unwrap();
+        let averages = prepared.score_leaders(skills, parameters).unwrap();
+        for leader in 0..5 {
+            let mut reordered = input.clone();
+            reordered.teams[slot].member_instance_ids =
+                LEADER_MEMBER_ORDERS[leader].map(|position| team.member_instance_ids[position]);
+            reordered.teams[slot].deck_total_parameter = parameters[leader];
+            let expected = evaluate_fixed_medley(&reordered).unwrap();
+            assert_eq!(
+                averages[leader].to_bits(),
+                expected.songs[slot].average_score().to_bits()
+            );
+        }
+    }
+
     fn assert_reference_parity(input: &FixedMedleyEvaluationInputV1) {
         let reference = evaluate_fixed_medley(input).expect("reference fixture scores");
         let perfect_rate = exact_probability_to_f64(input.perfect_rate);
         let mut start_combo = 0_u32;
-
         for slot in 0..3 {
             let team = &input.teams[slot];
             let skills = team
@@ -442,9 +467,8 @@ mod tests {
             .expect("production fixture scores");
             assert_eq!(
                 production.average_score.to_bits(),
-                reference.songs[slot].average_score().to_bits(),
+                reference.songs[slot].average_score().to_bits()
             );
-            assert_eq!(production.order_scores.len(), SKILL_ORDER_COUNT);
             for (actual, expected) in production
                 .order_scores
                 .iter()
@@ -452,22 +476,61 @@ mod tests {
             {
                 assert_eq!(actual.to_bits(), expected.to_f64().to_bits());
             }
-            start_combo +=
-                u32::try_from(input.songs[slot].notes.len()).expect("fixture note count fits u32");
+            let parameter = team.deck_total_parameter;
+            assert_leader_parity(
+                input,
+                slot,
+                start_combo,
+                [
+                    parameter,
+                    parameter.next_up(),
+                    parameter,
+                    parameter + 1.0,
+                    parameter,
+                ],
+            );
+            start_combo += input.songs[slot].notes.len() as u32;
         }
     }
 
     #[test]
     fn production_song_scores_match_reference_bits() {
-        let input: FixedMedleyEvaluationInputV1 =
+        let mut input: FixedMedleyEvaluationInputV1 =
             serde_json::from_str(FIXTURE).expect("fixed fixture decodes");
         assert_reference_parity(&input);
+        // A parameter group must not evaluate a sixth-window member who is
+        // leader only in another group: that hypothetical note can overflow.
+        input.perfect_rate = ExactProbabilityV1 {
+            numerator: 1,
+            decimal_scale: 0,
+        };
+        input.songs[0].play_level = 5;
+        for (note, time) in input.songs[0]
+            .notes
+            .iter_mut()
+            .zip([0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 51.0])
+        {
+            note.time_seconds = time;
+        }
+        for (member, instance_id) in input.teams[0].member_instance_ids.into_iter().enumerate() {
+            let skill = &mut input.cards[instance_id as usize].skill;
+            skill.duration_seconds = 1.0;
+            skill.behavior = if member == 0 {
+                SkillBehaviorV1::Score {
+                    score_up_percent: 100.0,
+                }
+            } else {
+                SkillBehaviorV1::Neutral
+            };
+        }
+        let low = 4_555_268_344.242_423_f64;
+        let high = low.next_up();
+        assert_leader_parity(&input, 0, 0, [low, high, high, high, high]);
     }
 
     #[test]
-    fn stateful_and_negative_overlap_behaviors_match_reference_bits() {
-        let mut input: FixedMedleyEvaluationInputV1 =
-            serde_json::from_str(FIXTURE).expect("fixed fixture decodes");
+    fn probability_formulas_and_additive_overlap_match_reference_bits() {
+        let mut input: FixedMedleyEvaluationInputV1 = serde_json::from_str(FIXTURE).unwrap();
         let team = input.teams[0];
         let behaviors = [
             SkillBehaviorV1::ScoreOnPerfect {
@@ -487,18 +550,38 @@ mod tests {
                 score_up_percent: 90.0,
             },
         ];
-        for (instance_id, behavior) in team.member_instance_ids.into_iter().zip(behaviors) {
+        for (position, (instance_id, behavior)) in team
+            .member_instance_ids
+            .into_iter()
+            .zip(behaviors)
+            .enumerate()
+        {
             let skill = &mut input.cards[instance_id as usize].skill;
-            skill.duration_seconds = 10.0;
+            skill.duration_seconds = 2.0 + position as f64;
             skill.behavior = behavior;
-            skill.rate_up_with_perfect = None;
+            skill.is_rate_up_with_perfect = position == 2;
         }
-        input.cards[team.member_instance_ids[2] as usize]
-            .skill
-            .rate_up_with_perfect = Some(RateUpWithPerfectV1 {
-            stack_percent: 0.5,
-            max_score_up_percent: 110.0,
-        });
+        for (numerator, decimal_scale) in [(0, 0), (6, 1), (1, 0)] {
+            input.perfect_rate = ExactProbabilityV1 {
+                numerator,
+                decimal_scale,
+            };
+            assert_reference_parity(&input);
+        }
+        // Separated windows exercise the common first-five contribution path.
+        for song in &mut input.songs {
+            song.notes = (0..12)
+                .map(|note_id| ScoringNoteV1 {
+                    note_id,
+                    time_seconds: f64::from(note_id / 2) * 10.0 + f64::from(note_id % 2),
+                    is_skill_trigger: note_id % 2 == 0,
+                })
+                .collect();
+        }
+        input.perfect_rate = ExactProbabilityV1 {
+            numerator: 6,
+            decimal_scale: 1,
+        };
         assert_reference_parity(&input);
     }
 }

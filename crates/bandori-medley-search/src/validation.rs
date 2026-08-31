@@ -73,28 +73,11 @@ fn validate_skill(skill: ResolvedScoreSkillV1, path: &str) -> Result<(), SearchE
             "skill percentages must be finite, non-negative JavaScript numbers",
         );
     }
-    if skill.rate_up_with_perfect.is_some()
-        && !matches!(skill.behavior, SkillBehaviorV1::Score { .. })
-    {
+    if skill.is_rate_up_with_perfect && !matches!(skill.behavior, SkillBehaviorV1::Score { .. }) {
         return invalid(
             SearchErrorCode::InvalidSkill,
-            format!("{path}.rateUpWithPerfect"),
+            format!("{path}.isRateUpWithPerfect"),
             "rate-up is only audited with an unconditional score behavior",
-        );
-    }
-    if let Some(rate_up) = skill.rate_up_with_perfect
-        && (!is_non_negative_number(rate_up.stack_percent)
-            || !is_non_negative_number(rate_up.max_score_up_percent)
-            || rate_up.stack_percent == 0.0
-            || skill_rates
-                .into_iter()
-                .flatten()
-                .any(|base_rate| base_rate > rate_up.max_score_up_percent))
-    {
-        return invalid(
-            SearchErrorCode::InvalidSkill,
-            format!("{path}.rateUpWithPerfect"),
-            "rate-up stack must be positive and its maximum must cover every base score-up rate",
         );
     }
     Ok(())
@@ -398,7 +381,7 @@ mod tests {
             behavior: SkillBehaviorV1::Score {
                 score_up_percent: 100.0,
             },
-            rate_up_with_perfect: None,
+            is_rate_up_with_perfect: false,
         }
     }
 

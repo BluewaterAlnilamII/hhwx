@@ -10,16 +10,6 @@ pub struct ExactProbabilityV1 {
     pub decimal_scale: u8,
 }
 
-/// Optional dynamic increase used by skills that grow with PERFECT judgments.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RateUpWithPerfectV1 {
-    /// Amount added after each PERFECT, including the current note.
-    pub stack_percent: f64,
-    /// Maximum total score-up percent after the base skill line and stacks.
-    pub max_score_up_percent: f64,
-}
-
 /// A team-context-resolved score skill behavior.
 ///
 /// Team unification branches are resolved before this contract is built. The
@@ -40,7 +30,7 @@ pub enum SkillBehaviorV1 {
     ScoreOnPerfect { score_up_percent: f64 },
     /// PERFECT receives the score-up multiplier and GREAT scores zero.
     PerfectOnly { score_up_percent: f64 },
-    /// The high value remains only while all earlier active notes were PERFECT.
+    /// Bestdori blends the values using PERFECT rate raised to the covered-note count.
     ContinuedPerfect {
         active_score_up_percent: f64,
         fallback_score_up_percent: f64,
@@ -58,7 +48,8 @@ pub struct ResolvedScoreSkillV1 {
     pub skill_level: u8,
     pub duration_seconds: f64,
     pub behavior: SkillBehaviorV1,
-    pub rate_up_with_perfect: Option<RateUpWithPerfectV1>,
+    /// Enables Bestdori's fixed `0.5 * min(covered_notes, 100) * perfect_rate` increase.
+    pub is_rate_up_with_perfect: bool,
 }
 
 /// One physical card instance after profile, master, area-item, and event resolution.

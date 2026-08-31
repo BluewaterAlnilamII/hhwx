@@ -1,8 +1,6 @@
 use bandori_medley_model::ResolvedScoreSkillV1;
 
-use crate::exact_score::{
-    ExactScoreFailure, ExactTeamScoreInput, exact_probability_to_f64, score_song,
-};
+use crate::exact_score::{ExactScoreFailure, PreparedSong};
 use crate::parameters::{TeamParameterFailure, calculate_team_parameters};
 use crate::{AreaItemConfigurationV1, MedleySearchInputV1, SearchCardV1};
 
@@ -84,7 +82,7 @@ pub(crate) fn evaluate_candidate(
     input: &MedleySearchInputV1,
     configuration: &AreaItemConfigurationV1,
     mut member_instance_ids: [u32; 5],
-    start_combos: [u32; 3],
+    songs: &[PreparedSong<'_>; 3],
 ) -> Result<CompactCandidate, CandidateFailure> {
     member_instance_ids.sort_unstable();
     if member_instance_ids
@@ -102,50 +100,43 @@ pub(crate) fn evaluate_candidate(
     let first_attribute = cards[0].attribute;
     let is_same_band = cards.iter().all(|card| card.band_id == first_band);
     let is_same_attribute = cards.iter().all(|card| card.attribute == first_attribute);
-    let perfect_rate = exact_probability_to_f64(input.perfect_rate);
-    let mut best_scores = [None::<f64>; 3];
-    let mut best_leaders = [0_u32; 3];
-
-    // Leaders are considered in source order. Equal scores therefore keep the
-    // lowest stable source index without making score a second objective.
-    for leader_instance_id in member_instance_ids {
+    let skills = std::array::from_fn(|member| {
+        resolved_skill(cards[member], is_same_band, is_same_attribute)
+    });
+    let mut parameters = [0.0; 5];
+    for (leader, leader_instance_id) in member_instance_ids.iter().copied().enumerate() {
         let ordered_members = member_order_for_leader(member_instance_ids, leader_instance_id)?;
-        let parameters = calculate_team_parameters(
+        parameters[leader] = calculate_team_parameters(
             &input.cards,
             &input.area_items,
             configuration,
             ordered_members,
         )
-        .map_err(map_parameter_failure)?;
-        let skills = ordered_members.map(|instance_id| {
-            resolved_skill(
-                &input.cards[instance_id as usize],
-                is_same_band,
-                is_same_attribute,
-            )
-        });
-        for song_slot in 0..3 {
-            let score = score_song(
-                &input.songs[song_slot],
-                ExactTeamScoreInput {
-                    deck_total_parameter: parameters.deck_total_parameter,
-                    skills,
-                },
-                start_combos[song_slot],
-                perfect_rate,
-            )
-            .map_err(map_score_failure)?
-            .average_score;
-            if best_scores[song_slot].is_none_or(|best| score > best) {
-                best_scores[song_slot] = Some(score);
-                best_leaders[song_slot] = leader_instance_id;
+        .map_err(map_parameter_failure)?
+        .deck_total_parameter;
+    }
+    let mut best_scores = [0.0; 3];
+    let mut best_leaders = [0_u32; 3];
+
+    // Leaders are considered in source order. Equal scores therefore keep the
+    // lowest stable source index without making score a second objective.
+    for (song_slot, song) in songs.iter().enumerate() {
+        let scores = song
+            .score_leaders(skills, parameters)
+            .map_err(map_score_failure)?;
+        let mut best_leader = 0;
+        for leader in 1..5 {
+            if scores[leader] > scores[best_leader] {
+                best_leader = leader;
             }
         }
+        best_scores[song_slot] = scores[best_leader];
+        best_leaders[song_slot] = member_instance_ids[best_leader];
     }
 
     Ok(CompactCandidate {
         member_instance_ids,
-        song_scores: best_scores.map(|score| score.expect("five leaders were evaluated")),
+        song_scores: best_scores,
         leader_instance_ids: best_leaders,
     })
 }

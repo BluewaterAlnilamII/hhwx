@@ -176,28 +176,13 @@ pub(crate) fn validate_input(input: &FixedMedleyEvaluationInputV1) -> Result<(),
                 "skill percentages must be finite, non-negative JavaScript numbers",
             );
         }
-        if card.skill.rate_up_with_perfect.is_some()
+        if card.skill.is_rate_up_with_perfect
             && !matches!(card.skill.behavior, SkillBehaviorV1::Score { .. })
         {
             return invalid(
                 ValidationCode::InvalidSkill,
-                format!("{path}.skill.rateUpWithPerfect"),
+                format!("{path}.skill.isRateUpWithPerfect"),
                 "rate-up is only audited with an unconditional score behavior",
-            );
-        }
-        if let Some(rate_up) = card.skill.rate_up_with_perfect
-            && (!validate_non_negative_number(rate_up.stack_percent)
-                || !validate_non_negative_number(rate_up.max_score_up_percent)
-                || rate_up.stack_percent == 0.0
-                || skill_rates
-                    .into_iter()
-                    .flatten()
-                    .any(|base_rate| base_rate > rate_up.max_score_up_percent))
-        {
-            return invalid(
-                ValidationCode::InvalidSkill,
-                format!("{path}.skill.rateUpWithPerfect"),
-                "rate-up stack must be positive and its maximum must cover every base score-up rate",
             );
         }
         cards_by_id.insert(card.instance_id, card);
@@ -355,7 +340,7 @@ mod tests {
                     behavior: SkillBehaviorV1::Score {
                         score_up_percent: 100.0,
                     },
-                    rate_up_with_perfect: None,
+                    is_rate_up_with_perfect: false,
                 },
             })
             .collect();
@@ -444,10 +429,7 @@ mod tests {
         input.cards[0].skill.behavior = SkillBehaviorV1::ScoreOnPerfect {
             score_up_percent: 100.0,
         };
-        input.cards[0].skill.rate_up_with_perfect = Some(crate::RateUpWithPerfectV1 {
-            stack_percent: 0.5,
-            max_score_up_percent: 150.0,
-        });
+        input.cards[0].skill.is_rate_up_with_perfect = true;
         let error = input
             .validate()
             .expect_err("unsupported conditional rate-up must fail closed");

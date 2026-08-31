@@ -1,0 +1,195 @@
+{
+  "sourceUrl": "https://bestdori.com/js/app.d390adb1.js",
+  "sourceSha256": "ac84605d7889e53c0144ab7c41e379c174b94b8dc31edae07f3483b8a0610778",
+  "sourceFunctions": "c0f0.st; c0f0.ct two-floor callback with unit combo and fever",
+  "cases": [
+    {
+      "name": "neutral-half-perfect",
+      "perfectRate": 0.5,
+      "activeNoteCount": 1,
+      "baseBeforeJudgment": 101,
+      "skill": {
+        "masterSkillId": 1,
+        "skillLevel": 1,
+        "durationSeconds": 5,
+        "behavior": {
+          "kind": "neutral"
+        },
+        "isRateUpWithPerfect": false
+      },
+      "rawSkill": {
+        "activationEffect": {
+          "activateEffectTypes": {}
+        }
+      },
+      "judgeMultiplier": "0.9500000000000001",
+      "skillMultiplier": "1",
+      "innerScore": 95,
+      "noteScore": 95
+    },
+    {
+      "name": "score-on-perfect-bonus",
+      "perfectRate": 0.6,
+      "activeNoteCount": 3,
+      "baseBeforeJudgment": 301.375,
+      "skill": {
+        "masterSkillId": 2,
+        "skillLevel": 1,
+        "durationSeconds": 5,
+        "behavior": {
+          "kind": "score_on_perfect",
+          "scoreUpPercent": 80
+        },
+        "isRateUpWithPerfect": false
+      },
+      "rawSkill": {
+        "activationEffect": {
+          "activateEffectTypes": {
+            "score": {
+              "activateEffectValue": [
+                80
+              ],
+              "activateCondition": "perfect"
+            }
+          }
+        }
+      },
+      "judgeMultiplier": "0.9800000000000001",
+      "skillMultiplier": "1.5387755102040817",
+      "innerScore": 295,
+      "noteScore": 453
+    },
+    {
+      "name": "continued-third-note",
+      "perfectRate": 0.8,
+      "activeNoteCount": 3,
+      "baseBeforeJudgment": 301.375,
+      "skill": {
+        "masterSkillId": 3,
+        "skillLevel": 1,
+        "durationSeconds": 5,
+        "behavior": {
+          "kind": "continued_perfect",
+          "activeScoreUpPercent": 120,
+          "fallbackScoreUpPercent": 60
+        },
+        "isRateUpWithPerfect": false
+      },
+      "rawSkill": {
+        "activationEffect": {
+          "activateEffectTypes": {
+            "score_continued_note_judge": {
+              "activateEffectValue": [
+                120
+              ]
+            },
+            "score": {
+              "activateEffectValue": [
+                60
+              ]
+            }
+          }
+        }
+      },
+      "judgeMultiplier": "1.04",
+      "skillMultiplier": "1.9072000000000002",
+      "innerScore": 313,
+      "noteScore": 596
+    },
+    {
+      "name": "rate-up-past-one-hundred-notes",
+      "perfectRate": 0.6,
+      "activeNoteCount": 120,
+      "baseBeforeJudgment": 301.375,
+      "skill": {
+        "masterSkillId": 4,
+        "skillLevel": 1,
+        "durationSeconds": 5,
+        "behavior": {
+          "kind": "score",
+          "scoreUpPercent": 110
+        },
+        "isRateUpWithPerfect": true
+      },
+      "rawSkill": {
+        "activationEffect": {
+          "activateEffectTypes": {
+            "score": {
+              "activateEffectValue": [
+                110
+              ]
+            },
+            "score_rate_up_with_perfect": {}
+          }
+        }
+      },
+      "judgeMultiplier": "0.9800000000000001",
+      "skillMultiplier": "2.4",
+      "innerScore": 295,
+      "noteScore": 708
+    },
+    {
+      "name": "great-half",
+      "perfectRate": 0.4,
+      "activeNoteCount": 7,
+      "baseBeforeJudgment": 301.375,
+      "skill": {
+        "masterSkillId": 5,
+        "skillLevel": 1,
+        "durationSeconds": 5,
+        "behavior": {
+          "kind": "great_or_worse_half",
+          "scoreUpPercent": 80
+        },
+        "isRateUpWithPerfect": false
+      },
+      "rawSkill": {
+        "activationEffect": {
+          "activateEffectTypes": {
+            "score_under_great_half": {
+              "activateEffectValue": [
+                80
+              ]
+            }
+          }
+        }
+      },
+      "judgeMultiplier": "0.92",
+      "skillMultiplier": "1.1217391304347826",
+      "innerScore": 277,
+      "noteScore": 310
+    },
+    {
+      "name": "fractional-full-perfect-rate-up",
+      "perfectRate": 1,
+      "activeNoteCount": 100,
+      "baseBeforeJudgment": 301.375,
+      "skill": {
+        "masterSkillId": 6,
+        "skillLevel": 1,
+        "durationSeconds": 5,
+        "behavior": {
+          "kind": "score",
+          "scoreUpPercent": 0.022
+        },
+        "isRateUpWithPerfect": true
+      },
+      "rawSkill": {
+        "activationEffect": {
+          "activateEffectTypes": {
+            "score": {
+              "activateEffectValue": [
+                0.022
+              ]
+            },
+            "score_rate_up_with_perfect": {}
+          }
+        }
+      },
+      "judgeMultiplier": "1.1",
+      "skillMultiplier": "1.50022",
+      "innerScore": 331,
+      "noteScore": 496
+    }
+  ]
+}

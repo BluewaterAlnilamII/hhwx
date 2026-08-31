@@ -6,6 +6,7 @@ use crate::candidate::{
     CandidateFailure, CompactCandidate, candidates_overlap, evaluate_candidate,
     member_order_for_leader,
 };
+use crate::exact_score::{PreparedSong, exact_probability_to_f64};
 use crate::fast_upper::{FastScoreModel, FastUpperBoundEngine};
 use crate::upper_bound::add_song_uppers;
 use crate::{
@@ -317,7 +318,7 @@ impl ScoreCache {
         input: &MedleySearchInputV1,
         configuration: &AreaItemConfigurationV1,
         mut members: [u32; 5],
-        combos: [u32; 3],
+        songs: &[PreparedSong<'_>; 3],
         state: &mut RunState<'_, '_>,
     ) -> Result<CompactCandidate, SearchAbort> {
         state.poll_stop()?;
@@ -337,9 +338,10 @@ impl ScoreCache {
             add_counter(&mut state.diagnostics.cache_hits, 1)?;
             return Ok(row);
         }
-        let row = evaluate_candidate(input, configuration, members, combos)
+        let row = evaluate_candidate(input, configuration, members, songs)
             .map_err(map_candidate_failure)?;
         add_counter(&mut state.diagnostics.complete_teams, 1)?;
+        // Count the 3 songs x 5 leader results, not full chart scans.
         add_counter(&mut state.diagnostics.exact_song_scores, 15)?;
         if let Some(index) = index {
             self.slots[index] = Some(row);
@@ -452,7 +454,7 @@ fn propose_assignment(
 struct EvaluationContext<'input, 'state, 'control, 'callback> {
     input: &'input MedleySearchInputV1,
     configuration: &'input AreaItemConfigurationV1,
-    combos: [u32; 3],
+    songs: &'state [PreparedSong<'input>; 3],
     cache: &'state mut ScoreCache,
     state: &'state mut RunState<'control, 'callback>,
 }
@@ -463,7 +465,7 @@ impl EvaluationContext<'_, '_, '_, '_> {
             self.input,
             self.configuration,
             members,
-            self.combos,
+            self.songs,
             self.state,
         )
     }
@@ -902,6 +904,12 @@ fn run_search(
         return Ok(());
     }
 
+    let perfect_rate = exact_probability_to_f64(input.perfect_rate);
+    let prepare_song = |slot: usize| {
+        PreparedSong::new(&input.songs[slot], combos[slot], perfect_rate)
+            .map_err(|_| abort(SearchIncompleteReasonV1::ArithmeticOverflow))
+    };
+    let songs = [prepare_song(0)?, prepare_song(1)?, prepare_song(2)?];
     let model = FastScoreModel::new(input).ok();
     let plans = plan_configurations(input, model.as_ref(), &eligible, state)?;
     let families = [TeamFamily::default(); 3];
@@ -924,7 +932,7 @@ fn run_search(
         let mut evaluation = EvaluationContext {
             input,
             configuration,
-            combos,
+            songs: &songs,
             cache: &mut cache,
             state,
         };
@@ -955,7 +963,7 @@ fn run_search(
         let evaluation = EvaluationContext {
             input,
             configuration,
-            combos,
+            songs: &songs,
             cache: &mut cache,
             state,
         };

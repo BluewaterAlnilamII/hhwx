@@ -78,7 +78,7 @@ test("regional duration and unified values resolve from raw skill master", () =>
     skillLevel: 5,
     durationSeconds: 7,
     behavior: { kind: "score_on_perfect", scoreUpPercent: 150 },
-    rateUpWithPerfect: null,
+    isRateUpWithPerfect: false,
   });
 });
 
@@ -99,7 +99,7 @@ test("life-named Bestdori keys remain ordinary source-ordered score rows", () =>
   assert.deepEqual(resolved.behavior, { kind: "score", scoreUpPercent: 160 });
 });
 
-test("a zero-valued first score row keeps Bestdori source ordering", () => {
+test("a zero-valued first score row keeps the HHWX normalization policy", () => {
   const resolved = resolveBestdoriScoreSkill({
     skillId: 83,
     skillLevel: 1,
@@ -113,7 +113,7 @@ test("a zero-valued first score row keeps Bestdori source ordering", () => {
   assert.deepEqual(resolved.behavior, { kind: "score", scoreUpPercent: 0 });
 });
 
-test("continued fallback and PERFECT stacking retain their separate Bestdori behaviors", () => {
+test("continued fallback and the rate-up flag resolve independently", () => {
   const continued = resolveBestdoriScoreSkill({
     skillId: 90,
     skillLevel: 1,
@@ -129,7 +129,7 @@ test("continued fallback and PERFECT stacking retain their separate Bestdori beh
     activeScoreUpPercent: 115,
     fallbackScoreUpPercent: 80,
   });
-  assert.equal(continued.rateUpWithPerfect, null);
+  assert.equal(continued.isRateUpWithPerfect, false);
 
   const crescendo = resolveBestdoriScoreSkill({
     skillId: 91,
@@ -142,10 +142,7 @@ test("continued fallback and PERFECT stacking retain their separate Bestdori beh
     server: 0,
   });
   assert.deepEqual(crescendo.behavior, { kind: "score", scoreUpPercent: 115 });
-  assert.deepEqual(crescendo.rateUpWithPerfect, {
-    stackPercent: 0.5,
-    maxScoreUpPercent: 165,
-  });
+  assert.equal(crescendo.isRateUpWithPerfect, true);
 });
 
 test("malformed selected skill rows fail closed", () => {

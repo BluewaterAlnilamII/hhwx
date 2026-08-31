@@ -1,6 +1,6 @@
 //! A chart-free partial-team bound, separate from exact leaf scoring.
 //!
-//! Every real team has score <= P*K before the reference expectation-rounding
+//! Every real team has score <= P*K before the 120-order mean-rounding
 //! envelope. P is an additive per-card parameter upper; K is the full-P base
 //! coefficient plus five real card contributions and exactly one leader bonus.
 //! For any positive t, P*K <= (t*P + K/t)^2/4. Maximizing that additive quantity
@@ -12,10 +12,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use bandori_medley_model::ResolvedScoreSkillV1;
 
 use crate::candidate::member_order_for_leader;
+use crate::exact_score::exact_probability_to_f64;
 use crate::parameters::calculate_team_parameters;
 use crate::upper_bound::{
-    SkillUpper, UpperBoundFailure, all_order_operation_ceilings, checked_finite, combo_rate,
-    reference_ceiling, skill_delta, skill_upper, trigger_times,
+    MAX_EXACT_SCORE_INTEGER, UpperBoundFailure, checked_finite, combo_rate, continued_power_range,
+    reference_ceiling, skill_delta, trigger_times,
 };
 use crate::{AreaItemConfigurationV1, CardAttributeV1, MedleySearchInputV1, SearchCardV1};
 
@@ -97,7 +98,7 @@ struct SongModel {
     base: f64,
     maximum_alpha: f64,
     level_rate: f64,
-    rounding_operations: u128,
+    note_count: u32,
 }
 
 /// One input-local copy of chart work, shared by every area configuration.
@@ -113,6 +114,18 @@ pub(crate) struct FastScoreModel<'a> {
 
 impl<'a> FastScoreModel<'a> {
     pub(crate) fn new(input: &'a MedleySearchInputV1) -> Result<Self, UpperBoundFailure> {
+        let perfect_rate = exact_probability_to_f64(input.perfect_rate);
+        let judgment_multiplier = checked_finite(1.1 * perfect_rate + 0.8 * (1.0 - perfect_rate))?;
+        let maximum_notes = input
+            .songs
+            .iter()
+            .map(|song| song.notes.len())
+            .max()
+            .unwrap_or(0);
+        let power_range = continued_power_range(
+            perfect_rate,
+            u32::try_from(maximum_notes).map_err(|_| UpperBoundFailure::Unknown)?,
+        )?;
         let character_ids = input
             .cards
             .iter()
@@ -125,21 +138,10 @@ impl<'a> FastScoreModel<'a> {
             .iter()
             .map(|card| character_ids.binary_search(&card.character_id).unwrap())
             .collect();
-        let mut global = SkillUpper {
-            duration_seconds: 0.0,
-            positive_delta: 0.0,
-            may_continue: false,
-            may_rate_up: false,
-        };
         let mut bands = BTreeSet::new();
         let mut attributes = Vec::new();
         let mut pairs = Vec::new();
         for card in input.cards.iter().filter(|card| !card.is_excluded) {
-            let upper = skill_upper(card)?;
-            global.duration_seconds = global.duration_seconds.max(upper.duration_seconds);
-            global.positive_delta = global.positive_delta.max(upper.positive_delta);
-            global.may_continue |= upper.may_continue;
-            global.may_rate_up |= upper.may_rate_up;
             bands.insert(card.band_id);
             if !attributes.contains(&card.attribute) {
                 attributes.push(card.attribute);
@@ -147,10 +149,6 @@ impl<'a> FastScoreModel<'a> {
             if !pairs.contains(&(card.band_id, card.attribute)) {
                 pairs.push((card.band_id, card.attribute));
             }
-        }
-        let mut maximum_multiplier = 1.0;
-        for _ in 0..6 {
-            maximum_multiplier = add_up(maximum_multiplier, global.positive_delta)?;
         }
         let mut team_contexts = vec![TeamContext {
             band_id: None,
@@ -180,7 +178,7 @@ impl<'a> FastScoreModel<'a> {
             let level_rate = 1.0 + (f64::from(song.play_level) - 5.0) / 100.0;
             let fixed_rate = mul_up(
                 mul_up(div_up(level_rate, f64::from(note_count))?, 3.0)?,
-                1.1,
+                1.1_f64.max(judgment_multiplier),
             )?;
             let mut base = 0.0_f64;
             let mut maximum_alpha = 0.0_f64;
@@ -194,20 +192,11 @@ impl<'a> FastScoreModel<'a> {
                 maximum_alpha = maximum_alpha.max(alpha);
             }
             times[slot] = trigger_times(song)?;
-            // This global state envelope covers every context and leader. It
-            // retains states until after the first note outside each window.
-            let rounding_operations = all_order_operation_ceilings(song, times[slot], [global; 5])?
-                .into_iter()
-                .max()
-                .ok_or(UpperBoundFailure::Unknown)?
-                .checked_add(121)
-                .ok_or(UpperBoundFailure::Unknown)?;
-            rounding_factor(rounding_operations)?;
             song_models.push(SongModel {
                 base,
                 maximum_alpha,
                 level_rate,
-                rounding_operations,
+                note_count,
             });
             start_combo = start_combo
                 .checked_add(note_count)
@@ -218,6 +207,7 @@ impl<'a> FastScoreModel<'a> {
         // area configuration. Direct upward sums avoid unsafe prefix subtraction.
         let mut windows = BTreeMap::<u64, [[f64; 6]; 3]>::new();
         let mut contributions = vec![[[SkillContribution::default(); 3]; 4]; input.cards.len()];
+        let mut maximum_delta = 0.0_f64;
         for card in input.cards.iter().filter(|card| !card.is_excluded) {
             for (context_index, skill) in contexts(card).into_iter().enumerate() {
                 let duration_key = skill.duration_seconds.to_bits();
@@ -240,7 +230,8 @@ impl<'a> FastScoreModel<'a> {
                     entry.insert(coverage);
                 }
                 let coverage = &windows[&duration_key];
-                let delta = skill_delta(skill)?;
+                let delta = skill_delta(skill, perfect_rate, judgment_multiplier, power_range)?;
+                maximum_delta = maximum_delta.max(delta);
                 for slot in 0..3 {
                     let first_sum = coverage[slot][..5]
                         .iter()
@@ -254,6 +245,10 @@ impl<'a> FastScoreModel<'a> {
                         };
                 }
             }
+        }
+        let mut maximum_multiplier = 1.0;
+        for _ in 0..6 {
+            maximum_multiplier = add_up(maximum_multiplier, maximum_delta)?;
         }
         Ok(Self {
             input,
@@ -592,6 +587,14 @@ impl<'a> FastUpperBoundEngine<'a> {
         if range_upper.floor() > f64::from(u32::MAX) {
             return Err(UpperBoundFailure::Unknown);
         }
+        // Integer note sums are independent of reuse/reassociation only in
+        // this range. Larger families remain searchable with an unknown bound.
+        let maximum_order_score = (range_upper.floor() as u64)
+            .checked_mul(u64::from(song.note_count))
+            .ok_or(UpperBoundFailure::Unknown)?;
+        if maximum_order_score > MAX_EXACT_SCORE_INTEGER {
+            return Err(UpperBoundFailure::Unknown);
+        }
 
         let mut family_upper = None::<f64>;
         for weighted in &self.contexts {
@@ -624,7 +627,7 @@ impl<'a> FastUpperBoundEngine<'a> {
         if path_ceiling >= (1_u128 << 64) as f64 {
             return Err(UpperBoundFailure::Unknown);
         }
-        reference_ceiling(path_ceiling as u128, song.rounding_operations).map(|result| result.2)
+        reference_ceiling(path_ceiling as u128)
     }
 
     /// A full-team, actual-context estimate for ordering only, never a proof.
@@ -721,8 +724,7 @@ impl<'a> FastUpperBoundEngine<'a> {
 #[cfg(test)]
 mod tests {
     use bandori_medley_model::{
-        ExactProbabilityV1, FixedMedleyEvaluationInputV1, RateUpWithPerfectV1, ScoringNoteV1,
-        SkillBehaviorV1,
+        ExactProbabilityV1, FixedMedleyEvaluationInputV1, ScoringNoteV1, SkillBehaviorV1,
     };
     use bandori_medley_reference::evaluate_fixed_medley;
 
@@ -760,10 +762,7 @@ mod tests {
                                 score_up_percent: rate,
                             },
                         },
-                        rate_up_with_perfect: (id == 0).then_some(RateUpWithPerfectV1 {
-                            stack_percent: 0.5,
-                            max_score_up_percent: rate + 50.0,
-                        }),
+                        is_rate_up_with_perfect: id == 0,
                     }
                 };
                 SearchCardV1 {
@@ -933,7 +932,7 @@ mod tests {
                     &mut card.skill_contexts.same_band_and_attribute,
                 ] {
                     skill.behavior = SkillBehaviorV1::Neutral;
-                    skill.rate_up_with_perfect = None;
+                    skill.is_rate_up_with_perfect = false;
                 }
             }
             input.validate().unwrap();
