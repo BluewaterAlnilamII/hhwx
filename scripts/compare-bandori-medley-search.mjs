@@ -15,8 +15,13 @@ const ARCHIVE_ROOT = join(REPO_ROOT, "temp/medley-regression-fixtures");
 const DURATION_MS = 300_000;
 const CANDIDATE_BUDGET_BYTES = 256 * 1024 ** 2;
 const PROCESS_LIMIT_BYTES = 1024 ** 3;
-const { values } = parseArgs({ options: { remaining: { type: "boolean", default: false } } });
-const CASES = (values.remaining ? [119, 961, 962, 972] : [119]).flatMap((cardCount) => (
+const { values } = parseArgs({ options: {
+  remaining: { type: "boolean", default: false },
+  six: { type: "boolean", default: false },
+} });
+assert(!(values.remaining && values.six), "choose either --remaining or --six");
+const continueAfterFailure = values.remaining || values.six;
+const CASES = (values.remaining ? [119, 961, 962, 972] : values.six ? [119, 961] : [119]).flatMap((cardCount) => (
   (cardCount === 119 ? [null, 323] : [null, 244, 260, 323]).map((eventId) => ({
     id: `${cardCount}-${eventId === null ? "no-event" : `event-${eventId}`}`,
     cardCount, eventId, songIds: cardCount === 119 ? [295, 300, 703] : [385, 193, 619],
@@ -115,7 +120,7 @@ const metadata = {
   sourceChanges: execFileSync("git", ["status", "--short"], { cwd: REPO_ROOT, encoding: "utf8" }).trim(),
   runtime: { node: process.version, rust: execFileSync("rustc", ["--version"], { encoding: "utf8" }).trim(), cpu: cpus()[0]?.model },
   limits: { durationMs: DURATION_MS, candidateBudgetBytes: CANDIDATE_BUDGET_BYTES, processLimitBytes: PROCESS_LIMIT_BYTES },
-  dataSnapshot: snapshot.id, files: [...usedFiles.values()], continueAfterFailure: values.remaining,
+  dataSnapshot: snapshot.id, files: [...usedFiles.values()], continueAfterFailure,
   historicalLimitations: "Historical reports omit per-run data hashes; the 119-card reports also omit PERFECT rate. This run explicitly uses full PERFECT and the retained main-directory cache.",
   memoryMeasurement: "Windows native process PeakWorkingSet64 sampled every second; excludes input preparation and is not browser/WASM incremental memory. The last interval before exit may be missed.",
   cases: cases.map(({ id, cardCount, eventId, input, baseline, profilePayloadSha256 }) => {
@@ -184,6 +189,6 @@ for (const { id, cardCount, input, baseline } of cases) {
   console.log(JSON.stringify({ id, status: outcome?.status ?? "process_failed", reason: outcome?.reason ?? execution.forcedStop, averageScore, delta: result.delta, passed }));
   if (!passed) {
     process.exitCode = 1;
-    if (!values.remaining) break;
+    if (!continueAfterFailure) break;
   }
 }

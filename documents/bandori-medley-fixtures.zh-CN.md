@@ -42,6 +42,8 @@ node --import tsx scripts/archive-bandori-medley-fixtures.mjs --verify
 
 ## 首批直接比较
 
+只重跑已经批准的六例时，运行 `node --import tsx scripts/compare-bandori-medley-search.mjs --six`：包含 119 卡的两例、961 卡的四例，同一预算下单例未完成后继续，不包含 962／972 卡档案。作前后比较之前，核对规范化输入校验值与原六次运行一致。当前存储预算包含局部候选、排序索引和固定容量计分缓存；原生进程内存仍单独测量。
+
 运行 `node --import tsx scripts/compare-bandori-medley-search.mjs`，使用本地资料包。脚本构建原生 release 测试入口，输入完整 119 卡档案、expert 歌曲 `295 → 300 → 703`、全 PERFECT、无 fever，由搜索选择两套已拥有的合法道具配置。无活动的历史平均总分为 1,693,959，活动 323 为 1,781,877。这两份报告缺少历史 PERFECT 比例和当次数据校验值；本次明确记录采用全 PERFECT 和 main 目录留存缓存，不声称这些历史缺项已被证实。
 
 每例限时 300 秒，候选存储预算 256 MiB。Windows 下每秒采样原生进程峰值工作集，达到 1 GiB 时停止；这不是操作系统硬性内存配额，也不是浏览器／WASM 内存。外部截止时间额外留 15 秒让正常超时结果返回。逐例执行，首个未完成或分数回退就停止，不自动增加预算或改算法。

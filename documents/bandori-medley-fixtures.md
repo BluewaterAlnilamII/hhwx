@@ -42,6 +42,8 @@ For each source/profile/song/settings combination, retain the highest reported s
 
 ## First direct comparison
 
+To repeat only the six approved cases, run `node --import tsx scripts/compare-bandori-medley-search.mjs --six`. It runs both 119-card cases and all four 961-card cases, continuing after an incomplete result under the same limits. It does not include the 962/972-card profiles. Compare normalized-input hashes with the previous six runs before drawing before/after conclusions. The current storage budget includes local candidate rows, sorting indexes, and the bounded score cache; native process memory is still measured separately.
+
 Run `node --import tsx scripts/compare-bandori-medley-search.mjs` against the local archive. It builds the native release test entry point and runs the full 119-card profile, expert songs `295 → 300 → 703`, full PERFECT, no fever, and both owned legal area configurations. The no-event reference average is 1,693,959; event 323 is 1,781,877. These references omit historical PERFECT rates and per-run data hashes; the run explicitly records full PERFECT and the retained main-directory cache, without claiming those historical gaps have been verified.
 
 Each case has 300 seconds and a 256 MiB candidate-storage budget. On Windows, the runner samples native peak working set every second and stops at 1 GiB; this is not a hard OS allocation limit or browser/WASM memory measurement. An external deadline allows 15 seconds for the normal timeout result to return. Run cases sequentially and stop at the first incomplete result or score regression, without raising budgets or changing the algorithm.
