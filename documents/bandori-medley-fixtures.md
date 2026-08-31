@@ -65,22 +65,20 @@ Native search time totaled 159.922 seconds; the longest case took 35.232 seconds
 
 Full results, checks and the next-stage case list remain in the private archive under `runs/2026-08-31-final-low-pressure/`, referring to the two raw runs `2026-08-31T14-48-26.892Z` and `2026-08-31T14-48-29.719Z`. The separate 972/event244 investigation explains its higher score; this rerun changes neither solver. Acceptance covers these fourteen scenes only.
 
-## Next stage: prepared, not executed
+## Completed-profile stage
 
-Select individual scenes with more than 1,000 owned cards and a retained **full-area-scope exact** result. An exact flag selects historically completed cases; it is not an independent proof that the old score is optimal. Do not exclude a whole profile just because another event remains difficult, or count a locked-area exact result as full-scope completion.
+Select whole profiles over 1,000 cards whose no-event, event244, event260 and event323 scenes all have retained full-area-scope exact results. The approved list is **1036, 1039, 1161, 1211, 1229, 1252, 1318, 1425, 1433, 1513, 1522 and 1703 cards**: twelve profiles, four scenes each, **48 runs**.
 
-The retained real-profile matrix supplies 56 candidate scenes across fifteen profiles. The recommended first batch is:
+```sh
+node --import tsx scripts/compare-bandori-medley-search.mjs --completed-profiles
+```
 
-| Cards | Events | Scenes |
-| ---: | --- | ---: |
-| 1,036 | None, 244, 260, 323 | 4 |
-| 1,039 | None, 244, 260, 323 | 4 |
-| 1,051 | None, 323 | 2 |
-| 1,127 | None, 260, 323 | 3 |
-| **Total** | | **13** |
+This reuses the existing runner, input normalization and resource recording. Card counts uniquely identify these archived profiles; each run records their payload hashes. All scenes use the retained main-directory data, expert songs 385/193/619, full PERFECT, no fever and all owned area configurations. Keep the existing per-case 300-second / 256-MiB search-storage / 1-GiB sampled-process limits. Finish all 48 scenes sequentially, recording individual failures without increasing budgets or changing the algorithm.
 
-Keep 1051/event244, 1051/event260, 1127/event244 and 1747/event260 out of this stage: no retained full-scope exact result was found. The 1329-card exact record is locked-area only. Two 1889-card event323 records are full-scope exact, for songs 295/300/703 and 595/686/703, but omit historical PERFECT rate; retain them as reserves requiring an explicit comparison assumption, not first-batch cases.
+All four 1229-card scenes and 1513/event323 also have higher reports from a directory without a retained data snapshot. Run them, but preserve those higher references separately: a pass against the main-snapshot reference alone does not resolve that input discrepancy. Old exact flags select the batch; they do not prove that the old scores are optimal.
 
-Five later candidates need input reconciliation before acceptance: all four 1229-card scenes and 1513/event323 have higher reports from a directory without a retained data snapshot. Preserve those reports alongside the main-snapshot reference rather than silently lowering the comparison target.
+## Final high-pressure stage
 
-For the first batch, retain expert 385/193/619, full PERFECT, no fever, the current shared-area rules, and the same 300-second / 256-MiB / 1-GiB limits. Extend only the existing runner's case selection when execution is authorized; reuse normalization, result comparison and resource recording. Finish the approved batch, record every incomplete or lower-scoring case as failed, and stop before another batch, old-team replay or algorithm changes.
+Reserve the remaining five profiles in their entirety: **1051, 1127, 1329, 1747 and 1889 cards**. Do not pull their already-completed individual scenes into the current batch. No high-pressure run is authorized here.
+
+The 1051, 1127 and 1747 profiles lack complete four-scene exact coverage. The generic 1329/1889 reports use different song sets and include locked-area results or missing historical PERFECT rates; settle their exact scene settings before that final stage. Neither a locked-area exact flag nor a diagnostic best-so-far result counts as full-scope acceptance.

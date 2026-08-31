@@ -15,15 +15,19 @@ const ARCHIVE_ROOT = join(REPO_ROOT, "temp/medley-regression-fixtures");
 const CANDIDATE_BUDGET_BYTES = 256 * 1024 ** 2;
 const PROCESS_LIMIT_BYTES = 1024 ** 3;
 const { values } = parseArgs({ options: {
+  "completed-profiles": { type: "boolean", default: false },
   remaining: { type: "boolean", default: false },
   six: { type: "boolean", default: false },
   diagnose: { type: "boolean", default: false },
   case: { type: "string" },
 } });
-assert([values.remaining, values.six, values.diagnose].filter(Boolean).length <= 1, "choose one run mode");
+assert([values["completed-profiles"], values.remaining, values.six, values.diagnose].filter(Boolean).length <= 1, "choose one run mode");
 const DURATION_MS = values.diagnose ? 60_000 : 300_000;
-const continueAfterFailure = values.remaining || values.six || values.diagnose;
-const CASES = (values.remaining ? [119, 961, 962, 972] : values.six || values.diagnose ? [119, 961] : [119]).flatMap((cardCount) => (
+const continueAfterFailure = values["completed-profiles"] || values.remaining || values.six || values.diagnose;
+const profileCardCounts = values["completed-profiles"]
+  ? [1036, 1039, 1161, 1211, 1229, 1252, 1318, 1425, 1433, 1513, 1522, 1703]
+  : values.remaining ? [119, 961, 962, 972] : values.six || values.diagnose ? [119, 961] : [119];
+const CASES = profileCardCounts.flatMap((cardCount) => (
   (values.diagnose ? [null] : cardCount === 119 ? [null, 323] : [null, 244, 260, 323]).map((eventId) => ({
     id: `${cardCount}-${eventId === null ? "no-event" : `event-${eventId}`}`,
     cardCount, eventId, songIds: cardCount === 119 ? [295, 300, 703] : [385, 193, 619],
@@ -92,7 +96,7 @@ function readBaseline(testCase, profile) {
 }
 
 const cases = CASES.map((testCase) => {
-  const profile = manifest.profiles.find((entry) => entry.aliases.includes(`sample-${testCase.cardCount}`));
+  const profile = manifest.profiles.find((entry) => entry.cardCount === testCase.cardCount);
   const baseline = readBaseline(testCase, profile);
   const event = testCase.eventId === null ? null : readAsset(`event-${testCase.eventId}.json`);
   const eventBonus = event === null ? null : {
