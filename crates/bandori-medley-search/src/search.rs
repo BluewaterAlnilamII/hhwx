@@ -77,6 +77,10 @@ impl RunState<'_, '_> {
     }
 
     fn record_solution(&mut self, solution: MedleySearchSolutionV1) -> Result<bool, SearchAbort> {
+        #[cfg(test)]
+        let score_improved = self
+            .incumbent_score()
+            .is_none_or(|previous| solution.total_average_score > previous);
         add_counter(&mut self.diagnostics.feasible_medleys, 1)?;
         let becomes_best = self
             .best
@@ -88,6 +92,10 @@ impl RunState<'_, '_> {
         if becomes_best {
             self.best = Some(solution.clone());
             add_counter(&mut self.diagnostics.incumbent_changes, 1)?;
+        }
+        #[cfg(test)]
+        if score_improved {
+            crate::profiling::improvement(solution.total_average_score, &self.diagnostics);
         }
 
         if let Some(existing) = self
@@ -373,6 +381,8 @@ impl TeamFamily {
     }
 
     fn remaining(&self, groups: &[CharacterGroup], used: &[bool]) -> Vec<u32> {
+        #[cfg(test)]
+        let _timing = crate::profiling::enter(crate::profiling::Phase::Domains);
         groups[self.next_group..]
             .iter()
             .flat_map(|group| group.instance_ids.iter().copied())
@@ -381,6 +391,8 @@ impl TeamFamily {
     }
 
     fn completion_count(&self, groups: &[CharacterGroup], used: &[bool], cap: usize) -> usize {
+        #[cfg(test)]
+        let _timing = crate::profiling::enter(crate::profiling::Phase::Domains);
         let needed = TEAM_SIZE - self.member_count;
         let mut counts = [0_usize; TEAM_SIZE + 1];
         counts[0] = 1;
@@ -407,6 +419,12 @@ fn team_upper(
     song_slot: usize,
     state: &mut RunState<'_, '_>,
 ) -> Result<f64, SearchAbort> {
+    #[cfg(test)]
+    let _timing = crate::profiling::enter(if family.member_count == TEAM_SIZE {
+        crate::profiling::Phase::CompleteBounds
+    } else {
+        crate::profiling::Phase::PartialBounds
+    });
     add_counter(&mut state.diagnostics.bound_evaluations, 1)?;
     match engine.and_then(|engine| {
         engine
@@ -603,6 +621,8 @@ fn join_block(
     views: &[Vec<usize>; 3],
     state: &mut RunState<'_, '_>,
 ) -> Result<(), SearchAbort> {
+    #[cfg(test)]
+    let _timing = crate::profiling::enter(crate::profiling::Phase::Join);
     if rows.iter().any(Vec::is_empty) {
         return Ok(());
     }
@@ -887,6 +907,8 @@ fn run_search(
     input: &MedleySearchInputV1,
     state: &mut RunState<'_, '_>,
 ) -> Result<(), SearchAbort> {
+    #[cfg(test)]
+    let setup_timing = crate::profiling::enter(crate::profiling::Phase::Setup);
     state.diagnostics.configurations_total = u64::try_from(input.area_configurations.len())
         .map_err(|_| abort(SearchIncompleteReasonV1::CountOrIndexOverflow))?;
     let combos = start_combos(input)?;
@@ -919,6 +941,8 @@ fn run_search(
     {
         state.diagnostics.first_configuration_song_uppers = Some(first.root_song_uppers);
     }
+    #[cfg(test)]
+    drop(setup_timing);
 
     // A bounded warm start can improve configuration and contested-card choices.
     // All configurations are still searched or safely pruned below.
@@ -944,6 +968,8 @@ fn run_search(
         evaluation.probe_completions(engine.as_ref(), families, &domains, 6)?;
     }
     state.diagnostics.warm_start_average_score = state.incumbent_score();
+    #[cfg(test)]
+    crate::profiling::warm_start_finished();
 
     for (index, plan) in plans.into_iter().enumerate() {
         state.poll_stop()?;
@@ -1022,6 +1048,39 @@ pub fn search_medley(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "native full-roster diagnosis; run scripts/compare-bandori-medley-search.mjs --diagnose"]
+    fn profile_real_roster_search() {
+        use std::{env, fs, time::Duration, time::Instant};
+
+        let input = crate::decode_medley_search_input_json(
+            &fs::read_to_string(env::var("HHWX_MEDLEY_DIAGNOSTIC_INPUT").unwrap()).unwrap(),
+        )
+        .unwrap();
+        let duration = Duration::from_millis(
+            env::var("HHWX_MEDLEY_DIAGNOSTIC_DURATION_MS")
+                .unwrap()
+                .parse()
+                .unwrap(),
+        );
+        let budget = env::var("HHWX_MEDLEY_DIAGNOSTIC_BUDGET_BYTES")
+            .unwrap()
+            .parse()
+            .unwrap();
+        let started = Instant::now();
+        let mut stop_check =
+            || (started.elapsed() >= duration).then_some(SearchStopReason::TimedOut);
+        let mut control = SearchControl::new(budget, &mut stop_check);
+        crate::profiling::start();
+        let outcome = search_medley(&input, &mut control);
+        let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
+        let profile = crate::profiling::finish();
+        println!(
+            "MEDLEY_SEARCH_PROFILE:{}",
+            serde_json::json!({ "elapsedMs": elapsed_ms, "outcome": outcome, "profile": profile })
+        );
+    }
 
     #[test]
     fn join_keeps_signed_scores_and_smallest_output_identity_across_ties() {

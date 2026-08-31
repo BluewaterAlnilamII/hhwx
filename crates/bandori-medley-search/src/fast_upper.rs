@@ -1,7 +1,7 @@
 //! A chart-free partial-team bound, separate from exact leaf scoring.
 //!
 //! Every real team has score <= P*K before the final mean-rounding
-//! envelope. P is an additive per-card parameter upper; K is the full-P base
+//! envelope. P is an additive per-card parameter upper; K is the average-judgment base
 //! coefficient plus five real card contributions and exactly one leader bonus.
 //! For any positive t, P*K <= (t*P + K/t)^2/4. Maximizing that additive quantity
 //! over distinct characters retains the parameter/skill trade-off on each card.
@@ -486,6 +486,8 @@ impl<'a> FastUpperBoundEngine<'a> {
 
         // A character contributes at most one card. For a fixed positive scale,
         // only its best regular-card and best leader-card weights are needed.
+        #[cfg(test)]
+        crate::profiling::support_pass(remaining.len());
         let mut choices = vec![[None::<Choice>; 2]; self.model.character_count];
         for id in remaining.iter().copied() {
             let card = self
@@ -668,6 +670,8 @@ impl<'a> FastUpperBoundEngine<'a> {
         song_slot: usize,
         rank: usize,
     ) -> Option<[u32; 5]> {
+        #[cfg(test)]
+        let _timing = crate::profiling::enter(crate::profiling::Phase::Proposals);
         if song_slot >= 3 {
             return None;
         }

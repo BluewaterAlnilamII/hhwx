@@ -84,6 +84,8 @@ pub(crate) fn evaluate_candidate(
     mut member_instance_ids: [u32; 5],
     songs: &[PreparedSong<'_>; 3],
 ) -> Result<CompactCandidate, CandidateFailure> {
+    #[cfg(test)]
+    let _timing = crate::profiling::enter(crate::profiling::Phase::Scoring);
     member_instance_ids.sort_unstable();
     if member_instance_ids
         .windows(2)

@@ -13,8 +13,10 @@ The normalized input contains owned physical cards, hard-exclusion flags, card a
 
 Area-item IDs inside each configuration and output member IDs preserve their supplied operation order. Validation does not sort or repair the input. An empty selected-item list is valid when it is supplied as one legal configuration.
 
-The exact scorer prepares chart boundaries once and reuses floored window contributions across the 120 skill orders and all leaders. Overlapping notes still combine active multipliers before flooring. It uses the average-multiplier rules in [the foundation contract](../../documents/bandori-medley-foundation.md), with no P/G history state, and is bit-for-bit checked against the transparent reference.
+The exact scorer prepares chart boundaries once and adds independently rounded window contributions, including overlaps. It calculates the 120-order expectation directly without enumerating those orders in production. It uses the average-multiplier rules in [the foundation contract](../../documents/bandori-medley-foundation.md), with no P/G history state, and is bit-for-bit checked against the transparent reference.
 
 The search combines a contextual upper bound, three partial character-group teams, short-lived exhaustive blocks and a bounded score cache. Tiny searches are checked against an independent exhaustive oracle. The storage budget covers rows, sorting indexes and the score cache, not input/model data or chart-sized scoring scratch. See [the search design](../../documents/bandori-medley-search.md) for proof and resource semantics.
+
+For current-search diagnosis, `node --import tsx scripts/compare-bandori-medley-search.mjs --diagnose` runs the retained 119/961-card no-event inputs for 60 seconds each. Phase timers compile only into the native diagnostic test; production search and public result fields are unchanged. Results are not compared with historical solvers or scores.
 
 Worker/API adapters, frontend integration, rich-result hydration and command-line interfaces remain outside this checkpoint.

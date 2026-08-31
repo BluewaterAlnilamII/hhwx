@@ -13,6 +13,8 @@ mod fast_upper;
 mod input;
 mod output;
 mod parameters;
+#[cfg(test)]
+mod profiling;
 mod search;
 mod upper_bound;
 mod validation;
