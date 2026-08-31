@@ -9,6 +9,7 @@ mod candidate;
 mod control;
 mod error;
 mod exact_score;
+mod fast_upper;
 mod input;
 mod output;
 mod parameters;

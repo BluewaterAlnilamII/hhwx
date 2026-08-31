@@ -2,83 +2,65 @@
 
 Chinese version: [bandori-medley-search.zh-CN.md](bandori-medley-search.zh-CN.md)
 
-## Status and authority
+## Authority and exact problem
 
-This document records the approved and now executable first checkpoint of the greenfield medley search. The scoring and product semantics remain authoritative in [the foundation specification](bandori-medley-foundation.md). Search choices here are reviewable engineering decisions, not game rules; changing them requires another integrated review rather than an isolated optimization.
+This records the approved, reviewable search design, not additional game rules. [The foundation specification](bandori-medley-foundation.md) controls scoring and product semantics. The implementation is independent of the existing team-builder and experiment branches. Calc informs early pruning and short-lived compact storage, not HHWX scoring or proof rules.
 
-The implementation remains independent of the existing team-builder and experiment branches. Existing Bestdori/current-main code may be inspected only to verify an already adopted compatibility contract. Calc reverse engineering informs where pruning and compact storage belong, not HHWX scoring, proof, dominance, or record layout.
+For each owned legal area configuration shared by all three teams, choose five distinct characters per team from non-excluded physical cards. Physical cards cannot repeat across teams. Songs retain their three input slots, including repeats; each team chooses its own leader.
 
-## Exact problem
+The formal objective is the proven top-1 sum of three Bestdori-compatible average scores. Equal scores keep a deterministic representative. Up to ten discovered solutions remain diagnostic, not proven global top-10.
 
-For each legal area-item configuration shared by all three teams, search owned and non-excluded physical cards for three teams assigned to the three fixed ordered song slots. Each team contains five different characters, physical cards cannot repeat across the medley, each song may select its own leader, and duplicate songs remain allowed without reordering.
+## Scoring order stays unchanged
 
-The only formal objective is the proven top-1 sum of the three Bestdori-compatible average scores. Equal scores use one deterministic representative. Up to ten discovered high-average solutions may be retained diagnostically, but they are not proven global top-10 results.
+Dense card instance IDs follow decoded HHWX profile order. A complete five-card set is sorted by instance ID; remove the chosen leader and reinsert it at member index two, preserving the other members' order. Evaluate all five leaders for all three songs; an equal song score retains the first leader. Keep area-item operation order and the final `(song0 + song1) + song2` sum. Traversal and bound ordering never enter exact scoring.
 
-## Search unit and lifetime
+Exact leaves retain the two floors, P/G expectation, continued/rate-up state, all 120 equiprobable skill orders, and additive overlaps. The new bound and heuristic estimates do not replace that scorer.
 
-- Process one shared area-item configuration at a time; candidates from different configurations are never joined.
-- Group the roster by character and enumerate a five-card physical set once. A leaf evaluates all five leaders against all three song slots, then retains the best deterministic leader per song.
-- A compact leaf row contains five stable physical-card indexes, three exact binary64 song scores, and three leader indexes. Rich card and output objects are reconstructed only for the few retained medleys.
-- Configuration-local candidates and indexes are released as soon as that configuration is proved complete or safely pruned.
+## Shared, chart-free partial-team upper
 
-Dense instance IDs follow decoded HHWX profile-card order. For each physical five-card set, search keeps ascending instance-ID order, removes the selected leader, and reinserts it at member index two; the other four members retain their relative order. Bound ordering and traversal order never enter scoring order.
+The input-local model precomputes chart/combo coefficients, exact skill-window coverage by duration, and a reference-rounding operation envelope. Each area configuration supplies additive per-card parameter uppers; partial nodes do not rescan charts.
 
-## Proof-safe upper bound
+For any reachable whole-team skill context, the ideal average is at most `P * K`: `P` sums five per-card parameter uppers, and `K` contains the base coefficient, five first-five activation contributions, and exactly one sixth-trigger leader contribution. The proof replaces P/G by full-P inner scores and each active delta by a nonnegative maximum. Each card occupies each of the first five triggers in 24/120 orders, so its coefficient is the five-window sum divided by five.
 
-For a non-negative integer inner note score `x` and active-skill deltas `d_i`, direct-add overlap gives the real-number inequality:
+For any positive weight `t`:
 
 ```text
-floor(x * max(0, 1 + sum(d_i)))
-    <= x + sum(ceil(x * max(d_i, 0)))
+P * K <= (t * P + K / t)^2 / 4
 ```
 
-The bound may therefore discard negative deltas and upper-bound each activation independently while exact leaves retain every negative delta, state transition, overlap, and floor. The proof path also replaces each P/G inner note by its full-PERFECT inner score; this is an upward relaxation, not a change to exact leaf scoring. Per-card contributions remain contextual: they use the actual ordered chart, medley combo offset, trigger and inclusive-end timing, continued/rate-up behavior, area configuration, deck-power upper bound, and each still-reachable mixed/same-band/same-attribute team context. They are not permanent scalar card scores.
+For that weight, a small dynamic program maximizes the additive quantity using one card per remaining character and exactly one leader. Parameter and skill contributions stay attached to the same card. Fixed cards remain fixed. A maximum over reachable band/attribute contexts covers every completion; a minimum over several valid weights tightens each context's upper. This is still a relaxation, not a promise that the maximizing parameter and skill combination is attainable.
 
-Across the fixed 120 first-five orders, every card occupies every trigger position exactly 24 times. After the note inequality is established, the first-five upper is therefore the sum of each member's five-position average; the selected leader contributes the sixth activation separately.
+Binary64 safety is part of the implementation:
 
-For a partial team, selected cards remain fixed and unresolved slots may independently take favorable remaining distinct-character parameter and skill contributions. Allowing parameter and skill maxima to come from different cards is a deliberate upward relaxation. The maximum over every still-reachable team context is used.
+- Already-rounded card/event sums and area products are atoms; an upward envelope covers the remaining nonnegative parameter additions in every leader order.
+- Upward chart coefficients cover the five base-note operations and the six overlap additions plus final product. A subnormal base intermediate cannot reach an integer note score of one, so this step needs no arbitrary epsilon.
+- An independent whole-family parameter maximum proves note `u32` range safety; checking only the weighted maximizing team would be insufficient.
+- The integer reference envelope covers P/G state accumulation and the stable 120-order mean, including its rounding slack.
 
-For one configuration, let `R[s]` be the root team upper for song slot `s`, temporarily allowing card reuse. If a partial team has slot upper `U[s]`, its whole-medley relevance upper is:
+An unavailable or failed proof is positive infinity, never an infeasible family. Only a strict whole-medley upper below the exactly scored incumbent may prune; equality remains searchable.
 
-```text
-max(U[0] + R[1] + R[2],
-    R[0] + U[1] + R[2],
-    R[0] + R[1] + U[2])
-```
+## Early solutions and complete three-team search
 
-Only a strict upper below the incumbent may prune. Equality is retained, no epsilon is allowed, and a failed or unavailable proof becomes positive infinity and cannot prune.
+1. Find a legal fifteen-card assignment. A failed heuristic is not a no-solution proof.
+2. Order configurations by feasible full-team estimates. In at most eight configurations, try up to six deterministic constructions with different card-allocation orders and contribution weights. Exactly score every proposed complete medley before updating the incumbent. These effort limits never restrict the formal search.
+3. Search one configuration at a time with a depth-first state containing all three partial teams. Each team has an increasing character-group prefix. Its remaining domain excludes previously skipped groups and every physical card already fixed in any team, but not other cards of the same character in another team.
+4. Sum the three current family uppers in song order. This replaces the former single-team test that left the other two teams at unconstrained root maxima. Periodic complete-solution probes and completed blocks can keep improving the incumbent.
+5. When the three families contain at most 256 total candidate rows, or a smaller budget-derived limit, exhaustively generate their local rows and join the entire local three-way product. Otherwise split one family into every legal next-group/card child. Each complete medley belongs to exactly one child, so different blocks cannot lose cross-block combinations.
+6. Sort each local list by its assigned song score, reject physical overlap, and use monotone sum cutoffs. After the first compatible third team, retain every row with the same rounded total before stopping; a slightly smaller third score can still tie the total and improve its deterministic representative.
+7. Drop local rows and views after each block. A bounded configuration-local cache reuses a complete five-card row across all song slots and blocks. Hash collisions or eviction cause re-scoring only, never omission. No global candidate pool, pair table, roster bitset per row, or best-first frontier is retained.
 
-The real-number inequality alone is insufficient for the reference binary64 result. A pruning bound must also use directed intervals or a proved error envelope covering the reference operation order: note arithmetic, P/G state accumulation, the stable 120-order sum and division, and the ordered three-song sum. Until that envelope is executable and replay-tested, the same bound may order traversal but must not prune.
+The 256-row switch, cache capacity, and heuristic effort are implementation controls, not candidate caps. Smaller memory produces more complete blocks and possibly more repeated exact scoring. This trade-off must be measured; short-lived storage alone does not solve the search's combinatorial scale.
 
-## Search and exact join
+## Completion, resources, and evidence
 
-1. Validate the normalized search input, hard-exclude marked cards, and preflight score/count/index ranges.
-2. Find one deterministic legal fifteen-card assignment and score it exactly to seed the incumbent. Failure to find one is not a no-solution proof unless the feasibility search is complete.
-3. Order area configurations by their whole-medley root upper.
-4. Within one configuration, use depth-first character-group traversal. Recompute the contextual upper as choices become fixed; do not retain a global best-first frontier.
-5. At a complete five-card set, run the production scorer for all leaders and songs. Store the compact row only if it can still participate in an incumbent-improving or tie-relevant medley.
-6. Build three score-sorted index views over the same rows. Enumerate song-zero and song-one rows with monotone score cutoffs, reject physical-card overlap by their five indexes, and scan song-two rows in descending score until the first compatible row. Always calculate the final objective in song-slot order.
-7. Release configuration-local storage after its exhaustive generation and exact join complete; retain only the global winner, the small diagnostic set, completion state, and aggregate counters.
+Exact means every configuration and family was exhausted or safely pruned. Cancellation, timeout, memory exhaustion, invalid data, arithmetic overflow, scorer disagreement, count/index overflow, or internal failure returns incomplete with optional diagnostic `bestSoFar`. No score uplift can turn an incomplete run into a pass.
 
-The initial join has no full pair table, per-candidate roster bitset, or mandatory inverted index. A sparse card-to-candidate-rank index may be reviewed later only if measurements show the exact third-row scan dominates and its memory is justified.
+The supplied storage budget covers local compact rows, their sorting indexes, and the bounded score cache. `peakCandidateBytes` covers rows/indexes; `peakCacheBytes` and `peakSearchStorageBytes` report cache and combined peaks. These exclude input/model/configuration data and bounded-depth traversal scratch; they are not total native or browser/WASM memory. Stop polling occurs between nodes/candidates, not inside one exact five-leader/three-song evaluation or model construction, so the caller's deadline is not a hard real-time guarantee.
 
-## Completion and evidence
+Diagnostics include bound calls, family/row cuts, completed blocks, cache hits, actual exact-team evaluations, joins, heuristic probes/improvements, first and post-warm-start scores, root song uppers, and storage peaks. Compact rows count cumulative materializations; exact-team evaluations count cache misses, including heuristic work.
 
-An exact result exists only after every legal area configuration and candidate family was exhausted or safely pruned. Cancellation, timeout, memory exhaustion, invalid data, arithmetic overflow, scorer disagreement, count/index overflow, or an internal failure returns incomplete with an optional diagnostic `bestSoFar`. Capacity estimates may reserve or fail explicitly; they never truncate candidates.
+Required checks are bitwise reference-score parity; independent tiny exhaustive score and identity comparison across large/small budgets, conflicting cards, contexts and configurations; partial-bound replay against every tiny completion; tie handling; explicit incomplete outcomes; and the six approved retained real cases with unchanged inputs and budgets. Historical scores and teams are never search seeds or routinely replayed. The [fixture procedure](bandori-medley-fixtures.md) retains private evidence.
 
-The minimal evidence suite is deliberately proof-oriented:
+## Stop line
 
-- bit-for-bit production/reference scorer parity;
-- independent exhaustive whole-search comparison on tiny rosters and one or two configurations;
-- pruning replay proving every pruned tiny family cannot exceed its recorded upper;
-- one existing small real HHWX profile acceptance run after synthetic correctness is established.
-
-Aggregate counters cover configurations, partial nodes, pruning, complete teams, exact scores, compact rows, join checks, conflicts, feasible medleys, incumbent changes, unavailable bounds, and peak candidate bytes. The memory budget and peak counter in this core cover compact candidate rows plus their three index views; whole browser/WASM incremental peak remains a later integration acceptance measurement. Counters diagnose the hard-input boundary but do not themselves prove exactness.
-
-## Implemented checkpoint and stop line
-
-The first implementation is single-threaded and includes the strict normalized contract, exact scorer, proved upper bound, character-group traversal, compact three-view join, explicit incomplete outcomes, an independent tiny exhaustive oracle, and an opt-in small real-profile acceptance run. It adds no dominance relation, same-character replacement, cross-character coverage, SIMD/FMA, score quantization, random retention, candidate cap, external storage, frontend/API connection, or speculative partitioning. If real hard inputs still approach exhaustive growth, the core upper bound is reviewed before any local optimization is proposed.
-
-This checkpoint stops before frontend/API wiring and before post-search maximum-score hydration for the small diagnostic result set. Those are separate reviewed stages, not hidden work in the search core.
-
-Historical profiles, data snapshots, and selected main/dev results are retained locally under the [regression evidence procedure](bandori-medley-fixtures.md). Archiving them does not run score comparisons or change the search algorithm.
+This checkpoint adds no dominance replacement, score quantization, SIMD/FMA, approximate candidate retention, external storage, new dependency, frontend/API connection, or post-search maximum-score hydration. Any further optimization follows review of the completed evidence, not automatic changes after acceptance.

@@ -21,7 +21,7 @@ pub struct MedleySearchSolutionV1 {
 
 /// Aggregate evidence from one run. These counters diagnose scale and pruning;
 /// they are not an alternative completion proof.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MedleySearchDiagnosticsV1 {
     pub configurations_total: u64,
@@ -39,7 +39,17 @@ pub struct MedleySearchDiagnosticsV1 {
     pub feasible_medleys: u64,
     pub incumbent_changes: u64,
     pub unknown_bound_evaluations: u64,
+    pub bound_evaluations: u64,
+    pub cache_hits: u64,
+    pub local_blocks: u64,
+    pub heuristic_probes: u64,
+    pub heuristic_improvements: u64,
+    pub initial_average_score: Option<f64>,
+    pub warm_start_average_score: Option<f64>,
+    pub first_configuration_song_uppers: Option<[f64; 3]>,
     pub peak_candidate_bytes: u64,
+    pub peak_cache_bytes: u64,
+    pub peak_search_storage_bytes: u64,
 }
 
 /// Why a run ended without an exact result.

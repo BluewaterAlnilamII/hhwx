@@ -8,15 +8,17 @@ use bandori_medley_model::{
 };
 use bandori_medley_reference::evaluate_fixed_medley;
 use bandori_medley_search::{
-    AreaItemConfigurationV1, CardAttributeV1, MedleySearchInputV1, MedleySearchOutcomeV1,
-    MedleySearchSolutionV1, MedleySearchTeamV1, SEARCH_INPUT_SCHEMA_VERSION, SearchAreaItemV1,
-    SearchCardSkillContextsV1, SearchCardV1, SearchControl, SearchIncompleteReasonV1,
-    search_medley,
+    AreaItemConfigurationV1, CardAttributeV1, MedleySearchDiagnosticsV1, MedleySearchInputV1,
+    MedleySearchOutcomeV1, MedleySearchSolutionV1, MedleySearchTeamV1, SEARCH_INPUT_SCHEMA_VERSION,
+    SearchAreaItemV1, SearchCardSkillContextsV1, SearchCardV1, SearchControl,
+    SearchIncompleteReasonV1, search_medley,
 };
 
 const CHARACTER_COUNT: usize = 5;
 const CARD_VARIANTS_PER_CHARACTER: usize = 3;
 const TEAM_COUNT: usize = 3_usize.pow(CHARACTER_COUNT as u32);
+const LARGE_MEMORY_BUDGET: usize = 1024 * 1024;
+const SMALL_MEMORY_BUDGET: usize = 16 * 1024;
 
 type TeamScoreTable = Vec<[[f64; 3]; 5]>;
 
@@ -95,6 +97,50 @@ fn fixture() -> MedleySearchInputV1 {
         }],
         songs,
     }
+}
+
+fn conflicting_contexts_fixture() -> MedleySearchInputV1 {
+    let mut input = fixture();
+    for card in &mut input.cards {
+        let character_index = card.instance_id / 3;
+        let variant = card.instance_id % 3;
+        // A character keeps its band, while its physical cards can have different
+        // attributes. The strong variants compete across all three song slots.
+        card.attribute = if variant == 0 || (variant == 2 && character_index % 2 == 0) {
+            CardAttributeV1::Powerful
+        } else {
+            CardAttributeV1::Cool
+        };
+        if variant == (character_index + 1) % 3 {
+            card.character_parameter[0] += 1400.0 + f64::from(character_index * 200);
+        }
+        let base_percent = 15.0 + f64::from(character_index * 6 + variant * 3);
+        let make_skill = |percent| {
+            let mut skill = score_skill(card.instance_id + 1, percent);
+            skill.duration_seconds = [0.5, 1.5, 2.5][variant as usize];
+            skill
+        };
+        card.skill_contexts = SearchCardSkillContextsV1 {
+            mixed: make_skill(base_percent),
+            same_band: make_skill(base_percent + 5.0),
+            same_attribute: make_skill(base_percent + 70.0),
+            same_band_and_attribute: make_skill(base_percent + 100.0),
+        };
+    }
+    for note in &mut input.songs[1].notes {
+        note.time_seconds *= 0.25;
+    }
+    input.songs[2].notes[6].time_seconds = 5.25;
+    input.area_items.push(SearchAreaItemV1 {
+        area_item_id: 2,
+        target_band_ids: vec![1],
+        target_attributes: vec![CardAttributeV1::Cool],
+        parameter_rates: [0.0625, 0.125, 0.09375],
+    });
+    input.area_configurations.push(AreaItemConfigurationV1 {
+        selected_area_item_ids: vec![2],
+    });
+    input
 }
 
 fn choices_from_index(mut index: usize) -> [u32; CHARACTER_COUNT] {
@@ -342,8 +388,17 @@ fn is_better(candidate: &MedleySearchSolutionV1, incumbent: &MedleySearchSolutio
 
 fn exhaustive_oracle(input: &MedleySearchInputV1) -> MedleySearchSolutionV1 {
     let mut best = None::<MedleySearchSolutionV1>;
+    let mut independent_song_maximum = 0.0_f64;
     for configuration in &input.area_configurations {
         let teams = oracle_teams(&reference_team_scores(input, configuration));
+        let standalone: [f64; 3] = std::array::from_fn(|slot| {
+            teams
+                .iter()
+                .map(|team| team.song_scores[slot])
+                .fold(0.0_f64, f64::max)
+        });
+        independent_song_maximum =
+            independent_song_maximum.max((standalone[0] + standalone[1]) + standalone[2]);
         for first in &teams {
             for second in &teams {
                 if first
@@ -390,7 +445,12 @@ fn exhaustive_oracle(input: &MedleySearchInputV1) -> MedleySearchSolutionV1 {
             }
         }
     }
-    best.expect("15 cards across five characters have a complete assignment")
+    let best = best.expect("15 cards across five characters have a complete assignment");
+    assert!(
+        best.total_average_score < independent_song_maximum,
+        "the fixture must require a joint compromise over shared physical cards"
+    );
+    best
 }
 
 fn assert_solution_bits_and_identity(
@@ -422,26 +482,34 @@ fn assert_solution_bits_and_identity(
     }
 }
 
-#[test]
-fn tiny_search_matches_the_complete_reference_oracle() {
-    let input = fixture();
-    input.validate().expect("tiny search fixture must validate");
-    let expected = exhaustive_oracle(&input);
+fn assert_exact_search(
+    input: &MedleySearchInputV1,
+    expected: &MedleySearchSolutionV1,
+    memory_budget: usize,
+) -> MedleySearchDiagnosticsV1 {
     let mut never_stop = || None;
-    let mut control = SearchControl::new(1024 * 1024, &mut never_stop);
+    let mut control = SearchControl::new(memory_budget, &mut never_stop);
 
+    let outcome = search_medley(input, &mut control);
     let MedleySearchOutcomeV1::Exact {
         best: Some(actual),
         diagnostics,
         ..
-    } = search_medley(&input, &mut control)
+    } = outcome
     else {
-        panic!("complete tiny input must return a proven exact solution");
+        panic!("tiny search with {memory_budget} bytes must finish exactly: {outcome:?}");
     };
 
-    assert_solution_bits_and_identity(&actual, &expected);
-    assert_eq!(diagnostics.configurations_total, 1);
-    assert_eq!(diagnostics.configurations_completed, 1);
+    assert_solution_bits_and_identity(&actual, expected);
+    assert_eq!(
+        diagnostics.configurations_total,
+        input.area_configurations.len() as u64
+    );
+    assert_eq!(
+        diagnostics.configurations_completed,
+        diagnostics.configurations_total
+    );
+    assert!(diagnostics.peak_search_storage_bytes <= memory_budget as u64);
 
     let physical_cards = actual
         .teams
@@ -461,6 +529,60 @@ fn tiny_search_matches_the_complete_reference_oracle() {
             .collect::<HashSet<_>>();
         assert_eq!(characters.len(), 5, "one team must use five characters");
     }
+    diagnostics
+}
+
+fn assert_budget_independent_result(
+    input: &MedleySearchInputV1,
+    expected: &MedleySearchSolutionV1,
+) {
+    let large = assert_exact_search(input, expected, LARGE_MEMORY_BUDGET);
+    let small = assert_exact_search(input, expected, SMALL_MEMORY_BUDGET);
+    assert!(
+        large.local_blocks > 1,
+        "the fixture must span multiple blocks"
+    );
+    assert!(
+        small.local_blocks > large.local_blocks,
+        "the smaller budget must force further splitting: large={large:?}, small={small:?}"
+    );
+    eprintln!(
+        "{}-configuration fixture: {} -> {} local blocks; small-budget storage {} bytes",
+        input.area_configurations.len(),
+        large.local_blocks,
+        small.local_blocks,
+        small.peak_search_storage_bytes
+    );
+}
+
+#[test]
+fn tiny_search_matches_the_complete_reference_oracle_across_memory_budgets() {
+    let input = fixture();
+    input.validate().expect("tiny search fixture must validate");
+    let expected = exhaustive_oracle(&input);
+    assert_budget_independent_result(&input, &expected);
+}
+
+#[test]
+fn tiny_search_keeps_cross_block_combinations_with_contexts_and_card_conflicts() {
+    let input = conflicting_contexts_fixture();
+    input.validate().expect("context fixture must validate");
+    let expected = exhaustive_oracle(&input);
+    let same_attribute_teams = expected
+        .teams
+        .iter()
+        .filter(|team| {
+            let first = input.cards[team.member_instance_ids[0] as usize].attribute;
+            team.member_instance_ids
+                .iter()
+                .all(|id| input.cards[*id as usize].attribute == first)
+        })
+        .count();
+    assert!(
+        (1..3).contains(&same_attribute_teams),
+        "the winning fixture must use both uniform and mixed attribute contexts: {expected:?}"
+    );
+    assert_budget_independent_result(&input, &expected);
 }
 
 #[test]
