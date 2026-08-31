@@ -90,7 +90,7 @@ function readBaseline(testCase, profile) {
 
 const cases = CASES.map((testCase) => {
   const profile = manifest.profiles.find((entry) => entry.aliases.includes(`sample-${testCase.cardCount}`));
-  const baseline = values.diagnose ? null : readBaseline(testCase, profile);
+  const baseline = readBaseline(testCase, profile);
   const event = testCase.eventId === null ? null : readAsset(`event-${testCase.eventId}.json`);
   const eventBonus = event === null ? null : {
     attributes: event.attributes, characters: event.characters,
@@ -109,7 +109,7 @@ const cases = CASES.map((testCase) => {
       [1, 6, 11, 16, 21], [5, 10, 15, 20, 25, 30, 35],
     ]);
   }
-  if (baseline !== null) assert(Number.isFinite(baseline.averageScore));
+  assert(Number.isFinite(baseline.averageScore));
   return { ...testCase, input, baseline, profilePayloadSha256: profile.payloadSha256 };
 });
 
@@ -123,11 +123,10 @@ const metadata = {
   runtime: { node: process.version, rust: execFileSync("rustc", ["--version"], { encoding: "utf8" }).trim(), cpu: cpus()[0]?.model },
   limits: { durationMs: DURATION_MS, candidateBudgetBytes: CANDIDATE_BUDGET_BYTES, processLimitBytes: PROCESS_LIMIT_BYTES },
   dataSnapshot: snapshot.id, files: [...usedFiles.values()], continueAfterFailure,
+  historicalLimitations: "Historical reports omit per-run data hashes; the 119-card reports also omit PERFECT rate. This run explicitly uses full PERFECT and the retained main-directory cache.",
   ...(values.diagnose ? {
-    timingMeasurement: "Exclusive wall-clock phases in the native test build, including instrumentation overhead. Production search has no timers. No historical solver or score comparison is performed.",
-  } : {
-    historicalLimitations: "Historical reports omit per-run data hashes; the 119-card reports also omit PERFECT rate. This run explicitly uses full PERFECT and the retained main-directory cache.",
-  }),
+    timingMeasurement: "Exclusive wall-clock phases in the native test build, including instrumentation overhead. Production search has no timers. Saved historical scores are compared only after search; no old solver or team replay is run.",
+  } : {}),
   memoryMeasurement: "Windows native process PeakWorkingSet64 sampled every second; excludes input preparation and is not browser/WASM incremental memory. The last interval before exit may be missed.",
   cases: cases.map(({ id, cardCount, eventId, input, baseline, profilePayloadSha256 }) => {
     const inputPath = join(runDirectory, `${id}.input.json`);
@@ -206,17 +205,18 @@ function runNative(id) {
 
 const results = [];
 for (const { id, cardCount, input, baseline } of cases) {
-  console.log(`${id}: starting full ${cardCount}-card search, ${input.areaConfigurations.length} area configurations${baseline === null ? "" : `; historical average ${baseline.averageScore}`}`);
+  console.log(`${id}: starting full ${cardCount}-card search, ${input.areaConfigurations.length} area configurations; historical average ${baseline.averageScore}`);
   const execution = await runNative(id);
   const outcome = execution.native?.outcome;
   const solution = outcome?.status === "exact" ? outcome.best : outcome?.bestSoFar;
   const averageScore = solution?.totalAverageScore ?? null;
-  const scoreAtLeastHistorical = averageScore === null || baseline === null ? null : averageScore >= baseline.averageScore;
+  const scoreAtLeastHistorical = averageScore === null ? null : averageScore >= baseline.averageScore;
   const passed = outcome?.status === "exact" && solution !== null && scoreAtLeastHistorical === true && execution.forcedStop === null;
   const diagnosticCompleted = execution.exitCode === 0 && execution.forcedStop === null
     && (outcome?.status === "exact" || (outcome?.status === "incomplete" && outcome.reason === "timed_out"));
-  const comparison = values.diagnose ? { diagnosticCompleted } : {
+  const comparison = {
     baseline, delta: averageScore === null ? null : averageScore - baseline.averageScore, scoreAtLeastHistorical, passed,
+    ...(values.diagnose ? { diagnosticCompleted } : {}),
   };
   const result = { id, ...execution, averageScore, ...comparison };
   results.push(result);
@@ -224,7 +224,7 @@ for (const { id, cardCount, input, baseline } of cases) {
   writeJson(join(runDirectory, "summary.json"), { results, skipped: cases.slice(results.length).map(({ id: remaining }) => remaining) });
   console.log(JSON.stringify({
     id, status: outcome?.status ?? "process_failed", reason: outcome?.reason ?? execution.forcedStop, averageScore,
-    ...(values.diagnose ? { diagnosticCompleted } : { delta: result.delta, passed }),
+    delta: result.delta, passed, ...(values.diagnose ? { diagnosticCompleted } : {}),
   }));
   if (!(values.diagnose ? diagnosticCompleted : passed)) {
     process.exitCode = 1;
