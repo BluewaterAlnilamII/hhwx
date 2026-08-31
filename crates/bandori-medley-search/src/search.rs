@@ -1109,11 +1109,16 @@ impl JointSearch<'_, '_, '_, '_> {
                     mask & UNUSED != 0 || proposal.iter().any(|team| team.contains(&(id as u32)))
                 })
             });
-        // If the maximizing allocation is still allowed, restricting the domain
-        // cannot improve that linear optimum. Reuse its conditional uppers;
-        // re-solve when a branch excludes it, not once per forced card.
-        if !proposal_fits {
-            let workspace = joint_upper::workspace_bytes(owners.len(), self.groups.len());
+        let fixed_scores = node.families.map(|family| family.fixed_score);
+        let same_model = node
+            .joint
+            .as_ref()
+            .is_some_and(|cached| cached.bound.can_update(&owners, fixed_scores));
+        // Fixed members change the remaining product and count dimensions.
+        // Otherwise keep the numeric model: reuse its optimum if still allowed,
+        // or update only affected working-table layers when it is excluded.
+        if !proposal_fits || !same_model {
+            let workspace = joint_upper::workspace_bytes(&owners, self.groups.len());
             let resident = self.evaluation.cache.bytes() + self.joint_storage.get();
             if let (Some(engine), Some(bytes)) = (&self.domain.engine, workspace)
                 && bytes
@@ -1136,6 +1141,8 @@ impl JointSearch<'_, '_, '_, '_> {
                     engine,
                     self.groups,
                     &owners,
+                    fixed_scores,
+                    node.joint.as_ref().map(|cached| &cached.bound),
                     self.evaluation.state.control,
                 )
                 .map_err(abort)?
@@ -1244,8 +1251,8 @@ impl JointSearch<'_, '_, '_, '_> {
             return Ok(JointStep::Finished);
         }
         // Prefer a still-unassigned card from the maximizing allocation. This
-        // makes its include branch reuse the table; alternatives trigger a new
-        // joint solve. Conditional gaps order all retained destinations only.
+        // narrows the remaining allocation early. Conditional gaps order all
+        // retained destinations only; no destination is dropped by rank.
         let proposal = bound.proposal;
         let card = (0..owners.len())
             .filter(|&id| self.domain.available[id] && owners[id].count_ones() > 1)

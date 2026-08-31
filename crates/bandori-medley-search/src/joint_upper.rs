@@ -11,25 +11,47 @@ use crate::{SearchControl, SearchIncompleteReasonV1, SearchStopReason};
 
 pub(crate) const UNUSED: u8 = 8;
 pub(crate) const ALL_OWNERS: u8 = 15;
-const STATES: usize = 1000;
-const GOAL: usize = STATES - 1;
 const PATTERNS: usize = 27;
 const NO_CARD: u32 = u32::MAX;
 
+#[derive(Clone)]
 pub(crate) struct JointWeights {
     pub(crate) cards: Vec<[[f64; 2]; 3]>,
     pub(crate) constant: f64,
+    pub(crate) fixed_members: [Vec<u32>; 3],
+    pub(crate) fixed_leaders: [Option<f64>; 3],
+    pub(crate) fixed_scores: [Option<f64>; 3],
 }
 
 pub(crate) struct JointUpper {
     pub(crate) score: f64,
     pub(crate) destinations: Vec<[f64; 4]>,
     pub(crate) proposal: Option<[[u32; 5]; 3]>,
+    working: Option<JointWorking>,
 }
 
 impl JointUpper {
     pub(crate) fn bytes(&self) -> usize {
-        size_of::<Self>() + self.destinations.capacity() * size_of::<[f64; 4]>()
+        size_of::<Self>()
+            + self.destinations.capacity() * size_of::<[f64; 4]>()
+            + self.working.as_ref().map_or(0, JointWorking::heap_bytes)
+    }
+
+    pub(crate) fn can_update(&self, owners: &[u8], fixed_scores: [Option<f64>; 3]) -> bool {
+        self.working.as_ref().is_some_and(|working| {
+            working.weights.fixed_scores == fixed_scores
+                && owners
+                    .iter()
+                    .zip(&working.owners)
+                    .all(|(&now, &before)| now & !before == 0)
+                && (0..3).all(|slot| {
+                    owners
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(id, &mask)| (mask == 1 << slot).then_some(id as u32))
+                        .eq(working.weights.fixed_members[slot].iter().copied())
+                })
+        })
     }
 
     fn infeasible() -> Self {
@@ -37,11 +59,12 @@ impl JointUpper {
             score: f64::NEG_INFINITY,
             destinations: Vec::new(),
             proposal: None,
+            working: None,
         }
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 struct LocalChoice {
     score: f64,
     cards: [u32; 3],
@@ -64,24 +87,90 @@ fn roles(mut pattern: usize) -> [usize; 3] {
     })
 }
 
-// A team digit is regular_count + 5*leader_count (0..4 and 0..1).
-// This removes unreachable states from the loose 6³*2³ formulation.
-fn destination(mut state: usize, roles: [usize; 3]) -> Option<usize> {
-    let mut result = 0;
-    let mut place = 1;
-    for role in roles {
-        let digit = state % 10;
-        state /= 10;
-        let delta = match role {
-            0 => 0,
-            1 if digit % 5 < 4 => 1,
-            2 if digit < 5 => 5,
-            _ => return None,
-        };
-        result += (digit + delta) * place;
-        place *= 10;
+/// A fresh team uses the original ten ordinary/leader count states. Once it
+/// has fixed members, count only its remaining cards; a fixed member can supply
+/// the leader without consuming another card. A completed team has one state.
+#[derive(Clone)]
+struct CountLayout {
+    remaining: [usize; 3],
+    radices: [usize; 3],
+    states: usize,
+    transitions: [Vec<(usize, usize)>; PATTERNS],
+}
+
+impl CountLayout {
+    fn radix(remaining: usize) -> usize {
+        match remaining {
+            0 => 1,
+            5 => 10,
+            _ => 2 * (remaining + 1),
+        }
     }
-    Some(result)
+
+    fn new(remaining: [usize; 3]) -> Self {
+        let radices = remaining.map(Self::radix);
+        let mut layout = Self {
+            remaining,
+            radices,
+            states: radices.into_iter().product(),
+            transitions: std::array::from_fn(|_| Vec::new()),
+        };
+        layout.transitions = std::array::from_fn(|pattern| {
+            let mut edges = Vec::with_capacity(layout.states);
+            for from in 0..layout.states {
+                if let Some(to) = layout.destination(from, roles(pattern)) {
+                    edges.push((from, to));
+                }
+            }
+            edges
+        });
+        layout
+    }
+
+    fn destination(&self, mut state: usize, roles: [usize; 3]) -> Option<usize> {
+        let mut result = 0;
+        let mut place = 1;
+        for (slot, role) in roles.into_iter().enumerate() {
+            let radix = self.radices[slot];
+            let digit = state % radix;
+            state /= radix;
+            let remaining = self.remaining[slot];
+            let delta = match role {
+                0 => 0,
+                _ if remaining == 0 => return None,
+                1 if remaining == 5 && digit % 5 < 4 => 1,
+                2 if remaining == 5 && digit < 5 => 5,
+                1 if remaining < 5 && digit % (remaining + 1) < remaining => 1,
+                2 if remaining < 5 && digit < remaining => remaining + 2,
+                _ => return None,
+            };
+            result += (digit + delta) * place;
+            place *= radix;
+        }
+        Some(result)
+    }
+
+    fn initialize(&self, first: &mut [f64], leaders: [Option<f64>; 3]) {
+        for flags in 0..8 {
+            let mut index = 0;
+            let mut value = 0.0;
+            let mut place = 1;
+            for (slot, leader) in leaders.iter().enumerate() {
+                if flags & (1 << slot) != 0 {
+                    let Some(leader) = *leader else {
+                        value = f64::NEG_INFINITY;
+                        break;
+                    };
+                    index += (self.remaining[slot] + 1) * place;
+                    value = sum_up(value, leader);
+                }
+                place *= self.radices[slot];
+            }
+            if value != f64::NEG_INFINITY {
+                first[index] = value;
+            }
+        }
+    }
 }
 
 fn sum_up(left: f64, right: f64) -> f64 {
@@ -108,6 +197,7 @@ fn score_upper(value: f64, constant: f64) -> f64 {
 /// suffice even when one card is forbidden: at most two other roles and that
 /// exclusion can occupy better alternatives. Required/forced cards are added
 /// explicitly; this is a local matching proof, not a roster candidate cap.
+#[derive(Clone)]
 struct LocalGroup {
     best: [[[u32; 4]; 2]; 3],
     required: Vec<u32>,
@@ -229,19 +319,129 @@ fn poll(control: &mut SearchControl<'_>) -> Result<(), SearchIncompleteReasonV1>
     }
 }
 
-/// Required temporary capacity, including model-building scratch and the
-/// retained destination table. The score cache and ancestor bounds are outside
-/// this amount and must be deducted by the caller before allocation.
-pub(crate) fn workspace_bytes(cards: usize, groups: usize) -> Option<usize> {
-    let layers = groups.checked_add(1)?.checked_mul(STATES)?;
-    // Forward/backward f64 scores and one u8 predecessor pattern per forward state.
-    layers
+/// Keep the numeric model and its working tables together. A child with the
+/// same fixed members can restrict this model without changing its weights.
+/// DFS ancestors keep their own snapshots; their capacity is budgeted too.
+#[derive(Clone)]
+struct JointWorking {
+    weights: JointWeights,
+    layout: CountLayout,
+    owners: Vec<u8>,
+    residual_owners: Vec<u8>,
+    local: Vec<LocalGroup>,
+    choices: Vec<[LocalChoice; PATTERNS]>,
+    tables: Vec<f64>,
+    paths: Vec<u8>,
+}
+
+impl JointWorking {
+    fn heap_bytes(&self) -> usize {
+        self.weights.cards.capacity() * size_of::<[[f64; 2]; 3]>()
+            + self
+                .weights
+                .fixed_members
+                .iter()
+                .map(|ids| ids.capacity() * size_of::<u32>())
+                .sum::<usize>()
+            + self
+                .layout
+                .transitions
+                .iter()
+                .map(|edges| edges.capacity() * size_of::<(usize, usize)>())
+                .sum::<usize>()
+            + self.owners.capacity()
+            + self.residual_owners.capacity()
+            + self.local.capacity() * size_of::<LocalGroup>()
+            + self
+                .local
+                .iter()
+                .map(|group| group.required.capacity() * size_of::<u32>())
+                .sum::<usize>()
+            + self.choices.capacity() * size_of::<[LocalChoice; PATTERNS]>()
+            + self.tables.capacity() * size_of::<f64>()
+            + self.paths.capacity()
+    }
+
+    fn new(
+        weights: JointWeights,
+        groups: &[Vec<u32>],
+        owners: &[u8],
+    ) -> Result<Self, SearchIncompleteReasonV1> {
+        let layout = CountLayout::new(std::array::from_fn(|slot| {
+            5 - weights.fixed_members[slot].len()
+        }));
+        let length = (groups.len() + 1) * layout.states;
+        let mut tables = Vec::new();
+        tables
+            .try_reserve_exact(2 * length)
+            .map_err(|_| SearchIncompleteReasonV1::MemoryExhausted)?;
+        tables.resize(2 * length, f64::NEG_INFINITY);
+        let mut paths = Vec::new();
+        paths
+            .try_reserve_exact(length)
+            .map_err(|_| SearchIncompleteReasonV1::MemoryExhausted)?;
+        paths.resize(length, u8::MAX);
+        layout.initialize(&mut tables[..layout.states], weights.fixed_leaders);
+        tables[length + groups.len() * layout.states] = 0.0;
+        Ok(Self {
+            weights,
+            layout,
+            tables,
+            paths,
+            owners: owners.to_vec(),
+            residual_owners: owners.to_vec(),
+            local: groups
+                .iter()
+                .map(|_| LocalGroup {
+                    best: [[[NO_CARD; 4]; 2]; 3],
+                    required: Vec::new(),
+                })
+                .collect(),
+            choices: vec![[LocalChoice::default(); PATTERNS]; groups.len()],
+        })
+    }
+
+    fn restrict(&mut self, groups: &[Vec<u32>], owners: &[u8]) {
+        self.owners.copy_from_slice(owners);
+        self.residual_owners.copy_from_slice(owners);
+        let complete = (0..3)
+            .filter(|&slot| self.weights.fixed_members[slot].len() == 5)
+            .fold(0_u8, |mask, slot| mask | (1 << slot));
+        for ids in groups {
+            let occupied = (0..3)
+                .filter(|&slot| {
+                    self.weights.fixed_members[slot]
+                        .iter()
+                        .any(|id| ids.contains(id))
+                })
+                .fold(complete, |mask, slot| mask | (1 << slot));
+            for &id in ids {
+                self.residual_owners[id as usize] &= !occupied;
+            }
+        }
+        for &id in self.weights.fixed_members.iter().flatten() {
+            self.residual_owners[id as usize] = UNUSED;
+        }
+    }
+}
+
+/// Conservative allocation peak for a new model or a copied child snapshot.
+/// Cache/ancestor storage is already charged separately by the caller.
+pub(crate) fn workspace_bytes(owners: &[u8], groups: usize) -> Option<usize> {
+    let mut states = 1_usize;
+    for slot in 0..3 {
+        let fixed = owners.iter().filter(|&&mask| mask == 1 << slot).count();
+        states = states.checked_mul(CountLayout::radix(5_usize.checked_sub(fixed)?))?;
+    }
+    (groups.checked_add(1)?.checked_mul(states)?)
         .checked_mul(17)?
-        .checked_add(cards.checked_mul(160)?)?
-        .checked_add(groups.checked_mul(
-            PATTERNS * size_of::<LocalChoice>() + size_of::<LocalGroup>() + size_of::<Vec<u32>>(),
-        )?)?
-        .checked_add(STATES * PATTERNS * size_of::<(usize, usize)>())?
+        .checked_add(owners.len().checked_mul(256)?)?
+        .checked_add(
+            groups.checked_mul(
+                2 * PATTERNS * size_of::<LocalChoice>() + 2 * size_of::<LocalGroup>(),
+            )?,
+        )?
+        .checked_add(states * PATTERNS * size_of::<(usize, usize)>())?
         .checked_add(2 * size_of::<JointUpper>() + 4096)
 }
 
@@ -249,6 +449,8 @@ pub(crate) fn calculate(
     engine: &FastUpperBoundEngine<'_>,
     groups: &[Vec<u32>],
     owners: &[u8],
+    fixed_scores: [Option<f64>; 3],
+    previous: Option<&JointUpper>,
     control: &mut SearchControl<'_>,
 ) -> Result<Option<JointUpper>, SearchIncompleteReasonV1> {
     #[cfg(test)]
@@ -257,137 +459,205 @@ pub(crate) fn calculate(
     if owners.contains(&0) {
         return Ok(Some(JointUpper::infeasible()));
     }
-    let weights = match engine.joint_weights(owners, groups) {
-        Ok(Some(weights)) => weights,
-        Ok(None) => return Ok(Some(JointUpper::infeasible())),
-        Err(_) => return Ok(None),
+    let previous = previous.filter(|bound| bound.can_update(owners, fixed_scores));
+    let weights = if previous.is_some() {
+        None
+    } else {
+        match engine.joint_weights(owners, groups, fixed_scores) {
+            Ok(Some(weights)) => Some(weights),
+            Ok(None) => return Ok(Some(JointUpper::infeasible())),
+            Err(_) => return Ok(None),
+        }
     };
-    calculate_weights(&weights, groups, owners, control).map(Some)
+    calculate_weights(weights, groups, owners, previous, control).map(Some)
 }
 
 fn calculate_weights(
-    weights: &JointWeights,
+    weights: Option<JointWeights>,
     groups: &[Vec<u32>],
     owners: &[u8],
+    previous: Option<&JointUpper>,
     control: &mut SearchControl<'_>,
 ) -> Result<JointUpper, SearchIncompleteReasonV1> {
-    let transitions: [Vec<(usize, usize)>; PATTERNS] = std::array::from_fn(|pattern| {
-        let pattern = roles(pattern);
-        let mut edges = Vec::with_capacity(STATES);
-        for from in 0..STATES {
-            if let Some(to) = destination(from, pattern) {
-                edges.push((from, to));
-            }
-        }
-        edges
-    });
-    let local = groups
-        .iter()
-        .map(|ids| LocalGroup::new(ids, owners, weights))
-        .collect::<Vec<_>>();
-    let mut choices = Vec::<[LocalChoice; PATTERNS]>::with_capacity(groups.len());
-    for group in &local {
+    let old = previous.and_then(|bound| bound.working.as_ref());
+    let mut working = match old {
+        Some(old) => old.clone(),
+        None => JointWorking::new(weights.unwrap(), groups, owners)?,
+    };
+    working.restrict(groups, owners);
+    if working.residual_owners.contains(&0) {
+        return Ok(JointUpper::infeasible());
+    }
+    let states = working.layout.states;
+    let goal = states - 1;
+    let length = (groups.len() + 1) * states;
+    #[cfg(test)]
+    crate::profiling::joint_model(states, old.is_some());
+    let mut changed = None::<(usize, usize)>;
+    for (group, ids) in groups.iter().enumerate() {
         poll(control)?;
-        if group.required.len() > 3 {
+        if old.is_some_and(|old| {
+            ids.iter()
+                .all(|&id| old.residual_owners[id as usize] == working.residual_owners[id as usize])
+        }) {
+            continue;
+        }
+        let local = LocalGroup::new(ids, &working.residual_owners, &working.weights);
+        if local.required.len() > 3 {
             return Ok(JointUpper::infeasible());
         }
-        choices.push(std::array::from_fn(|pattern| {
-            group.choice(roles(pattern), owners, weights, None)
-        }));
-    }
-    let length = (groups.len() + 1) * STATES;
-    let mut tables = Vec::new();
-    tables
-        .try_reserve_exact(2 * length)
-        .map_err(|_| SearchIncompleteReasonV1::MemoryExhausted)?;
-    tables.resize(2 * length, f64::NEG_INFINITY);
-    let (forward, backward) = tables.split_at_mut(length);
-    let mut paths = Vec::new();
-    paths
-        .try_reserve_exact(length)
-        .map_err(|_| SearchIncompleteReasonV1::MemoryExhausted)?;
-    paths.resize(length, u8::MAX);
-    forward[0] = 0.0;
-    backward[groups.len() * STATES] = 0.0;
-    for group in 0..groups.len() {
-        poll(control)?;
-        let (previous, rest) = forward.split_at_mut((group + 1) * STATES);
-        let previous = &previous[group * STATES..];
-        let next = &mut rest[..STATES];
-        for (pattern, edges) in transitions.iter().enumerate() {
-            let choice = choices[group][pattern];
-            if choice.score == f64::NEG_INFINITY {
-                continue;
+        let choices: [LocalChoice; PATTERNS] = std::array::from_fn(|pattern| {
+            if working.layout.transitions[pattern].is_empty() {
+                LocalChoice::default()
+            } else {
+                local.choice(
+                    roles(pattern),
+                    &working.residual_owners,
+                    &working.weights,
+                    None,
+                )
             }
-            for &(from, to) in edges {
-                let score = sum_up(previous[from], choice.score);
-                if score > next[to] {
-                    next[to] = score;
-                    paths[(group + 1) * STATES + to] = pattern as u8;
+        });
+        if old.is_none()
+            || choices
+                .iter()
+                .zip(&working.choices[group])
+                .any(|(now, before)| now.score != before.score)
+        {
+            changed = Some((changed.map_or(group, |range| range.0), group));
+        }
+        working.local[group] = local;
+        working.choices[group] = choices;
+    }
+    let (forward, backward) = working.tables.split_at_mut(length);
+    if let Some((first, last)) = changed {
+        for group in first..groups.len() {
+            poll(control)?;
+            #[cfg(test)]
+            crate::profiling::joint_layer();
+            let (prefix, rest) = forward.split_at_mut((group + 1) * states);
+            let prefix = &prefix[group * states..];
+            let next = &mut rest[..states];
+            next.fill(f64::NEG_INFINITY);
+            working.paths[(group + 1) * states..(group + 2) * states].fill(u8::MAX);
+            for (pattern, edges) in working.layout.transitions.iter().enumerate() {
+                let choice = working.choices[group][pattern];
+                if choice.score == f64::NEG_INFINITY {
+                    continue;
                 }
+                for &(from, to) in edges {
+                    let score = sum_up(prefix[from], choice.score);
+                    if score > next[to] {
+                        next[to] = score;
+                        working.paths[(group + 1) * states + to] = pattern as u8;
+                    }
+                }
+            }
+            if group >= last
+                && old.is_some_and(|old| {
+                    next == &old.tables[(group + 1) * states..(group + 2) * states]
+                })
+            {
+                break;
             }
         }
     }
-    let value = forward[groups.len() * STATES + GOAL];
+    let value = forward[groups.len() * states + goal];
     if value == f64::NEG_INFINITY {
         return Ok(JointUpper::infeasible());
     }
-    for group in (0..groups.len()).rev() {
-        poll(control)?;
-        let (previous, suffix) = backward.split_at_mut((group + 1) * STATES);
-        let next = &mut previous[group * STATES..];
-        let suffix = &suffix[..STATES];
-        for (pattern, edges) in transitions.iter().enumerate() {
-            let choice = choices[group][pattern];
-            if choice.score == f64::NEG_INFINITY {
-                continue;
+    if let Some((first, last)) = changed {
+        for group in (0..=last).rev() {
+            poll(control)?;
+            #[cfg(test)]
+            crate::profiling::joint_layer();
+            let (prefix, suffix) = backward.split_at_mut((group + 1) * states);
+            let next = &mut prefix[group * states..];
+            let suffix = &suffix[..states];
+            next.fill(f64::NEG_INFINITY);
+            for (pattern, edges) in working.layout.transitions.iter().enumerate() {
+                let choice = working.choices[group][pattern];
+                if choice.score == f64::NEG_INFINITY {
+                    continue;
+                }
+                for &(from, to) in edges {
+                    next[to] = next[to].max(sum_up(suffix[from], choice.score));
+                }
             }
-            for &(from, to) in edges {
-                next[to] = next[to].max(sum_up(suffix[from], choice.score));
+            if group <= first
+                && old.is_some_and(|old| {
+                    next == &old.tables[length + group * states..length + (group + 1) * states]
+                })
+            {
+                break;
             }
         }
     }
     let mut proposal = [[0; 5]; 3];
-    let mut counts = [0; 3];
-    let mut current = GOAL;
+    let mut counts = std::array::from_fn::<_, 3, _>(|slot| {
+        let fixed = &working.weights.fixed_members[slot];
+        proposal[slot][..fixed.len()].copy_from_slice(fixed);
+        fixed.len()
+    });
+    let mut current = goal;
     for group in (0..groups.len()).rev() {
-        let pattern = usize::from(paths[(group + 1) * STATES + current]);
-        let choice = choices[group][pattern];
+        let pattern = usize::from(working.paths[(group + 1) * states + current]);
+        let choice = working.choices[group][pattern];
         for slot in 0..3 {
             if choice.cards[slot] != NO_CARD {
                 proposal[slot][counts[slot]] = choice.cards[slot];
                 counts[slot] += 1;
             }
         }
-        current -= destination(0, roles(pattern)).unwrap();
+        current -= working.layout.destination(0, roles(pattern)).unwrap();
     }
-    let score = score_upper(value, weights.constant);
-    let mut destinations = vec![[f64::NEG_INFINITY; 4]; owners.len()];
+    debug_assert_eq!(counts, [5; 3]);
+    let score = score_upper(value, working.weights.constant);
+    let mut destinations = previous.map_or_else(
+        || vec![[f64::NEG_INFINITY; 4]; owners.len()],
+        |bound| bound.destinations.clone(),
+    );
     for (group, ids) in groups.iter().enumerate() {
         poll(control)?;
+        if old.is_some_and(|old| {
+            ids.iter()
+                .all(|&id| old.residual_owners[id as usize] == working.residual_owners[id as usize])
+                && forward[group * states..(group + 1) * states]
+                    == old.tables[group * states..(group + 1) * states]
+                && backward[(group + 1) * states..(group + 2) * states]
+                    == old.tables[length + (group + 1) * states..length + (group + 2) * states]
+        }) {
+            continue;
+        }
         let mut outside = [f64::NEG_INFINITY; PATTERNS];
-        for (pattern, edges) in transitions.iter().enumerate() {
-            if choices[group][pattern].score == f64::NEG_INFINITY {
+        for (pattern, edges) in working.layout.transitions.iter().enumerate() {
+            if working.choices[group][pattern].score == f64::NEG_INFINITY {
                 continue;
             }
             for &(from, to) in edges {
                 outside[pattern] = outside[pattern].max(sum_up(
-                    forward[group * STATES + from],
-                    backward[(group + 1) * STATES + GOAL - to],
+                    forward[group * states + from],
+                    backward[(group + 1) * states + goal - to],
                 ));
             }
         }
         for &id in ids {
+            destinations[id as usize] = [f64::NEG_INFINITY; 4];
+            let mask = working.residual_owners[id as usize];
+            if mask == UNUSED {
+                destinations[id as usize][3] = score;
+                continue;
+            }
             for (owner, target) in destinations[id as usize].iter_mut().enumerate() {
-                if owners[id as usize] & (1 << owner) == 0 {
+                if mask & (1 << owner) == 0 {
                     continue;
                 }
                 let mut upper = f64::NEG_INFINITY;
-                for pattern in 0..PATTERNS {
-                    if outside[pattern] == f64::NEG_INFINITY {
+                for (pattern, &outside) in outside.iter().enumerate() {
+                    if outside == f64::NEG_INFINITY {
                         continue;
                     }
-                    let best = choices[group][pattern];
+                    let best = working.choices[group][pattern];
                     let already_satisfies = if owner < 3 {
                         best.cards[owner] == id
                     } else {
@@ -396,18 +666,39 @@ fn calculate_weights(
                     let conditional = if already_satisfies {
                         best
                     } else {
-                        local[group].choice(roles(pattern), owners, weights, Some((id, owner)))
+                        working.local[group].choice(
+                            roles(pattern),
+                            &working.residual_owners,
+                            &working.weights,
+                            Some((id, owner)),
+                        )
                     };
-                    upper = upper.max(sum_up(outside[pattern], conditional.score));
+                    upper = upper.max(sum_up(outside, conditional.score));
                 }
-                *target = score_upper(upper, weights.constant).min(score);
+                *target = score_upper(upper, working.weights.constant).min(score);
             }
+        }
+    }
+    for (slot, fixed) in working.weights.fixed_members.iter().enumerate() {
+        for &id in fixed {
+            destinations[id as usize] = [f64::NEG_INFINITY; 4];
+            destinations[id as usize][slot] = score;
+        }
+    }
+    for (id, values) in destinations.iter_mut().enumerate() {
+        for (owner, value) in values.iter_mut().enumerate() {
+            *value = if owners[id] & (1 << owner) == 0 {
+                f64::NEG_INFINITY
+            } else {
+                value.min(score)
+            };
         }
     }
     Ok(JointUpper {
         score,
         destinations,
         proposal: Some(proposal),
+        working: Some(working),
     })
 }
 
@@ -421,6 +712,9 @@ mod tests {
         // force the top-four matching shortcut to be checked against all cards.
         let weights = JointWeights {
             constant: 0.0,
+            fixed_members: std::array::from_fn(|_| Vec::new()),
+            fixed_leaders: [None; 3],
+            fixed_scores: [None; 3],
             cards: (0..6)
                 .map(|id| {
                     std::array::from_fn(|slot| {
@@ -500,6 +794,9 @@ mod tests {
             .collect::<Vec<_>>();
         let weights = JointWeights {
             constant: 17.0,
+            fixed_members: std::array::from_fn(|_| Vec::new()),
+            fixed_leaders: [None; 3],
+            fixed_scores: [None; 3],
             cards: (0..15)
                 .map(|id| {
                     std::array::from_fn(|slot| {
@@ -520,10 +817,70 @@ mod tests {
         for owners in [
             vec![ALL_OWNERS; 15],
             vec![1, 15, 15, 15, 6, 15, 15, 15, 13, 7, 15, 15, 15, 15, 15],
+            vec![1, 2, 4, 1, 2, 4, 15, 2, 4, 15, 15, 4, 15, 15, 15],
+            vec![1, 2, 15, 1, 2, 15, 1, 2, 15, 1, 2, 15, 1, 2, 15],
+            vec![1, 2, 4, 1, 2, 4, 1, 2, 4, 1, 2, 4, 1, 2, 4],
         ] {
+            // Fold the same original linear objective into constants and a
+            // fixed-leader option. The exhaustive oracle below stays unchanged.
+            let mut remaining_weights = weights.clone();
+            for slot in 0..3 {
+                let fixed = &mut remaining_weights.fixed_members[slot];
+                *fixed = owners
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(id, &mask)| (mask == 1 << slot).then_some(id as u32))
+                    .collect();
+                let mut leader = 0.0_f64;
+                for &id in fixed.iter() {
+                    let [regular, with_leader] = weights.cards[id as usize][slot];
+                    remaining_weights.constant += regular;
+                    leader = leader.max(with_leader - regular);
+                }
+                if fixed.len() == 5 {
+                    remaining_weights.constant += leader;
+                } else if !fixed.is_empty() {
+                    remaining_weights.fixed_leaders[slot] = Some(leader);
+                }
+            }
             let mut never_stop = || None;
             let mut control = SearchControl::new(1024 * 1024, &mut never_stop);
-            let result = calculate_weights(&weights, &groups, &owners, &mut control).unwrap();
+            let result = calculate_weights(
+                Some(remaining_weights.clone()),
+                &groups,
+                &owners,
+                None,
+                &mut control,
+            )
+            .unwrap();
+            let expected_states = remaining_weights
+                .fixed_members
+                .iter()
+                .map(|ids| CountLayout::radix(5 - ids.len()))
+                .product::<usize>();
+            assert_eq!(
+                result.working.as_ref().unwrap().layout.states,
+                expected_states
+            );
+            if let Some(id) = owners.iter().position(|&mask| mask == ALL_OWNERS) {
+                let mut restricted = owners.clone();
+                restricted[id] &= !2;
+                assert!(result.can_update(&restricted, [None; 3]));
+                let updated =
+                    calculate_weights(None, &groups, &restricted, Some(&result), &mut control)
+                        .unwrap();
+                let fresh = calculate_weights(
+                    Some(remaining_weights),
+                    &groups,
+                    &restricted,
+                    None,
+                    &mut control,
+                )
+                .unwrap();
+                assert_eq!(updated.score, fresh.score);
+                assert_eq!(updated.destinations, fresh.destinations);
+                assert_eq!(updated.proposal, fresh.proposal);
+            }
             let mut expected = f64::NEG_INFINITY;
             let mut conditional = [[f64::NEG_INFINITY; 4]; 15];
             for mut combination in 0..6_usize.pow(5) {

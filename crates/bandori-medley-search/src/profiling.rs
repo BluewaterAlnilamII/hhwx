@@ -51,6 +51,10 @@ struct Profile {
     joint_destinations_pruned: u64,
     joint_cards_fixed: u64,
     joint_reuses: u64,
+    joint_model_builds: u64,
+    joint_table_updates: u64,
+    joint_state_count_sum: u64,
+    joint_layers_recomputed: u64,
     peak_joint_bytes: usize,
     first_joint_upper: Option<f64>,
 }
@@ -144,6 +148,24 @@ pub(crate) fn joint_cuts(destinations: u32, fixed: bool) {
     });
 }
 
+pub(crate) fn joint_model(states: usize, updated: bool) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            profile.joint_model_builds += u64::from(!updated);
+            profile.joint_table_updates += u64::from(updated);
+            profile.joint_state_count_sum += states as u64;
+        }
+    });
+}
+
+pub(crate) fn joint_layer() {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            profile.joint_layers_recomputed += 1;
+        }
+    });
+}
+
 pub(crate) fn improvement(score: f64, diagnostics: &MedleySearchDiagnosticsV1) {
     PROFILE.with_borrow_mut(|profile| {
         if let Some(profile) = profile {
@@ -185,6 +207,10 @@ pub(crate) fn start() {
             joint_destinations_pruned: 0,
             joint_cards_fixed: 0,
             joint_reuses: 0,
+            joint_model_builds: 0,
+            joint_table_updates: 0,
+            joint_state_count_sum: 0,
+            joint_layers_recomputed: 0,
             peak_joint_bytes: 0,
             first_joint_upper: None,
         });
@@ -213,6 +239,10 @@ pub(crate) fn finish() -> Value {
             "jointDestinationsPruned": profile.joint_destinations_pruned,
             "jointCardsFixed": profile.joint_cards_fixed,
             "jointReuses": profile.joint_reuses,
+            "jointModelBuilds": profile.joint_model_builds,
+            "jointTableUpdates": profile.joint_table_updates,
+            "jointStateCountSum": profile.joint_state_count_sum,
+            "jointLayersRecomputed": profile.joint_layers_recomputed,
             "peakJointReservedBytes": profile.peak_joint_bytes,
             "firstJointUpper": profile.first_joint_upper,
             "improvements": profile.improvements,
