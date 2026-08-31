@@ -62,7 +62,7 @@ test("HHWX profile input becomes the normalized search roster without caller tea
     bandId: 1,
     attribute: "powerful",
     isExcluded: true,
-    characterParameter: [1172, 1150, 1150],
+    characterParameter: [1173, 1150, 1150],
     eventParameter: [0, 0, 0],
     skillContexts: {
       mixed: {

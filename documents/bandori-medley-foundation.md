@@ -45,7 +45,7 @@ The source adapter derives parameters in this order:
 
 1. Reconstruct the selected card level from the Cards minimum/maximum P/T/V rows using Bestdori's rarity curve and JavaScript `Math.round`.
 2. Add `50 * rarity * masterRank` to each parameter, then training and completed episode bonuses.
-3. Convert compact mission units from tenths of a percentage point. Floor the potential contribution separately; combine collection and training mission rates before flooring their contribution once. Equal P/T/V values do not select a different rule.
+3. Convert compact mission units from tenths of a percentage point. Combine collection and training mission rates, add the potential rate, then calculate each P/T/V bonus as `floor(baseParameter * (potentialRate + missionRate))`. This is the chosen HHWX calculator rule, not an independently verified native-game rounding claim. Equal P/T/V values do not select a different rule.
 4. Apply owned area items using profile levels, regional P/T/V rates, target band and attribute.
 5. Apply event attribute, character, canonical member `situationId`, master-rank, matching-parameter and room percentages.
 6. Add card, area and event power as JavaScript-number-compatible values to obtain `deckTotalParameter`; area/event contributions are not independently rounded here.

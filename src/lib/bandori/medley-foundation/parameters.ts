@@ -209,8 +209,7 @@ export function calculateProfileCard(
     }
     const potentialRate = potentialLevel > 1 ? potentialLevel / 1000 : 0;
     const missionRate = (bonus.collection[index] + bonus.training[index]) / 100;
-    return Math.floor(parameter * potentialRate)
-      + Math.floor(parameter * missionRate);
+    return Math.floor(parameter * (potentialRate + missionRate));
   }) as Triple<number>;
   const characterParameter = add(baseParameter, characterBonus, `${path}.profile.characterBonuses`);
   const characterMaster = isRecord(characterMasterValue)

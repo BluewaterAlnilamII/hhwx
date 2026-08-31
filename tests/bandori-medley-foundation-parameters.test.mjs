@@ -45,7 +45,7 @@ const characterBonuses = new Map([[1, {
   training: [4, 5, 6],
 }]]);
 
-test("card parameters derive from the profile state and raw min/max master rows", () => {
+test("card parameters combine potential and mission rates before flooring", () => {
   const calculated = calculateProfileCard(
     profileCard(1),
     cardMaster(),
@@ -54,8 +54,8 @@ test("card parameters derive from the profile state and raw min/max master rows"
   );
 
   assert.deepEqual(calculated.baseParameter, [1330, 1430, 1530]);
-  assert.deepEqual(calculated.characterParameter, [1409, 1558, 1712]);
-  assert.equal(calculated.totalPower, 4679);
+  assert.deepEqual(calculated.characterParameter, [1409, 1558, 1713]);
+  assert.equal(calculated.totalPower, 4680);
   assert.equal(calculated.skillId, 1);
   assert.equal(calculated.bandId, 1);
 });
@@ -115,10 +115,10 @@ test("selected area items and event parameters are derived without caller totals
     server: 3,
   });
 
-  assert.equal(trace.cardPower, 23_395);
-  assert.ok(Math.abs(trace.areaItemPower - 4_830.5) < Number.EPSILON * 40_000);
-  assert.ok(Math.abs(trace.eventPower - 11_010.8) < Number.EPSILON * 40_000);
-  assert.ok(Math.abs(trace.deckTotalParameter - 39_236.3) < Number.EPSILON * 40_000);
+  assert.equal(trace.cardPower, 23_400);
+  assert.ok(Math.abs(trace.areaItemPower - 4_832) < Number.EPSILON * 40_000);
+  assert.ok(Math.abs(trace.eventPower - 11_013.2) < Number.EPSILON * 40_000);
+  assert.ok(Math.abs(trace.deckTotalParameter - 39_245.2) < Number.EPSILON * 40_000);
   assert.deepEqual(trace.selectedAreaItemIds, [1]);
 });
 

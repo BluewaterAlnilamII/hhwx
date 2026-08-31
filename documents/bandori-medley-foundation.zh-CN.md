@@ -45,7 +45,7 @@ English version: [bandori-medley-foundation.md](bandori-medley-foundation.md)
 
 1. 从 Cards 最低／最高 P/T/V 行，按 Bestdori 稀有度成长曲线和 JavaScript `Math.round` 还原所选等级。
 2. 每项加入 `50 * rarity * masterRank`，再加入训练与已完成剧情加成。
-3. 把压缩任务单位从十分之一百分点换算回来。潜能贡献单独 floor；收集与训练任务倍率先相加，再对任务贡献 floor 一次。三项 P/T/V 恰好相同也不切换规则。
+3. 把压缩任务单位从十分之一百分点换算回来。先合并收集与训练任务倍率，再加上潜能倍率；每项 P/T/V 加成统一计算为 `floor(基础参数 * (潜能倍率 + 任务倍率))`。这是选定的 HHWX 计算规则，不表示已有独立证据证明原生游戏的取整方式。三项 P/T/V 恰好相同也不切换规则。
 4. 按持有等级、区服 P/T/V 倍率及目标乐团／属性计算道具。
 5. 计算活动属性、角色、规范成员 `situationId`、突破、匹配参数和房间加成。
 6. 按 JavaScript 数值运算相加卡牌、道具、活动贡献，得到 `deckTotalParameter`；这里不额外对道具／活动贡献取整。
