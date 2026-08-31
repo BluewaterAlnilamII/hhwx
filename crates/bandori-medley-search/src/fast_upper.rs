@@ -663,8 +663,6 @@ impl<'a> FastUpperBoundEngine<'a> {
 
         // A character contributes at most one card. For a fixed positive scale,
         // only its best regular-card and best leader-card weights are needed.
-        #[cfg(test)]
-        crate::profiling::support_pass(0);
         let required = 5 - selected.len();
         let mut states = [[None::<Support>; 2]; 6];
         states[0][0] = Some(fixed);
@@ -675,11 +673,19 @@ impl<'a> FastUpperBoundEngine<'a> {
             });
         }
         if required == 0 {
+            #[cfg(test)]
+            crate::profiling::support_pass(0);
             return Ok(states[0][1]);
         }
+        #[cfg(test)]
+        let mut head_count = 0;
         for &(character, start) in &weighted.groups {
             if character < next_group || selected_characters.contains(&character) {
                 continue;
+            }
+            #[cfg(test)]
+            {
+                head_count += 2;
             }
             let group = std::array::from_fn::<_, 2, _>(|role| {
                 self.head(start + song_slot * 6 + weight * 2 + role)
@@ -710,6 +716,8 @@ impl<'a> FastUpperBoundEngine<'a> {
                 }
             }
         }
+        #[cfg(test)]
+        crate::profiling::support_pass(head_count);
         Ok(states[required][1])
     }
 

@@ -23,6 +23,14 @@ const LOCAL_ROW_TARGET: usize = 256;
 const SCORE_CACHE_SLOTS: usize = 4096;
 const WARM_CONFIGURATION_COUNT: usize = 8;
 const COMPLETION_PROBE_INTERVAL: u64 = 512;
+const TEAM_ORDERS: [[usize; 3]; 6] = [
+    [0, 1, 2],
+    [1, 0, 2],
+    [2, 0, 1],
+    [0, 2, 1],
+    [1, 2, 0],
+    [2, 1, 0],
+];
 
 #[derive(Debug)]
 struct CharacterGroup {
@@ -590,8 +598,10 @@ impl EvaluationContext<'_, '_, '_, '_> {
         )
     }
 
-    fn score_assignment(&mut self, assignment: [[u32; 5]; 3]) -> Result<(), SearchAbort> {
-        add_counter(&mut self.state.diagnostics.heuristic_probes, 1)?;
+    fn score_assignment(
+        &mut self,
+        assignment: [[u32; 5]; 3],
+    ) -> Result<[CompactCandidate; 3], SearchAbort> {
         let rows = [
             self.evaluate(assignment[0])?,
             self.evaluate(assignment[1])?,
@@ -603,11 +613,88 @@ impl EvaluationContext<'_, '_, '_, '_> {
         {
             return Err(abort(SearchIncompleteReasonV1::InternalFailure));
         }
-        if self.state.record_solution(candidate_solution(
-            self.configuration,
-            [&rows[0], &rows[1], &rows[2]],
-        )?)? {
-            add_counter(&mut self.state.diagnostics.heuristic_improvements, 1)?;
+        self.record_assignments(rows)?;
+        Ok(rows)
+    }
+
+    fn record_assignments(&mut self, rows: [CompactCandidate; 3]) -> Result<(), SearchAbort> {
+        add_counter(&mut self.state.diagnostics.heuristic_probes, 1)?;
+        // Reassign the teams, never the input songs or their combo offsets.
+        // Every row already contains all three song scores and best leaders.
+        for order in TEAM_ORDERS {
+            let selected = order.map(|team| &rows[team]);
+            let total = (selected[0].song_scores[0] + selected[1].song_scores[1])
+                + selected[2].song_scores[2];
+            if self
+                .state
+                .incumbent_score()
+                .is_some_and(|best| total < best)
+            {
+                continue;
+            }
+            if self
+                .state
+                .record_solution(candidate_solution(self.configuration, selected)?)?
+            {
+                add_counter(&mut self.state.diagnostics.heuristic_improvements, 1)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn can_replace(&self, team: [u32; 5], position: usize, id: u32) -> bool {
+        let character = self.input.cards[id as usize].character_id;
+        team.iter().enumerate().all(|(index, other)| {
+            index == position || self.input.cards[*other as usize].character_id != character
+        })
+    }
+
+    fn improve_assignment(
+        &mut self,
+        rows: [CompactCandidate; 3],
+        replacements: &[u32],
+    ) -> Result<(), SearchAbort> {
+        #[cfg(test)]
+        let _timing = crate::profiling::enter(crate::profiling::Phase::Improvements);
+        // One sweep around this seed: at most 75 swaps plus 225 replacements,
+        // or 375 affected five-card evaluations before legality/cache savings.
+        // A better neighbor updates the incumbent, but does not start a new sweep.
+        for left in 0..3 {
+            for right in left + 1..3 {
+                for a in 0..5 {
+                    for b in 0..5 {
+                        let mut first = rows[left].member_instance_ids;
+                        let mut second = rows[right].member_instance_ids;
+                        if !self.can_replace(first, a, second[b])
+                            || !self.can_replace(second, b, first[a])
+                        {
+                            continue;
+                        }
+                        std::mem::swap(&mut first[a], &mut second[b]);
+                        let mut neighbor = rows;
+                        neighbor[left] = self.evaluate(first)?;
+                        neighbor[right] = self.evaluate(second)?;
+                        self.record_assignments(neighbor)?;
+                    }
+                }
+            }
+        }
+        for &id in replacements {
+            if rows.iter().any(|row| row.member_instance_ids.contains(&id)) {
+                continue;
+            }
+            for slot in 0..3 {
+                for position in 0..5 {
+                    let mut team = rows[slot].member_instance_ids;
+                    if !self.can_replace(team, position, id) {
+                        continue;
+                    }
+                    team[position] = id;
+                    let mut neighbor = rows;
+                    neighbor[slot] = self.evaluate(team)?;
+                    self.record_assignments(neighbor)?;
+                }
+            }
         }
         Ok(())
     }
@@ -616,27 +703,30 @@ impl EvaluationContext<'_, '_, '_, '_> {
         &mut self,
         domain: &mut SearchDomain<'_>,
         families: [TeamFamily; 3],
+        bounds: [TeamUpper; 3],
         trials: usize,
     ) -> Result<(), SearchAbort> {
         // Construction order allocates contested cards; song slots never move.
-        const ORDERS: [[usize; 3]; 6] = [
-            [0, 1, 2],
-            [1, 0, 2],
-            [2, 0, 1],
-            [0, 2, 1],
-            [1, 2, 0],
-            [2, 1, 0],
-        ];
+        let mut replacements = bounds
+            .into_iter()
+            .filter_map(|bound| bound.members)
+            .flatten()
+            .collect::<Vec<_>>();
+        replacements.sort_unstable();
+        replacements.dedup();
         let mut seen = Vec::new();
-        for (trial, order) in ORDERS.into_iter().take(trials).enumerate() {
+        for (trial, order) in TEAM_ORDERS.into_iter().take(trials).enumerate() {
             self.state.poll_stop()?;
             if let Some(mut assignment) = propose_assignment(domain, families, order, trial / 3) {
                 for team in &mut assignment {
                     team.sort_unstable();
                 }
-                if !seen.contains(&assignment) {
-                    seen.push(assignment);
-                    self.score_assignment(assignment)?;
+                let mut key = assignment;
+                key.sort_unstable();
+                if !seen.contains(&key) {
+                    seen.push(key);
+                    let rows = self.score_assignment(assignment)?;
+                    self.improve_assignment(rows, &replacements)?;
                 }
             }
         }
@@ -648,6 +738,7 @@ fn plan_configurations(
     input: &MedleySearchInputV1,
     model: Option<&FastScoreModel<'_>>,
     groups: &[CharacterGroup],
+    songs: &[PreparedSong<'_>; 3],
     state: &mut RunState<'_, '_>,
 ) -> Result<Vec<ConfigurationPlan>, SearchAbort> {
     let mut plans = Vec::with_capacity(input.area_configurations.len());
@@ -660,6 +751,17 @@ fn plan_configurations(
             root_bounds[song_slot] = team_upper(&domain, families[song_slot], song_slot, state)?;
         }
         let proposed_assignment = propose_assignment(&mut domain, families, [0, 1, 2], 0);
+        if let Some(assignment) = proposed_assignment {
+            let mut cache = ScoreCache::new(state)?;
+            EvaluationContext {
+                input,
+                configuration,
+                songs,
+                cache: &mut cache,
+                state,
+            }
+            .score_assignment(assignment)?;
+        }
         let estimated_score =
             domain
                 .engine
@@ -1129,7 +1231,7 @@ impl JointSearch<'_, '_, '_, '_> {
             .is_multiple_of(COMPLETION_PROBE_INTERVAL)
         {
             self.evaluation
-                .probe_completions(&mut self.domain, node.families, 3)?;
+                .probe_completions(&mut self.domain, node.families, node.bounds, 3)?;
         }
         if counts.into_iter().fold(0_u64, u64::saturating_add) <= limit as u64 {
             self.finish_block(node.families, counts.map(|count| count as usize), uppers)?;
@@ -1258,7 +1360,7 @@ fn run_search(
     };
     let songs = [prepare_song(0)?, prepare_song(1)?, prepare_song(2)?];
     let model = FastScoreModel::new(input).ok();
-    let plans = plan_configurations(input, model.as_ref(), &groups, state)?;
+    let plans = plan_configurations(input, model.as_ref(), &groups, &songs, state)?;
     let families = [TeamFamily::default(); 3];
     if let Some(first) = plans.first()
         && first
@@ -1291,7 +1393,7 @@ fn run_search(
         } else if evaluation.state.best.is_none() {
             evaluation.score_assignment(assignment)?;
         }
-        evaluation.probe_completions(&mut domain, families, 6)?;
+        evaluation.probe_completions(&mut domain, families, plan.root_bounds, 6)?;
     }
     state.diagnostics.warm_start_average_score = state.incumbent_score();
     #[cfg(test)]
@@ -1323,9 +1425,12 @@ fn run_search(
             domain,
         };
         if index >= WARM_CONFIGURATION_COUNT {
-            search
-                .evaluation
-                .probe_completions(&mut search.domain, families, 3)?;
+            search.evaluation.probe_completions(
+                &mut search.domain,
+                families,
+                plan.root_bounds,
+                3,
+            )?;
         }
         search.visit(SearchNode {
             families,

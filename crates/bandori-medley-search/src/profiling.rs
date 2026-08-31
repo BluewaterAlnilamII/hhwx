@@ -15,17 +15,19 @@ pub(crate) enum Phase {
     PartialBounds,
     CompleteBounds,
     Proposals,
+    Improvements,
     Scoring,
     Join,
     Other,
 }
 
-const PHASE_NAMES: [&str; 8] = [
+const PHASE_NAMES: [&str; 9] = [
     "setup",
     "domains",
     "partialBounds",
     "completeBounds",
     "proposals",
+    "improvements",
     "scoring",
     "join",
     "other",
@@ -35,10 +37,10 @@ struct Profile {
     started: Instant,
     last: Instant,
     phase: Phase,
-    elapsed: [Duration; 8],
-    calls: [u64; 8],
-    support_passes: [u64; 8],
-    support_cards: [u64; 8],
+    elapsed: [Duration; 9],
+    calls: [u64; 9],
+    support_passes: [u64; 9],
+    support_heads: [u64; 9],
     improvements: Vec<Value>,
     warm_start_ms: Option<f64>,
     peak_bound_index_bytes: usize,
@@ -81,11 +83,11 @@ pub(crate) fn enter(phase: Phase) -> Scope {
     })
 }
 
-pub(crate) fn support_pass(card_count: usize) {
+pub(crate) fn support_pass(head_count: usize) {
     PROFILE.with_borrow_mut(|profile| {
         if let Some(profile) = profile {
             profile.support_passes[profile.phase as usize] += 1;
-            profile.support_cards[profile.phase as usize] += card_count as u64;
+            profile.support_heads[profile.phase as usize] += head_count as u64;
         }
     });
 }
@@ -143,10 +145,10 @@ pub(crate) fn start() {
             started: now,
             last: now,
             phase: Phase::Other,
-            elapsed: [Duration::ZERO; 8],
-            calls: [0; 8],
-            support_passes: [0; 8],
-            support_cards: [0; 8],
+            elapsed: [Duration::ZERO; 9],
+            calls: [0; 9],
+            support_passes: [0; 9],
+            support_heads: [0; 9],
             improvements: Vec::new(),
             warm_start_ms: None,
             peak_bound_index_bytes: 0,
@@ -169,7 +171,7 @@ pub(crate) fn finish() -> Value {
                 "elapsedMs": profile.elapsed[index].as_secs_f64() * 1000.0,
                 "calls": profile.calls[index],
                 "supportPasses": profile.support_passes[index],
-                "supportCards": profile.support_cards[index],
+                "supportHeads": profile.support_heads[index],
             })).collect::<Vec<_>>(),
             "warmStartMs": profile.warm_start_ms,
             "peakBoundIndexBytes": profile.peak_bound_index_bytes,

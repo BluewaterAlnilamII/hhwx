@@ -543,14 +543,17 @@ fn assert_budget_independent_result(
         "the fixture must span multiple blocks"
     );
     assert!(
-        small.local_blocks > large.local_blocks,
+        small.partial_nodes > large.partial_nodes,
         "the smaller budget must force further splitting: large={large:?}, small={small:?}"
     );
+    // Stronger early solutions can prune the additional children before they
+    // become blocks. Check the split and storage directly, not block count.
+    assert!(small.peak_candidate_bytes < large.peak_candidate_bytes);
     eprintln!(
-        "{}-configuration fixture: {} -> {} local blocks; small-budget storage {} bytes",
+        "{}-configuration fixture: {} -> {} nodes; small-budget storage {} bytes",
         input.area_configurations.len(),
-        large.local_blocks,
-        small.local_blocks,
+        large.partial_nodes,
+        small.partial_nodes,
         small.peak_search_storage_bytes
     );
 }
