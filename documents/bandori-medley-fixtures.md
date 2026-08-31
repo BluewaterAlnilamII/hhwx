@@ -40,16 +40,47 @@ For each source/profile/song/settings combination, retain the highest reported s
 5. Real-profile runners fixed expert/full-P/no-fever; generic benchmark reports omitted their configurable PERFECT rate, which remains unknown in the index. Record any comparison assumption rather than filling this historical gap silently. Missing leaders are not inferred from old card order and do not block direct score comparison.
 6. A fifteen-card projection and the original full roster are different search inputs. Do not compare their optimal scores as if they covered the same search space.
 
-## First direct comparison
+## Direct comparison runs
 
-To repeat only the six approved cases, run `node --import tsx scripts/compare-bandori-medley-search.mjs --six`. It runs both 119-card cases and all four 961-card cases, continuing after an incomplete result under the same limits. It does not include the 962/972-card profiles. Compare normalized-input hashes with the previous six runs before drawing before/after conclusions. Storage accounting follows [the search design](bandori-medley-search.md), including joint working/conditional tables; native process memory is measured separately.
+The existing runner rebuilds input from the archived HHWX profile and raw data, builds the native release executable, and compares the new search directly with saved historical averages. It uses the retained main-directory snapshot, not the old search implementation. The 119-card songs are expert `295 → 300 → 703`; the 961/962/972-card songs are expert `385 → 193 → 619`. All use full PERFECT, no fever and the complete owned area scope.
 
-Run `node --import tsx scripts/compare-bandori-medley-search.mjs` against the local archive. It builds the native release test entry point and runs the full 119-card profile, expert songs `295 → 300 → 703`, full PERFECT, no fever, and both owned legal area configurations. The no-event reference average is 1,693,959; event 323 is 1,781,877. These references omit historical PERFECT rates and per-run data hashes; the run explicitly records full PERFECT and the retained main-directory cache, without claiming those historical gaps have been verified.
+To rerun the four-profile, fourteen-scene matrix without adding another runner:
 
-Each case has 300 seconds and a 256 MiB search-storage budget. On Windows, the runner samples native peak working set every second and stops at 1 GiB; this is not a hard OS allocation limit or browser/WASM memory measurement. An external deadline allows 15 seconds for the normal timeout result to return. Run cases sequentially and stop at the first incomplete result or score regression, without raising budgets or changing the algorithm.
+```sh
+node --import tsx scripts/compare-bandori-medley-search.mjs --case 119-no-event
+node --import tsx scripts/compare-bandori-medley-search.mjs --remaining
+```
 
-With explicit approval to finish the remaining under-1,000-card matrix, run `node --import tsx scripts/compare-bandori-medley-search.mjs --remaining`. This skips the already-tested 119-card no-event case and runs all other 13 cases: 119 cards with event 323, plus the 961/962/972-card profiles on expert songs `385 → 193 → 619` with no event or event 244/260/323. This mode continues after individual failures under the same per-case limits; it does not rerun the first case or change the algorithm.
+Without flags, the runner selects both 119-card cases. `--remaining` selects the other thirteen cases and continues after individual failures; `--six` selects only 119/961 cards. The existing `--diagnose` mode is described in [the search document](bandori-medley-search.md).
 
-The larger-profile references use the main-directory full-scope reports. Their known scope-matrix formatter stored the primary medley average as `rows[n].all.score`; the runner records this exact source field rather than inventing a missing `averageScore` field or using a generic fallback. The 962-card main references also equal the retained dev primary scores in all four cases. All inputs still use the retained main-directory data snapshot.
+Each case remains limited to 300 seconds and 256 MiB of budgeted search storage. Cases run sequentially. Windows samples native peak working set every second and stops at 1 GiB, with a 315-second outer deadline. These are sampled native-process limits, not OS allocation guarantees or browser/WASM incremental memory. Do not automatically raise budgets or change the algorithm after a failure.
 
-Inputs, hashes, source commit, historical settings, scores/differences, native outcomes, counters, timing, and sampled memory stay under the private archive's `runs/` directory. No old team is rescored. This changes none of the [foundation rules](bandori-medley-foundation.md); larger-roster acceptance and algorithm changes remain separate decisions.
+The larger-profile references read the known scope-matrix field `rows[n].all.score`, which stores the primary medley average. Preserve that original field and the reported exact status; auxiliary saved candidates are not substitutes for the primary result. The 119-card reports still lack historical PERFECT rates; every historical run still lacks verified per-run data hashes. New runs explicitly record their own inputs, hashes, settings, code commit, outputs, timing and memory.
+
+## Accepted small-roster checkpoint
+
+On 2026-08-31, clean code commit `eb66f9b` completed all fourteen scenes after the combined potential/mission rounding correction: thirteen matched their historical averages, and 972/event244 reached 8,594,227, exceeding its historical 8,591,251 by 2,976. This is a complete final-version search rerun, not merely saved-team rescoring.
+
+Native search time totaled 159.922 seconds; the longest case took 35.232 seconds. Sampled native peak working set was 29.30 MiB; maximum budgeted search storage was 20.34 MiB. Both 119-card runs finished before the first memory sample, so their process memory is unavailable, not zero. Raw profiles, masters, charts, settings and historical references matched the preceding matrix; normalized-input changes were confined to character/event parameters affected by the approved bonus rule.
+
+Full results, checks and the next-stage case list remain in the private archive under `runs/2026-08-31-final-low-pressure/`, referring to the two raw runs `2026-08-31T14-48-26.892Z` and `2026-08-31T14-48-29.719Z`. The separate 972/event244 investigation explains its higher score; this rerun changes neither solver. Acceptance covers these fourteen scenes only.
+
+## Next stage: prepared, not executed
+
+Select individual scenes with more than 1,000 owned cards and a retained **full-area-scope exact** result. An exact flag selects historically completed cases; it is not an independent proof that the old score is optimal. Do not exclude a whole profile just because another event remains difficult, or count a locked-area exact result as full-scope completion.
+
+The retained real-profile matrix supplies 56 candidate scenes across fifteen profiles. The recommended first batch is:
+
+| Cards | Events | Scenes |
+| ---: | --- | ---: |
+| 1,036 | None, 244, 260, 323 | 4 |
+| 1,039 | None, 244, 260, 323 | 4 |
+| 1,051 | None, 323 | 2 |
+| 1,127 | None, 260, 323 | 3 |
+| **Total** | | **13** |
+
+Keep 1051/event244, 1051/event260, 1127/event244 and 1747/event260 out of this stage: no retained full-scope exact result was found. The 1329-card exact record is locked-area only. Two 1889-card event323 records are full-scope exact, for songs 295/300/703 and 595/686/703, but omit historical PERFECT rate; retain them as reserves requiring an explicit comparison assumption, not first-batch cases.
+
+Five later candidates need input reconciliation before acceptance: all four 1229-card scenes and 1513/event323 have higher reports from a directory without a retained data snapshot. Preserve those reports alongside the main-snapshot reference rather than silently lowering the comparison target.
+
+For the first batch, retain expert 385/193/619, full PERFECT, no fever, the current shared-area rules, and the same 300-second / 256-MiB / 1-GiB limits. Extend only the existing runner's case selection when execution is authorized; reuse normalization, result comparison and resource recording. Finish the approved batch, record every incomplete or lower-scoring case as failed, and stop before another batch, old-team replay or algorithm changes.

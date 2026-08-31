@@ -98,13 +98,6 @@ For current-search diagnosis, run `node --import tsx scripts/compare-bandori-med
 
 No dominance, quantization, SIMD/FMA, approximate retention, external storage, new dependency, frontend/API integration or maximum-score output hydration is part of this search scope.
 
-Current checkpoint (2026-08-31): v3 scoring is unchanged; the six real-chart timestamp checks and 140 leader-score comparisons remain in private scoring run `2026-08-31T11-47-16.663Z`. Search run `2026-08-31T12-48-33.976Z` measured the remaining-allocation optimization:
+Current checkpoint (2026-08-31): clean code commit `eb66f9b` completed the final-version fourteen-scene rerun across the 119/961/962/972-card profiles. All scenes returned exact and passed the historical-score comparison: thirteen equal, with 972/event244 at 8,594,227 (+2,976). The combined potential/mission rounding correction resolved the nine formerly lower results; the separate 972/event244 investigation explains its higher score.
 
-| No-event case | Before | After | Historical comparison |
-| --- | --- | --- | --- |
-| 119 cards, 2 configurations | 25.392 s, exact | 0.697 s, exact; 1,693,959 | Equal; passed |
-| 961 cards, 108 configurations | 60 s timeout, 0 completed | 8.343 s, reports exact; 7,808,421 | Still 167 below 7,808,588; failed |
-
-The 961 before/after normalized-input hashes match; its before run is `2026-08-31T12-27-19.091Z`, after removing the unnecessary unequipped-parameter choices. Joint-bound time fell from 50.448 s to 5.290 s, and the after run completed all configurations, pruning 96 at the configuration level. Mean count-state size was 660 instead of 1,000; 711 table updates avoided 7.8% of full forward/backward layer passes. Budgeted storage rose from 2.95 to 12.93 MiB and sampled native peak from 10.81 to 21.79 MiB. These single instrumented runs are not isolated attribution of each optimization.
-
-The remaining score discrepancy is unresolved: the current winning teams' three scores agree with the retained upstream-formula checks and a targeted call to the existing main **scorer**, but the historical report lacks teams/leaders and per-run master/chart hashes. This does not establish the source of the 167 points or authorize lowering the reference. Keep `passed: false`; do not declare the 961 correctness acceptance complete. No further search/scoring changes or expanded profile matrix are included in this checkpoint.
+Native search totaled 159.922 seconds, with a 35.232-second maximum. Sampled process peak was 29.30 MiB; budgeted search-storage peak was 20.34 MiB. The two sub-second 119-card runs had no memory sample. This closes the small-roster checkpoint, not larger-roster or browser/WASM acceptance. Full private evidence and the prepared, unexecuted next-stage selection are indexed in [the fixture procedure](bandori-medley-fixtures.md). No search changes were made for this rerun.
