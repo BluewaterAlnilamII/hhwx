@@ -460,6 +460,15 @@ pub(crate) fn calculate(
         return Ok(Some(JointUpper::infeasible()));
     }
     let previous = previous.filter(|bound| bound.can_update(owners, fixed_scores));
+    #[cfg(test)]
+    let _calculation_timing = crate::profiling::joint_timing(
+        if previous.is_some() {
+            crate::profiling::JointTiming::Incremental
+        } else {
+            crate::profiling::JointTiming::Fresh
+        },
+        0,
+    );
     let weights = if previous.is_some() {
         None
     } else {
@@ -481,7 +490,14 @@ fn calculate_weights(
 ) -> Result<JointUpper, SearchIncompleteReasonV1> {
     let old = previous.and_then(|bound| bound.working.as_ref());
     let mut working = match old {
-        Some(old) => old.clone(),
+        Some(old) => {
+            #[cfg(test)]
+            let _clone_timing = crate::profiling::joint_timing(
+                crate::profiling::JointTiming::Clone,
+                old.heap_bytes(),
+            );
+            old.clone()
+        }
         None => JointWorking::new(weights.unwrap(), groups, owners)?,
     };
     working.restrict(groups, owners);
@@ -617,6 +633,9 @@ fn calculate_weights(
         || vec![[f64::NEG_INFINITY; 4]; owners.len()],
         |bound| bound.destinations.clone(),
     );
+    #[cfg(test)]
+    let destination_timing =
+        crate::profiling::joint_timing(crate::profiling::JointTiming::Destinations, 0);
     for (group, ids) in groups.iter().enumerate() {
         poll(control)?;
         if old.is_some_and(|old| {
@@ -679,6 +698,8 @@ fn calculate_weights(
             }
         }
     }
+    #[cfg(test)]
+    drop(destination_timing);
     for (slot, fixed) in working.weights.fixed_members.iter().enumerate() {
         for &id in fixed {
             destinations[id as usize] = [f64::NEG_INFINITY; 4];

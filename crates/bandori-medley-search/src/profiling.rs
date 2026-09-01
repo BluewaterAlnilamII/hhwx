@@ -35,6 +35,16 @@ const PHASE_NAMES: [&str; 10] = [
     "other",
 ];
 
+const JOINT_TIMING_NAMES: [&str; 4] = ["fresh", "incremental", "clone", "destinations"];
+
+#[derive(Clone, Copy)]
+pub(crate) enum JointTiming {
+    Fresh,
+    Incremental,
+    Clone,
+    Destinations,
+}
+
 struct Profile {
     started: Instant,
     last: Instant,
@@ -57,6 +67,9 @@ struct Profile {
     joint_layers_recomputed: u64,
     peak_joint_bytes: usize,
     first_joint_upper: Option<f64>,
+    joint_timing_elapsed: [Duration; 4],
+    joint_timing_calls: [u64; 4],
+    joint_clone_bytes: u64,
 }
 
 impl Profile {
@@ -79,6 +92,35 @@ impl Drop for Scope {
         if let Some(previous) = self.0 {
             PROFILE.with_borrow_mut(|profile| profile.as_mut().unwrap().switch(previous));
         }
+    }
+}
+
+pub(crate) struct JointTimingScope {
+    timing: JointTiming,
+    started: Instant,
+    bytes: usize,
+}
+
+impl Drop for JointTimingScope {
+    fn drop(&mut self) {
+        PROFILE.with_borrow_mut(|profile| {
+            if let Some(profile) = profile {
+                let index = self.timing as usize;
+                profile.joint_timing_elapsed[index] += self.started.elapsed();
+                profile.joint_timing_calls[index] += 1;
+                if matches!(self.timing, JointTiming::Clone) {
+                    profile.joint_clone_bytes += self.bytes as u64;
+                }
+            }
+        });
+    }
+}
+
+pub(crate) fn joint_timing(timing: JointTiming, bytes: usize) -> JointTimingScope {
+    JointTimingScope {
+        timing,
+        started: Instant::now(),
+        bytes,
     }
 }
 
@@ -213,6 +255,9 @@ pub(crate) fn start() {
             joint_layers_recomputed: 0,
             peak_joint_bytes: 0,
             first_joint_upper: None,
+            joint_timing_elapsed: [Duration::ZERO; 4],
+            joint_timing_calls: [0; 4],
+            joint_clone_bytes: 0,
         });
     });
 }
@@ -245,6 +290,12 @@ pub(crate) fn finish() -> Value {
             "jointLayersRecomputed": profile.joint_layers_recomputed,
             "peakJointReservedBytes": profile.peak_joint_bytes,
             "firstJointUpper": profile.first_joint_upper,
+            "jointTimings": JOINT_TIMING_NAMES.iter().enumerate().map(|(index, name)| json!({
+                "name": name,
+                "elapsedMs": profile.joint_timing_elapsed[index].as_secs_f64() * 1000.0,
+                "calls": profile.joint_timing_calls[index],
+            })).collect::<Vec<_>>(),
+            "jointCloneBytes": profile.joint_clone_bytes,
             "improvements": profile.improvements,
         })
     })
