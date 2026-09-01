@@ -20,15 +20,24 @@ const { values } = parseArgs({ options: {
   six: { type: "boolean", default: false },
   diagnose: { type: "boolean", default: false },
   case: { type: "string" },
+  "duration-ms": { type: "string" },
+  "local-row-target": { type: "string" },
+  "score-cache-slots": { type: "string" },
 } });
 assert([values["completed-profiles"], values.remaining, values.six, values.diagnose].filter(Boolean).length <= 1, "choose one run mode");
-const DURATION_MS = values.diagnose ? 60_000 : 300_000;
+assert(values.diagnose || (!values["duration-ms"] && !values["local-row-target"] && !values["score-cache-slots"]), "diagnostic controls require --diagnose");
+const diagnosticCase = values.diagnose && values.case?.match(/^(\d+)-(no-event|event-(\d+))$/u);
+assert(!values.diagnose || !values.case || diagnosticCase, "invalid diagnostic case");
+const DURATION_MS = Number(values["duration-ms"] ?? (values.diagnose ? 60_000 : 300_000));
+assert(Number.isSafeInteger(DURATION_MS) && DURATION_MS > 0, "invalid duration");
 const continueAfterFailure = values["completed-profiles"] || values.remaining || values.six || values.diagnose;
 const profileCardCounts = values["completed-profiles"]
   ? [1036, 1039, 1161, 1211, 1229, 1252, 1318, 1425, 1433, 1513, 1522, 1703]
-  : values.remaining ? [119, 961, 962, 972] : values.six || values.diagnose ? [119, 961] : [119];
+  : values.remaining ? [119, 961, 962, 972] : values.six ? [119, 961]
+    : diagnosticCase ? [Number(diagnosticCase[1])] : values.diagnose ? [119, 961] : [119];
 const CASES = profileCardCounts.flatMap((cardCount) => (
-  (values.diagnose ? [null] : cardCount === 119 ? [null, 323] : [null, 244, 260, 323]).map((eventId) => ({
+  (diagnosticCase ? [diagnosticCase[3] ? Number(diagnosticCase[3]) : null]
+    : values.diagnose ? [null] : cardCount === 119 ? [null, 323] : [null, 244, 260, 323]).map((eventId) => ({
     id: `${cardCount}-${eventId === null ? "no-event" : `event-${eventId}`}`,
     cardCount, eventId, songIds: cardCount === 119 ? [295, 300, 703] : [385, 193, 619],
   }))
@@ -175,6 +184,8 @@ function runNative(id) {
           HHWX_MEDLEY_DIAGNOSTIC_INPUT: inputPath,
           HHWX_MEDLEY_DIAGNOSTIC_DURATION_MS: String(DURATION_MS),
           HHWX_MEDLEY_DIAGNOSTIC_BUDGET_BYTES: String(CANDIDATE_BUDGET_BYTES),
+          ...(values["local-row-target"] ? { HHWX_MEDLEY_DIAGNOSTIC_LOCAL_ROW_TARGET: values["local-row-target"] } : {}),
+          ...(values["score-cache-slots"] ? { HHWX_MEDLEY_DIAGNOSTIC_SCORE_CACHE_SLOTS: values["score-cache-slots"] } : {}),
         } : {}),
       },
     });

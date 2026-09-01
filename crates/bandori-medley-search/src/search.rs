@@ -37,6 +37,24 @@ const TEAM_ORDERS: [[usize; 3]; 6] = [
 
 type CharacterGroup = Vec<u32>;
 
+fn local_row_target() -> usize {
+    #[cfg(test)]
+    return std::env::var("HHWX_MEDLEY_DIAGNOSTIC_LOCAL_ROW_TARGET")
+        .map_or(LOCAL_ROW_TARGET, |value| value.parse().unwrap());
+
+    #[cfg(not(test))]
+    LOCAL_ROW_TARGET
+}
+
+fn score_cache_slots() -> usize {
+    #[cfg(test)]
+    return std::env::var("HHWX_MEDLEY_DIAGNOSTIC_SCORE_CACHE_SLOTS")
+        .map_or(SCORE_CACHE_SLOTS, |value| value.parse().unwrap());
+
+    #[cfg(not(test))]
+    SCORE_CACHE_SLOTS
+}
+
 #[derive(Clone, Copy, Debug)]
 struct ConfigurationPlan {
     configuration_index: usize,
@@ -444,7 +462,7 @@ impl ScoreCache {
         }
         let cache_budget = (budget / 2).min(budget - minimum_block);
         let slot_count =
-            SCORE_CACHE_SLOTS.min(cache_budget / size_of::<Option<CompactCandidate>>());
+            score_cache_slots().min(cache_budget / size_of::<Option<CompactCandidate>>());
         let mut slots = Vec::new();
         slots
             .try_reserve_exact(slot_count)
@@ -461,7 +479,7 @@ impl ScoreCache {
             .max(bytes as u64);
         Ok(Self {
             slots,
-            local_row_limit: LOCAL_ROW_TARGET.min((budget - bytes) / row_bytes),
+            local_row_limit: local_row_target().min((budget - bytes) / row_bytes),
         })
     }
 
@@ -2006,7 +2024,15 @@ mod tests {
         let profile = crate::profiling::finish();
         println!(
             "MEDLEY_SEARCH_PROFILE:{}",
-            serde_json::json!({ "elapsedMs": elapsed_ms, "outcome": outcome, "profile": profile })
+            serde_json::json!({
+                "elapsedMs": elapsed_ms,
+                "outcome": outcome,
+                "profile": profile,
+                "tuning": {
+                    "localRowTarget": local_row_target(),
+                    "scoreCacheSlots": score_cache_slots(),
+                },
+            })
         );
     }
 
