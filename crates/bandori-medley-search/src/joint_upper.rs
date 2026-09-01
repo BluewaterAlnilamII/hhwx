@@ -607,6 +607,7 @@ fn calculate_weights(
     }
     let score = score_upper(value, working.weights.constant);
     if prune_below.is_some_and(|incumbent| score < incumbent) {
+        #[cfg(test)]
         crate::profiling::joint_whole_cutoff();
         return Ok(JointUpper {
             score,
