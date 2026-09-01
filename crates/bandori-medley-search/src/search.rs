@@ -23,7 +23,7 @@ const TEAM_SIZE: usize = 5;
 const MEDLEY_TEAM_COUNT: usize = 3;
 // These limits control temporary work, never which families are searched.
 const LOCAL_ROW_TARGET: usize = 256;
-const SCORE_CACHE_SLOTS: usize = 4096;
+const SCORE_CACHE_SLOTS: usize = 65_536;
 const WARM_CONFIGURATION_COUNT: usize = 8;
 const COMPLETION_PROBE_INTERVAL: u64 = 512;
 const TEAM_ORDERS: [[usize; 3]; 6] = [
