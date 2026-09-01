@@ -45,13 +45,28 @@ const PHASE_NAMES: [&str; 15] = [
     "other",
 ];
 
-const JOINT_TIMING_NAMES: [&str; 4] = ["fresh", "incremental", "clone", "destinations"];
+const JOINT_TIMING_NAMES: [&str; 9] = [
+    "fresh",
+    "incremental",
+    "weights",
+    "clone",
+    "localChoices",
+    "forward",
+    "backward",
+    "proposal",
+    "destinations",
+];
 
 #[derive(Clone, Copy)]
 pub(crate) enum JointTiming {
     Fresh,
     Incremental,
+    Weights,
     Clone,
+    LocalChoices,
+    Forward,
+    Backward,
+    Proposal,
     Destinations,
 }
 
@@ -77,8 +92,8 @@ struct Profile {
     joint_layers_recomputed: u64,
     peak_joint_bytes: usize,
     first_joint_upper: Option<f64>,
-    joint_timing_elapsed: [Duration; 4],
-    joint_timing_calls: [u64; 4],
+    joint_timing_elapsed: [Duration; 9],
+    joint_timing_calls: [u64; 9],
     joint_clone_bytes: u64,
     joint_whole_cutoffs: u64,
 }
@@ -274,8 +289,8 @@ pub(crate) fn start() {
             joint_layers_recomputed: 0,
             peak_joint_bytes: 0,
             first_joint_upper: None,
-            joint_timing_elapsed: [Duration::ZERO; 4],
-            joint_timing_calls: [0; 4],
+            joint_timing_elapsed: [Duration::ZERO; 9],
+            joint_timing_calls: [0; 9],
             joint_clone_bytes: 0,
             joint_whole_cutoffs: 0,
         });

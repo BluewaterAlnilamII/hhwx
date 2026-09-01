@@ -471,13 +471,17 @@ pub(crate) fn calculate(
         },
         0,
     );
-    let weights = if previous.is_some() {
-        None
-    } else {
-        match engine.joint_weights(owners, groups, fixed_scores) {
-            Ok(Some(weights)) => Some(weights),
-            Ok(None) => return Ok(Some(JointUpper::infeasible())),
-            Err(_) => return Ok(None),
+    let weights = {
+        #[cfg(test)]
+        let _timing = crate::profiling::joint_timing(crate::profiling::JointTiming::Weights, 0);
+        if previous.is_some() {
+            None
+        } else {
+            match engine.joint_weights(owners, groups, fixed_scores) {
+                Ok(Some(weights)) => Some(weights),
+                Ok(None) => return Ok(Some(JointUpper::infeasible())),
+                Err(_) => return Ok(None),
+            }
         }
     };
     calculate_weights(weights, groups, owners, previous, prune_below, control).map(Some)
@@ -503,83 +507,93 @@ fn calculate_weights(
         }
         None => JointWorking::new(weights.unwrap(), groups, owners)?,
     };
-    working.restrict(groups, owners);
-    if working.residual_owners.contains(&0) {
-        return Ok(JointUpper::infeasible());
-    }
     let states = working.layout.states;
     let goal = states - 1;
     let length = (groups.len() + 1) * states;
     #[cfg(test)]
     crate::profiling::joint_model(states, old.is_some());
     let mut changed = None::<(usize, usize)>;
-    for (group, ids) in groups.iter().enumerate() {
-        poll(control)?;
-        if old.is_some_and(|old| {
-            ids.iter()
-                .all(|&id| old.residual_owners[id as usize] == working.residual_owners[id as usize])
-        }) {
-            continue;
-        }
-        let local = LocalGroup::new(ids, &working.residual_owners, &working.weights);
-        if local.required.len() > 3 {
+    {
+        #[cfg(test)]
+        let _timing =
+            crate::profiling::joint_timing(crate::profiling::JointTiming::LocalChoices, 0);
+        working.restrict(groups, owners);
+        if working.residual_owners.contains(&0) {
             return Ok(JointUpper::infeasible());
         }
-        let choices: [LocalChoice; PATTERNS] = std::array::from_fn(|pattern| {
-            if working.layout.transitions[pattern].is_empty() {
-                LocalChoice::default()
-            } else {
-                local.choice(
-                    roles(pattern),
-                    &working.residual_owners,
-                    &working.weights,
-                    None,
-                )
+        for (group, ids) in groups.iter().enumerate() {
+            poll(control)?;
+            if old.is_some_and(|old| {
+                ids.iter().all(|&id| {
+                    old.residual_owners[id as usize] == working.residual_owners[id as usize]
+                })
+            }) {
+                continue;
             }
-        });
-        if old.is_none()
-            || choices
-                .iter()
-                .zip(&working.choices[group])
-                .any(|(now, before)| now.score != before.score)
-        {
-            changed = Some((changed.map_or(group, |range| range.0), group));
+            let local = LocalGroup::new(ids, &working.residual_owners, &working.weights);
+            if local.required.len() > 3 {
+                return Ok(JointUpper::infeasible());
+            }
+            let choices: [LocalChoice; PATTERNS] = std::array::from_fn(|pattern| {
+                if working.layout.transitions[pattern].is_empty() {
+                    LocalChoice::default()
+                } else {
+                    local.choice(
+                        roles(pattern),
+                        &working.residual_owners,
+                        &working.weights,
+                        None,
+                    )
+                }
+            });
+            if old.is_none()
+                || choices
+                    .iter()
+                    .zip(&working.choices[group])
+                    .any(|(now, before)| now.score != before.score)
+            {
+                changed = Some((changed.map_or(group, |range| range.0), group));
+            }
+            working.local[group] = local;
+            working.choices[group] = choices;
         }
-        working.local[group] = local;
-        working.choices[group] = choices;
     }
     let (forward, backward) = working.tables.split_at_mut(length);
-    if let Some((first, last)) = changed {
-        for group in first..groups.len() {
-            poll(control)?;
-            #[cfg(test)]
-            crate::profiling::joint_layer();
-            let (prefix, rest) = forward.split_at_mut((group + 1) * states);
-            let prefix = &prefix[group * states..];
-            let next = &mut rest[..states];
-            next.fill(f64::NEG_INFINITY);
-            working.paths[(group + 1) * states..(group + 2) * states].fill(u8::MAX);
-            for (pattern, edges) in working.layout.transitions.iter().enumerate() {
-                let choice = working.choices[group][pattern];
-                if choice.score == f64::NEG_INFINITY {
-                    continue;
-                }
-                for &(from, to) in edges {
-                    let from = usize::from(from);
-                    let to = usize::from(to);
-                    let score = sum_up(prefix[from], choice.score);
-                    if score > next[to] {
-                        next[to] = score;
-                        working.paths[(group + 1) * states + to] = pattern as u8;
+    {
+        #[cfg(test)]
+        let _timing = crate::profiling::joint_timing(crate::profiling::JointTiming::Forward, 0);
+        if let Some((first, last)) = changed {
+            for group in first..groups.len() {
+                poll(control)?;
+                #[cfg(test)]
+                crate::profiling::joint_layer();
+                let (prefix, rest) = forward.split_at_mut((group + 1) * states);
+                let prefix = &prefix[group * states..];
+                let next = &mut rest[..states];
+                next.fill(f64::NEG_INFINITY);
+                working.paths[(group + 1) * states..(group + 2) * states].fill(u8::MAX);
+                for (pattern, edges) in working.layout.transitions.iter().enumerate() {
+                    let choice = working.choices[group][pattern];
+                    if choice.score == f64::NEG_INFINITY {
+                        continue;
+                    }
+                    for &(from, to) in edges {
+                        let from = usize::from(from);
+                        let to = usize::from(to);
+                        let score = sum_up(prefix[from], choice.score);
+                        if score > next[to] {
+                            next[to] = score;
+                            working.paths[(group + 1) * states + to] = pattern as u8;
+                        }
                     }
                 }
-            }
-            if group >= last
-                && old.is_some_and(|old| {
-                    next == &old.tables[(group + 1) * states..(group + 2) * states]
-                })
-            {
-                break;
+                if group >= last
+                    && old.is_some_and(|old| {
+                        next == &old.tables[(group + 1) * states..(group + 2) * states]
+                    })
+                {
+                    break;
+                }
             }
         }
     }
@@ -597,54 +611,63 @@ fn calculate_weights(
             working: None,
         });
     }
-    if let Some((first, last)) = changed {
-        for group in (0..=last).rev() {
-            poll(control)?;
-            #[cfg(test)]
-            crate::profiling::joint_layer();
-            let (prefix, suffix) = backward.split_at_mut((group + 1) * states);
-            let next = &mut prefix[group * states..];
-            let suffix = &suffix[..states];
-            next.fill(f64::NEG_INFINITY);
-            for (pattern, edges) in working.layout.transitions.iter().enumerate() {
-                let choice = working.choices[group][pattern];
-                if choice.score == f64::NEG_INFINITY {
-                    continue;
+    {
+        #[cfg(test)]
+        let _timing = crate::profiling::joint_timing(crate::profiling::JointTiming::Backward, 0);
+        if let Some((first, last)) = changed {
+            for group in (0..=last).rev() {
+                poll(control)?;
+                #[cfg(test)]
+                crate::profiling::joint_layer();
+                let (prefix, suffix) = backward.split_at_mut((group + 1) * states);
+                let next = &mut prefix[group * states..];
+                let suffix = &suffix[..states];
+                next.fill(f64::NEG_INFINITY);
+                for (pattern, edges) in working.layout.transitions.iter().enumerate() {
+                    let choice = working.choices[group][pattern];
+                    if choice.score == f64::NEG_INFINITY {
+                        continue;
+                    }
+                    for &(from, to) in edges {
+                        let from = usize::from(from);
+                        let to = usize::from(to);
+                        next[to] = next[to].max(sum_up(suffix[from], choice.score));
+                    }
                 }
-                for &(from, to) in edges {
-                    let from = usize::from(from);
-                    let to = usize::from(to);
-                    next[to] = next[to].max(sum_up(suffix[from], choice.score));
+                if group <= first
+                    && old.is_some_and(|old| {
+                        next == &old.tables[length + group * states..length + (group + 1) * states]
+                    })
+                {
+                    break;
                 }
-            }
-            if group <= first
-                && old.is_some_and(|old| {
-                    next == &old.tables[length + group * states..length + (group + 1) * states]
-                })
-            {
-                break;
             }
         }
     }
-    let mut proposal = [[0; 5]; 3];
-    let mut counts = std::array::from_fn::<_, 3, _>(|slot| {
-        let fixed = &working.weights.fixed_members[slot];
-        proposal[slot][..fixed.len()].copy_from_slice(fixed);
-        fixed.len()
-    });
-    let mut current = goal;
-    for group in (0..groups.len()).rev() {
-        let pattern = usize::from(working.paths[(group + 1) * states + current]);
-        let choice = working.choices[group][pattern];
-        for slot in 0..3 {
-            if choice.cards[slot] != NO_CARD {
-                proposal[slot][counts[slot]] = choice.cards[slot];
-                counts[slot] += 1;
+    let proposal = {
+        #[cfg(test)]
+        let _timing = crate::profiling::joint_timing(crate::profiling::JointTiming::Proposal, 0);
+        let mut proposal = [[0; 5]; 3];
+        let mut counts = std::array::from_fn::<_, 3, _>(|slot| {
+            let fixed = &working.weights.fixed_members[slot];
+            proposal[slot][..fixed.len()].copy_from_slice(fixed);
+            fixed.len()
+        });
+        let mut current = goal;
+        for group in (0..groups.len()).rev() {
+            let pattern = usize::from(working.paths[(group + 1) * states + current]);
+            let choice = working.choices[group][pattern];
+            for slot in 0..3 {
+                if choice.cards[slot] != NO_CARD {
+                    proposal[slot][counts[slot]] = choice.cards[slot];
+                    counts[slot] += 1;
+                }
             }
+            current -= working.layout.destination(0, roles(pattern)).unwrap();
         }
-        current -= working.layout.destination(0, roles(pattern)).unwrap();
-    }
-    debug_assert_eq!(counts, [5; 3]);
+        debug_assert_eq!(counts, [5; 3]);
+        proposal
+    };
     let mut destinations = previous.map_or_else(
         || vec![[f64::NEG_INFINITY; 4]; owners.len()],
         |bound| bound.destinations.clone(),
