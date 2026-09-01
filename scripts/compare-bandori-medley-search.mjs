@@ -90,7 +90,7 @@ function readBaseline(testCase, profile) {
     row.profileSha256 === profile.payloadSha256 && row.sourceId === "main"
     && row.eventKey === String(testCase.eventId ?? "none") && /^rows\[\d+\]\.all$/u.test(row.resultPath)
   ));
-  if (!entry && values["high-pressure"]) return null;
+  if (!entry && (values["high-pressure"] || values.diagnose)) return null;
   assert(entry, `missing full-scope historical result: ${testCase.id}`);
   assert.deepEqual(entry.songIds, testCase.songIds);
   assert.deepEqual(entry.difficulties, ["expert", "expert", "expert"]);
