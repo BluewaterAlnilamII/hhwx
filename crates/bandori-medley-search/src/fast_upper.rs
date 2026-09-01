@@ -451,12 +451,28 @@ impl<'a> FastUpperBoundEngine<'a> {
                 continue;
             }
             let constant = mul_up(fixed_parameter, fixed_coefficient)?;
-            result.constant = add_up(result.constant, constant)?;
             let remaining_ids = remaining_groups
                 .iter()
                 .flat_map(|group| group.iter().copied())
                 .filter(|&id| owners[id as usize] & bit != 0)
                 .collect::<Vec<_>>();
+            if needed == 1 {
+                // Carry the complete P*K on the last card. A zero fixed-leader
+                // option keeps both fixed-member and last-card leaders legal.
+                let fixed_leader = fixed_leader.ok_or(UpperBoundFailure::Unknown)?;
+                result.fixed_leaders[slot] = Some(0.0);
+                for &id in &remaining_ids {
+                    let id = id as usize;
+                    let parameter = add_up(fixed_parameter, self.parameters[id])?;
+                    let coefficient = add_up(fixed_coefficient, coefficients[id][0])?;
+                    result.cards[id][slot] = [
+                        mul_up(parameter, add_up(coefficient, fixed_leader)?)?,
+                        mul_up(parameter, add_up(coefficient, coefficients[id][1])?)?,
+                    ];
+                }
+                continue;
+            }
+            result.constant = add_up(result.constant, constant)?;
             let max_first = remaining_ids
                 .iter()
                 .map(|&id| coefficients[id as usize][0])
