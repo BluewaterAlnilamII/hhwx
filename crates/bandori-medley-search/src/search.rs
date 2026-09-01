@@ -2037,9 +2037,40 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "native retained-input root-envelope diagnosis"]
-    fn profile_root_joint_envelopes() {
-        use std::{env, fs, time::Instant};
+    #[ignore = "native retained-input root-context diagnosis"]
+    fn profile_root_context_envelopes() {
+        use std::{collections::BTreeSet, env, fs, time::Instant};
+
+        use crate::fast_upper::RootContextMode;
+
+        #[derive(Clone, Copy, Debug)]
+        enum AxisValue {
+            Band(u32),
+            Attribute(crate::CardAttributeV1),
+        }
+
+        impl AxisValue {
+            fn matches(self, card: &crate::SearchCardV1) -> bool {
+                match self {
+                    Self::Band(band_id) => card.band_id == band_id,
+                    Self::Attribute(attribute) => card.attribute == attribute,
+                }
+            }
+
+            fn same_mode(self) -> RootContextMode {
+                match self {
+                    Self::Band(band_id) => RootContextMode::BandSame(band_id),
+                    Self::Attribute(attribute) => RootContextMode::AttributeSame(attribute),
+                }
+            }
+
+            fn mixed_mode(self) -> RootContextMode {
+                match self {
+                    Self::Band(_) => RootContextMode::BandMixed,
+                    Self::Attribute(_) => RootContextMode::AttributeMixed,
+                }
+            }
+        }
 
         let input = crate::decode_medley_search_input_json(
             &fs::read_to_string(env::var("HHWX_MEDLEY_DIAGNOSTIC_INPUT").unwrap()).unwrap(),
@@ -2076,110 +2107,171 @@ mod tests {
                 .unwrap()
                 .unwrap();
         let incumbent = state.incumbent_score().unwrap();
-        let (current_score, current_destinations, current_bytes) = current.into_diagnostic_parts();
-        let workspace_bytes = joint_upper::workspace_bytes(owners, groups.len()).unwrap();
-        assert!(workspace_bytes <= budget);
-        let mut minimum_score = f64::INFINITY;
-        let mut minimum_destinations = vec![[f64::INFINITY; 4]; owners.len()];
-        let mut variants = Vec::with_capacity(27);
-        let retained_bytes = (current_destinations.capacity() + minimum_destinations.capacity())
-            * std::mem::size_of::<[f64; 4]>();
-        let mut peak_bytes = current_bytes.max(retained_bytes);
-        for first in 0..3 {
-            for second in 0..3 {
-                for third in 0..3 {
-                    let factors = [first, second, third];
-                    let started = Instant::now();
-                    let weights = engine
-                        .joint_weights_for_factors(owners, &groups, [None; 3], factors)
-                        .unwrap()
-                        .unwrap();
-                    let bound = joint_upper::calculate_from_weights(
-                        weights,
-                        &groups,
-                        owners,
-                        state.control,
-                    )
-                    .unwrap();
-                    let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
-                    minimum_score = minimum_score.min(bound.score);
-                    for (minimum, values) in
-                        minimum_destinations.iter_mut().zip(&bound.destinations)
-                    {
-                        for (target, value) in minimum.iter_mut().zip(values) {
-                            *target = target.min(*value);
-                        }
-                    }
-                    let bytes = bound.bytes();
-                    peak_bytes = peak_bytes.max(bytes + retained_bytes);
-                    variants.push(serde_json::json!({
-                        "factors": factors,
-                        "upper": bound.score,
-                        "elapsedMs": elapsed_ms,
-                        "bytes": bytes,
-                    }));
-                }
+        let (current_score, _, current_bytes) = current.into_diagnostic_parts();
+        let root_workspace = joint_upper::workspace_bytes(owners, groups.len()).unwrap();
+        assert!(root_workspace <= budget);
+        let mut attempted_bounds = 0_u32;
+        let mut completed_solves = 0_u32;
+        let mut infeasible_bounds = 0_u32;
+        let mut total_elapsed_ms = 0.0_f64;
+        let mut peak_bound_bytes = current_bytes;
+        let mut peak_reserved_bytes = root_workspace;
+        let mut solve = |restricted_owners: &[u8], modes: [RootContextMode; 3]| {
+            attempted_bounds += 1;
+            let workspace = joint_upper::workspace_bytes(restricted_owners, groups.len()).unwrap();
+            assert!(workspace <= budget);
+            peak_reserved_bytes = peak_reserved_bytes.max(workspace);
+            let started = Instant::now();
+            let weights = engine
+                .joint_weights_for_context_modes(restricted_owners, &groups, [None; 3], modes)
+                .unwrap();
+            let Some(weights) = weights else {
+                total_elapsed_ms += started.elapsed().as_secs_f64() * 1000.0;
+                infeasible_bounds += 1;
+                return (f64::NEG_INFINITY, Vec::new());
+            };
+            let bound = joint_upper::calculate_from_weights(
+                weights,
+                &groups,
+                restricted_owners,
+                state.control,
+            )
+            .unwrap();
+            total_elapsed_ms += started.elapsed().as_secs_f64() * 1000.0;
+            completed_solves += 1;
+            let (score, destinations, bytes) = bound.into_diagnostic_parts();
+            peak_bound_bytes = peak_bound_bytes.max(bytes);
+            if score == f64::NEG_INFINITY {
+                infeasible_bounds += 1;
             }
-        }
-        assert_eq!(variants.len(), 27);
-        assert!(minimum_score <= current_score);
-        let mut improved_destinations = 0;
-        let mut maximum_destination_reduction = 0.0_f64;
-        let mut total_destination_reduction = 0.0_f64;
-        for ((current, minimum), &mask) in current_destinations
+            (score, destinations)
+        };
+
+        let bands = input
+            .cards
             .iter()
-            .zip(&minimum_destinations)
-            .zip(owners)
-        {
-            for owner in 0..4 {
-                if mask & (1 << owner) == 0 {
-                    continue;
-                }
-                assert_eq!(
-                    current[owner] == f64::NEG_INFINITY,
-                    minimum[owner] == f64::NEG_INFINITY
-                );
-                assert!(minimum[owner] <= current[owner]);
-                if minimum[owner] < current[owner] {
-                    let reduction = current[owner] - minimum[owner];
-                    improved_destinations += 1;
-                    maximum_destination_reduction = maximum_destination_reduction.max(reduction);
-                    total_destination_reduction += reduction;
-                }
+            .filter(|card| !card.is_excluded)
+            .map(|card| card.band_id)
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .map(AxisValue::Band)
+            .collect::<Vec<_>>();
+        let mut attributes: Vec<AxisValue> = Vec::new();
+        for card in input.cards.iter().filter(|card| !card.is_excluded) {
+            let value = AxisValue::Attribute(card.attribute);
+            if !attributes.iter().any(|existing| existing.matches(card)) {
+                attributes.push(value);
             }
         }
-        let count_below = |destinations: &[[f64; 4]]| {
-            destinations
-                .iter()
-                .zip(owners)
-                .map(|(values, &mask)| {
-                    values
+        let mut measure_axis = |slot: usize, values: &[AxisValue]| {
+            assert!(!values.is_empty());
+            let mut modes = [RootContextMode::Any; 3];
+            modes[slot] = values[0].mixed_mode();
+            let (mixed_base, mixed_destinations) = solve(owners, modes);
+            let mut mixed_upper = f64::INFINITY;
+            let mut witness_values = Vec::with_capacity(values.len());
+            for &value in values {
+                let outside = if mixed_destinations.is_empty() {
+                    f64::NEG_INFINITY
+                } else {
+                    input
+                        .cards
                         .iter()
                         .enumerate()
-                        .filter(|(owner, value)| mask & (1 << owner) != 0 && **value < incumbent)
-                        .count()
-                })
-                .sum::<usize>()
+                        .filter(|(id, card)| owners[*id] & (1 << slot) != 0 && !value.matches(card))
+                        .map(|(id, _)| mixed_destinations[id][slot])
+                        .fold(f64::NEG_INFINITY, f64::max)
+                };
+                mixed_upper = mixed_upper.min(outside);
+                witness_values.push(serde_json::json!({
+                    "value": format!("{value:?}"),
+                    "upper": outside.is_finite().then_some(outside),
+                }));
+            }
+            if mixed_base.is_finite() && mixed_upper.is_finite() {
+                assert!(mixed_upper <= mixed_base);
+            }
+            drop(mixed_destinations);
+
+            let mut same_maximum = f64::NEG_INFINITY;
+            let mut same_values = Vec::with_capacity(values.len());
+            for &value in values {
+                let mut restricted = owners.clone();
+                for (id, card) in input.cards.iter().enumerate() {
+                    if !value.matches(card) {
+                        restricted[id] &= !(1 << slot);
+                    }
+                }
+                let mut modes = [RootContextMode::Any; 3];
+                modes[slot] = value.same_mode();
+                let (score, destinations) = solve(&restricted, modes);
+                drop(destinations);
+                same_maximum = same_maximum.max(score);
+                same_values.push(serde_json::json!({
+                    "value": format!("{value:?}"),
+                    "upper": score.is_finite().then_some(score),
+                }));
+            }
+            let slot_upper = same_maximum.max(mixed_upper);
+            (
+                slot_upper,
+                serde_json::json!({
+                    "slot": slot,
+                    "mixedBaseUpper": mixed_base.is_finite().then_some(mixed_base),
+                    "mixedUpper": mixed_upper.is_finite().then_some(mixed_upper),
+                    "mixedReduction": (mixed_base.is_finite() && mixed_upper.is_finite())
+                        .then_some(mixed_base - mixed_upper),
+                    "witnessValues": witness_values,
+                    "sameMaximumUpper": same_maximum.is_finite().then_some(same_maximum),
+                    "sameValues": same_values,
+                    "slotUpper": slot_upper.is_finite().then_some(slot_upper),
+                    "reductionFromCurrent": slot_upper
+                        .is_finite()
+                        .then_some(current_score - slot_upper),
+                }),
+            )
         };
+
+        let mut band_root = f64::INFINITY;
+        let mut band_slots = Vec::with_capacity(3);
+        for slot in 0..3 {
+            let (upper, details) = measure_axis(slot, &bands);
+            band_root = band_root.min(upper);
+            band_slots.push(details);
+        }
+        let mut attribute_root = f64::INFINITY;
+        let mut attribute_slots = Vec::with_capacity(3);
+        for slot in 0..3 {
+            let (upper, details) = measure_axis(slot, &attributes);
+            attribute_root = attribute_root.min(upper);
+            attribute_slots.push(details);
+        }
+        drop(measure_axis);
+        let combined_root = current_score.min(band_root).min(attribute_root);
+        assert!(combined_root <= current_score);
         println!(
-            "MEDLEY_ROOT_ENVELOPES:{}",
+            "MEDLEY_ROOT_CONTEXT_ENVELOPES:{}",
             serde_json::json!({
+                "configurationSelection": "planningFirst",
                 "configurationIndex": plan.configuration_index,
                 "selectedAreaItemIds": configuration.selected_area_item_ids,
-                "incumbent": incumbent,
+                "planningIncumbent": incumbent,
                 "planningUpper": plan.whole_medley_upper,
                 "currentUpper": current_score,
-                "minimumUpper": minimum_score,
-                "currentDestinationsBelowIncumbent": count_below(&current_destinations),
-                "minimumDestinationsBelowIncumbent": count_below(&minimum_destinations),
-                "improvedDestinations": improved_destinations,
-                "maximumDestinationReduction": maximum_destination_reduction,
-                "totalDestinationReduction": total_destination_reduction,
-                "completedCombinations": variants.len(),
-                "workspaceBytes": workspace_bytes,
+                "bandRootUpper": band_root,
+                "bandSlots": band_slots,
+                "attributeRootUpper": attribute_root,
+                "attributeSlots": attribute_slots,
+                "combinedRootUpper": combined_root,
+                "absoluteReduction": current_score - combined_root,
+                "wouldPruneAtPlanningIncumbent": combined_root < incumbent,
+                "attemptedBounds": attempted_bounds,
+                "completedSolves": completed_solves,
+                "infeasibleBounds": infeasible_bounds,
+                "totalElapsedMs": total_elapsed_ms,
+                "peakBoundBytes": peak_bound_bytes,
+                "peakReservedBytes": peak_reserved_bytes,
                 "budgetBytes": budget,
-                "peakBytes": peak_bytes,
-                "variants": variants,
             })
         );
     }

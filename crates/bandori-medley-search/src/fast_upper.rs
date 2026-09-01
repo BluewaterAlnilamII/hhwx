@@ -79,6 +79,29 @@ impl TeamContext {
     }
 }
 
+#[cfg(test)]
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum RootContextMode {
+    Any,
+    BandSame(u32),
+    BandMixed,
+    AttributeSame(CardAttributeV1),
+    AttributeMixed,
+}
+
+#[cfg(test)]
+impl RootContextMode {
+    fn accepts(self, context: TeamContext) -> bool {
+        match self {
+            Self::Any => true,
+            Self::BandSame(band_id) => context.band_id == Some(band_id),
+            Self::BandMixed => context.band_id.is_none(),
+            Self::AttributeSame(attribute) => context.attribute == Some(attribute),
+            Self::AttributeMixed => context.attribute.is_none(),
+        }
+    }
+}
+
 fn contexts(card: &SearchCardV1) -> [ResolvedScoreSkillV1; 4] {
     [
         card.skill_contexts.mixed,
@@ -331,32 +354,32 @@ impl<'a> FastUpperBoundEngine<'a> {
         groups: &[Vec<u32>],
         fixed_scores: [Option<f64>; 3],
     ) -> Result<Option<crate::joint_upper::JointWeights>, UpperBoundFailure> {
-        self.joint_weights_with_factors(owners, groups, fixed_scores, None)
+        self.joint_weights_with_contexts(owners, groups, fixed_scores, |_, _| true)
     }
 
     #[cfg(test)]
-    pub(crate) fn joint_weights_for_factors(
+    pub(crate) fn joint_weights_for_context_modes(
         &self,
         owners: &[u8],
         groups: &[Vec<u32>],
         fixed_scores: [Option<f64>; 3],
-        factors: [usize; 3],
+        modes: [RootContextMode; 3],
     ) -> Result<Option<crate::joint_upper::JointWeights>, UpperBoundFailure> {
-        assert!(
-            factors
-                .into_iter()
-                .all(|factor| factor < WEIGHT_FACTORS.len())
-        );
-        self.joint_weights_with_factors(owners, groups, fixed_scores, Some(factors))
+        self.joint_weights_with_contexts(owners, groups, fixed_scores, |slot, context| {
+            modes[slot].accepts(context)
+        })
     }
 
-    fn joint_weights_with_factors(
+    fn joint_weights_with_contexts<F>(
         &self,
         owners: &[u8],
         groups: &[Vec<u32>],
         fixed_scores: [Option<f64>; 3],
-        factors: Option<[usize; 3]>,
-    ) -> Result<Option<crate::joint_upper::JointWeights>, UpperBoundFailure> {
+        context_allowed: F,
+    ) -> Result<Option<crate::joint_upper::JointWeights>, UpperBoundFailure>
+    where
+        F: Fn(usize, TeamContext) -> bool,
+    {
         let mut result = crate::joint_upper::JointWeights {
             cards: vec![[[0.0; 2]; 3]; owners.len()],
             constant: 0.0,
@@ -401,22 +424,24 @@ impl<'a> FastUpperBoundEngine<'a> {
                 .contexts
                 .iter()
                 .filter(|weighted| {
-                    fixed.iter().all(|&id| {
-                        weighted
-                            .context
-                            .accepts(&self.model.input.cards[id as usize])
-                    }) && remaining_groups
-                        .iter()
-                        .filter(|group| {
-                            group.iter().any(|&id| {
-                                owners[id as usize] & bit != 0
-                                    && weighted
-                                        .context
-                                        .accepts(&self.model.input.cards[id as usize])
-                            })
+                    context_allowed(slot, weighted.context)
+                        && fixed.iter().all(|&id| {
+                            weighted
+                                .context
+                                .accepts(&self.model.input.cards[id as usize])
                         })
-                        .count()
-                        >= needed
+                        && remaining_groups
+                            .iter()
+                            .filter(|group| {
+                                group.iter().any(|&id| {
+                                    owners[id as usize] & bit != 0
+                                        && weighted
+                                            .context
+                                            .accepts(&self.model.input.cards[id as usize])
+                                })
+                            })
+                            .count()
+                            >= needed
                 })
                 .collect::<Vec<_>>();
             if reachable.is_empty() {
@@ -557,10 +582,7 @@ impl<'a> FastUpperBoundEngine<'a> {
                 1.0
             };
             let mut best = None::<(f64, Option<f64>, Vec<[f64; 2]>)>;
-            for (factor_index, factor) in WEIGHT_FACTORS.into_iter().enumerate() {
-                if factors.is_some_and(|factors| factors[slot] != factor_index) {
-                    continue;
-                }
+            for factor in WEIGHT_FACTORS {
                 let t = scale * factor;
                 let mut weights = vec![[0.0; 2]; owners.len()];
                 for &id in &remaining_ids {
@@ -1372,6 +1394,23 @@ mod tests {
                         }
                         exact
                     });
+                    let semantic_modes = [
+                        if set.iter().all(|&id| {
+                            input.cards[id as usize].band_id == input.cards[set[0] as usize].band_id
+                        }) {
+                            RootContextMode::BandSame(input.cards[set[0] as usize].band_id)
+                        } else {
+                            RootContextMode::BandMixed
+                        },
+                        if set.iter().all(|&id| {
+                            input.cards[id as usize].attribute
+                                == input.cards[set[0] as usize].attribute
+                        }) {
+                            RootContextMode::AttributeSame(input.cards[set[0] as usize].attribute)
+                        } else {
+                            RootContextMode::AttributeMixed
+                        },
+                    ];
                     for fixed_count in 0..=5 {
                         let mut owners = input
                             .cards
@@ -1413,20 +1452,17 @@ mod tests {
                             .unwrap();
                         assert_joint_covers(&joint);
                         if fixed_count == 0 {
-                            for first in 0..3 {
-                                for second in 0..3 {
-                                    for third in 0..3 {
-                                        let forced = engine
-                                            .joint_weights_for_factors(
-                                                &owners,
-                                                &groups,
-                                                [None; 3],
-                                                [first, second, third],
-                                            )
-                                            .unwrap()
-                                            .unwrap();
-                                        assert_joint_covers(&forced);
-                                    }
+                            for slot in 0..3 {
+                                for mode in semantic_modes {
+                                    let mut modes = [RootContextMode::Any; 3];
+                                    modes[slot] = mode;
+                                    let filtered = engine
+                                        .joint_weights_for_context_modes(
+                                            &owners, &groups, [None; 3], modes,
+                                        )
+                                        .unwrap()
+                                        .unwrap();
+                                    assert_joint_covers(&filtered);
                                 }
                             }
                         }
