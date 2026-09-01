@@ -131,7 +131,10 @@ export function readCardPreferences(profileCacheKey: string): TeamBuilderCardPre
       return createDefaultCardPreferences();
     }
     const stored = JSON.parse(rawValue) as Record<string, unknown>;
-    return normalizeCardPreferences(stored[profileCacheKey]);
+    return {
+      ...normalizeCardPreferences(stored[profileCacheKey]),
+      temporaryCards: [],
+    };
   } catch {
     return createDefaultCardPreferences();
   }
@@ -148,6 +151,10 @@ export function writeCardPreferences(profileCacheKey: string, preferences: TeamB
   } catch {
     stored = {};
   }
-  stored[profileCacheKey] = normalizeCardPreferences(preferences);
+  const normalized = normalizeCardPreferences(preferences);
+  stored[profileCacheKey] = {
+    excludedCardIds: normalized.excludedCardIds,
+    ownedCardParameters: normalized.ownedCardParameters,
+  };
   window.localStorage.setItem(TEAMBUILDER_CARD_PREFERENCES_STORAGE_KEY, JSON.stringify(stored));
 }

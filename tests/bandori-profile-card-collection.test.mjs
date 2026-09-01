@@ -29,6 +29,10 @@ import {
 import {
   reduceGameProfileCardDraft,
 } from "../src/app/[locale]/bandori/game-profiles/[profileId]/cards/useGameProfileCardDraft.ts";
+import {
+  readCardPreferences,
+  writeCardPreferences,
+} from "../src/app/[locale]/bandori/teambuilder/card-preferences.ts";
 
 const readSource = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -65,6 +69,58 @@ function entry(cardId, overrides = {}) {
     searchText: overrides.searchText ?? `card ${cardId} character ${overrides.characterId ?? 1}`,
   };
 }
+
+test("team builder keeps temporary cards out of browser storage", () => {
+  const storedValues = new Map();
+  const previousWindow = globalThis.window;
+  globalThis.window = {
+    localStorage: {
+      getItem: (key) => storedValues.get(key) ?? null,
+      setItem: (key, value) => storedValues.set(key, value),
+    },
+  };
+
+  try {
+    const temporaryCard = { ...card(2), instanceId: "temporary-2" };
+    const ownedCardParameters = {
+      maxLevelEpisodeTraining: true,
+      maxMasterRank: false,
+      maxMasterRankRarityThreshold: 4,
+      maxSkillLevel: false,
+      maxSkillLevelRarityThreshold: 3,
+    };
+    writeCardPreferences("profile-1", {
+      excludedCardIds: [1],
+      temporaryCards: [temporaryCard],
+      ownedCardParameters,
+    });
+
+    const [[storageKey, rawValue]] = storedValues.entries();
+    assert.deepEqual(JSON.parse(rawValue)["profile-1"], {
+      excludedCardIds: [1],
+      ownedCardParameters,
+    });
+
+    storedValues.set(storageKey, JSON.stringify({
+      "profile-1": {
+        excludedCardIds: [1],
+        temporaryCards: [temporaryCard],
+        ownedCardParameters,
+      },
+    }));
+    assert.deepEqual(readCardPreferences("profile-1"), {
+      excludedCardIds: [1],
+      temporaryCards: [],
+      ownedCardParameters,
+    });
+  } finally {
+    if (previousWindow === undefined) {
+      delete globalThis.window;
+    } else {
+      globalThis.window = previousWindow;
+    }
+  }
+});
 
 test("card equality and change summaries compare every persisted field without caring about order", () => {
   const base = card(1);
