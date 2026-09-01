@@ -1529,8 +1529,11 @@ impl JointSearch<'_, '_, '_, '_> {
             if family.has_character(&self.domain, group) {
                 continue;
             }
+            // The group check already covers prefix and character uniqueness.
             for &id in &self.groups[group] {
-                if family.can_include(&self.domain, id, song_slot) {
+                if self.domain.available[id as usize]
+                    && self.domain.owners[id as usize] & (1 << song_slot) != 0
+                {
                     self.generate_rows(
                         family.with_member(id, group),
                         song_slot,
@@ -1735,8 +1738,11 @@ impl JointSearch<'_, '_, '_, '_> {
             if family.has_character(&self.domain, group) {
                 continue;
             }
+            // The group check already covers prefix and character uniqueness.
             for &id in &self.groups[group] {
-                if family.can_include(&self.domain, id, slot) {
+                if self.domain.available[id as usize]
+                    && self.domain.owners[id as usize] & (1 << slot) != 0
+                {
                     choices.push((group, id));
                 }
             }
