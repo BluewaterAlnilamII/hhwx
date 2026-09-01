@@ -1,0 +1,21 @@
+[package]
+name = "bandori-medley-wasm"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+bandori-medley-search = { path = "../bandori-medley-search" }
+js-sys = "0.3"
+serde.workspace = true
+serde_json.workspace = true
+wasm-bindgen = "0.2"
+
+[lints]
+workspace = true

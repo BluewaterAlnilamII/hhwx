@@ -110,7 +110,6 @@ impl RunState<'_, '_> {
     }
 
     fn record_solution(&mut self, solution: MedleySearchSolutionV1) -> Result<bool, SearchAbort> {
-        #[cfg(test)]
         let score_improved = self
             .incumbent_score()
             .is_none_or(|previous| solution.total_average_score > previous);
@@ -126,8 +125,9 @@ impl RunState<'_, '_> {
             self.best = Some(solution.clone());
             add_counter(&mut self.diagnostics.incumbent_changes, 1)?;
         }
-        #[cfg(test)]
         if score_improved {
+            self.control.report_strict_improvement(&solution);
+            #[cfg(test)]
             crate::profiling::improvement(solution.total_average_score, &self.diagnostics);
         }
 
@@ -2120,6 +2120,41 @@ mod tests {
         );
         assert!(!state.could_enter_discovered(90.0));
         assert!(state.could_enter_discovered(91.0));
+    }
+
+    #[test]
+    fn strict_improvement_callback_ignores_tie_representative_changes() {
+        let mut reported_scores = Vec::new();
+        {
+            let mut never_stop = || None;
+            let mut report = |solution: &MedleySearchSolutionV1| {
+                reported_scores.push(solution.total_average_score);
+            };
+            let mut control =
+                SearchControl::new(1024, &mut never_stop).with_strict_improvement(&mut report);
+            let mut state = RunState {
+                control: &mut control,
+                diagnostics: MedleySearchDiagnosticsV1::default(),
+                best: None,
+                discovered: Vec::new(),
+            };
+            let solution = |identity, score| MedleySearchSolutionV1 {
+                selected_area_item_ids: vec![identity],
+                teams: [MedleySearchTeamV1 {
+                    slot: 0,
+                    member_instance_ids: [0; 5],
+                    average_score: 0.0,
+                }; 3],
+                total_average_score: score,
+            };
+
+            state.record_solution(solution(2, 100.0)).unwrap();
+            state.record_solution(solution(1, 100.0)).unwrap();
+            assert_eq!(state.best.as_ref().unwrap().selected_area_item_ids, [1]);
+            state.record_solution(solution(0, 101.0)).unwrap();
+        }
+
+        assert_eq!(reported_scores, [100.0, 101.0]);
     }
 
     #[test]

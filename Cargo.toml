@@ -3,6 +3,7 @@ members = [
   "crates/bandori-medley-model",
   "crates/bandori-medley-reference",
   "crates/bandori-medley-search",
+  "crates/bandori-medley-wasm",
 ]
 resolver = "3"
 

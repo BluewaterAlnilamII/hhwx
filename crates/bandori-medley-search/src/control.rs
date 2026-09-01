@@ -1,3 +1,5 @@
+use crate::MedleySearchSolutionV1;
+
 /// A caller-observed request to stop an in-progress search.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SearchStopReason {
@@ -13,6 +15,7 @@ pub enum SearchStopReason {
 pub struct SearchControl<'a> {
     memory_budget_bytes: usize,
     stop_check: &'a mut dyn FnMut() -> Option<SearchStopReason>,
+    strict_improvement: Option<&'a mut dyn FnMut(&MedleySearchSolutionV1)>,
 }
 
 impl<'a> SearchControl<'a> {
@@ -23,7 +26,17 @@ impl<'a> SearchControl<'a> {
         Self {
             memory_budget_bytes,
             stop_check,
+            strict_improvement: None,
         }
+    }
+
+    /// Report the first feasible solution and later strictly higher totals.
+    pub fn with_strict_improvement(
+        mut self,
+        strict_improvement: &'a mut dyn FnMut(&MedleySearchSolutionV1),
+    ) -> Self {
+        self.strict_improvement = Some(strict_improvement);
+        self
     }
 
     pub const fn memory_budget_bytes(&self) -> usize {
@@ -32,6 +45,12 @@ impl<'a> SearchControl<'a> {
 
     pub fn poll_stop(&mut self) -> Option<SearchStopReason> {
         (self.stop_check)()
+    }
+
+    pub(crate) fn report_strict_improvement(&mut self, solution: &MedleySearchSolutionV1) {
+        if let Some(callback) = &mut self.strict_improvement {
+            callback(solution);
+        }
     }
 }
 

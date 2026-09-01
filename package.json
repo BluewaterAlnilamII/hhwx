@@ -20,6 +20,7 @@
     "lint:medley-foundation": "cargo clippy --workspace --all-targets --locked -- -D warnings",
     "test:medley-foundation": "cargo test --workspace --locked",
     "check:medley-foundation:wasm": "cargo check --workspace --target wasm32-unknown-unknown --locked",
+    "build:medley-foundation:wasm": "cargo build --release --locked --target wasm32-unknown-unknown -p bandori-medley-wasm && wasm-bindgen target/wasm32-unknown-unknown/release/bandori_medley_wasm.wasm --out-dir src/lib/bandori/medley-wasm/pkg --out-name bandori_medley --target web --typescript",
     "test:medley-foundation:source": "node --import tsx --test tests/bandori-medley-profile-decoder.test.mjs tests/bandori-medley-foundation-normalization.test.mjs tests/bandori-medley-foundation-parameters.test.mjs tests/bandori-medley-foundation-skills.test.mjs tests/bandori-medley-foundation-evaluation.test.mjs tests/bandori-medley-search-source.test.mjs",
     "accept:medley-search:real": "node --import tsx scripts/accept-bandori-medley-search.mjs",
     "test:bandori-cards": "node --import tsx --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/bandori-cards-api-contract.test.mjs && node --import tsx --test tests/bandori-card-catalog.test.mjs tests/bandori-card-detail-ui-contract.test.mjs tests/bandori-card-hover-tooltip.test.mjs tests/bandori-card-training.test.mjs tests/bandori-profile-card-collection.test.mjs tests/bandori-snapshot-api-server.test.mjs tests/bandori-cards-api-consumers.test.mjs && node --import tsx scripts/test-bandori-cards-api-reader.mjs",
