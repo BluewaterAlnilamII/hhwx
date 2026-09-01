@@ -58,10 +58,6 @@ import type {
   BandoriTeamSearchSkillOrderActor,
   BandoriTeamSearchTarget,
 } from "@/lib/bandori-team-search";
-import type {
-  BandoriMedleyTeamSearchResponse,
-  BandoriMedleyTeamSearchResult,
-} from "@/lib/bandori/team-builder/medley";
 import {
   listLocalGameProfiles,
   readLocalGameProfilePayload,
@@ -105,6 +101,9 @@ import {
   type TemporaryGameProfileCard,
 } from "./card-preferences";
 import type {
+  BandoriMedleyFrontendCandidateDto,
+  BandoriMedleyFrontendFinalDto,
+  BandoriMedleyFrontendProgressDto,
   TeamSearchWorkerMessage,
   TeamSearchWorkerMessages,
   TeamSearchWorkerRequest,
@@ -133,7 +132,7 @@ type PreloadState = {
 };
 type MedleySongSource = "custom" | "event-cn" | "event-jp";
 type MedleyCalculationMode = "maximize";
-type TeamBuilderSearchResponse = BandoriTeamSearchResponse | BandoriMedleyTeamSearchResponse;
+type TeamBuilderSearchResponse = BandoriTeamSearchResponse | BandoriMedleyFrontendFinalDto;
 type TeamSearchWorkerProgressResponse = Extract<TeamSearchWorkerResponse, { type: "search-progress" }>;
 type MedleyResultInputSnapshot = {
   selectedEvent: BandoriEventSummary | null;
@@ -145,17 +144,6 @@ type MedleyResultInputSnapshot = {
   maxSearchDurationSeconds: string;
   medleyCalculationMode: MedleyCalculationMode;
 };
-type BrowserMemoryPerformance = Performance & {
-  memory?: {
-    usedJSHeapSize?: number;
-    jsHeapSizeLimit?: number;
-  };
-  measureUserAgentSpecificMemory?: () => Promise<{
-    bytes?: number;
-    breakdown?: Array<{ bytes?: number }>;
-  }>;
-};
-
 function DynamicTemporaryCardDialogLoading({ message }: { message: string }) {
   return (
     <div className="fixed inset-0 z-1000 flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true">
@@ -290,9 +278,6 @@ const DEFAULT_MEDLEY_DIFFICULTIES: MedleyDifficultyTuple = [
 ];
 const DEFAULT_SEARCH_DURATION_SECONDS = "30";
 const MEDLEY_PREVIEW_SEARCH_DURATION_SECONDS = "300";
-const MEDLEY_BROWSER_MEMORY_WATCHDOG_LIMIT_MIB = 3000;
-const MEDLEY_BROWSER_MEMORY_WATCHDOG_HEAP_LIMIT_RATIO = 0.7;
-const MEDLEY_BROWSER_MEMORY_WATCHDOG_INTERVAL_MS = 200;
 const DEFAULT_PERFECT_RATE = "100";
 const NO_EVENT_BANNER_URL = "/res/530.png";
 const TEAMBUILDER_LIVE_PREFERENCES_STORAGE_KEY = "hhwx-bandori-teambuilder-live-preferences:v1";
@@ -560,60 +545,6 @@ function formatNumber(value: number | null | undefined, locale: AppLocale = "zh-
 function formatDurationLabel(totalSeconds: number): string {
   const seconds = Math.max(0, Math.floor(totalSeconds));
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-}
-
-function buildBrowserHeapSnapshot(
-  usedBytes: number,
-  heapLimitBytes: number | null,
-  source: "agent" | "heap",
-): { usedMiB: number; limitMiB: number | null; effectiveLimitMiB: number; source: "agent" | "heap" } {
-  const dynamicLimitMiB = heapLimitBytes !== null
-    ? Math.floor((heapLimitBytes / (1024 * 1024)) * MEDLEY_BROWSER_MEMORY_WATCHDOG_HEAP_LIMIT_RATIO)
-    : Number.POSITIVE_INFINITY;
-  const effectiveLimitMiB = Math.min(MEDLEY_BROWSER_MEMORY_WATCHDOG_LIMIT_MIB, dynamicLimitMiB);
-  return {
-    usedMiB: Math.ceil(usedBytes / (1024 * 1024)),
-    limitMiB: heapLimitBytes !== null ? Math.floor(heapLimitBytes / (1024 * 1024)) : null,
-    effectiveLimitMiB,
-    source,
-  };
-}
-
-async function readBrowserHeapSnapshot(): Promise<{
-  usedMiB: number;
-  limitMiB: number | null;
-  effectiveLimitMiB: number;
-  source: "agent" | "heap";
-} | null> {
-  const runtimePerformance = performance as BrowserMemoryPerformance;
-  const memory = runtimePerformance.memory;
-  const heapLimitBytes = typeof memory?.jsHeapSizeLimit === "number" && Number.isFinite(memory.jsHeapSizeLimit) && memory.jsHeapSizeLimit > 0
-    ? memory.jsHeapSizeLimit
-    : null;
-
-  if (typeof runtimePerformance.measureUserAgentSpecificMemory === "function") {
-    try {
-      const measurement = await runtimePerformance.measureUserAgentSpecificMemory();
-      const measuredBytes = typeof measurement.bytes === "number" && Number.isFinite(measurement.bytes)
-        ? measurement.bytes
-        : measurement.breakdown?.reduce((sum, item) => (
-          sum + (typeof item.bytes === "number" && Number.isFinite(item.bytes) ? item.bytes : 0)
-        ), 0) ?? null;
-      if (measuredBytes !== null && measuredBytes > 0) {
-        return buildBrowserHeapSnapshot(measuredBytes, heapLimitBytes, "agent");
-      }
-    } catch {
-      // Fall through to the older Chrome heap counter when process-wide memory is unavailable.
-    }
-  }
-
-  const usedBytes = typeof memory?.usedJSHeapSize === "number" && Number.isFinite(memory.usedJSHeapSize)
-    ? memory.usedJSHeapSize
-    : null;
-  if (usedBytes === null) {
-    return null;
-  }
-  return buildBrowserHeapSnapshot(usedBytes, heapLimitBytes, "heap");
 }
 
 function formatAreaItemAttribute(attribute: BandoriCardAttribute | null): string {
@@ -981,47 +912,15 @@ function orderResultCardsWithLeaderCenter(
   return [others[0], others[1], leader, others[2], others[3]].filter(Boolean) as BandoriTeamSearchResultCard[];
 }
 
-function isMedleySearchResult(result: BandoriTeamSearchResult | BandoriMedleyTeamSearchResult): result is BandoriMedleyTeamSearchResult {
+function isMedleySearchResult(result: BandoriTeamSearchResult | BandoriMedleyFrontendCandidateDto): result is BandoriMedleyFrontendCandidateDto {
   return "songResults" in result;
 }
 
-function isMedleySearchResponse(result: TeamBuilderSearchResponse): result is BandoriMedleyTeamSearchResponse {
-  return "evaluatedAverageTopCandidates" in result || result.results.some((item) => "songResults" in item);
-}
-
-function isMedleySearchStats(stats: TeamBuilderSearchResponse["stats"]): stats is BandoriMedleyTeamSearchResponse["stats"] {
-  return "profiling" in stats;
+function isMedleySearchResponse(result: TeamBuilderSearchResponse): result is BandoriMedleyFrontendFinalDto {
+  return "kind" in result && result.kind === "medley";
 }
 
 type TeamBuilderTranslator = (key: string, values?: Record<string, string | number>) => string;
-
-const EXACT_ABORT_REASON_MESSAGE_KEYS: Record<string, string> = {
-  "candidate-fill-deadline": "abortReasons.candidateFillDeadline",
-  "candidate-fill-soft-limit": "abortReasons.candidateFillSoftLimit",
-  "candidate-fill-generator-aborted": "abortReasons.candidateFillGeneratorAborted",
-  "memory-soft-limit": "abortReasons.memorySoftLimit",
-  "solve-workload-limit": "abortReasons.solveWorkloadLimit",
-  "solve-timeout": "abortReasons.solveTimeout",
-  "anchored-join-timeout": "abortReasons.anchoredJoinTimeout",
-  "candidate-fill-pair-refine": "abortReasons.candidateFillPairRefine",
-  "initial-candidate": "abortReasons.initialCandidate",
-  "pair-upper": "abortReasons.pairUpper",
-  "deep-pair-upper": "abortReasons.deepPairUpper",
-  "high-budget-pair-upper": "abortReasons.highBudgetPairUpper",
-  "invalid-input": "abortReasons.invalidInput",
-};
-
-const CONFIGURATION_TRACE_STATUS_MESSAGE_KEYS: Record<string, string> = {
-  "bounded-dominated-root-skip": "abortReasons.boundedDominatedRootSkip",
-  "bounded-near-deadline-root-skip": "abortReasons.boundedNearDeadlineRootSkip",
-  "exact-unproved-skip-dfs": "abortReasons.exactUnprovedSkipDfs",
-  "exact-before-seeding-timeout": "abortReasons.exactBeforeSeedingTimeout",
-  "slot-candidate-seeding-timeout": "abortReasons.slotCandidateSeedingTimeout",
-  "greedy-seeding-timeout": "abortReasons.greedySeedingTimeout",
-  "conflict-bnb-timeout": "abortReasons.conflictBnbTimeout",
-  "exact-after-seeding-timeout": "abortReasons.exactAfterSeedingTimeout",
-  "dfs-timeout": "abortReasons.dfsTimeout",
-};
 
 function getSearchTimeLimitLabel(maxSearchDurationSeconds: string | undefined, secondsLabel: string): string | null {
   if (!maxSearchDurationSeconds) {
@@ -1036,169 +935,27 @@ function parsePositiveConstraintInput(value: string): number | undefined {
   return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined;
 }
 
-function getExactCandidateJoinAbortReasonLabel(
-  reason: string | null | undefined,
-  stats: BandoriMedleyTeamSearchResponse["stats"],
-  proofT: TeamBuilderTranslator,
-  locale: AppLocale,
-  secondsLabel: string,
-  maxSearchDurationSeconds?: string,
-): string | null {
-  if (!reason) {
-    return null;
-  }
-  const profiling = stats.profiling;
-  const timeLimitLabel = getSearchTimeLimitLabel(maxSearchDurationSeconds, secondsLabel);
-  const candidateSoftLimit = profiling.exactCandidateJoinLastAbortCandidateSoftLimit;
-  const candidateCount = profiling.exactCandidateJoinLastAbortCandidateCount;
-  const nodeSoftLimit = profiling.exactCandidateJoinLastAbortNodeSoftLimit;
-  if (reason === "solve-workload-limit" && nodeSoftLimit !== null) {
-    return proofT("abortReasons.nodeLimit", { limit: formatNumber(nodeSoftLimit, locale) });
-  }
-  const messageKey = EXACT_ABORT_REASON_MESSAGE_KEYS[reason];
-  if (!messageKey) {
-    return reason;
-  }
-  const generatedLabel = candidateCount !== null
-    ? proofT("generatedLabel", { count: formatNumber(candidateCount, locale) })
-    : "";
-  const candidateSoftLimitLabel = candidateSoftLimit !== null
-    ? proofT("candidateSoftLimitLabel", {
-      limit: formatNumber(candidateSoftLimit, locale),
-      generatedLabel,
-    })
-    : "";
-  return proofT(messageKey, {
-    limitLabel: timeLimitLabel ? proofT("limitLabel", { limit: timeLimitLabel }) : candidateSoftLimitLabel,
-  });
-}
-
-function getConfigurationTraceStringValue(entry: Record<string, unknown>, key: string): string | null {
-  const value = entry[key];
-  return typeof value === "string" && value.length > 0 ? value : null;
-}
-
-function isClosedConfigurationTraceStatus(status: string | null): boolean {
-  return Boolean(status && (status.endsWith("-proved") || status.endsWith("-pruned")));
-}
-
-function getConfigurationTraceStatusLabel(status: string | null, proofT: TeamBuilderTranslator): string {
-  if (!status) {
-    return proofT("unknownCompletion");
-  }
-  const messageKey = CONFIGURATION_TRACE_STATUS_MESSAGE_KEYS[status];
-  return messageKey ? proofT(messageKey) : status;
-}
-
-function formatConfigurationTraceEntry(
-  entry: Record<string, unknown>,
-  proofT: TeamBuilderTranslator,
-  attributeLabels: Record<BandoriCardAttribute, string>,
-  areaItemParameterLabels: Record<"performance" | "technique" | "visual", string>,
-): string {
-  const bandKey = getConfigurationTraceStringValue(entry, "bandKey") ?? "-";
-  const attribute = getConfigurationTraceStringValue(entry, "attribute");
-  const parameter = getConfigurationTraceStringValue(entry, "parameter");
-  const attributeLabel = attribute && attribute in attributeLabels
-    ? attributeLabels[attribute as BandoriCardAttribute]
-    : "-";
-  const parameterLabel = parameter === "performance" || parameter === "technique" || parameter === "visual"
-    ? formatAreaItemParameter(parameter, areaItemParameterLabels)
-    : "-";
-  const status = getConfigurationTraceStringValue(entry, "status");
-  return `${bandKey} / ${attributeLabel} / ${parameterLabel} (${getConfigurationTraceStatusLabel(status, proofT)})`;
-}
-
-function getFirstUnclosedConfigurationTrace(stats: BandoriMedleyTeamSearchResponse["stats"]): Record<string, unknown> | null {
-  return stats.profiling.configurationTrace?.find((entry) => (
-    !isClosedConfigurationTraceStatus(getConfigurationTraceStringValue(entry, "status"))
-  )) ?? null;
-}
-
-function buildConfigurationProgressReason(
-  stats: BandoriMedleyTeamSearchResponse["stats"],
-  proofT: TeamBuilderTranslator,
-  attributeLabels: Record<BandoriCardAttribute, string>,
-  areaItemParameterLabels: Record<"performance" | "technique" | "visual", string>,
-): string | null {
-  const totalCount = stats.areaItemConfigurationCount;
-  if (totalCount <= 0) {
-    return null;
-  }
-  const closedCount = Math.min(
-    totalCount,
-    stats.profiling.completedAreaItemConfigurationCount + stats.profiling.rootUpperPrunedConfigurationCount,
-  );
-  const startedCount = Math.min(totalCount, stats.profiling.startedAreaItemConfigurationCount);
-  if (closedCount >= totalCount) {
-    return null;
-  }
-
-  const firstUnclosedTrace = getFirstUnclosedConfigurationTrace(stats);
-  const traceLabel = firstUnclosedTrace
-    ? proofT("firstUnclosedTrace", {
-      trace: formatConfigurationTraceEntry(firstUnclosedTrace, proofT, attributeLabels, areaItemParameterLabels),
-    })
-    : "";
-  return proofT("configurationProgress", {
-    closed: closedCount,
-    total: totalCount,
-    started: startedCount,
-    traceLabel,
-  });
-}
-
 function buildBoundedEarlyStopReason(
-  stats: TeamBuilderSearchResponse["stats"],
+  result: TeamBuilderSearchResponse,
   proofT: TeamBuilderTranslator,
-  locale: AppLocale,
   secondsLabel: string,
-  attributeLabels: Record<BandoriCardAttribute, string>,
-  areaItemParameterLabels: Record<"performance" | "technique" | "visual", string>,
   maxSearchDurationSeconds?: string,
 ): string {
-  const reasons: string[] = [];
-
-  if ("memoryLimited" in stats && stats.memoryLimited) {
-    const limitLabel = stats.memorySoftLimitMiB !== null
-      ? proofT("upperLimitLabel", { limit: `${stats.memorySoftLimitMiB} MiB` })
-      : "";
-    reasons.push(proofT("reasonParts.memoryLimit", { limitLabel }));
+  if (isMedleySearchResponse(result) && result.incompleteReason === "memory_exhausted") {
+    return proofT("reasonParts.memoryLimit", {
+      limitLabel: proofT("upperLimitLabel", {
+        limit: `${Math.floor(result.stats.memoryBudgetBytes / (1024 * 1024))} MiB`,
+      }),
+    });
   }
-  if (stats.timedOut) {
+  if ((isMedleySearchResponse(result) && result.incompleteReason === "timed_out")
+    || (!isMedleySearchResponse(result) && result.stats.timedOut)) {
     const timeLimitLabel = getSearchTimeLimitLabel(maxSearchDurationSeconds, secondsLabel);
-    reasons.push(proofT("reasonParts.timeLimit", {
+    return proofT("reasonParts.timeLimit", {
       limitLabel: timeLimitLabel ? proofT("limitLabel", { limit: timeLimitLabel }) : "",
-    }));
+    });
   }
-
-  if (isMedleySearchStats(stats)) {
-    const abortReason = getExactCandidateJoinAbortReasonLabel(
-      stats.profiling.exactCandidateJoinLastAbortReason,
-      stats,
-      proofT,
-      locale,
-      secondsLabel,
-      maxSearchDurationSeconds,
-    );
-    if (abortReason && !reasons.includes(abortReason)) {
-      reasons.push(proofT("reasonParts.candidateJoinIncomplete", { reason: abortReason }));
-    }
-    const configurationProgressReason = buildConfigurationProgressReason(
-      stats,
-      proofT,
-      attributeLabels,
-      areaItemParameterLabels,
-    );
-    if (configurationProgressReason) {
-      reasons.push(configurationProgressReason);
-    }
-  }
-
-  if (reasons.length === 0) {
-    reasons.push(proofT("fallbackBounded"));
-  }
-  return reasons.join("; ");
+  return proofT("fallbackBounded");
 }
 
 function formatSearchElapsedMs(elapsedMs: number | null | undefined): string | null {
@@ -1213,64 +970,51 @@ function formatSearchElapsedMs(elapsedMs: number | null | undefined): string | n
 function buildSearchCompletionSummary(
   result: TeamBuilderSearchResponse,
   proofT: TeamBuilderTranslator,
-  locale: AppLocale,
   secondsLabel: string,
-  attributeLabels: Record<BandoriCardAttribute, string>,
-  areaItemParameterLabels: Record<"performance" | "technique" | "visual", string>,
   maxSearchDurationSeconds?: string,
 ): string {
-  const { stats } = result;
-  const isMedleyResult = isMedleySearchResponse(result);
-  const elapsedLabel = isMedleyResult
-    ? `${(stats.elapsedMs / 1000).toFixed(1)}s`
-    : `${stats.elapsedMs}ms`;
+  const medleyResult = isMedleySearchResponse(result) ? result : null;
+  const elapsedLabel = medleyResult
+    ? formatSearchElapsedMs(medleyResult.stats.elapsedMs) ?? "0ms"
+    : `${result.stats.elapsedMs}ms`;
   const parts = [proofT("completedElapsed", { elapsed: elapsedLabel })];
-  if (stats.searchMode === "exact" && isMedleyResult) {
+  if (medleyResult?.status === "exact") {
     parts.push(proofT("exact"));
-  } else if (stats.searchMode === "bounded") {
+  } else if (medleyResult?.status === "incomplete"
+    || (!isMedleySearchResponse(result) && result.stats.searchMode === "bounded")) {
     parts.push(proofT("boundedStop", {
       reason: buildBoundedEarlyStopReason(
-        stats,
+        result,
         proofT,
-        locale,
         secondsLabel,
-        attributeLabels,
-        areaItemParameterLabels,
         maxSearchDurationSeconds,
       ),
     }));
-    if (stats.observedScoreUpperBoundGap !== null) {
-      parts.push(`gap ${formatNumber(stats.observedScoreUpperBoundGap, locale)}`);
-    }
   }
-  if (isMedleySearchResponse(result)) {
-    const medleyStats = result.stats;
-    const timeToBestScoreMs = medleyStats.profiling.timeToBestScoreMs;
+  if (medleyResult) {
+    const timeToBestScoreMs = medleyResult.stats.timeToBestScoreMs;
     const timeToBestLabel = formatSearchElapsedMs(timeToBestScoreMs);
     if (timeToBestLabel && timeToBestScoreMs !== null) {
       parts.push(proofT("timeToBest", { elapsed: timeToBestLabel }));
-      const proofElapsedLabel = formatSearchElapsedMs(medleyStats.elapsedMs - timeToBestScoreMs);
+      const proofElapsedLabel = formatSearchElapsedMs(medleyResult.stats.elapsedMs - timeToBestScoreMs);
       if (proofElapsedLabel) {
         parts.push(proofT("proofElapsed", { elapsed: proofElapsedLabel }));
       }
     }
   }
-  if (isMedleyResult && result.maxScoreCandidate) {
+  if (medleyResult?.maximumScoreCandidate) {
     parts.push(proofT("hasMaxScoreCandidate"));
   }
   return parts.join("\n");
 }
 
-function buildSearchProgressSummary(result: TeamBuilderSearchResponse, proofT: TeamBuilderTranslator): string {
+function buildSearchProgressSummary(progress: BandoriMedleyFrontendProgressDto, proofT: TeamBuilderTranslator): string {
   const parts = [proofT("running")];
-  if (isMedleySearchResponse(result)) {
-    const medleyStats = result.stats;
-    const timeToBestLabel = formatSearchElapsedMs(medleyStats.profiling.timeToBestScoreMs);
-    if (timeToBestLabel) {
-      parts.push(proofT("timeToBest", { elapsed: timeToBestLabel }));
-    }
-    parts.push(proofT("stillProving"));
+  const timeToBestLabel = formatSearchElapsedMs(progress.timeToBestScoreMs);
+  if (timeToBestLabel) {
+    parts.push(proofT("timeToBest", { elapsed: timeToBestLabel }));
   }
+  parts.push(proofT("stillProving"));
   return parts.join("\n");
 }
 
@@ -1278,16 +1022,13 @@ function getSearchProofStatusLabel(result: TeamBuilderSearchResponse, proofT: Te
   if (!isMedleySearchResponse(result)) {
     return null;
   }
-  if (result.stats.searchMode === "exact") {
+  if (result.status === "exact") {
     return proofT("exact");
   }
-  if (result.stats.searchMode === "bounded") {
-    return proofT("notExact");
-  }
-  return null;
+  return proofT("notExact");
 }
 
-function serializeMedleyDebugResult(item: BandoriMedleyTeamSearchResult) {
+function serializeMedleyDebugResult(item: BandoriMedleyFrontendCandidateDto) {
   return {
     rank: item.rank,
     score: item.score,
@@ -1341,7 +1082,7 @@ function buildMedleyDebugPayload({
   medleyCalculationMode,
   preferredServer,
 }: {
-  result: BandoriMedleyTeamSearchResponse;
+  result: BandoriMedleyFrontendFinalDto;
   selectedEvent: BandoriEventSummary | null;
   medleySongIds: MedleySongIdTuple;
   medleyDifficulties: MedleyDifficultyTuple;
@@ -1354,10 +1095,10 @@ function buildMedleyDebugPayload({
   preferredServer: BandoriServer;
 }) {
   return {
-    version: 1,
+    version: 2,
     generatedAt: new Date().toISOString(),
     page: "bandori/teambuilder",
-    mode: "medley-preview",
+    mode: "medley",
     input: {
       medleyCalculationMode,
       event: selectedEvent ? {
@@ -1382,21 +1123,18 @@ function buildMedleyDebugPayload({
       maxSearchDurationSeconds,
     },
     proof: {
-      searchMode: result.stats.searchMode,
-      isExhaustive: result.stats.isExhaustive,
-      timedOut: result.stats.timedOut,
-      memoryLimited: result.stats.memoryLimited,
-      observedScoreUpperBound: result.stats.observedScoreUpperBound,
-      observedScoreUpperBoundGap: result.stats.observedScoreUpperBoundGap,
-      memorySoftLimitMiB: result.stats.memorySoftLimitMiB,
-      peakUsedHeapMiB: result.stats.peakUsedHeapMiB,
+      status: result.status,
+      incompleteReason: result.incompleteReason,
+      elapsedMs: result.stats.elapsedMs,
+      hydrationElapsedMs: result.stats.hydrationElapsedMs,
+      timeToBestScoreMs: result.stats.timeToBestScoreMs,
+      memoryBudgetBytes: result.stats.memoryBudgetBytes,
     },
     stats: result.stats,
-    maxScoreCandidate: result.maxScoreCandidate
-      ? serializeMedleyDebugResult(result.maxScoreCandidate)
+    maximumScoreCandidate: result.maximumScoreCandidate
+      ? serializeMedleyDebugResult(result.maximumScoreCandidate)
       : null,
-    evaluatedAverageTopCandidates: result.evaluatedAverageTopCandidates.map(serializeMedleyDebugResult),
-    results: result.results.map(serializeMedleyDebugResult),
+    candidates: result.candidates.map(serializeMedleyDebugResult),
   };
 }
 
@@ -2045,6 +1783,70 @@ function ResultCard({
   );
 }
 
+function MedleyProgressCard({
+  progress,
+  cardMetadata,
+  characters,
+  skills,
+  displayServer,
+  songs,
+}: {
+  progress: BandoriMedleyFrontendProgressDto;
+  cardMetadata: Record<string, CardMetadata | undefined>;
+  characters: Record<string, CharacterMaster | undefined>;
+  skills: Record<string, SkillMaster | undefined>;
+  displayServer: BandoriServer;
+  songs: Array<SongMaster | null>;
+}) {
+  const locale = useLocale() as AppLocale;
+  const preferredServer = useBandoriPreferredServer();
+  const labelsT = useTranslations("bandori.teamBuilder.labels");
+  return (
+    <article className="rounded-2xl border border-sky-200 bg-sky-50/60 p-4 shadow-xs">
+      <div className="text-xl font-bold text-slate-900">
+        {formatNumber(progress.bestSoFar.totalAverageScore, locale)}
+      </div>
+      <div className="mt-4 space-y-4">
+        {progress.bestSoFar.teams.map((team) => {
+          const displayedCards = orderResultCardsWithLeaderCenter(
+            team.cards,
+            team.leaderCardId,
+            team.leaderCardInstanceKey,
+          );
+          const songTitle = pickLocalizedName(
+            songs[team.slot]?.musicTitle,
+            preferredServer,
+            labelsT("firstSong", { index: team.slot + 1 }),
+          );
+          return (
+            <section key={team.slot} className="rounded-2xl border border-sky-100 bg-white/80 p-3">
+              <div className="text-sm font-bold text-slate-900">
+                {labelsT("firstSong", { index: team.slot + 1 })} / {songTitle}
+              </div>
+              <div className="mt-1 text-xs font-semibold text-slate-500">
+                {labelsT("averageScore")} {formatNumber(team.averageScore, locale)}
+              </div>
+              <div className="mt-3 flex flex-wrap items-start gap-2 overflow-visible">
+                {displayedCards.map((card) => (
+                  <TeamBuilderCardTile
+                    key={getDisplayCardKey(card)}
+                    card={card}
+                    metadata={cardMetadata[String(card.cardId)]}
+                    characters={characters}
+                    skills={skills}
+                    displayServer={displayServer}
+                    leader={getDisplayCardKey(card) === (team.leaderCardInstanceKey ?? `profile:${team.leaderCardId}`)}
+                  />
+                ))}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </article>
+  );
+}
+
 function MedleyResultCard({
   result,
   cardMetadata,
@@ -2057,7 +1859,7 @@ function MedleyResultCard({
   description,
   variant = "default",
 }: {
-  result: BandoriMedleyTeamSearchResult;
+  result: BandoriMedleyFrontendCandidateDto;
   cardMetadata: Record<string, CardMetadata | undefined>;
   characters: Record<string, CharacterMaster | undefined>;
   skills: Record<string, SkillMaster | undefined>;
@@ -2288,7 +2090,6 @@ function TeamBuilderPanel() {
   const messagesT = useTranslations("bandori.teamBuilder.messages");
   const temporaryCardsT = useTranslations("bandori.teamBuilder.temporaryCards");
   const eventTypesT = useTranslations("bandori.teamBuilder.eventTypes");
-  const attributeT = useTranslations("bandori.cardFilters.attributes");
   const eventStatusT = useTranslations("bandori.teamBuilder.eventStatus");
   const targetLabelsT = useTranslations("bandori.teamBuilder.targetLabels");
   const calculationModesT = useTranslations("bandori.teamBuilder.calculationModes");
@@ -2316,17 +2117,6 @@ function TeamBuilderPanel() {
     team: liveLabelsT("team"),
     vs: liveLabelsT("vs"),
   }), [liveLabelsT]);
-  const attributeLabelMap = useMemo<Record<BandoriCardAttribute, string>>(() => ({
-    powerful: attributeT("powerful"),
-    cool: attributeT("cool"),
-    happy: attributeT("happy"),
-    pure: attributeT("pure"),
-  }), [attributeT]);
-  const areaItemParameterLabels = useMemo(() => ({
-    performance: labelsT("performance"),
-    technique: labelsT("technique"),
-    visual: labelsT("visual"),
-  }), [labelsT]);
   const medleyCalculationModeLabels = useMemo<Record<MedleyCalculationMode, string>>(() => ({
     maximize: calculationModesT("maximize"),
   }), [calculationModesT]);
@@ -2382,7 +2172,7 @@ function TeamBuilderPanel() {
   const [calculationStartedAt, setCalculationStartedAt] = useState<number | null>(null);
   const [calculationNow, setCalculationNow] = useState<number | null>(null);
   const [result, setResult] = useState<TeamBuilderSearchResponse | null>(null);
-  const [resultIsPartial, setResultIsPartial] = useState(false);
+  const [medleyProgress, setMedleyProgress] = useState<BandoriMedleyFrontendProgressDto | null>(null);
   const [medleyResultInputSnapshot, setMedleyResultInputSnapshot] = useState<MedleyResultInputSnapshot | null>(null);
   const [resultError, setResultError] = useState("");
   const [debugInfoCopied, setDebugInfoCopied] = useState(false);
@@ -2863,67 +2653,19 @@ function TeamBuilderPanel() {
   const postTeamSearchWorkerMessage = useCallback((
     message: TeamSearchWorkerMessage,
     options?: {
-      memoryWatchdog?: boolean;
       onProgress?: (response: TeamSearchWorkerProgressResponse) => void;
     },
   ): Promise<TeamSearchWorkerResponse> => (
     new Promise((resolve, reject) => {
       const worker = getTeamSearchWorker();
-      let watchdogIntervalId: number | null = null;
-      const cleanup = (): void => {
-        if (watchdogIntervalId !== null) {
-          window.clearInterval(watchdogIntervalId);
-          watchdogIntervalId = null;
-        }
-      };
-      const rejectAllAndResetWorker = (error: Error): void => {
-        workerCallbacksRef.current.forEach((callback) => {
-          callback.cleanup?.();
-          callback.reject(error);
-        });
-        workerCallbacksRef.current.clear();
-        worker.terminate();
-        if (workerRef.current === worker) {
-          workerRef.current = null;
-        }
-      };
-
-      if (options?.memoryWatchdog) {
-        let isCheckingMemory = false;
-        watchdogIntervalId = window.setInterval(() => {
-          if (isCheckingMemory) {
-            return;
-          }
-          isCheckingMemory = true;
-          void readBrowserHeapSnapshot()
-            .then((heap) => {
-              if (!heap || heap.usedMiB < heap.effectiveLimitMiB || !workerCallbacksRef.current.has(message.requestId)) {
-                return;
-              }
-              rejectAllAndResetWorker(new Error(
-                messagesT("memoryWatchdog", {
-                  usedMiB: heap.usedMiB,
-                  effectiveLimitMiB: heap.effectiveLimitMiB,
-                  heapLimitLabel: heap.limitMiB !== null ? messagesT("heapLimit", { limitMiB: heap.limitMiB }) : "",
-                  source: heap.source === "agent" ? messagesT("sourceAgent") : messagesT("sourceHeap"),
-                }),
-              ));
-            })
-            .finally(() => {
-              isCheckingMemory = false;
-            });
-        }, MEDLEY_BROWSER_MEMORY_WATCHDOG_INTERVAL_MS);
-      }
-
       workerCallbacksRef.current.set(message.requestId, {
         resolve,
         reject,
-        cleanup,
         onProgress: options?.onProgress,
       });
       worker.postMessage(message);
     })
-  ), [getTeamSearchWorker, messagesT]);
+  ), [getTeamSearchWorker]);
 
   useEffect(() => () => {
     workerRef.current?.terminate();
@@ -3216,9 +2958,9 @@ function TeamBuilderPanel() {
   }, [isMedleyEvent, medleyDifficulties, selectedMedleySongs]);
 
   const resultEventPointMode = useMemo(() => {
-    const singleResult = result?.results.find((item): item is BandoriTeamSearchResult => (
-      !isMedleySearchResult(item) && item.eventPointOptions.mode !== "none"
-    ));
+    const singleResult = result && !isMedleySearchResponse(result)
+      ? result.results.find((item) => item.eventPointOptions.mode !== "none")
+      : undefined;
     return singleResult?.eventPointOptions.mode ?? "none";
   }, [result]);
   const isPreloadReady = preloadState.master === "ready"
@@ -3252,8 +2994,16 @@ function TeamBuilderPanel() {
     if (!result) {
       return [];
     }
-    return resultIsPartial ? result.results.slice(0, 1) : result.results;
-  }, [result, resultIsPartial]);
+    return isMedleySearchResponse(result) ? result.candidates.slice(0, 1) : result.results;
+  }, [result]);
+  const additionalMedleyCandidates = useMemo(() => {
+    if (!result || !isMedleySearchResponse(result)) {
+      return [];
+    }
+    return result.candidates.slice(1).filter((candidate) => (
+      candidate.rank !== result.maximumScoreCandidate?.rank
+    ));
+  }, [result]);
   const medleyDebugText = useMemo(() => {
     if (!result || !isMedleySearchResponse(result) || !medleyResultInputSnapshot) {
       return "";
@@ -3350,7 +3100,7 @@ function TeamBuilderPanel() {
     setCalculationNow(startedAt);
     setResultError("");
     setResult(null);
-    setResultIsPartial(false);
+    setMedleyProgress(null);
     setMedleyResultInputSnapshot(null);
     setDebugInfoCopied(false);
     const shouldShowMedleyProgress = isMedleyEvent && medleyCalculationMode === "maximize";
@@ -3383,6 +3133,7 @@ function TeamBuilderPanel() {
           songId: Number(isMedleyEvent && medleyInputSnapshot ? medleyInputSnapshot.medleySongIds[0] : songId),
           difficulty: isMedleyEvent && medleyInputSnapshot ? medleyInputSnapshot.medleyDifficulties[0] : difficulty,
           perfectRate: Math.max(0, Math.min(1, Number(perfectRate) / 100)),
+          perfectRatePercentText: isMedleyEvent ? perfectRate : undefined,
         },
         songs: isMedleyEvent && medleyInputSnapshot
           ? medleyInputSnapshot.medleySongIds.map((id, index) => ({
@@ -3409,12 +3160,10 @@ function TeamBuilderPanel() {
           constraints,
         },
       }, {
-        memoryWatchdog: isMedleyEvent,
         onProgress: shouldShowMedleyProgress
-          ? (progress) => {
+          ? (progressResponse) => {
             setMedleyResultInputSnapshot(medleyInputSnapshot);
-            setResult(progress.result);
-            setResultIsPartial(true);
+            setMedleyProgress(progressResponse.progress);
             setActiveStep("calculate");
           }
           : undefined,
@@ -3430,12 +3179,12 @@ function TeamBuilderPanel() {
       setResultPlacement("1");
       setResultFestivalResult("win");
       setMedleyResultInputSnapshot(isMedleySearchResponse(response.result) ? medleyInputSnapshot : null);
-      setResultIsPartial(false);
+      setMedleyProgress(null);
       setResult(response.result);
       setActiveStep("calculate");
     } catch (calculateError) {
       setResult(null);
-      setResultIsPartial(false);
+      setMedleyProgress(null);
       setResultError(calculateError instanceof Error ? calculateError.message : errorsT("calculateFailed"));
     } finally {
       setSubmitting(false);
@@ -3844,27 +3593,36 @@ function TeamBuilderPanel() {
               </div>
             ) : null}
             {resultError ? <div className="rounded-xl bg-red-50 p-3 text-center text-sm font-semibold text-red-600">{resultError}</div> : null}
-            {result ? (
-              <div className={`whitespace-pre-line rounded-xl p-3 text-center text-sm font-semibold leading-6 ${
-                resultIsPartial ? "bg-sky-50 text-sky-700" : "bg-emerald-50 text-emerald-600"
-              }`}>
-                {resultIsPartial
-                  ? <Loader2 className="mr-1 inline h-4 w-4 animate-spin" />
-                  : <CheckCircle2 className="mr-1 inline h-4 w-4" />}
-                {resultIsPartial
-                  ? buildSearchProgressSummary(result, proofT)
-                  : buildSearchCompletionSummary(
-                    result,
-                    proofT,
-                    locale,
-                    termsT("seconds"),
-                    attributeLabelMap,
-                    areaItemParameterLabels,
-                    displayedMaxSearchDurationSeconds,
-                  )}
+            {medleyProgress ? (
+              <div className="whitespace-pre-line rounded-xl bg-sky-50 p-3 text-center text-sm font-semibold leading-6 text-sky-700">
+                <Loader2 className="mr-1 inline h-4 w-4 animate-spin" />
+                {buildSearchProgressSummary(medleyProgress, proofT)}
+              </div>
+            ) : result ? (
+              <div className="whitespace-pre-line rounded-xl bg-emerald-50 p-3 text-center text-sm font-semibold leading-6 text-emerald-600">
+                <CheckCircle2 className="mr-1 inline h-4 w-4" />
+                {buildSearchCompletionSummary(
+                  result,
+                  proofT,
+                  termsT("seconds"),
+                  displayedMaxSearchDurationSeconds,
+                )}
               </div>
             ) : null}
           </div>
+          {medleyProgress ? (
+            <div className="space-y-4">
+              <h2 className="text-xl font-bold text-slate-900">{labelsT("results")}</h2>
+              <MedleyProgressCard
+                progress={medleyProgress}
+                cardMetadata={profileCardMetadata}
+                characters={data.characters}
+                skills={data.skills}
+                displayServer={selectedProfileCardServer}
+                songs={displayedMedleySongs}
+              />
+            </div>
+          ) : null}
           {result ? (
             <div className="space-y-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -3895,7 +3653,7 @@ function TeamBuilderPanel() {
                 </div>
               ) : null}
               <div className="flex flex-col gap-3">
-                {!resultIsPartial && isMedleySearchResponse(result) && (result.maxScoreCandidate || result.evaluatedAverageTopCandidates.length > 0) ? (
+                {isMedleySearchResponse(result) && (result.maximumScoreCandidate || additionalMedleyCandidates.length > 0) ? (
                   <div className="order-2 space-y-3">
                     <div>
                       <div className="text-sm font-bold text-slate-900">{labelsT("evaluatedCandidates")}</div>
@@ -3903,10 +3661,10 @@ function TeamBuilderPanel() {
                         {labelsT("evaluatedCandidatesDescription")}
                       </div>
                     </div>
-                    {result.maxScoreCandidate ? (
+                    {result.maximumScoreCandidate ? (
                       <MedleyResultCard
                         key="max-score-candidate"
-                        result={result.maxScoreCandidate}
+                        result={result.maximumScoreCandidate}
                         cardMetadata={profileCardMetadata}
                         characters={data.characters}
                         skills={data.skills}
@@ -3918,16 +3676,16 @@ function TeamBuilderPanel() {
                         variant="max-score-candidate"
                       />
                     ) : null}
-                    {result.evaluatedAverageTopCandidates.map((item, index) => (
+                    {additionalMedleyCandidates.map((item) => (
                       <MedleyResultCard
-                        key={`evaluated-average-${index}`}
+                        key={`evaluated-average-${item.rank}`}
                         result={item}
                         cardMetadata={profileCardMetadata}
                         characters={data.characters}
                         skills={data.skills}
                         displayServer={selectedProfileCardServer}
                         songs={displayedMedleySongs}
-                        rankLabel={labelsT("candidateWithIndex", { index: index + 1 })}
+                        rankLabel={labelsT("candidateWithIndex", { index: item.rank })}
                         badgeLabel={labelsT("evaluatedAverageBadge")}
                         description={labelsT("evaluatedCandidateDescription")}
                         variant="candidate"
@@ -3964,12 +3722,11 @@ function TeamBuilderPanel() {
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                 <ListFilter className="mr-2 inline h-4 w-4" />
-                {labelsT("candidateCards", { count: result.stats.candidateCardCount })} / {labelsT("areaItemConfigurationCount", { count: result.stats.areaItemConfigurationCount })}
+                {isMedleySearchResponse(result)
+                  ? `${labelsT("evaluatedCandidates")}: ${formatNumber(result.candidates.length, locale)}`
+                  : `${labelsT("candidateCards", { count: result.stats.candidateCardCount })} / ${labelsT("areaItemConfigurationCount", { count: result.stats.areaItemConfigurationCount })}`}
                 {resultProofStatusLabel ? ` / ${resultProofStatusLabel}` : ""}
-                {"peakUsedHeapMiB" in result.stats && result.stats.peakUsedHeapMiB !== null
-                  ? ` / ${labelsT("peakMemory", { count: result.stats.peakUsedHeapMiB })}`
-                  : ""}
-                {"supportBandEnabled" in result.stats && result.stats.supportBandEnabled
+                {!isMedleySearchResponse(result) && result.stats.supportBandEnabled
                   ? ` / ${labelsT("supportStats", { candidateCount: result.stats.supportCandidateCount, evaluationCount: result.stats.supportEvaluationCount })}`
                   : ""}
               </div>

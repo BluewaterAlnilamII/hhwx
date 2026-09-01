@@ -1028,11 +1028,7 @@
     },
     "messages": {
       "duplicateCardsSkipped": "{count} duplicate cards were skipped",
-      "workerStartFailed": "Failed to start calculation worker",
-      "memoryWatchdog": "Browser memory guard stopped the calculation (currently about {usedMiB} MiB, guard limit {effectiveLimitMiB} MiB{heapLimitLabel}, source {source}).",
-      "heapLimit": ", browser heap limit {limitMiB} MiB",
-      "sourceAgent": "browser process memory",
-      "sourceHeap": "JS heap"
+      "workerStartFailed": "Failed to start calculation worker"
     },
     "worker": {
       "notReady": "{label} is not ready yet",

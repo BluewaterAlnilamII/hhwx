@@ -1028,11 +1028,7 @@
     },
     "messages": {
       "duplicateCardsSkipped": "{count} 张重复卡牌已跳过添加",
-      "workerStartFailed": "计算线程启动失败",
-      "memoryWatchdog": "已触发浏览器内存保护，计算已停止（当前约 {usedMiB} MiB，保护上限 {effectiveLimitMiB} MiB{heapLimitLabel}，来源 {source}）。",
-      "heapLimit": "，浏览器 heap 上限 {limitMiB} MiB",
-      "sourceAgent": "浏览器进程级统计",
-      "sourceHeap": "JS heap 统计"
+      "workerStartFailed": "计算线程启动失败"
     },
     "worker": {
       "notReady": "{label}尚未准备完成",
