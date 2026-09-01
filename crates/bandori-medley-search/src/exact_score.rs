@@ -37,6 +37,37 @@ struct PreparedSkill {
     constant_multiplier: f64,
 }
 
+pub(crate) struct PreparedSongScoreRange {
+    pub(crate) minimum_score: i128,
+    pub(crate) average_score: f64,
+    pub(crate) maximum_score: i128,
+    pub(crate) best_order: [usize; 5],
+    pub(crate) maximum_score_order_count: u16,
+    #[cfg(test)]
+    pub(crate) order_scores: Vec<i128>,
+}
+
+fn visit_skill_orders(
+    depth: usize,
+    order: &mut [usize; 5],
+    used: &mut [bool; 5],
+    visitor: &mut impl FnMut([usize; 5]),
+) {
+    if depth == order.len() {
+        visitor(*order);
+        return;
+    }
+    for member in 0..5 {
+        if used[member] {
+            continue;
+        }
+        used[member] = true;
+        order[depth] = member;
+        visit_skill_orders(depth + 1, order, used, visitor);
+        used[member] = false;
+    }
+}
+
 pub(crate) fn exact_probability_to_f64(probability: ExactProbabilityV1) -> f64 {
     let denominator = 10_u64.pow(u32::from(probability.decimal_scale));
     probability.numerator as f64 / denominator as f64
@@ -271,6 +302,65 @@ impl<'input> PreparedSong<'input> {
         Ok(totals)
     }
 
+    /// Enumerate the fixed 5! first-five orders after reusing production base
+    /// and independent-window contributions. The sixth trigger repeats leader.
+    pub(crate) fn score_range(
+        &self,
+        skills: [ResolvedScoreSkillV1; 5],
+        parameter: f64,
+        leader: usize,
+    ) -> Result<PreparedSongScoreRange, ExactScoreFailure> {
+        if leader >= 5 {
+            return Err(ExactScoreFailure::InvalidSong);
+        }
+        let prepared_skills = self.prepare_skills(skills)?;
+        let base_scores = self.base_scores(parameter)?;
+        let base_total: i128 = self
+            .combo_groups
+            .iter()
+            .zip(&base_scores)
+            .map(|(group, score)| i128::from(*score) * (group.end - group.start) as i128)
+            .sum();
+        let mut leaders = [false; 5];
+        leaders[leader] = true;
+        let windows = self.window_contributions(&base_scores, &prepared_skills, leaders)?;
+        let first_five: i128 = windows[..5].iter().flatten().sum();
+        let average_score =
+            ((5 * (base_total + windows[5][leader]) + first_five) as f64 / 5.0).floor();
+
+        let mut minimum_score = i128::MAX;
+        let mut maximum_score = i128::MIN;
+        let mut best_order = [0, 1, 2, 3, 4];
+        let mut maximum_score_order_count = 0_u16;
+        #[cfg(test)]
+        let mut order_scores = Vec::with_capacity(120);
+        visit_skill_orders(0, &mut [0; 5], &mut [false; 5], &mut |order| {
+            let first_five_score: i128 = (0..5).map(|slot| windows[slot][order[slot]]).sum();
+            let score = base_total + first_five_score + windows[5][leader];
+            minimum_score = minimum_score.min(score);
+            if score > maximum_score {
+                maximum_score = score;
+                best_order = order;
+                maximum_score_order_count = 1;
+            } else if score == maximum_score {
+                maximum_score_order_count += 1;
+            }
+            #[cfg(test)]
+            order_scores.push(score);
+        });
+        debug_assert!(maximum_score_order_count > 0);
+
+        Ok(PreparedSongScoreRange {
+            minimum_score,
+            average_score,
+            maximum_score,
+            best_order,
+            maximum_score_order_count,
+            #[cfg(test)]
+            order_scores,
+        })
+    }
+
     /// Each member occupies each of the first five slots in 24/120 orders.
     /// Independent integer extras therefore need only a denominator of five.
     /// i128 covers u32 note counts/scores, signed extras and this numerator.
@@ -490,6 +580,86 @@ mod tests {
         let low = 4_555_268_344.242_423_f64;
         let high = low.next_up();
         assert_leader_parity(&input, 0, 0, [low, high, high, high, high]);
+    }
+
+    #[test]
+    fn score_range_matches_all_120_reference_orders() {
+        let mut input: FixedMedleyEvaluationInputV1 = serde_json::from_str(FIXTURE).unwrap();
+        let team = input.teams[0];
+        let behaviors = [
+            SkillBehaviorV1::Score {
+                score_up_percent: 30.0,
+            },
+            SkillBehaviorV1::ScoreOnPerfect {
+                score_up_percent: 70.0,
+            },
+            SkillBehaviorV1::ContinuedPerfect {
+                active_score_up_percent: 100.0,
+                fallback_score_up_percent: 40.0,
+            },
+            SkillBehaviorV1::GreatOrWorseHalf {
+                score_up_percent: 80.0,
+            },
+            SkillBehaviorV1::PerfectOnly {
+                score_up_percent: 110.0,
+            },
+        ];
+        for (position, (instance_id, behavior)) in team
+            .member_instance_ids
+            .into_iter()
+            .zip(behaviors)
+            .enumerate()
+        {
+            let skill = &mut input.cards[instance_id as usize].skill;
+            skill.duration_seconds = 1.0 + position as f64;
+            skill.behavior = behavior;
+            skill.is_rate_up_with_perfect = position == 0;
+        }
+
+        let reference = evaluate_fixed_medley(&input).unwrap();
+        let prepared = PreparedSong::new(
+            &input.songs[0],
+            0,
+            exact_probability_to_f64(input.perfect_rate),
+        )
+        .unwrap();
+        let skills = team
+            .member_instance_ids
+            .map(|instance_id| input.cards[instance_id as usize].skill);
+        let range = prepared
+            .score_range(skills, team.deck_total_parameter, 2)
+            .unwrap();
+        let reference_scores = &reference.songs[0].permutation_expected_score_bits;
+        assert_eq!(range.order_scores.len(), 120);
+        assert_eq!(reference_scores.len(), 120);
+        for (actual, expected) in range.order_scores.iter().zip(reference_scores) {
+            assert_eq!((*actual as f64).to_bits(), expected.to_f64().to_bits());
+        }
+
+        let expected_minimum = range.order_scores.iter().copied().min().unwrap();
+        let expected_maximum = range.order_scores.iter().copied().max().unwrap();
+        let expected_maximum_count = range
+            .order_scores
+            .iter()
+            .filter(|score| **score == expected_maximum)
+            .count() as u16;
+        let mut orders = Vec::with_capacity(120);
+        visit_skill_orders(0, &mut [0; 5], &mut [false; 5], &mut |order| {
+            orders.push(order)
+        });
+        let expected_best_order = orders[range
+            .order_scores
+            .iter()
+            .position(|score| *score == expected_maximum)
+            .unwrap()];
+        assert_eq!(range.minimum_score, expected_minimum);
+        assert_eq!(range.maximum_score, expected_maximum);
+        assert_eq!(range.maximum_score_order_count, expected_maximum_count);
+        assert_eq!(range.best_order, expected_best_order);
+        assert_eq!(
+            range.average_score.to_bits(),
+            reference.songs[0].average_score().to_bits()
+        );
     }
 
     #[test]

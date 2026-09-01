@@ -10,6 +10,7 @@ mod control;
 mod error;
 mod exact_score;
 mod fast_upper;
+mod hydration;
 mod input;
 mod joint_upper;
 mod output;
@@ -22,6 +23,10 @@ mod validation;
 
 pub use control::{SearchControl, SearchStopReason};
 pub use error::{SearchError, SearchErrorCode};
+pub use hydration::{
+    HydratedMedleySearchSolutionV1, HydratedMedleySearchTeamV1, MedleySearchHydrationV1,
+    MedleySearchTeamParameterBreakdownV1, hydrate_medley_search_solutions,
+};
 pub use input::{
     AreaItemConfigurationV1, CardAttributeV1, MedleySearchInputV1, SearchAreaItemV1,
     SearchCardSkillContextsV1, SearchCardV1,
