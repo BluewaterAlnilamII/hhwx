@@ -2037,6 +2037,154 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "native retained-input root-envelope diagnosis"]
+    fn profile_root_joint_envelopes() {
+        use std::{env, fs, time::Instant};
+
+        let input = crate::decode_medley_search_input_json(
+            &fs::read_to_string(env::var("HHWX_MEDLEY_DIAGNOSTIC_INPUT").unwrap()).unwrap(),
+        )
+        .unwrap();
+        input.validate().unwrap();
+        let budget = env::var("HHWX_MEDLEY_DIAGNOSTIC_BUDGET_BYTES")
+            .unwrap()
+            .parse()
+            .unwrap();
+        let mut never_stop = || None;
+        let mut control = SearchControl::new(budget, &mut never_stop);
+        let mut state = RunState {
+            control: &mut control,
+            diagnostics: MedleySearchDiagnosticsV1::default(),
+            best: None,
+            discovered: Vec::new(),
+        };
+        let groups = build_groups(&input);
+        let combos = start_combos(&input).unwrap();
+        let perfect_rate = exact_probability_to_f64(input.perfect_rate);
+        let songs = std::array::from_fn(|slot| {
+            PreparedSong::new(&input.songs[slot], combos[slot], perfect_rate).unwrap()
+        });
+        let model = FastScoreModel::new(&input).unwrap();
+        let plans = plan_configurations(&input, Some(&model), &groups, &songs, &mut state).unwrap();
+        let plan = plans.first().unwrap();
+        let configuration = &input.area_configurations[plan.configuration_index];
+        let domain = SearchDomain::new(&input, &groups, Some(&model), configuration);
+        let engine = domain.engine.as_ref().unwrap();
+        let owners = &domain.owners;
+        let current =
+            joint_upper::calculate(engine, &groups, owners, [None; 3], None, state.control)
+                .unwrap()
+                .unwrap();
+        let incumbent = state.incumbent_score().unwrap();
+        let (current_score, current_destinations, current_bytes) = current.into_diagnostic_parts();
+        let workspace_bytes = joint_upper::workspace_bytes(owners, groups.len()).unwrap();
+        assert!(workspace_bytes <= budget);
+        let mut minimum_score = f64::INFINITY;
+        let mut minimum_destinations = vec![[f64::INFINITY; 4]; owners.len()];
+        let mut variants = Vec::with_capacity(27);
+        let retained_bytes = (current_destinations.capacity() + minimum_destinations.capacity())
+            * std::mem::size_of::<[f64; 4]>();
+        let mut peak_bytes = current_bytes.max(retained_bytes);
+        for first in 0..3 {
+            for second in 0..3 {
+                for third in 0..3 {
+                    let factors = [first, second, third];
+                    let started = Instant::now();
+                    let weights = engine
+                        .joint_weights_for_factors(owners, &groups, [None; 3], factors)
+                        .unwrap()
+                        .unwrap();
+                    let bound = joint_upper::calculate_from_weights(
+                        weights,
+                        &groups,
+                        owners,
+                        state.control,
+                    )
+                    .unwrap();
+                    let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
+                    minimum_score = minimum_score.min(bound.score);
+                    for (minimum, values) in
+                        minimum_destinations.iter_mut().zip(&bound.destinations)
+                    {
+                        for (target, value) in minimum.iter_mut().zip(values) {
+                            *target = target.min(*value);
+                        }
+                    }
+                    let bytes = bound.bytes();
+                    peak_bytes = peak_bytes.max(bytes + retained_bytes);
+                    variants.push(serde_json::json!({
+                        "factors": factors,
+                        "upper": bound.score,
+                        "elapsedMs": elapsed_ms,
+                        "bytes": bytes,
+                    }));
+                }
+            }
+        }
+        assert_eq!(variants.len(), 27);
+        assert!(minimum_score <= current_score);
+        let mut improved_destinations = 0;
+        let mut maximum_destination_reduction = 0.0_f64;
+        let mut total_destination_reduction = 0.0_f64;
+        for ((current, minimum), &mask) in current_destinations
+            .iter()
+            .zip(&minimum_destinations)
+            .zip(owners)
+        {
+            for owner in 0..4 {
+                if mask & (1 << owner) == 0 {
+                    continue;
+                }
+                assert_eq!(
+                    current[owner] == f64::NEG_INFINITY,
+                    minimum[owner] == f64::NEG_INFINITY
+                );
+                assert!(minimum[owner] <= current[owner]);
+                if minimum[owner] < current[owner] {
+                    let reduction = current[owner] - minimum[owner];
+                    improved_destinations += 1;
+                    maximum_destination_reduction = maximum_destination_reduction.max(reduction);
+                    total_destination_reduction += reduction;
+                }
+            }
+        }
+        let count_below = |destinations: &[[f64; 4]]| {
+            destinations
+                .iter()
+                .zip(owners)
+                .map(|(values, &mask)| {
+                    values
+                        .iter()
+                        .enumerate()
+                        .filter(|(owner, value)| mask & (1 << owner) != 0 && **value < incumbent)
+                        .count()
+                })
+                .sum::<usize>()
+        };
+        println!(
+            "MEDLEY_ROOT_ENVELOPES:{}",
+            serde_json::json!({
+                "configurationIndex": plan.configuration_index,
+                "selectedAreaItemIds": configuration.selected_area_item_ids,
+                "incumbent": incumbent,
+                "planningUpper": plan.whole_medley_upper,
+                "currentUpper": current_score,
+                "minimumUpper": minimum_score,
+                "currentDestinationsBelowIncumbent": count_below(&current_destinations),
+                "minimumDestinationsBelowIncumbent": count_below(&minimum_destinations),
+                "improvedDestinations": improved_destinations,
+                "maximumDestinationReduction": maximum_destination_reduction,
+                "totalDestinationReduction": total_destination_reduction,
+                "completedCombinations": variants.len(),
+                "workspaceBytes": workspace_bytes,
+                "budgetBytes": budget,
+                "peakBytes": peak_bytes,
+                "variants": variants,
+            })
+        );
+    }
+
+    #[test]
     fn join_keeps_signed_scores_and_smallest_output_identity_across_ties() {
         // Independently additive negative extras can also produce negative totals.
         for (base_score, alternative_score) in [100.0, -100.0].into_iter().flat_map(|base| {

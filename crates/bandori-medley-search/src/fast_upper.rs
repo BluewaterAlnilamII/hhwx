@@ -331,6 +331,32 @@ impl<'a> FastUpperBoundEngine<'a> {
         groups: &[Vec<u32>],
         fixed_scores: [Option<f64>; 3],
     ) -> Result<Option<crate::joint_upper::JointWeights>, UpperBoundFailure> {
+        self.joint_weights_with_factors(owners, groups, fixed_scores, None)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn joint_weights_for_factors(
+        &self,
+        owners: &[u8],
+        groups: &[Vec<u32>],
+        fixed_scores: [Option<f64>; 3],
+        factors: [usize; 3],
+    ) -> Result<Option<crate::joint_upper::JointWeights>, UpperBoundFailure> {
+        assert!(
+            factors
+                .into_iter()
+                .all(|factor| factor < WEIGHT_FACTORS.len())
+        );
+        self.joint_weights_with_factors(owners, groups, fixed_scores, Some(factors))
+    }
+
+    fn joint_weights_with_factors(
+        &self,
+        owners: &[u8],
+        groups: &[Vec<u32>],
+        fixed_scores: [Option<f64>; 3],
+        factors: Option<[usize; 3]>,
+    ) -> Result<Option<crate::joint_upper::JointWeights>, UpperBoundFailure> {
         let mut result = crate::joint_upper::JointWeights {
             cards: vec![[[0.0; 2]; 3]; owners.len()],
             constant: 0.0,
@@ -531,7 +557,10 @@ impl<'a> FastUpperBoundEngine<'a> {
                 1.0
             };
             let mut best = None::<(f64, Option<f64>, Vec<[f64; 2]>)>;
-            for factor in WEIGHT_FACTORS {
+            for (factor_index, factor) in WEIGHT_FACTORS.into_iter().enumerate() {
+                if factors.is_some_and(|factors| factors[slot] != factor_index) {
+                    continue;
+                }
                 let t = scale * factor;
                 let mut weights = vec![[0.0; 2]; owners.len()];
                 for &id in &remaining_ids {
@@ -1356,29 +1385,50 @@ mod tests {
                                 owners[(id + slot as u32 * pool_size) as usize] = 1 << slot;
                             }
                         }
+                        let assert_joint_covers = |joint: &crate::joint_upper::JointWeights| {
+                            for (leader, exact) in set.into_iter().zip(exact_by_leader) {
+                                let mut upper = joint.constant;
+                                for slot in 0..3 {
+                                    for &id in &set[fixed_count..] {
+                                        let role = usize::from(id == leader);
+                                        upper = add_up(
+                                            upper,
+                                            joint.cards[(id + slot as u32 * pool_size) as usize]
+                                                [slot][role],
+                                        )
+                                        .unwrap();
+                                    }
+                                    if fixed_count < 5 && set[..fixed_count].contains(&leader) {
+                                        upper = add_up(upper, joint.fixed_leaders[slot].unwrap())
+                                            .unwrap();
+                                    }
+                                }
+                                let upper = mul_up(upper, rounding_factor(4).unwrap()).unwrap();
+                                assert!((exact[0] + exact[1]) + exact[2] <= upper);
+                            }
+                        };
                         let joint = engine
                             .joint_weights(&owners, &groups, [None; 3])
                             .unwrap()
                             .unwrap();
-                        for (leader, exact) in set.into_iter().zip(exact_by_leader) {
-                            let mut upper = joint.constant;
-                            for slot in 0..3 {
-                                for &id in &set[fixed_count..] {
-                                    let role = usize::from(id == leader);
-                                    upper = add_up(
-                                        upper,
-                                        joint.cards[(id + slot as u32 * pool_size) as usize][slot]
-                                            [role],
-                                    )
-                                    .unwrap();
-                                }
-                                if fixed_count < 5 && set[..fixed_count].contains(&leader) {
-                                    upper =
-                                        add_up(upper, joint.fixed_leaders[slot].unwrap()).unwrap();
+                        assert_joint_covers(&joint);
+                        if fixed_count == 0 {
+                            for first in 0..3 {
+                                for second in 0..3 {
+                                    for third in 0..3 {
+                                        let forced = engine
+                                            .joint_weights_for_factors(
+                                                &owners,
+                                                &groups,
+                                                [None; 3],
+                                                [first, second, third],
+                                            )
+                                            .unwrap()
+                                            .unwrap();
+                                        assert_joint_covers(&forced);
+                                    }
                                 }
                             }
-                            let upper = mul_up(upper, rounding_factor(4).unwrap()).unwrap();
-                            assert!((exact[0] + exact[1]) + exact[2] <= upper);
                         }
                         if fixed_count == 5 {
                             let scores = std::array::from_fn(|slot| {

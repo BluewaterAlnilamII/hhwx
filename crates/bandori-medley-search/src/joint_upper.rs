@@ -54,6 +54,12 @@ impl JointUpper {
         })
     }
 
+    #[cfg(test)]
+    pub(crate) fn into_diagnostic_parts(self) -> (f64, Vec<[f64; 4]>, usize) {
+        let bytes = self.bytes();
+        (self.score, self.destinations, bytes)
+    }
+
     fn infeasible() -> Self {
         Self {
             score: f64::NEG_INFINITY,
@@ -721,6 +727,16 @@ fn calculate_weights(
         proposal: Some(proposal),
         working: Some(working),
     })
+}
+
+#[cfg(test)]
+pub(crate) fn calculate_from_weights(
+    weights: JointWeights,
+    groups: &[Vec<u32>],
+    owners: &[u8],
+    control: &mut SearchControl<'_>,
+) -> Result<JointUpper, SearchIncompleteReasonV1> {
+    calculate_weights(Some(weights), groups, owners, None, control)
 }
 
 #[cfg(test)]
