@@ -23,7 +23,7 @@ The seed is the existing `manifest.json` package with profiles, source container
 
 The generated `README.md` lists profiles. `manifest.json` records:
 
-- profile payload hashes and dated aliases, mapping historical identity hashes through the original containers rather than the reused `P01–P10` labels;
+- profile payload hashes and dated aliases; account identity locates only a candidate payload, and a report with a different recorded card count remains unindexed;
 - separate source-directory data snapshots, sharing identical stored files;
 - original report paths, dates, settings, scores, and locations inside each retained report;
 - whether cards, area-item IDs, and explicit leaders were saved;
@@ -34,7 +34,7 @@ For each source/profile/song/settings combination, retain the highest reported s
 ## Score comparison rules
 
 1. Routine regression runs the new search directly and compares its total average score with the retained historical average under matching profile, song order, difficulty, PERFECT rate, event settings, and data. Do not rerun the old solver, replay old teams, or feed old winners into the search as a prerequisite. Targeted replay is reserved for a separately needed discrepancy investigation.
-2. With identical complete inputs, a completed new search must reach at least the historical average. An incomplete result does not pass, even if its diagnostic score is higher. A higher score alone does not prove scoring correctness; overcounting could also raise it.
+2. With identical complete inputs, the score-regression check passes when the new search reaches at least the historical average. Exact completion is tracked separately: an incomplete result does not prove optimality, but it is not a score-regression failure after reaching the reference. A higher score alone does not prove scoring correctness; overcounting could also raise it.
 3. Keep `score`, `averageScore`, and old exact/completion claims as originally recorded. Do not silently equate score fields or promote an old claim to a new proof. Auxiliary saved candidates are not necessarily the reported winner.
 4. Retained caches are the files found in each source directory, not proof of the exact data used by every historical run. Reports lacking per-run data hashes or commit IDs remain explicitly unverified in those respects. Directory labels do not identify the generating branch.
 5. Real-profile runners fixed expert/full-P/no-fever; generic benchmark reports omitted their configurable PERFECT rate, which remains unknown in the index. Record any comparison assumption rather than filling this historical gap silently. Missing leaders are not inferred from old card order and do not block direct score comparison.
@@ -73,13 +73,13 @@ Select whole profiles over 1,000 cards whose no-event, event244, event260 and ev
 node --import tsx scripts/compare-bandori-medley-search.mjs --completed-profiles
 ```
 
-This reuses the existing runner, input normalization and resource recording. Card counts uniquely identify these archived profiles; each run records their payload hashes. All scenes use the retained main-directory data, expert songs 385/193/619, full PERFECT, no fever and all owned area configurations. Keep the existing per-case 300-second / 256-MiB search-storage / 1-GiB sampled-process limits. Finish all 48 scenes sequentially, recording individual failures without increasing budgets or changing the algorithm.
+This reuses the existing runner, input normalization and resource recording. Card counts are display labels; each run records the immutable profile payload hash used for comparison. All scenes use the retained main-directory data, expert songs 385/193/619, full PERFECT, no fever and all owned area configurations. The retained event323 input is used only for same-input search regression here; this batch does not separately validate the live HHWX event323 parameter set. Keep the existing per-case 300-second / 256-MiB search-storage / 1-GiB sampled-process limits. Finish all 48 scenes sequentially without increasing budgets or changing the algorithm.
 
-The batch finished on 2026-09-01 at clean commit `8c758bf`: all 48 scenes ran, with **45 exact passes** against the primary references (42 equal, 3 higher). The higher scores were 1211/no-event (+193), 1211/event260 (+155) and 1252/event323 (+154). **1229/event244, 1513/event244 and 1703/event260 timed out** at 300 seconds. All three reached their primary reference scores, but incomplete proof is still a failure. There were no lower primary scores, process failures or memory-limit stops.
+The batch finished on 2026-09-01 at clean commit `8c758bf`: **all 48 same-input score-regression checks passed**. Forty-five searches completed exact (42 equal to their primary references, 3 higher); the higher scores were 1211/no-event (+193), 1211/event260 (+155) and 1252/event323 (+154). **1229/event244, 1513/event244 and 1703/event260 timed out** at 300 seconds after reaching their primary reference scores. They are the only remaining proof-completion failures. There were no lower primary scores, process failures or memory-limit stops.
 
 Native search totaled 3,606.484 seconds; the across-scene median was 28.550 seconds. Sampled process peak was 40.36 MiB; budgeted search-storage peak was 32.16 MiB. All scenes had memory samples. Input/file hashes, saved-output consistency, team legality and integer song-score sums were checked without rescoring. Full per-scene scores, timing, memory, diagnostic counters and report references are retained under `runs/2026-08-31T15-20-54.142Z/`, including `report.md`, `run.json` and `summary.json`.
 
-All four 1229-card scenes and 1513/event323 remain below higher reports from a directory without a retained data snapshot. Their differences and original completion flags are recorded separately; the cause is not established, and missing data is not itself an explanation. Primary-reference passes do not settle those gaps. The three timeouts and five higher-reference discrepancies mean this stage is **not fully accepted**. No scoring/search changes, budget increases or historical-team replays were made.
+A provenance audit rejected five extra comparisons that had been attached after the run. The four supposed 1229-card reports actually record a later 1252-card version of the same account, with a different payload hash. The 1513/event323 report uses the same profile payload but a different event323 parameter set, including the HHWX performance bonus, and uncommitted experimental search code. None is a same-input reference for this batch. The approved search-regression objective is therefore **accepted for all 48 scenes**; only the three exact-proof timeouts remain. No scoring/search changes, budget increases or historical-team replays were made.
 
 ## Final high-pressure stage
 

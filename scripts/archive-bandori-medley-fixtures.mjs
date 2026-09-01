@@ -48,6 +48,13 @@ function* reportFiles(root) {
   }
 }
 
+function retainedProfilePayload(profile, profileByIdentity) {
+  const retained = profileByIdentity.get(profile?.profileHash);
+  if (!retained) return null;
+  if (Number.isInteger(profile.cardCount) && profile.cardCount !== retained.cardCount) return null;
+  return retained.payloadSha256;
+}
+
 function verifyArchive(manifest) {
   for (const file of manifest.files) {
     const bytes = readFileSync(join(OUTPUT_ROOT, file.path));
@@ -113,13 +120,16 @@ function indexReport(report, profileByIdentity, profileByName) {
   }
   if (report.topResult) {
     const identity = report.profile?.profileHash;
-    add(profileByIdentity.get(identity) ?? profileByName.get(input.profileName), identity,
+    const profileSha256 = identity
+      ? retainedProfilePayload(report.profile, profileByIdentity)
+      : profileByName.get(input.profileName);
+    add(profileSha256, identity,
       report.eventKey ?? (input.eventId == null ? "none" : String(input.eventId)),
       report.topResult, "topResult", report.exact);
   }
   for (const [index, row] of (report.rows ?? []).entries()) {
     const identity = row.profile?.profileHash;
-    const profileSha256 = profileByIdentity.get(identity);
+    const profileSha256 = retainedProfilePayload(row.profile, profileByIdentity);
     add(profileSha256, identity, row.eventKey, row.all, `rows[${index}].all`, row.all?.exact);
     for (const [candidateIndex, candidate] of (row.all?.evaluatedAverageTopCandidates ?? []).entries()) {
       add(profileSha256, identity, row.eventKey, candidate,
@@ -140,8 +150,11 @@ function collectArchive() {
     assert.equal(sha256(readFileSync(source)), container.sha256);
     for (const row of readJson(source).rows ?? []) {
       const identity = sha256(String(row.id)).slice(0, 12);
-      assert(!profileByIdentity.has(identity) || profileByIdentity.get(identity) === row.payload_sha256);
-      profileByIdentity.set(identity, row.payload_sha256);
+      const retained = { payloadSha256: row.payload_sha256, cardCount: row.card_count };
+      const previous = profileByIdentity.get(identity);
+      assert(!previous || (previous.payloadSha256 === retained.payloadSha256
+        && previous.cardCount === retained.cardCount));
+      profileByIdentity.set(identity, retained);
     }
     return { sourcePath: source, originalPath: container.sourcePath, path: retainFile(source, "containers") };
   });
@@ -188,7 +201,9 @@ function collectArchive() {
       const report = readJson(reportPath);
       source.scannedReports += 1;
       for (const profile of [report.profile, ...(report.rows ?? []).map((row) => row.profile)]) {
-        if (profile?.profileHash && !profileByIdentity.has(profile.profileHash)) unmatched.add(profile.profileHash);
+        if (profile?.profileHash && !retainedProfilePayload(profile, profileByIdentity)) {
+          unmatched.add(profile.profileHash);
+        }
       }
       for (const result of indexReport(report, profileByIdentity, profileByName)) {
         source.matchedResults += 1;
@@ -235,10 +250,12 @@ function collectArchive() {
     + `## Profiles\n\n| Alias | Cards | Indexed results | With explicit leaders |\n| --- | ---: | ---: | ---: |\n${table}\n\n`
     + `## Before comparing scores\n\n`
     + `- Historical averages are comparison references; old exact flags do not prove completion of the new search.\n`
+    + `- An account identity is not a profile version. Reports whose recorded card count differs from the retained payload are left unindexed.\n`
     + `- Cache snapshots are preserved as found; reports without data hashes cannot prove which version a run used.\n`
     + `- A source label identifies a saved directory, not the branch or commit that generated every report.\n`
     + `- Missing PERFECT rates, leaders or team details remain missing; never infer a leader from legacy card order.\n`
-    + `- Compare the new search directly with the retained historical average under matching inputs; old-team replay is only for a separately needed discrepancy investigation.\n`
+    + `- Compare scores only when the payload, songs, play settings, event parameters and data snapshot match. Index presence alone is not proof of comparability.\n`
+    + `- Old-team replay is only for a separately needed discrepancy investigation.\n`
     + `- A fifteen-card projection is not comparable to the original full roster's search result.\n\n`
     + `Verify from the repository root: \`node --import tsx scripts/archive-bandori-medley-fixtures.mjs --verify\`.\n`);
 }
