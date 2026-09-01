@@ -695,42 +695,20 @@ function getEventBonusMemberCardIds(eventBonus: BandoriEventBonus | null): numbe
   });
 }
 
-function getTemporaryCardParameterKey(
-  card: Pick<UserGameProfileCardRecord, "cardId" | "level" | "masterRank" | "skillLevel" | "episodeCount" | "isTrained" | "hasTrainedArt">,
-): string {
-  return [
-    card.cardId,
-    card.level,
-    card.masterRank,
-    card.skillLevel,
-    card.episodeCount,
-    card.isTrained ? 1 : 0,
-    card.hasTrainedArt ? 1 : 0,
-  ].join(":");
-}
-
 function selectMissingTemporaryCards(
-  profileCards: UserGameProfileCardRecord[],
   preferences: TeamBuilderCardPreferences,
   candidateTemporaryCards: TemporaryGameProfileCard[],
 ): { cardsToAdd: TemporaryGameProfileCard[]; skippedDuplicateCount: number } {
-  const excludedCardIds = new Set(preferences.excludedCardIds);
-  const existingKeys = new Set([
-    ...profileCards
-      .filter((card) => !card.isExcluded && !excludedCardIds.has(card.cardId))
-      .map(getTemporaryCardParameterKey),
-    ...preferences.temporaryCards.map(getTemporaryCardParameterKey),
-  ]);
+  const existingCardIds = new Set(preferences.temporaryCards.map((card) => card.cardId));
   const cardsToAdd: TemporaryGameProfileCard[] = [];
   let skippedDuplicateCount = 0;
 
   candidateTemporaryCards.forEach((card) => {
-    const key = getTemporaryCardParameterKey(card);
-    if (existingKeys.has(key)) {
+    if (existingCardIds.has(card.cardId)) {
       skippedDuplicateCount += 1;
       return;
     }
-    existingKeys.add(key);
+    existingCardIds.add(card.cardId);
     cardsToAdd.push(card);
   });
 
@@ -2794,12 +2772,18 @@ function TeamBuilderPanel() {
     if (!value) {
       return;
     }
+    const cardId = Math.trunc(value.cardId);
+    const existingCard = cardPreferences.temporaryCards.find((card) => card.cardId === cardId);
+    if (existingCard) {
+      setEditingTemporaryCard(existingCard);
+      return;
+    }
     const card = createMaxGameProfileCard(
-      value.cardId,
-      profileCardMetadata[String(Math.trunc(value.cardId))],
+      cardId,
+      profileCardMetadata[String(cardId)],
     );
     setEditingTemporaryCard({ ...card, instanceId: crypto.randomUUID() });
-  }, [profileCardMetadata]);
+  }, [cardPreferences.temporaryCards, profileCardMetadata]);
   const selectedProfileCharacterBonusesById = useMemo(
     () => selectedProfilePayload
       ? toBandoriCharacterBonusMap(buildBandoriCharacterBonuses(
@@ -2821,7 +2805,6 @@ function TeamBuilderPanel() {
       instanceId: crypto.randomUUID(),
     }));
     const { cardsToAdd, skippedDuplicateCount } = selectMissingTemporaryCards(
-      selectedProfileCards,
       cardPreferences,
       candidateTemporaryCards,
     );
@@ -2839,7 +2822,6 @@ function TeamBuilderPanel() {
     currentEventBonusCardIds,
     messagesT,
     profileCardMetadata,
-    selectedProfileCards,
     updateCardPreferences,
   ]);
 

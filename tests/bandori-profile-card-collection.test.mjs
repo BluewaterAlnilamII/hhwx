@@ -30,6 +30,7 @@ import {
   reduceGameProfileCardDraft,
 } from "../src/app/[locale]/bandori/game-profiles/[profileId]/cards/useGameProfileCardDraft.ts";
 import {
+  normalizeCardPreferences,
   readCardPreferences,
   writeCardPreferences,
 } from "../src/app/[locale]/bandori/teambuilder/card-preferences.ts";
@@ -120,6 +121,29 @@ test("team builder keeps temporary cards out of browser storage", () => {
       globalThis.window = previousWindow;
     }
   }
+});
+
+test("team builder keeps one non-excluded temporary override per card", async () => {
+  const normalized = normalizeCardPreferences({
+    excludedCardIds: [2],
+    temporaryCards: [
+      { ...card(2, { isExcluded: true }), instanceId: "temporary-2" },
+      { ...card(2, { level: 50 }), instanceId: "duplicate-2" },
+    ],
+  });
+
+  assert.deepEqual(normalized.temporaryCards, [
+    { ...card(2), instanceId: "temporary-2" },
+  ]);
+
+  const [page, worker] = await Promise.all([
+    readSource("src/app/[locale]/bandori/teambuilder/page.tsx"),
+    readSource("src/app/[locale]/bandori/teambuilder/team-search-worker.ts"),
+  ]);
+  assert.match(page, /temporaryCards\.find\(\(card\) => card\.cardId === cardId\)/u);
+  assert.doesNotMatch(page, /getTemporaryCardParameterKey/u);
+  assert.match(worker, /\.filter\(\(card\) => !temporaryCardIds\.has\(card\.cardId\)\)/u);
+  assert.match(worker, /const temporaryCards = request\.cards\.temporaryCards\.map\([\s\S]*?isExcluded: false,[\s\S]*?\}\)\);/u);
 });
 
 test("card equality and change summaries compare every persisted field without caring about order", () => {

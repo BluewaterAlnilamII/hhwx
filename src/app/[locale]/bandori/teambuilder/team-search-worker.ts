@@ -857,18 +857,21 @@ async function runSearchAttempt(
   }
 
   const excludedCardIds = new Set(request.cards.excludedCardIds);
-  const profileCards = getGameProfileCards(request.profilePayload).map((card) => {
-    const effectiveCard = applyOwnedCardParameterPreferences(
-      card,
-      cardsById[String(card.cardId)],
-      request.cards.ownedCardParameters,
-    );
-    return {
-      ...effectiveCard,
-      cardInstanceKey: `profile:${card.cardId}`,
-      isExcluded: effectiveCard.isExcluded || excludedCardIds.has(card.cardId),
-    };
-  });
+  const temporaryCardIds = new Set(request.cards.temporaryCards.map((card) => card.cardId));
+  const profileCards = getGameProfileCards(request.profilePayload)
+    .filter((card) => !temporaryCardIds.has(card.cardId))
+    .map((card) => {
+      const effectiveCard = applyOwnedCardParameterPreferences(
+        card,
+        cardsById[String(card.cardId)],
+        request.cards.ownedCardParameters,
+      );
+      return {
+        ...effectiveCard,
+        cardInstanceKey: `profile:${card.cardId}`,
+        isExcluded: effectiveCard.isExcluded || excludedCardIds.has(card.cardId),
+      };
+    });
   const temporaryCards = request.cards.temporaryCards.map((card, index) => ({
     ...card,
     cardInstanceKey: card.cardInstanceKey ?? `temporary:${card.instanceId ?? `${index}:${card.cardId}`}`,
