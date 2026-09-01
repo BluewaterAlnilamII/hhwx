@@ -102,6 +102,13 @@ impl RunState<'_, '_> {
             .map(|solution| solution.total_average_score)
     }
 
+    fn could_enter_discovered(&self, total_average_score: f64) -> bool {
+        self.discovered.len() < DIAGNOSTIC_SOLUTION_LIMIT
+            || self.discovered.last().is_some_and(|worst| {
+                total_average_score.total_cmp(&worst.total_average_score) != Ordering::Less
+            })
+    }
+
     fn record_solution(&mut self, solution: MedleySearchSolutionV1) -> Result<bool, SearchAbort> {
         #[cfg(test)]
         let score_improved = self
@@ -700,11 +707,7 @@ impl EvaluationContext<'_, '_, '_, '_> {
             let selected = order.map(|team| &rows[team]);
             let total = (selected[0].song_scores[0] + selected[1].song_scores[1])
                 + selected[2].song_scores[2];
-            if self
-                .state
-                .incumbent_score()
-                .is_some_and(|best| total < best)
-            {
+            if !self.state.could_enter_discovered(total) {
                 continue;
             }
             if self
@@ -2072,6 +2075,51 @@ mod tests {
                 },
             })
         );
+    }
+
+    #[test]
+    fn discovered_admission_uses_its_own_tenth_place_cutoff() {
+        let mut never_stop = || None;
+        let mut control = SearchControl::new(1024, &mut never_stop);
+        let mut state = RunState {
+            control: &mut control,
+            diagnostics: MedleySearchDiagnosticsV1::default(),
+            best: None,
+            discovered: Vec::new(),
+        };
+        let solution = |identity: u32, total_average_score: f64| MedleySearchSolutionV1 {
+            selected_area_item_ids: vec![identity],
+            teams: [MedleySearchTeamV1 {
+                slot: 0,
+                member_instance_ids: [0; 5],
+                average_score: 0.0,
+            }; 3],
+            total_average_score,
+        };
+
+        state.record_solution(solution(0, 100.0)).unwrap();
+        assert!(
+            state.could_enter_discovered(50.0),
+            "a lower score still belongs while fewer than ten solutions exist"
+        );
+        state.record_solution(solution(1, 50.0)).unwrap();
+        for identity in 2..=10 {
+            state
+                .record_solution(solution(identity, 101.0 - f64::from(identity)))
+                .unwrap();
+        }
+
+        assert_eq!(state.discovered.len(), DIAGNOSTIC_SOLUTION_LIMIT);
+        assert_eq!(
+            state
+                .discovered
+                .iter()
+                .map(|candidate| candidate.total_average_score)
+                .collect::<Vec<_>>(),
+            vec![100.0, 99.0, 98.0, 97.0, 96.0, 95.0, 94.0, 93.0, 92.0, 91.0]
+        );
+        assert!(!state.could_enter_discovered(90.0));
+        assert!(state.could_enter_discovered(91.0));
     }
 
     #[test]
