@@ -580,7 +580,11 @@ fn calculate_weights(
                     for &(from, to) in edges {
                         let from = usize::from(from);
                         let to = usize::from(to);
-                        let score = sum_up(prefix[from], choice.score);
+                        let prefix = prefix[from];
+                        if prefix == f64::NEG_INFINITY {
+                            continue;
+                        }
+                        let score = sum_up(prefix, choice.score);
                         if score > next[to] {
                             next[to] = score;
                             working.paths[(group + 1) * states + to] = pattern as u8;
@@ -631,7 +635,11 @@ fn calculate_weights(
                     for &(from, to) in edges {
                         let from = usize::from(from);
                         let to = usize::from(to);
-                        next[to] = next[to].max(sum_up(suffix[from], choice.score));
+                        let suffix = suffix[from];
+                        if suffix == f64::NEG_INFINITY {
+                            continue;
+                        }
+                        next[to] = next[to].max(sum_up(suffix, choice.score));
                     }
                 }
                 if group <= first
@@ -695,6 +703,11 @@ fn calculate_weights(
             for &(from, to) in edges {
                 let from = usize::from(from);
                 let to = usize::from(to);
+                if forward[group * states + from] == f64::NEG_INFINITY
+                    || backward[(group + 1) * states + goal - to] == f64::NEG_INFINITY
+                {
+                    continue;
+                }
                 outside[pattern] = outside[pattern].max(sum_up(
                     forward[group * states + from],
                     backward[(group + 1) * states + goal - to],
