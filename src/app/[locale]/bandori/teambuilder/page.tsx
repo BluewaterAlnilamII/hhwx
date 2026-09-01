@@ -135,14 +135,9 @@ type MedleyCalculationMode = "maximize";
 type TeamBuilderSearchResponse = BandoriTeamSearchResponse | BandoriMedleyFrontendFinalDto;
 type TeamSearchWorkerProgressResponse = Extract<TeamSearchWorkerResponse, { type: "search-progress" }>;
 type MedleyResultInputSnapshot = {
-  selectedEvent: BandoriEventSummary | null;
   medleySongIds: MedleySongIdTuple;
   medleyDifficulties: MedleyDifficultyTuple;
-  profileLabel: string;
-  selectedProfileCacheKey: string;
-  perfectRate: string;
   maxSearchDurationSeconds: string;
-  medleyCalculationMode: MedleyCalculationMode;
 };
 function DynamicTemporaryCardDialogLoading({ message }: { message: string }) {
   return (
@@ -1028,116 +1023,6 @@ function getSearchProofStatusLabel(result: TeamBuilderSearchResponse, proofT: Te
   return proofT("notExact");
 }
 
-function serializeMedleyDebugResult(item: BandoriMedleyFrontendCandidateDto) {
-  return {
-    rank: item.rank,
-    score: item.score,
-    averageScore: item.averageScore,
-    maxScore: item.maxScore,
-    minScore: item.minScore,
-    areaItemConfiguration: item.areaItemConfiguration,
-    cardIds: item.cardIds,
-    songResults: item.songResults.map((songResult) => ({
-      songIndex: songResult.songIndex,
-      score: songResult.score,
-      averageScore: songResult.averageScore,
-      maxScore: songResult.maxScore,
-      minScore: songResult.minScore,
-      startCombo: songResult.startCombo,
-      notesCount: songResult.notesCount,
-      totalPower: songResult.totalPower,
-      eventPower: songResult.eventPower,
-      pointBonusRate: songResult.pointBonusRate,
-      leaderCardId: songResult.leaderCardId,
-      leaderCardInstanceKey: songResult.leaderCardInstanceKey,
-      skillOrderCardIds: songResult.skillOrderCardIds,
-      skillOrderCardInstanceKeys: songResult.skillOrderCardInstanceKeys,
-      skillOrderActors: songResult.skillOrderActors,
-      areaItemConfiguration: songResult.areaItemConfiguration,
-      cards: songResult.cards.map((card) => ({
-        cardId: card.cardId,
-        cardInstanceKey: card.cardInstanceKey,
-        characterId: card.characterId,
-        attribute: card.attribute,
-        bandId: card.bandId,
-        rarity: card.rarity,
-        skillId: card.skillId,
-        skillLevel: card.skillLevel,
-        totalPower: card.totalPower,
-      })),
-    })),
-  };
-}
-
-function buildMedleyDebugPayload({
-  result,
-  selectedEvent,
-  medleySongIds,
-  medleyDifficulties,
-  songs,
-  profileLabel,
-  selectedProfileCacheKey,
-  perfectRate,
-  maxSearchDurationSeconds,
-  medleyCalculationMode,
-  preferredServer,
-}: {
-  result: BandoriMedleyFrontendFinalDto;
-  selectedEvent: BandoriEventSummary | null;
-  medleySongIds: MedleySongIdTuple;
-  medleyDifficulties: MedleyDifficultyTuple;
-  songs: Record<string, SongMaster | undefined>;
-  profileLabel: string;
-  selectedProfileCacheKey: string;
-  perfectRate: string;
-  maxSearchDurationSeconds: string;
-  medleyCalculationMode: MedleyCalculationMode;
-  preferredServer: BandoriServer;
-}) {
-  return {
-    version: 2,
-    generatedAt: new Date().toISOString(),
-    page: "bandori/teambuilder",
-    mode: "medley",
-    input: {
-      medleyCalculationMode,
-      event: selectedEvent ? {
-        eventId: selectedEvent.eventId,
-        eventType: selectedEvent.eventType,
-        name: selectedEvent.name,
-        musicIds: selectedEvent.musicIds,
-      } : null,
-      songs: medleySongIds.map((songId, index) => ({
-        slot: index + 1,
-        songId: Number(songId),
-        title: pickLocalizedName(
-          songs[songId]?.musicTitle,
-          preferredServer,
-          `#${songId}`,
-        ),
-        difficulty: medleyDifficulties[index],
-      })),
-      profileLabel,
-      profileCacheKey: selectedProfileCacheKey,
-      perfectRate,
-      maxSearchDurationSeconds,
-    },
-    proof: {
-      status: result.status,
-      incompleteReason: result.incompleteReason,
-      elapsedMs: result.stats.elapsedMs,
-      hydrationElapsedMs: result.stats.hydrationElapsedMs,
-      timeToBestScoreMs: result.stats.timeToBestScoreMs,
-      memoryBudgetBytes: result.stats.memoryBudgetBytes,
-    },
-    stats: result.stats,
-    maximumScoreCandidate: result.maximumScoreCandidate
-      ? serializeMedleyDebugResult(result.maximumScoreCandidate)
-      : null,
-    candidates: result.candidates.map(serializeMedleyDebugResult),
-  };
-}
-
 function getSkillOrderActorLabel(actor: BandoriTeamSearchSkillOrderActor, actorT: TeamBuilderTranslator): string {
   if (actor === "self") {
     return actorT("self");
@@ -2012,44 +1897,6 @@ function MedleyResultCard({
   );
 }
 
-function MedleyDebugInfoPanel({
-  debugText,
-  copied,
-  onCopy,
-}: {
-  debugText: string;
-  copied: boolean;
-  onCopy: () => void;
-}) {
-  const labelsT = useTranslations("bandori.teamBuilder.labels");
-  return (
-    <details className="rounded-2xl border border-red-200 bg-white p-4 text-sm shadow-xs">
-      <summary className="cursor-pointer select-none rounded-xl bg-red-50 px-3 py-2 font-bold text-red-700 transition hover:bg-red-100">
-        {labelsT("medleyDebug")}
-      </summary>
-      <div className="mt-4 space-y-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm leading-6 text-slate-500">
-            {labelsT("medleyDebugDescription")}
-          </p>
-          <button
-            type="button"
-            onClick={onCopy}
-            className="shrink-0 rounded-full border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-700 transition hover:border-red-300 hover:bg-red-100"
-          >
-            {copied ? labelsT("copied") : labelsT("copyDebug")}
-          </button>
-        </div>
-        <textarea
-          readOnly
-          value={debugText}
-          className="h-80 w-full resize-y rounded-xl border border-slate-200 bg-slate-950 p-3 font-mono text-xs leading-5 text-slate-100 outline-hidden"
-        />
-      </div>
-    </details>
-  );
-}
-
 function getCardCharacterLabel(
   metadata: CardMetadata | undefined,
   characters: Record<string, CharacterMaster | undefined>,
@@ -2175,7 +2022,6 @@ function TeamBuilderPanel() {
   const [medleyProgress, setMedleyProgress] = useState<BandoriMedleyFrontendProgressDto | null>(null);
   const [medleyResultInputSnapshot, setMedleyResultInputSnapshot] = useState<MedleyResultInputSnapshot | null>(null);
   const [resultError, setResultError] = useState("");
-  const [debugInfoCopied, setDebugInfoCopied] = useState(false);
   const [resultLiveBoostCount, setResultLiveBoostCount] = useState<LiveBoostCountOption>("3");
   const [resultChallengeCpCost, setResultChallengeCpCost] = useState<ChallengeCpCostOption>("1600");
   const [resultPlacement, setResultPlacement] = useState<ResultPlacementOption>("1");
@@ -3004,43 +2850,6 @@ function TeamBuilderPanel() {
       candidate.rank !== result.maximumScoreCandidate?.rank
     ));
   }, [result]);
-  const medleyDebugText = useMemo(() => {
-    if (!result || !isMedleySearchResponse(result) || !medleyResultInputSnapshot) {
-      return "";
-    }
-    return JSON.stringify(buildMedleyDebugPayload({
-      result,
-      selectedEvent: medleyResultInputSnapshot.selectedEvent,
-      medleySongIds: medleyResultInputSnapshot.medleySongIds,
-      medleyDifficulties: medleyResultInputSnapshot.medleyDifficulties,
-      songs: data.songs,
-      profileLabel: medleyResultInputSnapshot.profileLabel,
-      selectedProfileCacheKey: medleyResultInputSnapshot.selectedProfileCacheKey,
-      perfectRate: medleyResultInputSnapshot.perfectRate,
-      maxSearchDurationSeconds: medleyResultInputSnapshot.maxSearchDurationSeconds,
-      medleyCalculationMode: medleyResultInputSnapshot.medleyCalculationMode,
-      preferredServer,
-    }), null, 2);
-  }, [
-    data.songs,
-    medleyResultInputSnapshot,
-    preferredServer,
-    result,
-  ]);
-  const copyMedleyDebugInfo = useCallback(() => {
-    if (!medleyDebugText) {
-      return;
-    }
-    void navigator.clipboard.writeText(medleyDebugText)
-      .then(() => {
-        setDebugInfoCopied(true);
-        window.setTimeout(() => setDebugInfoCopied(false), 1600);
-      })
-      .catch(() => {
-        setDebugInfoCopied(false);
-      });
-  }, [medleyDebugText]);
-
   async function handleCalculate() {
     if (!profileChoice) {
       setResultError(errorsT("selectProfile"));
@@ -3070,14 +2879,9 @@ function TeamBuilderPanel() {
 
     const medleyInputSnapshot: MedleyResultInputSnapshot | null = isMedleyEvent
       ? {
-        selectedEvent,
         medleySongIds: [...medleySongIds] as MedleySongIdTuple,
         medleyDifficulties: [...medleyDifficulties] as MedleyDifficultyTuple,
-        profileLabel: selectedProfileLabel,
-        selectedProfileCacheKey,
-        perfectRate,
         maxSearchDurationSeconds,
-        medleyCalculationMode,
       }
       : null;
     let constraints: TeamSearchWorkerRequest["calculation"]["constraints"];
@@ -3102,7 +2906,6 @@ function TeamBuilderPanel() {
     setResult(null);
     setMedleyProgress(null);
     setMedleyResultInputSnapshot(null);
-    setDebugInfoCopied(false);
     const shouldShowMedleyProgress = isMedleyEvent && medleyCalculationMode === "maximize";
     try {
       const response = await postTeamSearchWorkerMessage({
@@ -3561,13 +3364,6 @@ function TeamBuilderPanel() {
                 </FieldRow>
               </>
             ) : null}
-            {isMedleyEvent ? (
-              <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-center text-sm font-semibold leading-6 text-amber-800">
-                <p>
-                  {labelsT("exactEngineWarning")}
-                </p>
-              </div>
-            ) : null}
             <div className="flex justify-center">
               <button
                 type="button"
@@ -3730,13 +3526,6 @@ function TeamBuilderPanel() {
                   ? ` / ${labelsT("supportStats", { candidateCount: result.stats.supportCandidateCount, evaluationCount: result.stats.supportEvaluationCount })}`
                   : ""}
               </div>
-              {medleyDebugText ? (
-                <MedleyDebugInfoPanel
-                  debugText={medleyDebugText}
-                  copied={debugInfoCopied}
-                  onCopy={copyMedleyDebugInfo}
-                />
-              ) : null}
             </div>
           ) : null}
         </section>

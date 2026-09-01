@@ -914,8 +914,6 @@
       "firstSong": "Song {index}",
       "startCombo": "Start combo {combo}",
       "scoreAndEventPoint": "Score / Event Pt",
-      "medleyDebug": "Medley debug info",
-      "medleyDebugDescription": "Copy this JSON when reporting issues. It includes the input summary, proof state, memory/time usage, and algorithm stats.",
       "eventSongSource": "Event songs {source}",
       "selectedProfile": "Selected profile",
       "unselectedProfile": "No profile selected",
@@ -942,7 +940,6 @@
       "minLeaderScoreUp": "Minimum leader score-up",
       "minTotalPower": "Minimum total power",
       "unlimited": "Unlimited",
-      "exactEngineWarning": "The exact proof engine uses a large amount of runtime memory. Use a desktop browser to avoid page crashes from memory pressure.",
       "results": "Results",
       "teamLiveRank": "Team Live rank",
       "result": "Result",
@@ -957,9 +954,7 @@
       "areaItemConfigurationCount": "Area item setups {count}",
       "peakMemory": "Peak memory {count} MiB",
       "supportStats": "Support candidates {candidateCount} · Support evaluations {evaluationCount}",
-      "nextStep": "Next: {step}",
-      "copyDebug": "Copy debug info",
-      "copied": "Copied"
+      "nextStep": "Next: {step}"
     },
     "actions": {
       "calculate": "Calculate",

@@ -914,8 +914,6 @@
       "firstSong": "第 {index} 首",
       "startCombo": "起始 Combo {combo}",
       "scoreAndEventPoint": "分数/活动Pt",
-      "medleyDebug": "组曲调试信息",
-      "medleyDebugDescription": "反馈问题时可以复制这一段 JSON，里面包含输入摘要、证明状态、内存/耗时和算法统计。",
       "eventSongSource": "活动曲目 {source}",
       "selectedProfile": "已选择档案",
       "unselectedProfile": "未选择档案",
@@ -942,7 +940,6 @@
       "minLeaderScoreUp": "最低队长技能倍率",
       "minTotalPower": "最低综合力",
       "unlimited": "不限制",
-      "exactEngineWarning": "精确证明引擎将占用大量运行内存空间，请使用电脑进行计算以避免网页因内存不足而崩溃",
       "results": "结果",
       "teamLiveRank": "团队演出排名",
       "result": "结果",
@@ -957,9 +954,7 @@
       "areaItemConfigurationCount": "区域道具配置 {count}",
       "peakMemory": "峰值内存 {count} MiB",
       "supportStats": "支援候选 {candidateCount} · 支援评估 {evaluationCount}",
-      "nextStep": "下一步：{step}",
-      "copyDebug": "复制调试信息",
-      "copied": "已复制"
+      "nextStep": "下一步：{step}"
     },
     "actions": {
       "calculate": "计算",
