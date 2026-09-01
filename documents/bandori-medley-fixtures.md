@@ -83,6 +83,18 @@ A provenance audit rejected five extra comparisons that had been attached after 
 
 ## Final high-pressure stage
 
-Reserve the remaining five profiles in their entirety: **1051, 1127, 1329, 1747 and 1889 cards**. Do not pull their already-completed individual scenes into the current batch. No high-pressure run is authorized here.
+The first high-pressure batch combines **1513 and 1703 cards** with the five reserved profiles: **1051, 1127, 1329, 1747 and 1889 cards**. All seven whole profiles use no-event, event244, event260 and event323, for **28 sequential scenes**:
 
-The 1051, 1127 and 1747 profiles lack complete four-scene exact coverage. The generic 1329/1889 reports use different song sets and include locked-area results or missing historical PERFECT rates; settle their exact scene settings before that final stage. Neither a locked-area exact flag nor a diagnostic best-so-far result counts as full-scope acceptance.
+```sh
+node --import tsx scripts/compare-bandori-medley-search.mjs --high-pressure
+```
+
+Inputs stay fixed at expert songs 385 → 193 → 619, full PERFECT, no fever and all 108 owned-area configurations. Twenty scenes have strict same-input historical references. The eight 1329/1889 scenes do not: their generic reports use other song sets and omit the historical PERFECT rate, so this batch does not pretend those scores are comparable.
+
+The batch ran on 2026-09-01 at clean commit `6b5bebb`. **Twenty-four scenes completed exact; four timed out at 300 seconds:** 1513/event244 at 9,758,172, 1703/event260 at 10,106,861, 1747/event244 at 9,891,757 and 1889/event244 at 10,122,138. The first three reached their strict references; the last has no comparable reference and remains only best-so-far.
+
+All **20/20 valid score-regression comparisons passed**: 19 were equal and exact 1747/event260 was 7,343 higher at 9,484,242. Of the eight scenes without references, seven completed exact. There were no lower comparable scores, skipped scenes, process failures or memory-limit stops.
+
+Native search totaled 2,660.221 seconds; the scene median was 38.197 seconds. Sampled process peak was 40.73 MiB and budget-accounted search-storage peak was 32.42 MiB. The four timeouts consumed 45.1% of total native time and remained inside their first few configurations, while their warm starts were already within 0.36% of best-so-far. This batch therefore identifies proof traversal, not initial score quality or memory exhaustion, as the current high-pressure failure.
+
+The complete 28-scene table, counters, hashes, audit and analysis are retained in `runs/2026-09-01T06-26-53.930Z/report.md`, alongside `run.json` and `summary.json`. No higher-budget retry or algorithm change followed the results.
