@@ -315,6 +315,8 @@ impl<'a> SearchDomain<'a> {
         if current == previous {
             return;
         }
+        #[cfg(test)]
+        let previous_capacity = self.removed.capacity();
         self.removed.push(DomainChange::Owners(id, previous));
         self.owners[index] = current;
         if self.available[index] {
@@ -327,7 +329,9 @@ impl<'a> SearchDomain<'a> {
         // Individual-team heads may retain a card removed from only one team.
         // That is a safe relaxation; the joint DP and enumeration read the mask.
         #[cfg(test)]
-        self.record_storage();
+        if previous_capacity != self.removed.capacity() {
+            self.record_storage();
+        }
     }
 
     #[cfg(test)]
@@ -1111,7 +1115,13 @@ impl JointSearch<'_, '_, '_, '_> {
     }
 
     fn joint_step(&mut self, node: &mut SearchNode) -> Result<JointStep, SearchAbort> {
-        let mut owners = self.effective_owners(node);
+        #[cfg(test)]
+        let _timing = crate::profiling::enter(crate::profiling::Phase::JointBookkeeping);
+        let mut owners = {
+            #[cfg(test)]
+            let _timing = crate::profiling::enter(crate::profiling::Phase::EffectiveOwners);
+            self.effective_owners(node)
+        };
         if owners.contains(&0) {
             return Ok(JointStep::Finished);
         }
@@ -1235,37 +1245,41 @@ impl JointSearch<'_, '_, '_, '_> {
             .state
             .incumbent_score()
             .unwrap_or(f64::NEG_INFINITY);
-        for (id, mask) in owners.iter_mut().enumerate() {
-            if !self.domain.available[id] {
-                continue;
-            }
+        {
             #[cfg(test)]
-            let previous = *mask;
-            for owner in 0..4 {
-                let upper = bound.destinations[id][owner];
-                if upper == f64::NEG_INFINITY || upper < incumbent {
-                    *mask &= !(1 << owner);
+            let _timing = crate::profiling::enter(crate::profiling::Phase::ApplyJointCuts);
+            for (id, mask) in owners.iter_mut().enumerate() {
+                if !self.domain.available[id] {
+                    continue;
                 }
-            }
-            if *mask == 0 {
-                return Ok(JointStep::Finished);
-            }
-            self.domain.restrict_owners(id as u32, *mask);
-            let fixed = mask.count_ones() == 1;
-            #[cfg(test)]
-            crate::profiling::joint_cuts((previous & !*mask).count_ones(), fixed);
-            if fixed {
-                if *mask != UNUSED {
-                    let slot = mask.trailing_zeros() as usize;
-                    // Two simultaneous forced cards may reveal an infeasible
-                    // character/capacity combination. Never append past five.
-                    if !node.families[slot].can_include(&self.domain, id as u32, slot) {
-                        return Ok(JointStep::Finished);
+                #[cfg(test)]
+                let previous = *mask;
+                for owner in 0..4 {
+                    let upper = bound.destinations[id][owner];
+                    if upper == f64::NEG_INFINITY || upper < incumbent {
+                        *mask &= !(1 << owner);
                     }
-                    node.families[slot] = node.families[slot].with_required(id as u32);
                 }
-                self.domain.remove(id as u32);
-                node.refresh_bounds = [true; 3];
+                if *mask == 0 {
+                    return Ok(JointStep::Finished);
+                }
+                self.domain.restrict_owners(id as u32, *mask);
+                let fixed = mask.count_ones() == 1;
+                #[cfg(test)]
+                crate::profiling::joint_cuts((previous & !*mask).count_ones(), fixed);
+                if fixed {
+                    if *mask != UNUSED {
+                        let slot = mask.trailing_zeros() as usize;
+                        // Two simultaneous forced cards may reveal an infeasible
+                        // character/capacity combination. Never append past five.
+                        if !node.families[slot].can_include(&self.domain, id as u32, slot) {
+                            return Ok(JointStep::Finished);
+                        }
+                        node.families[slot] = node.families[slot].with_required(id as u32);
+                    }
+                    self.domain.remove(id as u32);
+                    node.refresh_bounds = [true; 3];
+                }
             }
         }
         let counts = std::array::from_fn::<_, 3, _>(|slot| {
@@ -1285,6 +1299,8 @@ impl JointSearch<'_, '_, '_, '_> {
         // Prefer a still-unassigned card from the maximizing allocation. This
         // narrows the remaining allocation early. Conditional gaps order all
         // retained destinations only; no destination is dropped by rank.
+        #[cfg(test)]
+        let _branch_timing = crate::profiling::enter(crate::profiling::Phase::JointBranching);
         let proposal = bound.proposal;
         let card = (0..owners.len())
             .filter(|&id| self.domain.available[id] && owners[id].count_ones() > 1)
@@ -1533,6 +1549,8 @@ impl JointSearch<'_, '_, '_, '_> {
         counts: [usize; 3],
         uppers: [f64; 3],
     ) -> Result<(), SearchAbort> {
+        #[cfg(test)]
+        let _timing = crate::profiling::enter(crate::profiling::Phase::LocalBlocks);
         let mut rows: [Vec<CompactCandidate>; 3] = std::array::from_fn(|_| Vec::new());
         let mut views: [Vec<usize>; 3] = std::array::from_fn(|_| Vec::new());
         for slot in 0..3 {

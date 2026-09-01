@@ -95,7 +95,7 @@ struct CountLayout {
     remaining: [usize; 3],
     radices: [usize; 3],
     states: usize,
-    transitions: [Vec<(usize, usize)>; PATTERNS],
+    transitions: [Vec<(u16, u16)>; PATTERNS],
 }
 
 impl CountLayout {
@@ -115,11 +115,12 @@ impl CountLayout {
             states: radices.into_iter().product(),
             transitions: std::array::from_fn(|_| Vec::new()),
         };
+        assert!(layout.states <= usize::from(u16::MAX));
         layout.transitions = std::array::from_fn(|pattern| {
             let mut edges = Vec::with_capacity(layout.states);
             for from in 0..layout.states {
                 if let Some(to) = layout.destination(from, roles(pattern)) {
-                    edges.push((from, to));
+                    edges.push((from as u16, to as u16));
                 }
             }
             edges
@@ -347,7 +348,7 @@ impl JointWorking {
                 .layout
                 .transitions
                 .iter()
-                .map(|edges| edges.capacity() * size_of::<(usize, usize)>())
+                .map(|edges| edges.capacity() * size_of::<(u16, u16)>())
                 .sum::<usize>()
             + self.owners.capacity()
             + self.residual_owners.capacity()
@@ -441,7 +442,7 @@ pub(crate) fn workspace_bytes(owners: &[u8], groups: usize) -> Option<usize> {
                 2 * PATTERNS * size_of::<LocalChoice>() + 2 * size_of::<LocalGroup>(),
             )?,
         )?
-        .checked_add(states * PATTERNS * size_of::<(usize, usize)>())?
+        .checked_add(states * PATTERNS * size_of::<(u16, u16)>())?
         .checked_add(2 * size_of::<JointUpper>() + 4096)
 }
 
@@ -564,6 +565,8 @@ fn calculate_weights(
                     continue;
                 }
                 for &(from, to) in edges {
+                    let from = usize::from(from);
+                    let to = usize::from(to);
                     let score = sum_up(prefix[from], choice.score);
                     if score > next[to] {
                         next[to] = score;
@@ -609,6 +612,8 @@ fn calculate_weights(
                     continue;
                 }
                 for &(from, to) in edges {
+                    let from = usize::from(from);
+                    let to = usize::from(to);
                     next[to] = next[to].max(sum_up(suffix[from], choice.score));
                 }
             }
@@ -665,6 +670,8 @@ fn calculate_weights(
                 continue;
             }
             for &(from, to) in edges {
+                let from = usize::from(from);
+                let to = usize::from(to);
                 outside[pattern] = outside[pattern].max(sum_up(
                     forward[group * states + from],
                     backward[(group + 1) * states + goal - to],
