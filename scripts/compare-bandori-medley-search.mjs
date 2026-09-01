@@ -16,6 +16,7 @@ const CANDIDATE_BUDGET_BYTES = 256 * 1024 ** 2;
 const PROCESS_LIMIT_BYTES = 1024 ** 3;
 const { values } = parseArgs({ options: {
   "completed-profiles": { type: "boolean", default: false },
+  "high-pressure": { type: "boolean", default: false },
   remaining: { type: "boolean", default: false },
   six: { type: "boolean", default: false },
   diagnose: { type: "boolean", default: false },
@@ -24,15 +25,16 @@ const { values } = parseArgs({ options: {
   "local-row-target": { type: "string" },
   "score-cache-slots": { type: "string" },
 } });
-assert([values["completed-profiles"], values.remaining, values.six, values.diagnose].filter(Boolean).length <= 1, "choose one run mode");
+assert([values["completed-profiles"], values["high-pressure"], values.remaining, values.six, values.diagnose].filter(Boolean).length <= 1, "choose one run mode");
 assert(values.diagnose || (!values["duration-ms"] && !values["local-row-target"] && !values["score-cache-slots"]), "diagnostic controls require --diagnose");
 const diagnosticCase = values.diagnose && values.case?.match(/^(\d+)-(no-event|event-(\d+))$/u);
 assert(!values.diagnose || !values.case || diagnosticCase, "invalid diagnostic case");
 const DURATION_MS = Number(values["duration-ms"] ?? (values.diagnose ? 60_000 : 300_000));
 assert(Number.isSafeInteger(DURATION_MS) && DURATION_MS > 0, "invalid duration");
-const continueAfterFailure = values["completed-profiles"] || values.remaining || values.six || values.diagnose;
+const continueAfterFailure = values["completed-profiles"] || values["high-pressure"] || values.remaining || values.six || values.diagnose;
 const profileCardCounts = values["completed-profiles"]
   ? [1036, 1039, 1161, 1211, 1229, 1252, 1318, 1425, 1433, 1513, 1522, 1703]
+  : values["high-pressure"] ? [1051, 1127, 1329, 1513, 1703, 1747, 1889]
   : values.remaining ? [119, 961, 962, 972] : values.six ? [119, 961]
     : diagnosticCase ? [Number(diagnosticCase[1])] : values.diagnose ? [119, 961] : [119];
 const CASES = profileCardCounts.flatMap((cardCount) => (
@@ -88,6 +90,7 @@ function readBaseline(testCase, profile) {
     row.profileSha256 === profile.payloadSha256 && row.sourceId === "main"
     && row.eventKey === String(testCase.eventId ?? "none") && /^rows\[\d+\]\.all$/u.test(row.resultPath)
   ));
+  if (!entry && values["high-pressure"]) return null;
   assert(entry, `missing full-scope historical result: ${testCase.id}`);
   assert.deepEqual(entry.songIds, testCase.songIds);
   assert.deepEqual(entry.difficulties, ["expert", "expert", "expert"]);
@@ -125,7 +128,7 @@ const cases = CASES.map((testCase) => {
       [1, 6, 11, 16, 21], [5, 10, 15, 20, 25, 30, 35],
     ]);
   }
-  assert(Number.isFinite(baseline.averageScore));
+  assert(baseline === null || Number.isFinite(baseline.averageScore));
   return { ...testCase, input, baseline, profilePayloadSha256: profile.payloadSha256 };
 });
 
@@ -224,17 +227,19 @@ function runNative(id) {
 
 const results = [];
 for (const { id, cardCount, input, baseline } of cases) {
-  console.log(`${id}: starting full ${cardCount}-card search, ${input.areaConfigurations.length} area configurations; historical average ${baseline.averageScore}`);
+  console.log(`${id}: starting full ${cardCount}-card search, ${input.areaConfigurations.length} area configurations; historical average ${baseline?.averageScore ?? "unavailable"}`);
   const execution = await runNative(id);
   const outcome = execution.native?.outcome;
   const solution = outcome?.status === "exact" ? outcome.best : outcome?.bestSoFar;
   const averageScore = solution?.totalAverageScore ?? null;
-  const scoreAtLeastHistorical = averageScore === null ? null : averageScore >= baseline.averageScore;
-  const passed = outcome?.status === "exact" && solution !== null && scoreAtLeastHistorical === true && execution.forcedStop === null;
+  const scoreAtLeastHistorical = baseline === null || averageScore === null ? null : averageScore >= baseline.averageScore;
+  const passed = outcome?.status === "exact" && solution !== null
+    && (baseline === null || scoreAtLeastHistorical === true) && execution.forcedStop === null;
   const diagnosticCompleted = execution.exitCode === 0 && execution.forcedStop === null
     && (outcome?.status === "exact" || (outcome?.status === "incomplete" && outcome.reason === "timed_out"));
   const comparison = {
-    baseline, delta: averageScore === null ? null : averageScore - baseline.averageScore, scoreAtLeastHistorical, passed,
+    baseline, delta: baseline === null || averageScore === null ? null : averageScore - baseline.averageScore,
+    scoreAtLeastHistorical, passed,
     ...(values.diagnose ? { diagnosticCompleted } : {}),
   };
   const result = { id, ...execution, averageScore, ...comparison };
