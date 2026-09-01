@@ -4,7 +4,7 @@ Chinese version: [bandori-medley-search.zh-CN.md](bandori-medley-search.zh-CN.md
 
 ## Authority and objective
 
-This is the approved, revisable search design, not additional game rules. [The foundation contract](bandori-medley-foundation.md) controls inputs and scoring. The implementation is independent of old team-builder and experiment code. Calc informs early pruning and short-lived compact storage, not HHWX scoring or proof rules.
+This is the approved, revisable search design, not additional game rules. [The foundation contract](bandori-medley-foundation.md) controls inputs and scoring. The implementation is independent of old team-builder and experiment code.
 
 For each legal owned area configuration shared by all teams, choose three five-card teams with distinct characters within each team and no repeated physical card across teams. Exclusions are hard. Songs keep their input slots, including repeats. The objective is the proven top-1 total average score; ties retain a deterministic representative. Up to ten discovered solutions are diagnostic, not proven global top-10.
 
@@ -125,4 +125,4 @@ Rejected prototypes remain deleted; Git retains their implementation history.
 | Sparse/bitset destination traversal | Destination time did not improve, hard-case progress stayed flat, and each snapshot gained about 45 KiB. |
 | Character-usage branching | At the first joint root, 1229 retained 7–8 of 8 modes for every character; 1513 and 1703 fixed no required or excluded team-character relation. Supporting unresolved required characters would therefore add state without current pruning evidence. |
 | Global best-bound frontier | An independent node must copy or replay the mutable domain, a roughly 2 MiB bound index, and joint snapshots; it changes order but not the settled-incumbent proof set. A shallow cutset had no evidence strong enough to justify that replay machinery. |
-| Calc-style contribution frontier | Single-team root frontiers held only 21–42 entries, but summing three independent teams discarded physical-card competition and was 379,669–755,036 looser than the current joint root. A per-character frontier used only in weight preparation made that subphase 6%–8% faster while changing three 10-second node counts by only -0.8% to +0.5%; this does not justify a nine-dimensional joint-frontier rewrite. |
+| Independent contribution frontier | Single-team root frontiers held only 21–42 entries, but summing three independent teams discarded physical-card competition and was 379,669–755,036 looser than the current joint root. A per-character frontier used only in weight preparation made that subphase 6%–8% faster while changing three 10-second node counts by only -0.8% to +0.5%; this does not justify a nine-dimensional joint-frontier rewrite. |

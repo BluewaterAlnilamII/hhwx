@@ -19,7 +19,7 @@ node --import tsx scripts/archive-bandori-medley-fixtures.mjs --seed <私有档�
 node --import tsx scripts/archive-bandori-medley-fixtures.mjs --verify
 ```
 
-档案包采用现有的 `manifest.json` 格式，含档案、原始集合、数据和 `reference-only/` 报告。脚本保留其原文件，再读取已知的组曲基准、活动矩阵、独立进程测试和 low-memory HHWX 报告。不收集日志、二进制、转换成 Calc 格式的输入或求解器代码。再次传入相同来源可更新索引，已经复制的证据文件不会被删除。
+档案包采用现有的 `manifest.json` 格式，含档案、原始集合、数据和 `reference-only/` 报告。脚本保留其原文件，再读取已知的组曲基准、活动矩阵、独立进程测试和 low-memory HHWX 报告。不收集日志、二进制或求解器代码。再次传入相同来源可更新索引，已经复制的证据文件不会被删除。
 
 本地 `README.md` 列出档案；`manifest.json` 记录：
 

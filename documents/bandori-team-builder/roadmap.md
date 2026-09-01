@@ -1,23 +1,20 @@
 # HHWX Medley Low-Memory Roadmap
 
-Last updated: 2026-06-17
+Last updated: 2026-09-01
 
 This file is the persistent roadmap for the medley team-builder low-memory
-work. Keep it current whenever a benchmark, reverse-engineering note, or
-implementation checkpoint changes. The goal is to make future continuation
-possible from repository artifacts instead of chat context.
+work. Keep it current whenever a benchmark or implementation checkpoint
+changes. The goal is to make future continuation possible from repository
+artifacts instead of chat context.
 
 ## North Star
 
 Reduce medley optimizer memory usage while preserving HHWX's exactness proof
 semantics.
 
-The calc.krkrdkdk.cn implementation is useful as a research reference because
-it appears to run with much lower memory, but it is not a correctness oracle for
-HHWX. HHWX must continue to optimize average score and must retain explicit
-proof status, bounded gap, and bounded-reason reporting. Max score should be
-recorded for comparison and diagnostics, but it must not replace the primary
-average-score objective.
+HHWX must continue to optimize average score and retain explicit proof status,
+bounded gap, and bounded-reason reporting. Max score should be recorded for
+diagnostics, but it must not replace the primary average-score objective.
 
 ## Long-Term Goal
 
@@ -38,7 +35,6 @@ It is:
 - Same 40-case matrix: `P01` through `P10` times `none`, `244`, `260`, `323`
 - Same default validation budget: `300000ms` per case
 - Same Node heap ceiling for acceptance: `--max-old-space-size=8192`
-- No reliance on calc as an exactness oracle
 
 Quantified target outcomes:
 
@@ -64,19 +60,15 @@ Memory budget tiers:
   proof contract.
 - Runtime safety line: around `700-800 MiB`, stop aggressive proof expansion or
   return bounded instead of risking process termination.
-- Stretch target: common cases around `300-500 MiB`; calc-like stable
-  hundreds-of-MB hard cases are desirable but not required for the first HHWX
-  milestone.
+- Stretch target: common cases around `300-500 MiB`; stable hundreds-of-MB
+  hard cases are desirable but not required for the first HHWX milestone.
 
 Implementation language decision:
 
 - Prefer TypeScript first, using typed-array / raw-index candidate pools and
   delayed hydration.
 - Keep Rust/WASM as a second-stage fallback if the JS/TS raw representation
-  still cannot reach the `1 GiB` hard-case target, or if the product target
-  changes to calc-like stable hundreds-of-MB behavior.
-- Do not adopt calc's `maxCandidates` or `randomBucket` behavior as exact unless
-  HHWX can produce its own unseen-frontier proof.
+  still cannot reach the `1 GiB` hard-case target.
 
 ## Implementation Path
 
@@ -85,14 +77,13 @@ The implementation path is ordered by two pieces of evidence:
 - The `P02:260` trace shows candidate fill hits the memory guard before final
   solve starts, so candidate-fill working set must come before a production raw
   disjoint solver.
-- The latest calc research report shows calc's low memory likely starts before
-  final solve: signature/prefix enumeration, upper replay, dominance filtering,
-  and raw solver-input filtering appear to reduce candidate birth and candidate
-  residency together.
+- Retained HHWX diagnostics show that candidate birth and residency dominate
+  pressure before final solve. Signature/prefix census, upper replay, dominance
+  replay, and raw solver-input census are the available proof-neutral probes.
 
 Therefore memory work and algorithm diagnostics should move together, but not
 with the same risk level. No-op diagnostics can be added immediately. Any
-proof-changing calc-like pruning must wait until HHWX can replay the upper or
+proof-changing early pruning must wait until HHWX can replay the upper or
 dominance certificate and record violation counters.
 
 ### Stage 0: Measurement Harness
@@ -185,8 +176,8 @@ Implementation:
 - Hydrate rich `MedleyTeamCandidate` objects only through an adapter in debug
   comparison code.
 - Add assertions that raw pool ordering and card ids match object candidates.
-- Keep this in TypeScript first; this is the planned bridge toward calc-style
-  raw storage without changing the implementation language.
+- Keep this in TypeScript first; this is the planned bridge toward compact raw
+  storage without changing the implementation language.
 
 Acceptance:
 
@@ -198,7 +189,7 @@ Acceptance:
 - Memory overhead of the passive mirror is measured and documented, so it does
   not mask the savings expected in later stages.
 
-### Stage 2.5: Calc-Inspired No-Op Algorithm Diagnostics
+### Stage 2.5: Proof-Neutral Algorithm Diagnostics
 
 Status: signature census, materialized upper replay, materialized dominance
 replay, and raw solver-input census implemented.
@@ -207,27 +198,8 @@ Purpose:
 
 - Learn whether HHWX can safely reduce candidate birth before a large storage
   rewrite.
-- Convert calc's strongest visible ideas into HHWX-native proof diagnostics
-  without using calc as an oracle.
-
-Calc evidence to carry forward:
-
-- WASM name-section inventory indicates real compiled functions around
-  `enumerate_signature_pool`, `enumerate_signature_teams`,
-  `contribution_dominance_graph_for_signature`,
-  `MedleyPruneUpperBounds::signature_can_beat_incumbent`,
-  `best_any_team_score_upper_bound`,
-  `build_raw_team_candidates_with_current_best`, and
-  `raw_candidate_solver_input_for_indices`.
-- The likely memory mechanism is not just Rust/WASM. It is earlier pruning plus
-  compact raw candidate representation and late hydration.
-- Calc still lacks public HHWX-equivalent proof output, so its cap, random
-  bucket, and hidden route choices cannot enter HHWX exact semantics.
-- The latest pasted pruning explanation is a reasonable working model:
-  calc likely prunes item/mode, signature, prefix, and dominance branches before
-  full candidate birth, then stores only raw numeric survivor records for the
-  disjoint solver. Treat this as an implementation-shape hypothesis, not as a
-  source-level reconstruction or an exactness proof.
+- Measure candidate buckets, conservative uppers, dominance, and raw solver
+  input without changing returned results.
 
 Diagnostics:
 
@@ -473,7 +445,7 @@ Interpretation:
 
 Score-calculation-cache diagnostic artifacts:
 
-| Artifact | Case | Score calc cache | Score-only result cache | Status | Average | Max | Gap | Peak | Elapsed | Notes |
+| Artifact | Case | Score calculation cache | Score-only result cache | Status | Average | Max | Gap | Peak | Elapsed | Notes |
 | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
 | `low-memory-polish-hhwx-2026-06-16T15-42-26-063Z.json` | `P02:260` | enabled | enabled | bounded, memory-limited | `9376984` | `9412868` | `429693` | `4492 MiB` | `47269 ms` | baseline profile with scoreCache attribution; `skillWindowContributionCountForChartTotal=1211066`, `baseScoreCountForChartTotal=119468`, `scoreOnlyTeamEvaluationCacheSizeTotal=753387` |
 | `low-memory-polish-hhwx-2026-06-16T15-38-02-489Z.json` | `P01:none` | disabled | enabled | exact | `7927236` | `7982835` | `0` | `1176 MiB` | `71763 ms` | exact and scores preserved; slower |
@@ -505,9 +477,9 @@ Pressure cache fallback artifacts:
 
 | Artifact | Case | Trigger | Status | Average | Max | Gap | Peak | Elapsed | Notes |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| `low-memory-polish-hhwx-2026-06-16T17-26-21-463Z.json` | `P02:260` | score-calc pressure only | bounded, memory-limited | `9376984` | `9412868` | `416575` | `4494 MiB` | `125208 ms` | triggered at max slot card count `265`; not enough alone after later code changes |
-| `low-memory-polish-hhwx-2026-06-16T17-29-29-711Z.json` | `P02:260` | score-calc pressure + manual score-only cache disabled | bounded | `9376984` | `9412868` | `382812` | `4021 MiB` | `114866 ms` | proves the combination is useful and exact-safe for P02 |
-| `low-memory-polish-hhwx-2026-06-16T17-33-09-935Z.json` | `P02:260` | score-calc pressure + score-only pressure | bounded | `9376984` | `9412868` | `382812` | `3706 MiB` | `119623 ms` | first opt-in P02 run with `memoryLimited=false`; `17.6%` below `4495 MiB`, still short of the `20%` Stage 3 target |
+| `low-memory-polish-hhwx-2026-06-16T17-26-21-463Z.json` | `P02:260` | score-computation pressure only | bounded, memory-limited | `9376984` | `9412868` | `416575` | `4494 MiB` | `125208 ms` | triggered at max slot card count `265`; not enough alone after later code changes |
+| `low-memory-polish-hhwx-2026-06-16T17-29-29-711Z.json` | `P02:260` | score-computation pressure + manual score-only cache disabled | bounded | `9376984` | `9412868` | `382812` | `4021 MiB` | `114866 ms` | proves the combination is useful and exact-safe for P02 |
+| `low-memory-polish-hhwx-2026-06-16T17-33-09-935Z.json` | `P02:260` | score-computation pressure + score-only pressure | bounded | `9376984` | `9412868` | `382812` | `3706 MiB` | `119623 ms` | first opt-in P02 run with `memoryLimited=false`; `17.6%` below `4495 MiB`, still short of the `20%` Stage 3 target |
 | `low-memory-polish-hhwx-2026-06-16T17-35-27-982Z.json` | `P08:260` | not triggered | exact | `8912922` | `8993248` | `0` | `2391 MiB` | `253809 ms` | focused exact case preserved |
 | `low-memory-polish-hhwx-2026-06-16T17-35-27-982Z.json` | `P08:323` | not triggered | exact | `9249509` | `9368642` | `0` | `4273 MiB` | `166070 ms` | focused exact case preserved |
 | `low-memory-polish-hhwx-2026-06-16T17-35-27-982Z.json` | `P10:260` | not triggered | exact | `8887419` | `8977612` | `0` | `3957 MiB` | `207454 ms` | focused exact case preserved |
@@ -529,9 +501,9 @@ Bounded and skill-window-only score-cache experiments:
 
 | Artifact | Case | Cache Policy | Status | Average | Max | Gap | Peak | Elapsed | Notes |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| `low-memory-polish-hhwx-2026-06-16T16-09-38-162Z.json` | `P01:none` | bounded score-calc cache, limit `200000` | exact | `7927236` | `7982835` | `0` | `1775 MiB` | `45157 ms` | scores preserved, but peak is worse than nearby P01 diagnostic baselines |
-| `low-memory-polish-hhwx-2026-06-16T16-10-34-221Z.json` | `P02:260` | bounded score-calc cache, limit `200000` | bounded, memory-limited | `9376984` | `9412868` | `429693` | `4493 MiB` | `118783 ms` | no material peak improvement; each active generator still held up to `200000` skill-window entries |
-| `low-memory-polish-hhwx-2026-06-16T16-13-09-961Z.json` | `P02:260` | bounded score-calc cache, limit `50000` | bounded, memory-limited | `9376984` | `9412868` | `429693` | `4494 MiB` | `127507 ms` | lower limit increased churn and did not reduce peak |
+| `low-memory-polish-hhwx-2026-06-16T16-09-38-162Z.json` | `P01:none` | bounded score-computation cache, limit `200000` | exact | `7927236` | `7982835` | `0` | `1775 MiB` | `45157 ms` | scores preserved, but peak is worse than nearby P01 diagnostic baselines |
+| `low-memory-polish-hhwx-2026-06-16T16-10-34-221Z.json` | `P02:260` | bounded score-computation cache, limit `200000` | bounded, memory-limited | `9376984` | `9412868` | `429693` | `4493 MiB` | `118783 ms` | no material peak improvement; each active generator still held up to `200000` skill-window entries |
+| `low-memory-polish-hhwx-2026-06-16T16-13-09-961Z.json` | `P02:260` | bounded score-computation cache, limit `50000` | bounded, memory-limited | `9376984` | `9412868` | `429693` | `4494 MiB` | `127507 ms` | lower limit increased churn and did not reduce peak |
 | `low-memory-polish-hhwx-2026-06-16T16-18-23-863Z.json` | `P01:none` | skill-window contribution cache disabled | exact | `7927236` | `7982835` | `0` | `1291 MiB` | `42893 ms` | acceptable on the small smoke case |
 | `low-memory-polish-hhwx-2026-06-16T16-19-21-408Z.json` | `P02:260` | skill-window contribution cache disabled | bounded, memory-limited | `9376984` | `9412868` | `429693` | `4507 MiB` | `51923 ms` | worse than baseline; abort changed to `memory-soft-limit`; score/gap still matched the memory-limited baseline |
 
@@ -859,14 +831,12 @@ Acceptance:
 
 ## Long-Term Non-Goals
 
-- Do not port calc wholesale.
-- Do not use calc output as an HHWX correctness oracle.
 - Do not mark candidate-capped, randomized, timed-out, memory-limited, or
   generator-aborted paths as exact.
 - Do not merge a broad rewrite before a narrow feature-flagged path has passed
   focused hard-case validation.
 
-## Active Goal: Phase 2 Raw Mirror, Calc Diagnostics, And Candidate-Fill Prep
+## Active Goal: Raw Mirror, Proof Diagnostics, And Candidate-Fill Prep
 
 Owner: main agent
 
@@ -878,29 +848,26 @@ Goal:
   exact/bounded proof semantics.
 - Treat passive raw mirror validation as the completed bridge into raw data
   structures.
-- Add calc-inspired no-op diagnostics before proof-changing pruning or a broad
+- Add proof-neutral diagnostics before proof-changing pruning or a broad
   primary-storage rewrite.
 - Use focused artifacts to choose between proof-backed early pruning and raw
   primary candidate storage.
 - Keep Rust/WASM as a second-stage fallback only if TypeScript raw structures
-  cannot approach the `1 GiB` hard-case target or the future product target
-  requires calc-like stable hundreds-of-MB behavior.
+  cannot approach the `1 GiB` hard-case target.
 
 Detailed plan:
 
-1. Keep calc research and HHWX optimizer implementation separated. Calc remains
-   a read-only side reference under ignored `temp/` assets.
-2. Keep the benchmark runner as the canonical artifact writer for this branch,
+1. Keep the benchmark runner as the canonical artifact writer for this branch,
    including average score, max score, proof status, and memory snapshots.
-3. Preserve the Stage 2 raw mirror and raw-index final-join parity as
+2. Preserve the Stage 2 raw mirror and raw-index final-join parity as
    debug-only no-op diagnostics.
-4. Preserve the Stage 2.5 signature census artifacts as the first calc-inspired
+3. Preserve the Stage 2.5 signature census artifacts as the first proof-neutral
    no-op diagnostic checkpoint.
-5. Add upper replay and Level 0/1 dominance replay with violation counters.
-6. Decide the next implementation lever from evidence:
+4. Add upper replay and Level 0/1 dominance replay with violation counters.
+5. Decide the next implementation lever from evidence:
    proof-backed early pruning if replay counters show safe large reductions;
    otherwise raw primary candidate storage and lazy hydration.
-7. Re-run focused hard cases before attempting another 40-case matrix.
+6. Re-run focused hard cases before attempting another 40-case matrix.
 
 Mid-term task targets:
 
@@ -916,9 +883,8 @@ Mid-term task targets:
 
 Acceptance standards for this active goal:
 
-- `documents/bandori-team-builder/roadmap.md` records the calc report
-  conclusion, sequencing decision, `1 GiB` hard-case target, and `700-800 MiB`
-  safety line.
+- `documents/bandori-team-builder/roadmap.md` records the sequencing decision,
+  `1 GiB` hard-case target, and `700-800 MiB` safety line.
 - Raw mirror and raw parity diagnostics are opt-in and do not change default
   search behavior.
 - Signature census, upper replay, and dominance replay are also opt-in no-op
@@ -935,17 +901,12 @@ Acceptance standards for this active goal:
 - Exactness and proof safety are the primary gates. A memory reduction is not
   acceptable if it turns an unproved result into `exact`, weakens upper-bound
   contracts, or hides bounded gaps.
-- Calc output is a black-box comparison target only. It can suggest data layout,
-  pruning, and solver organization, but it cannot be used as proof that a HHWX
-  result is exact.
 - Any heuristic path, candidate cap, randomized bucket, or early stop must be
   isolated from exact proof paths unless the unseen frontier is still proven not
   to beat the incumbent.
 - Benchmark comparisons must record both `averageScore` and `maxScore`.
 - Fixed-card and fixed-skill-order simulations are diagnostic only. They are
   not substitutes for global team-builder proof runs.
-- Temporary calc assets must remain under ignored `temp/` paths and be easy to
-  delete as one bundle.
 
 ## Artifact Map
 
@@ -967,10 +928,6 @@ Ignored local artifacts:
   `temp/bandori-team-builder/low-memory-polish/low-memory-polish-hhwx-finalized-2026-06-16T06-03-03-210Z.json`
 - Latest HHWX pointer:
   `temp/bandori-team-builder/low-memory-polish/last-low-memory-polish-hhwx.json`
-- Calc research bundle:
-  `temp/bandori-team-builder/low-memory-polish/calc-research-2026-06-16/`
-- Calc bundle README:
-  `temp/bandori-team-builder/low-memory-polish/calc-research-2026-06-16/README.md`
 
 ## Current Baselines
 
@@ -1038,53 +995,18 @@ hard-case fixture result.
 1. HHWX's dominant memory pressure is likely in candidate residency rather than
    arithmetic itself: candidate object arrays, candidate key sets, pair-upper
    query structures, conflict masks, and cached hydrated objects.
-2. Calc's low-memory behavior likely comes from compact raw candidate
-   representation plus a solver that works on indices and masks instead of
-   keeping fully hydrated candidate objects through every phase.
-3. The best HHWX path is not to port calc wholesale, but to preserve HHWX's
-   proof framework while replacing hot-path candidate storage and join
-   operations with compact raw representations.
+2. HHWX measurements support compact raw candidate representation and a solver
+   that works on indices and masks instead of keeping fully hydrated candidate
+   objects through every phase.
+3. Preserve HHWX's proof framework while replacing hot-path candidate storage
+   and join operations with compact raw representations.
 4. The hardest validation risk is not reproducing a high score. It is proving
    that the new compact representation preserves every upper-bound and
    candidate-frontier contract.
 
 ## Workstreams
 
-### A. Calc Research Track
-
-Purpose: learn implementation ideas without depending on calc as an oracle.
-
-Deliverables:
-
-- Keep all calc raw assets under
-  `temp/bandori-team-builder/low-memory-polish/calc-research-2026-06-16/`.
-- Add or update an ignored research note inside that bundle when findings
-  change.
-- Produce a source-boundary map:
-  - browser runtime entry
-  - worker entry
-  - WASM glue
-  - solver-facing payload shape
-  - metrics emitted by the public build
-- Characterize visible solver behavior:
-  - candidate count fields
-  - solver candidate count fields
-  - candidate caps
-  - random bucket or heuristic paths
-  - exact/proof status fields, or absence of such fields
-- Run only small black-box samples unless the user explicitly reopens full calc
-  testing. The P01:323 calc run already showed that full web testing can be
-  too slow for the current phase.
-
-Agent handoff:
-
-- A second agent is useful for this track if it is constrained to read-only
-  reverse engineering and ignored temp docs.
-- The side agent must not edit HHWX optimizer code.
-- The side agent must not claim exact equivalence unless it can identify an
-  explicit proof contract in calc's implementation.
-
-### B. HHWX Memory Attribution Track
+### A. HHWX Memory Attribution Track
 
 Purpose: identify where HHWX holds memory before changing algorithm structure.
 
@@ -1120,7 +1042,7 @@ Acceptance for this track:
 - We can point to specific code paths and data shapes before implementing the
   compact store.
 
-### C. Compact Candidate Store Track
+### B. Compact Candidate Store Track
 
 Purpose: replace expensive hot-path candidate residency with exact-preserving
 raw storage.
@@ -1161,7 +1083,7 @@ Proof-safety requirements:
   the object-store path on synthetic fixtures before being used in the 40-case
   matrix.
 
-### D. Raw Pair-Upper And Join Track
+### C. Raw Pair-Upper And Join Track
 
 Purpose: reduce memory in proof-heavy exact join phases.
 
@@ -1183,7 +1105,7 @@ Acceptance:
 - 40-case benchmark has no false exact regression.
 - Bounded rows still expose comparable or better gap diagnostics.
 
-### E. Benchmark And Validation Track
+### D. Benchmark And Validation Track
 
 Purpose: make progress measurable and repeatable.
 
@@ -1237,7 +1159,6 @@ Done:
 
 - Current HHWX hard-case baseline is saved as a JSON artifact.
 - Current HHWX report is saved under `documents/bandori-team-builder/`.
-- Calc temp assets are consolidated under one ignored temp bundle.
 
 Remaining:
 
@@ -1249,27 +1170,7 @@ Remaining:
 - Add a short README pointer from `documents/bandori-team-builder/README.md`
   only after this roadmap stabilizes.
 
-### Phase 1: Calc Read-Only Reverse Engineering
-
-Goal: learn what to copy conceptually and what not to trust.
-
-Tasks:
-
-- Summarize the public JS/worker/WASM boundary.
-- Identify candidate and solver metrics visible from exported diagnostics.
-- Confirm whether public calc exposes any proof status equivalent to HHWX.
-- Document score-objective differences:
-  - calc visible result appears max-score oriented
-  - HHWX primary result is average-score oriented
-- Preserve P01:323 calc exported JSON as a black-box comparison artifact only.
-
-Exit criteria:
-
-- We have a concise calc algorithm note in the ignored calc bundle.
-- We have a list of concrete implementation ideas suitable for HHWX.
-- We have a list of calc behaviors that must not be copied into exact paths.
-
-### Phase 2: HHWX Memory Attribution
+### Phase 1: HHWX Memory Attribution
 
 Goal: identify the largest resident structures and the proof stages that cause
 memory spikes.
@@ -1287,7 +1188,7 @@ Exit criteria:
 - We know whether pair-upper, candidate generation, or hydration is the first
   implementation target.
 
-### Phase 3: Compact Store Prototype
+### Phase 2: Compact Store Prototype
 
 Goal: prove the data-layout change can preserve semantics on small fixtures.
 
@@ -1304,7 +1205,7 @@ Exit criteria:
 - Feature-flagged raw store matches old path on small deterministic fixtures.
 - No production path uses the raw store by default.
 
-### Phase 4: Raw Join Integration
+### Phase 3: Raw Join Integration
 
 Goal: move the memory-heavy exact join stages to raw indices and masks.
 
@@ -1321,7 +1222,7 @@ Exit criteria:
 - At least one previous high-memory case shows lower peak memory.
 - Bounded diagnostics remain intact.
 
-### Phase 5: Full Matrix Acceptance
+### Phase 4: Full Matrix Acceptance
 
 Goal: validate the branch against the retained 40-case hard-case matrix.
 
@@ -1342,81 +1243,56 @@ Exit criteria:
 - `P02:260` no longer fails, or the remaining blocker is documented with
   measured attribution.
 
-## Side-Agent Brief
-
-Use a second agent only for calc reverse engineering or isolated measurement
-tasks. Do not hand it the optimizer implementation unless its output is a
-reviewable note or small, bounded patch.
-
-Suggested prompt:
-
-```text
-You are a read-only research agent for HHWX medley low-memory work.
-Use only files under temp/bandori-team-builder/low-memory-polish/calc-research-2026-06-16
-and tracked documents under documents/bandori-team-builder for context.
-Do not edit HHWX optimizer code.
-Document calc.krkrdkdk.cn's public JS/worker/WASM boundary, solver-facing
-payload shape, visible metrics, candidate limits, and any evidence for or
-against exact proof semantics. Treat calc as a design reference, not as a
-correctness oracle. Write findings into the ignored calc research bundle.
-```
-
 ## Immediate Next Actions
 
 1. Treat Stage 1 key/cache compaction as diagnostic-complete: it preserved
    semantics but did not materially lower memory.
 2. Track `scripts/bandori-medley-low-memory-polish-benchmark.cjs` as the
    canonical runner for this branch, after reviewing the local patcher behavior.
-3. Keep calc side-agent work stopped for now. The current calc notes are
-   detailed enough to guide HHWX diagnostics. Further source digging is useful
-   only if a specific HHWX replay counter cannot be designed from the existing
-   report.
-4. Treat the passive raw candidate mirror and P01 raw-index final-join parity as
+3. Treat the passive raw candidate mirror and P01 raw-index final-join parity as
    Stage 2 complete enough for the next diagnostic step.
-5. Treat Stage 2.5 no-op diagnostics as implemented enough for the next
+4. Treat Stage 2.5 no-op diagnostics as implemented enough for the next
    implementation decision: signature census, materialized upper replay,
    materialized Level 0/1 dominance replay, and raw solver-input census are
    feature-flagged, artifact-backed, and validated on `P02:260`, `P08:260`,
    `P08:323`, and `P10:260`, plus `P01:none` as a small smoke case.
-6. Use the first Stage 2.5 readout to choose Stage 3 primary typed-array raw
+5. Use the first Stage 2.5 readout to choose Stage 3 primary typed-array raw
    candidate storage next. The hard rows still need lower object residency:
    materialized upper replay did not find a direct skip lever, dominance replay
    was capped before hard-row proof value, and raw solver-input estimates are
    small enough that final solver input is not the main GiB-scale pressure.
-7. Keep pre-materialization signature/prefix upper and dominance certificates as
-   a parallel proof-design track. They are likely the route toward calc-like
+6. Keep pre-materialization signature/prefix upper and dominance certificates as
+   a parallel proof-design track. They are a possible route toward
    candidate-birth reduction, but they must not gate the first object-residency
    compaction pass.
-8. Treat the Stage 3 score-only-cache-disable, shared empty score-only payload,
+7. Treat the Stage 3 score-only-cache-disable, shared empty score-only payload,
    compact candidate-card retention, and compact score-only cache slices as
    implemented but not primary levers. They preserved scores/proof state on the
    focused runs, but `P02:260` stayed in the `4491-4494 MiB` memory class.
-9. Continue Stage 3 with raw candidate rows as the primary resident
+8. Continue Stage 3 with raw candidate rows as the primary resident
    representation for exact candidate fill and lazy hydration for final
    winners/diagnostics, but include the new score-cache evidence in the design:
    unbounded skill-window/base-score caches are a real hard-case memory source.
-10. Treat `disableExactCandidateScoreCalculationCache` as an effective
+9. Treat `disableExactCandidateScoreCalculationCache` as an effective
    hard-case fallback, not a global default. It lowers `P02:260` peak to
    `3864 MiB`, but it makes `P08:260` and `P08:323` bounded under the same
    budget. Simple bounded score-cache residency and skill-window-only cache
    removal were tested next and did not materially lower P02 peak memory, so
    do not continue cache-only work unless the cache policy changes
    substantially.
-11. Keep the combined pressure fallback as an opt-in safety valve:
-   `HHWX_LOW_MEMORY_SCORE_CALC_CACHE_PRESSURE_FALLBACK=1` plus
-   `HHWX_LOW_MEMORY_SCORE_ONLY_CACHE_PRESSURE_FALLBACK=1` reduced `P02:260`
-   to `3706 MiB` without changing scores or making proof status more
+10. Keep the combined score-computation and score-only cache pressure fallback
+   as an opt-in safety valve. It reduced `P02:260` to `3706 MiB` without
+   changing scores or making proof status more
    optimistic, while the focused exact cases stayed exact because the threshold
    did not trigger. This is not the final Stage 3 answer because it is slower
    and still misses the `20%` target.
-12. Treat candidate-birth reduction as the next calc-inspired algorithm track:
+11. Treat candidate-birth reduction as the next algorithm track:
    design a pre-materialization signature/prefix upper or dominance certificate
    that can prove skipped branches cannot beat the incumbent. Do not remove
-   candidates based on calc-style dominance until HHWX has violation counters
-   and a proof ledger reason.
-13. Keep raw-index final join as a parity harness, not the primary memory fix for
+   candidates until HHWX has violation counters and a proof-ledger reason.
+12. Keep raw-index final join as a parity harness, not the primary memory fix for
    `P02:260`, until that case reaches solve.
-14. Re-run `P02:260`, then `P08:260`, `P08:323`, and `P10:260` with
+13. Re-run `P02:260`, then `P08:260`, `P08:323`, and `P10:260` with
    `HHWX_LOW_MEMORY_TRACE=1` after each candidate-fill memory change.
 
 ## Phase 1 Trace Log
@@ -1605,9 +1481,8 @@ Candidate-fill object compression attempt:
   - Result: `P02:260` process OOM, `failedCount=1`
   - Reason: ordinary-object shape reduction did not preserve the memory guard
     behavior and pushed the run to Node heap OOM.
-- The compact-result code was removed. This supports the calc-derived
-  conclusion that the next safe target should be typed-array primary storage,
-  not smaller ad hoc JS result objects.
+- The compact-result code was removed. The next safe target should be
+  typed-array primary storage, not smaller ad hoc JS result objects.
 
 P02:260 recovery check:
 
@@ -1649,11 +1524,8 @@ Conclusion:
   and `P10:260` stayed exact and did not trigger the fallback. This is the
   first current-branch P02 opt-in slice close to the `20%` target, but it is
   still a fallback rather than the final low-memory architecture.
-- 2026-06-17: Assessed the latest calc pruning explanation as a reasonable
-  algorithm-shape hypothesis: its useful lesson is earlier item/signature/
-  prefix/dominance pruning before full candidate birth plus raw numeric
-  survivor records, not calc as an HHWX exact oracle. Implemented and measured
-  three proof-neutral Stage 3 object-residency slices: shared score-only empty
+- 2026-06-17: Implemented and measured three proof-neutral Stage 3
+  object-residency slices: shared score-only empty
   payloads, `HHWX_LOW_MEMORY_COMPACT_CANDIDATE_CARDS=1`, and
   `HHWX_LOW_MEMORY_COMPACT_SCORE_ONLY_CACHE=1`. Focused results preserved
   average/max scores and did not make proof status more optimistic, but
@@ -1671,9 +1543,7 @@ Conclusion:
   nodes and `298k` global-complement entries, so this is not the primary memory
   lever. Continue toward primary raw candidate storage and raw-index
   pair/frontier helpers.
-- 2026-06-17: Read the calc research index plus the deep-pruning,
-  memory-mechanism, and HHWX diagnostics reports. Confirmed that the current
-  roadmap already follows the right ordering: no-op algorithm diagnostics and
+- 2026-06-17: Confirmed that no-op algorithm diagnostics and
   proof-design track run in parallel with memory residency work, but
   proof-changing signature/prefix/dominance pruning must wait for HHWX-native
   ledger certificates. Added the latest bounded score-cache and
@@ -1730,11 +1600,6 @@ Conclusion:
   `P02:260`, `P08:260`, `P08:323`, and `P10:260` preserved exact/bounded
   semantics and average/max score fields. The next diagnostic target is upper
   replay, followed by Level 0/1 dominance replay.
-- 2026-06-16: Read the updated calc research index and promoted its strongest
-  actionable findings into Stage 2.5 diagnostics: signature census, upper
-  replay, Level 0/1 dominance replay, and raw solver-input census. Updated the
-  active goal and immediate next actions so no-op algorithm diagnostics run
-  before proof-changing pruning or a broad primary-storage rewrite.
 - 2026-06-16: Added Stage 2 passive raw candidate mirror and raw-index
   final-join parity instrumentation. Focused raw mirror cases all reported
   `mismatchCountTotal=0`, and P01 raw-index parity matched the object join
@@ -1750,8 +1615,7 @@ Conclusion:
 - 2026-06-16: Added `HHWX_LOW_MEMORY_TRACE=1` runner support and recorded the
   first `P02:260` memory attribution. Chose candidate-fill working set
   compaction as the next implementation target.
-- 2026-06-16: Created roadmap for exact-preserving low-memory work, separating
-  calc research from HHWX proof-safe implementation.
+- 2026-06-16: Created the roadmap for exact-preserving low-memory work.
 
 ## 2026-06-17 Current Gate Boundary
 

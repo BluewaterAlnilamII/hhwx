@@ -19,7 +19,7 @@ node --import tsx scripts/archive-bandori-medley-fixtures.mjs --seed <private-fi
 node --import tsx scripts/archive-bandori-medley-fixtures.mjs --verify
 ```
 
-The seed is the existing `manifest.json` package with profiles, source containers, assets, and `reference-only/` reports. The utility preserves its raw files and scans the known medley benchmark, scope-matrix, isolated-run, and low-memory HHWX report formats. It does not collect logs, binaries, Calc-converted inputs, or solver code. Recollect using the same source arguments to update the generated index; previously copied evidence files are not deleted.
+The seed is the existing `manifest.json` package with profiles, source containers, assets, and `reference-only/` reports. The utility preserves its raw files and scans the known medley benchmark, scope-matrix, isolated-run, and low-memory HHWX report formats. It does not collect logs, binaries, or solver code. Recollect using the same source arguments to update the generated index; previously copied evidence files are not deleted.
 
 The generated `README.md` lists profiles. `manifest.json` records:
 
