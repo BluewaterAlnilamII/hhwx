@@ -1161,6 +1161,7 @@ impl JointSearch<'_, '_, '_, '_> {
                     &owners,
                     fixed_scores,
                     node.joint.as_ref().map(|cached| &cached.bound),
+                    self.evaluation.state.incumbent_score(),
                     self.evaluation.state.control,
                 )
                 .map_err(abort)?
@@ -1174,6 +1175,19 @@ impl JointSearch<'_, '_, '_, '_> {
                     if bound.score == f64::NEG_INFINITY {
                         return Ok(JointStep::Finished);
                     }
+                    if self
+                        .evaluation
+                        .state
+                        .incumbent_score()
+                        .is_some_and(|best| bound.score < best)
+                    {
+                        add_counter(
+                            &mut self.evaluation.state.diagnostics.partial_nodes_pruned,
+                            1,
+                        )?;
+                        return Ok(JointStep::Finished);
+                    }
+                    debug_assert_eq!(bound.destinations.len(), owners.len());
                     if let Some(proposal) = bound.proposal {
                         self.evaluation.score_assignment(proposal)?;
                     }

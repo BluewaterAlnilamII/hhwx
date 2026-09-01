@@ -451,6 +451,7 @@ pub(crate) fn calculate(
     owners: &[u8],
     fixed_scores: [Option<f64>; 3],
     previous: Option<&JointUpper>,
+    prune_below: Option<f64>,
     control: &mut SearchControl<'_>,
 ) -> Result<Option<JointUpper>, SearchIncompleteReasonV1> {
     #[cfg(test)]
@@ -478,7 +479,7 @@ pub(crate) fn calculate(
             Err(_) => return Ok(None),
         }
     };
-    calculate_weights(weights, groups, owners, previous, control).map(Some)
+    calculate_weights(weights, groups, owners, previous, prune_below, control).map(Some)
 }
 
 fn calculate_weights(
@@ -486,6 +487,7 @@ fn calculate_weights(
     groups: &[Vec<u32>],
     owners: &[u8],
     previous: Option<&JointUpper>,
+    prune_below: Option<f64>,
     control: &mut SearchControl<'_>,
 ) -> Result<JointUpper, SearchIncompleteReasonV1> {
     let old = previous.and_then(|bound| bound.working.as_ref());
@@ -582,6 +584,16 @@ fn calculate_weights(
     if value == f64::NEG_INFINITY {
         return Ok(JointUpper::infeasible());
     }
+    let score = score_upper(value, working.weights.constant);
+    if prune_below.is_some_and(|incumbent| score < incumbent) {
+        crate::profiling::joint_whole_cutoff();
+        return Ok(JointUpper {
+            score,
+            destinations: Vec::new(),
+            proposal: None,
+            working: None,
+        });
+    }
     if let Some((first, last)) = changed {
         for group in (0..=last).rev() {
             poll(control)?;
@@ -628,7 +640,6 @@ fn calculate_weights(
         current -= working.layout.destination(0, roles(pattern)).unwrap();
     }
     debug_assert_eq!(counts, [5; 3]);
-    let score = score_upper(value, working.weights.constant);
     let mut destinations = previous.map_or_else(
         || vec![[f64::NEG_INFINITY; 4]; owners.len()],
         |bound| bound.destinations.clone(),
@@ -871,9 +882,35 @@ mod tests {
                 &groups,
                 &owners,
                 None,
+                None,
                 &mut control,
             )
             .unwrap();
+            if owners.iter().all(|&mask| mask == ALL_OWNERS) {
+                let equal = calculate_weights(
+                    Some(remaining_weights.clone()),
+                    &groups,
+                    &owners,
+                    None,
+                    Some(result.score),
+                    &mut control,
+                )
+                .unwrap();
+                assert_eq!(equal.destinations.len(), owners.len());
+                let cut = calculate_weights(
+                    Some(remaining_weights.clone()),
+                    &groups,
+                    &owners,
+                    None,
+                    Some(f64::from_bits(result.score.to_bits() + 1)),
+                    &mut control,
+                )
+                .unwrap();
+                assert_eq!(cut.score, result.score);
+                assert!(cut.destinations.is_empty());
+                assert!(cut.proposal.is_none());
+                assert!(cut.working.is_none());
+            }
             let expected_states = remaining_weights
                 .fixed_members
                 .iter()
@@ -887,13 +924,20 @@ mod tests {
                 let mut restricted = owners.clone();
                 restricted[id] &= !2;
                 assert!(result.can_update(&restricted, [None; 3]));
-                let updated =
-                    calculate_weights(None, &groups, &restricted, Some(&result), &mut control)
-                        .unwrap();
+                let updated = calculate_weights(
+                    None,
+                    &groups,
+                    &restricted,
+                    Some(&result),
+                    None,
+                    &mut control,
+                )
+                .unwrap();
                 let fresh = calculate_weights(
                     Some(remaining_weights),
                     &groups,
                     &restricted,
+                    None,
                     None,
                     &mut control,
                 )

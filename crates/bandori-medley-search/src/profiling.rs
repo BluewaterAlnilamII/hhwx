@@ -70,6 +70,7 @@ struct Profile {
     joint_timing_elapsed: [Duration; 4],
     joint_timing_calls: [u64; 4],
     joint_clone_bytes: u64,
+    joint_whole_cutoffs: u64,
 }
 
 impl Profile {
@@ -208,6 +209,14 @@ pub(crate) fn joint_layer() {
     });
 }
 
+pub(crate) fn joint_whole_cutoff() {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            profile.joint_whole_cutoffs += 1;
+        }
+    });
+}
+
 pub(crate) fn improvement(score: f64, diagnostics: &MedleySearchDiagnosticsV1) {
     PROFILE.with_borrow_mut(|profile| {
         if let Some(profile) = profile {
@@ -258,6 +267,7 @@ pub(crate) fn start() {
             joint_timing_elapsed: [Duration::ZERO; 4],
             joint_timing_calls: [0; 4],
             joint_clone_bytes: 0,
+            joint_whole_cutoffs: 0,
         });
     });
 }
@@ -296,6 +306,7 @@ pub(crate) fn finish() -> Value {
                 "calls": profile.joint_timing_calls[index],
             })).collect::<Vec<_>>(),
             "jointCloneBytes": profile.joint_clone_bytes,
+            "jointWholeCutoffs": profile.joint_whole_cutoffs,
             "improvements": profile.improvements,
         })
     })
