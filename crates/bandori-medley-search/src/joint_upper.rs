@@ -730,6 +730,7 @@ fn calculate_weights(
                     if outside == f64::NEG_INFINITY {
                         continue;
                     }
+                    let pattern_roles = roles(pattern);
                     let best = working.choices[group][pattern];
                     let already_satisfies = if owner < 3 {
                         best.cards[owner] == id
@@ -738,9 +739,11 @@ fn calculate_weights(
                     };
                     let conditional = if already_satisfies {
                         best
+                    } else if owner < 3 && pattern_roles[owner] == 0 {
+                        LocalChoice::default()
                     } else {
                         working.local[group].choice(
-                            roles(pattern),
+                            pattern_roles,
                             &working.residual_owners,
                             &working.weights,
                             Some((id, owner)),
