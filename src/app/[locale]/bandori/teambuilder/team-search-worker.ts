@@ -6,48 +6,13 @@ import {
   type BandoriTeamSearchEventType,
   type BandoriTeamSearchExternalSkill,
   type BandoriTeamSearchLiveType,
+  type BandoriTeamSearchResult,
   type BandoriTeamSearchResponse,
   type BandoriTeamSearchTarget,
   type BestdoriChartEntity,
   type BestdoriSongMaster,
 } from "@/lib/bandori-team-search";
-import {
-  searchBandoriBestMedleyTeams,
-  type BandoriMedleySongSearchInput,
-  type BandoriMedleyTeamSearchResult,
-  type BandoriMedleyTeamSearchInput,
-  type BandoriMedleyTeamSearchResponse,
-  type BandoriMedleyTeamSearchStats,
-} from "@/lib/bandori/team-builder/medley";
-import {
-  buildCalculatedCards,
-  createAreaItemConfigurations,
-  pruneDominatedAreaItemConfigurations,
-} from "@/lib/bandori/team-builder/core";
-import { estimateMedleyStaticCoarsePotential } from "@/lib/bandori/team-builder/medley/configurations";
-import {
-  buildMedleyResult,
-  createMedleyEvaluatedCandidateTracker,
-  pushMedleyResult,
-  sortMedleyResults,
-} from "@/lib/bandori/team-builder/medley/results";
-import {
-  getMedleyGreedySeedSlotIndices,
-} from "@/lib/bandori/team-builder/medley/seeds";
-import {
-  buildMedleySlotBuildContexts,
-  buildMedleySlotSearches,
-  createMedleySlotInput,
-  estimateMedleySlotAvailability,
-  findBestMedleySlotTeamWithCache,
-  pruneDominatedMedleySlotCards,
-} from "@/lib/bandori/team-builder/medley/slots";
-import { createInitialMedleyProfilingStats } from "@/lib/bandori/team-builder/medley/profiling";
 import { buildBandoriCharacterBonuses } from "@/lib/bandori-character-bonuses";
-import type {
-  MedleyBestSlotTeamCacheEntry,
-  MedleyTeamCandidate,
-} from "@/lib/bandori/team-builder/medley/types";
 import {
   type BandoriEventBonus,
   type BestdoriAreaItemMaster,
@@ -59,9 +24,22 @@ import {
   getGameProfileCards,
   getGameProfileCharacterMissionBonuses,
   getGameProfileCharacterPotentials,
+  replaceGameProfileCards,
   type UserGameProfileCardRecord,
   type UserGameProfilePayload,
 } from "@/lib/user-game-profile-payload";
+import { BANDORI_AREA_ITEM_IDS_BY_GROUP } from "@/lib/bandori-area-item-groups";
+import {
+  ATTRIBUTE_AREA_ITEM_IDS,
+  BAND_AREA_ITEM_GROUP_KEYS,
+  PARAMETER_AREA_ITEM_IDS,
+} from "@/lib/bandori/team-builder/core/constants";
+import {
+  buildMedleySearchInput,
+  type MedleySearchInputV1,
+} from "@/lib/bandori/medley-foundation";
+import { MEDLEY_SEARCH_SOURCE_SCHEMA_VERSION } from "@/lib/bandori/medley-foundation/contracts";
+import initMedleyWasm, { runMedleySearchJson } from "@/lib/bandori/medley-wasm/pkg/bandori_medley";
 import { resolveBandoriCardMapForServerWithJpFallback } from "@/lib/bandori/cards/regional-extensions";
 import { hasTrainedCardArt } from "@/lib/bandori/cards/training";
 import {
@@ -139,8 +117,117 @@ const DEFAULT_WORKER_MESSAGES: TeamSearchWorkerMessages = {
   calculateFailed: "Calculation failed",
 };
 
-const MEDLEY_FRONTEND_MEMORY_SOFT_LIMIT_MIB = 2800;
-type MedleyCalculationMode = "maximize" | "legacy-greedy-single";
+const MEDLEY_FRONTEND_MEMORY_SOFT_LIMIT_MIB = 1024;
+const MEDLEY_FRONTEND_MEMORY_BUDGET_BYTES = MEDLEY_FRONTEND_MEMORY_SOFT_LIMIT_MIB * 1024 * 1024;
+const MEDLEY_PROGRESS_INITIAL_DELAY_MS = 10_000;
+const MEDLEY_PROGRESS_INTERVAL_MS = 5_000;
+type MedleyCalculationMode = "maximize";
+
+type WasmMedleySearchTeam = {
+  slot: number;
+  memberInstanceIds: [number, number, number, number, number];
+  averageScore: number;
+};
+
+type WasmMedleySearchSolution = {
+  selectedAreaItemIds: number[];
+  teams: [WasmMedleySearchTeam, WasmMedleySearchTeam, WasmMedleySearchTeam];
+  totalAverageScore: number;
+};
+
+type WasmHydratedMedleyTeam = WasmMedleySearchTeam & {
+  parameters: {
+    cardPower: number;
+    areaItemPower: number;
+    eventPower: number;
+    deckTotalParameter: number;
+  };
+  minimumScore: number;
+  maximumScore: number;
+  bestSkillOrderMemberInstanceIds: [number, number, number, number, number, number];
+  maximumScoreOrderCount: number;
+  scoreOrderCount: number;
+};
+
+type WasmHydratedMedleySolution = {
+  selectedAreaItemIds: number[];
+  teams: [WasmHydratedMedleyTeam, WasmHydratedMedleyTeam, WasmHydratedMedleyTeam];
+  totalMinimumScore: number;
+  totalAverageScore: number;
+  totalMaximumScore: number;
+};
+
+type WasmMedleySearchOutcome = {
+  status: "exact";
+  best: WasmMedleySearchSolution | null;
+  discovered: WasmMedleySearchSolution[];
+  diagnostics: Record<string, unknown>;
+} | {
+  status: "incomplete";
+  reason: string;
+  bestSoFar: WasmMedleySearchSolution | null;
+  discovered: WasmMedleySearchSolution[];
+  diagnostics: Record<string, unknown>;
+};
+
+type WasmMedleySearchRunResult = {
+  outcome: WasmMedleySearchOutcome;
+  hydration: {
+    candidates: WasmHydratedMedleySolution[];
+    maximumScoreCandidateIndex: number | null;
+  };
+};
+
+export type BandoriMedleyFrontendProgressDto = {
+  kind: "medley";
+  elapsedMs: number;
+  timeToBestScoreMs: number;
+  bestSoFar: {
+    totalAverageScore: number;
+    selectedAreaItemIds: number[];
+    teams: Array<{
+      slot: number;
+      cardIds: number[];
+      leaderCardId: number;
+      leaderCardInstanceKey?: string;
+      averageScore: number;
+      cards: BandoriTeamSearchResult["cards"];
+    }>;
+  };
+};
+
+export type BandoriMedleyFrontendCandidateDto = {
+  rank: number;
+  score: number;
+  averageScore: number;
+  maxScore: number;
+  minScore: number;
+  areaItemConfiguration: BandoriTeamSearchResult["areaItemConfiguration"];
+  songResults: Array<BandoriTeamSearchResult & {
+    songIndex: number;
+    startCombo: number;
+    notesCount: number;
+  }>;
+  cardIds: number[];
+};
+
+export type BandoriMedleyFrontendFinalDto = {
+  kind: "medley";
+  status: "exact" | "incomplete";
+  incompleteReason: string | null;
+  /** At most ten retained, hydrated candidates in average-score order. */
+  candidates: BandoriMedleyFrontendCandidateDto[];
+  maximumScoreCandidate: BandoriMedleyFrontendCandidateDto | null;
+  stats: {
+    elapsedMs: number;
+    hydrationElapsedMs: number;
+    timeToBestScoreMs: number | null;
+    memoryBudgetBytes: number;
+    diagnostics: Record<string, unknown>;
+  };
+};
+
+type TeamSearchWorkerSearchResult = BandoriTeamSearchResponse | BandoriMedleyFrontendFinalDto;
 
 type TeamSearchWorkerMessageEnvelope = {
   messages?: TeamSearchWorkerMessages;
@@ -170,6 +257,8 @@ type TeamSearchWorkerSearchRequest = TeamSearchWorkerMessageEnvelope & {
     songId: number;
     difficulty: BandoriTeamSearchDifficulty;
     perfectRate: number;
+    /** Raw frontend percentage text; required by the greenfield medley adapter. */
+    perfectRatePercentText?: string;
   };
   songs?: Array<{
     songId: number;
@@ -216,14 +305,15 @@ export type TeamSearchWorkerResponse =
       requestId: string;
       type: "search";
       ok: true;
-      result: BandoriTeamSearchResponse | BandoriMedleyTeamSearchResponse;
+      result: TeamSearchWorkerSearchResult;
     }
   | {
       requestId: string;
       type: "search-progress";
       ok: true;
       partial: true;
-      result: BandoriMedleyTeamSearchResponse;
+      result: null;
+      progress: BandoriMedleyFrontendProgressDto;
     }
   | {
       requestId: string;
@@ -233,7 +323,7 @@ export type TeamSearchWorkerResponse =
     };
 
 type TeamSearchWorkerRunOptions = {
-  onMedleyProgress?: (result: BandoriMedleyTeamSearchResponse) => void;
+  onMedleyProgress?: (progress: BandoriMedleyFrontendProgressDto) => void;
 };
 
 type TeamSearchMasterData = {
@@ -482,287 +572,262 @@ function applyOwnedCardParameterPreferences(
   return nextCard;
 }
 
-function buildMedleyGreedySlotOrders(slotCount: number, preferredOrder: number[]): number[][] {
-  if (slotCount === 3) {
-    return [[2, 1, 0]];
-  }
-  return preferredOrder.length === slotCount
-    ? [preferredOrder]
-    : [Array.from({ length: slotCount }, (_, index) => slotCount - index - 1)];
+type EffectiveProfileCard = UserGameProfileCardRecord & { cardInstanceKey?: string };
+
+function describeAreaItemConfiguration(
+  selectedAreaItemIds: number[],
+): BandoriTeamSearchResult["areaItemConfiguration"] {
+  const selected = new Set(selectedAreaItemIds);
+  const bandKey = BAND_AREA_ITEM_GROUP_KEYS.find((key) => (
+    (BANDORI_AREA_ITEM_IDS_BY_GROUP[key] ?? []).some((areaItemId) => selected.has(areaItemId))
+  )) ?? null;
+  const attribute = (Object.entries(ATTRIBUTE_AREA_ITEM_IDS) as Array<[
+    BandoriTeamSearchResult["areaItemConfiguration"]["attribute"],
+    number[],
+  ]>).find(([, areaItemIds]) => areaItemIds.some((areaItemId) => selected.has(areaItemId)))?.[0] ?? null;
+  const parameter = (Object.entries(PARAMETER_AREA_ITEM_IDS) as Array<[
+    NonNullable<BandoriTeamSearchResult["areaItemConfiguration"]["parameter"]>,
+    readonly number[],
+  ]>).find(([, areaItemIds]) => areaItemIds.some((areaItemId) => selected.has(areaItemId)))?.[0] ?? null;
+  return { bandKey, attribute, parameter, selectedAreaItemIds };
 }
 
-function buildSharedConfigurationLegacyGreedyMedleyResponse({
-  input,
-  songInputs,
-  server,
-  perfectRate,
-  resultLimit,
-  startedAt,
-  deadlineAt,
-}: {
-  input: BandoriMedleyTeamSearchInput;
-  songInputs: BandoriMedleySongSearchInput[];
-  server: number;
-  perfectRate: number;
-  resultLimit: number;
-  startedAt: number;
-  deadlineAt: number;
-}): BandoriMedleyTeamSearchResponse {
-  const firstSongInput = songInputs[0];
-  if (!firstSongInput) {
-    const profiling = createInitialMedleyProfilingStats(0);
-    return {
-      results: [],
-      maxScoreCandidate: null,
-      evaluatedAverageTopCandidates: [],
-      stats: {
-        candidateCardCount: 0,
-        rawAreaItemConfigurationCount: 0,
-        areaItemConfigurationCount: 0,
-        prunedAreaItemConfigurationCount: 0,
-        enumeratedTeamCount: 0,
-        evaluatedTeamCount: 0,
-        prunedBranchCount: 0,
-        elapsedMs: Math.round(performance.now() - startedAt),
-        isExhaustive: false,
-        timedOut: false,
-        memoryLimited: false,
-        memorySoftLimitMiB: null,
-        peakUsedHeapMiB: null,
-        searchMode: null,
-        observedScoreUpperBound: null,
-        observedScoreUpperBoundGap: null,
-        profiling,
-      },
-    };
+function mapMedleyDisplayCard(
+  instanceId: number,
+  input: MedleySearchInputV1,
+  effectiveCards: EffectiveProfileCard[],
+  cardsById: CardsResponse,
+): BandoriTeamSearchResult["cards"][number] {
+  const searchCard = input.cards[instanceId];
+  const state = effectiveCards[instanceId];
+  if (!searchCard || !state || searchCard.instanceId !== instanceId) {
+    throw new Error(`Invalid medley result card instance ${instanceId}`);
   }
-
-  const firstSlotInput = createMedleySlotInput(input, firstSongInput);
-  const calculatedCards = buildCalculatedCards(firstSlotInput);
-  const rawConfigurations = createAreaItemConfigurations(input.userAreaItems);
-  const configurations = pruneDominatedAreaItemConfigurations(rawConfigurations, calculatedCards, firstSlotInput, server);
-  const orderedConfigurations = configurations
-    .map((configuration, index) => ({
-      configuration,
-      index,
-      potential: estimateMedleyStaticCoarsePotential(input, calculatedCards, configuration),
-    }))
-    .sort((left, right) => right.potential - left.potential || left.index - right.index)
-    .map(({ configuration }) => configuration);
-  const profiling = createInitialMedleyProfilingStats(configurations.length);
-  const stats: BandoriMedleyTeamSearchStats = {
-    candidateCardCount: calculatedCards.length,
-    rawAreaItemConfigurationCount: rawConfigurations.length,
-    areaItemConfigurationCount: configurations.length,
-    prunedAreaItemConfigurationCount: rawConfigurations.length - configurations.length,
-    enumeratedTeamCount: 0,
-    evaluatedTeamCount: 0,
-    prunedBranchCount: 0,
-    elapsedMs: 0,
-    isExhaustive: false,
-    timedOut: false,
-    memoryLimited: false,
-    memorySoftLimitMiB: null,
-    peakUsedHeapMiB: null,
-    searchMode: null,
-    observedScoreUpperBound: null,
-    observedScoreUpperBoundGap: null,
-    profiling,
+  const master = cardsById[String(searchCard.masterCardId)];
+  return {
+    cardId: searchCard.masterCardId,
+    cardInstanceKey: state.cardInstanceKey,
+    characterId: searchCard.characterId,
+    bandId: searchCard.bandId,
+    attribute: searchCard.attribute,
+    rarity: readPositiveInteger(master?.rarity),
+    skillId: readPositiveInteger(master?.skillId),
+    skillLevel: state.skillLevel,
+    level: state.level,
+    masterRank: state.masterRank,
+    isTrained: state.isTrained,
+    totalPower: searchCard.characterParameter.reduce((sum, value) => sum + value, 0),
   };
-  const results: BandoriMedleyTeamSearchResult[] = [];
-  const evaluatedCandidateTracker = createMedleyEvaluatedCandidateTracker();
-  const observeEvaluatedMedleyResult = evaluatedCandidateTracker.observe;
-  const buildContexts = buildMedleySlotBuildContexts(input, songInputs, calculatedCards, server);
-  const getPruningThreshold = (): number => (
-    results.length >= resultLimit
-      ? results[resultLimit - 1]?.score ?? Number.NEGATIVE_INFINITY
-      : Number.NEGATIVE_INFINITY
-  );
-  const isPastDeadline = (): boolean => {
-    const timedOut = performance.now() >= deadlineAt;
-    if (timedOut) {
-      stats.timedOut = true;
-    }
-    return timedOut;
-  };
+}
 
-  for (const configuration of orderedConfigurations) {
-    if (isPastDeadline()) {
-      break;
-    }
-    profiling.startedAreaItemConfigurationCount += 1;
-    const slots = pruneDominatedMedleySlotCards(buildMedleySlotSearches(
-      input,
-      songInputs,
-      calculatedCards,
-      configuration,
-      server,
-      buildContexts,
+function mapMedleyCandidate(
+  candidate: WasmHydratedMedleySolution,
+  rank: number,
+  input: MedleySearchInputV1,
+  effectiveCards: EffectiveProfileCard[],
+  cardsById: CardsResponse,
+): BandoriMedleyFrontendCandidateDto {
+  const areaItemConfiguration = describeAreaItemConfiguration(candidate.selectedAreaItemIds);
+  let startCombo = 0;
+  const songResults = candidate.teams.map((team, songIndex) => {
+    const cards = team.memberInstanceIds.map((instanceId) => (
+      mapMedleyDisplayCard(instanceId, input, effectiveCards, cardsById)
     ));
-    const configurationRootUpperBound = slots.reduce((sum, slot) => sum + slot.rootScoreUpperBound, 0);
-    const currentThreshold = getPruningThreshold();
-    if (Number.isFinite(currentThreshold) && configurationRootUpperBound < currentThreshold) {
-      profiling.rootUpperPrunedConfigurationCount += 1;
-      profiling.rootUpperBestConfigurationUpperBound = Math.max(
-        profiling.rootUpperBestConfigurationUpperBound ?? Number.NEGATIVE_INFINITY,
-        configurationRootUpperBound,
-      );
-      continue;
+    const cardByInstanceId = new Map(team.memberInstanceIds.map((instanceId, index) => [instanceId, cards[index]]));
+    const leader = cardByInstanceId.get(team.memberInstanceIds[2]);
+    if (!leader) {
+      throw new Error(`Invalid medley result leader for slot ${songIndex}`);
     }
-    const seedOrders = buildMedleyGreedySlotOrders(slots.length, getMedleyGreedySeedSlotIndices(slots));
-    const bestSlotTeamCache = new Map<string, MedleyBestSlotTeamCacheEntry>();
-    const getRemainingScoreUpperBound = (
-      remainingSlotIndices: number[],
-      bannedCardIds: Set<number>,
-    ): number => remainingSlotIndices.reduce((sum, remainingSlotIndex) => (
-      sum + estimateMedleySlotAvailability(slots[remainingSlotIndex], bannedCardIds, bannedCardIds, profiling).scoreUpperBound
-    ), 0);
-    let completedConfiguration = false;
-
-    for (const seedOrder of seedOrders) {
-      const selectedBySong: Array<MedleyTeamCandidate | undefined> = [];
-      const bannedCardIds = new Set<number>();
-      let completedSeedOrder = true;
-      let currentScore = 0;
-
-      for (let orderIndex = 0; orderIndex < seedOrder.length; orderIndex += 1) {
-        const slotIndex = seedOrder[orderIndex];
-        const remainingSlotIndices = seedOrder.slice(orderIndex + 1);
-        if (isPastDeadline()) {
-          completedSeedOrder = false;
-          break;
-        }
-        const slot = slots[slotIndex];
-        const threshold = getPruningThreshold();
-        const remainingScoreUpperBound = Number.isFinite(threshold)
-          ? getRemainingScoreUpperBound(remainingSlotIndices, bannedCardIds)
-          : Number.POSITIVE_INFINITY;
-        const minimumScore = Number.isFinite(threshold)
-          ? threshold - currentScore - remainingScoreUpperBound
-          : Number.NEGATIVE_INFINITY;
-        const candidate = findBestMedleySlotTeamWithCache(
-          bestSlotTeamCache,
-          slotIndex,
-          slot,
-          bannedCardIds,
-          bannedCardIds,
-          server,
-          perfectRate,
-          stats,
-          isPastDeadline,
-          () => undefined,
-          profiling,
-          minimumScore,
-        );
-        if (!candidate) {
-          if (Number.isFinite(minimumScore)) {
-            stats.prunedBranchCount += 1;
-          }
-          completedSeedOrder = false;
-          break;
-        }
-        selectedBySong[slot.songIndex] = candidate;
-        for (const card of candidate.cards) {
-          bannedCardIds.add(card.cardId);
-        }
-        currentScore += candidate.result.score;
-        if (Number.isFinite(threshold)) {
-          const nextRemainingScoreUpperBound = getRemainingScoreUpperBound(remainingSlotIndices, bannedCardIds);
-          if (currentScore + nextRemainingScoreUpperBound < threshold) {
-            stats.prunedBranchCount += 1;
-            completedSeedOrder = false;
-            break;
-          }
-        }
-      }
-
-      const result = completedSeedOrder
-        ? buildMedleyResult(slots, selectedBySong, configuration)
-        : null;
-      if (result) {
-        completedConfiguration = true;
-        pushMedleyResult(results, result, resultLimit, observeEvaluatedMedleyResult);
-        profiling.bestGreedySeedScore = Math.max(profiling.bestGreedySeedScore ?? Number.NEGATIVE_INFINITY, result.score);
-        if (seedOrder.map((slotIndex) => slots[slotIndex].songIndex).join(",") === "2,1,0") {
-          profiling.reverseSongOrderGreedySeedScore = Math.max(
-            profiling.reverseSongOrderGreedySeedScore ?? Number.NEGATIVE_INFINITY,
-            result.score,
-          );
-        }
-      }
-      if (stats.timedOut) {
-        break;
-      }
+    const skillOrderCards = team.bestSkillOrderMemberInstanceIds.map((instanceId) => cardByInstanceId.get(instanceId));
+    if (skillOrderCards.some((card) => !card)) {
+      throw new Error(`Invalid medley result skill order for slot ${songIndex}`);
     }
-
-    if (completedConfiguration) {
-      profiling.completedAreaItemConfigurationCount += 1;
-    }
-    if (stats.timedOut) {
-      break;
-    }
-  }
-  sortMedleyResults(results);
-  if (profiling.bestGreedySeedScore === Number.NEGATIVE_INFINITY) {
-    profiling.bestGreedySeedScore = null;
-  }
-  stats.elapsedMs = Math.round(performance.now() - startedAt);
-
-  const maxScoreCandidate = evaluatedCandidateTracker.getMaxScoreCandidate(results[0] ?? null);
+    const notesCount = input.songs[songIndex]?.notes.length ?? 0;
+    const result: BandoriMedleyFrontendCandidateDto["songResults"][number] = {
+      rank: 1,
+      score: team.averageScore,
+      targetValue: team.averageScore,
+      averageScore: team.averageScore,
+      maxScore: team.maximumScore,
+      minScore: team.minimumScore,
+      maxScoreOrderCount: team.maximumScoreOrderCount,
+      maxScoreOrderTotal: team.scoreOrderCount,
+      totalPower: team.parameters.deckTotalParameter,
+      rawCardPower: team.parameters.cardPower,
+      areaItemPower: team.parameters.areaItemPower,
+      eventPower: team.parameters.eventPower,
+      eventPowerWithRoom: team.parameters.eventPower,
+      pointBonusRate: 0,
+      eventPointBase: null,
+      eventPointMultiplier: 1,
+      eventPoint: null,
+      eventPointOptions: { mode: "none", defaultKey: null, options: [] },
+      eventMode: "parameterPower",
+      roomScore: null,
+      supportBandPower: null,
+      supportCards: [],
+      liveType: "free",
+      eventType: "medley",
+      target: "score",
+      leaderCardId: leader.cardId,
+      leaderCardInstanceKey: leader.cardInstanceKey,
+      skillOrderCardIds: skillOrderCards.map((card) => card?.cardId ?? 0),
+      skillOrderCardInstanceKeys: skillOrderCards.map((card) => card?.cardInstanceKey ?? `profile:${card?.cardId ?? 0}`),
+      areaItemConfiguration,
+      context: {
+        sameBandId: cards.every((card) => card.bandId === cards[0]?.bandId) ? cards[0]?.bandId ?? null : null,
+        sameAttribute: cards.every((card) => card.attribute === cards[0]?.attribute) ? cards[0]?.attribute ?? null : null,
+      },
+      cards,
+      skills: cards.map((card) => ({
+        cardId: card.cardId,
+        cardInstanceKey: card.cardInstanceKey,
+        skillId: card.skillId,
+        skillLevel: card.skillLevel,
+        resolvedSkill: null,
+      })),
+      songIndex,
+      startCombo,
+      notesCount,
+    };
+    startCombo += notesCount;
+    return result;
+  });
+  const cardIds = songResults.flatMap((songResult) => songResult.cards.map((card) => card.cardId));
   return {
-    results,
-    maxScoreCandidate,
-    evaluatedAverageTopCandidates: evaluatedCandidateTracker.getEvaluatedAverageTopCandidates(
-      maxScoreCandidate ? [...results, maxScoreCandidate] : results,
-    ),
-    stats,
+    rank,
+    score: candidate.totalAverageScore,
+    averageScore: candidate.totalAverageScore,
+    maxScore: candidate.totalMaximumScore,
+    minScore: candidate.totalMinimumScore,
+    areaItemConfiguration,
+    songResults,
+    cardIds,
   };
 }
 
-function buildLegacyGreedyMedleyInput({
-  userCards,
-  userAreaItems,
-  characterBonuses,
-  cardsById,
-  charactersById,
-  skillsById,
-  areaItemsById,
-  songs,
-  eventBonus,
-  eventFormula,
-  perfectRate,
-  server,
-}: {
-  userCards: BandoriMedleyTeamSearchInput["userCards"];
-  userAreaItems: BandoriMedleyTeamSearchInput["userAreaItems"];
-  characterBonuses: BandoriMedleyTeamSearchInput["characterBonuses"];
-  cardsById: BandoriMedleyTeamSearchInput["cardsById"];
-  charactersById: BandoriMedleyTeamSearchInput["charactersById"];
-  skillsById: BandoriMedleyTeamSearchInput["skillsById"];
-  areaItemsById: BandoriMedleyTeamSearchInput["areaItemsById"];
-  songs: BandoriMedleySongSearchInput[];
-  eventBonus: BandoriMedleyTeamSearchInput["eventBonus"];
-  eventFormula: 0 | 1 | 2;
-  perfectRate: number;
-  server: number;
-}): BandoriMedleyTeamSearchInput {
+function mapMedleyProgress(
+  solution: WasmMedleySearchSolution,
+  input: MedleySearchInputV1,
+  effectiveCards: EffectiveProfileCard[],
+  cardsById: CardsResponse,
+  elapsedMs: number,
+  timeToBestScoreMs: number,
+): BandoriMedleyFrontendProgressDto {
   return {
-    userCards,
-    userAreaItems,
-    characterBonuses,
-    cardsById,
-    charactersById,
-    skillsById,
-    areaItemsById,
-    songs,
-    eventBonus,
-    eventType: "medley",
-    eventFormula,
-    target: "score",
-    resultLimit: 1,
-    perfectRate,
-    useSpecialRoomBonus: false,
-    server,
+    kind: "medley",
+    elapsedMs,
+    timeToBestScoreMs,
+    bestSoFar: {
+      totalAverageScore: solution.totalAverageScore,
+      selectedAreaItemIds: solution.selectedAreaItemIds,
+      teams: solution.teams.map((team) => {
+        const cards = team.memberInstanceIds.map((instanceId) => (
+          mapMedleyDisplayCard(instanceId, input, effectiveCards, cardsById)
+        ));
+        const leader = cards[2];
+        return {
+          slot: team.slot,
+          cardIds: cards.map((card) => card.cardId),
+          leaderCardId: leader?.cardId ?? 0,
+          leaderCardInstanceKey: leader?.cardInstanceKey,
+          averageScore: team.averageScore,
+          cards,
+        };
+      }),
+    },
+  };
+}
+
+async function runGreenfieldMedleySearch({
+  request,
+  input,
+  effectiveCards,
+  cardsById,
+  options,
+}: {
+  request: TeamSearchWorkerSearchRequest;
+  input: MedleySearchInputV1;
+  effectiveCards: EffectiveProfileCard[];
+  cardsById: CardsResponse;
+  options: TeamSearchWorkerRunOptions;
+}): Promise<BandoriMedleyFrontendFinalDto> {
+  await initMedleyWasm();
+  const inputJson = JSON.stringify(input);
+  const searchStartedAt = performance.now();
+  const deadlineAt = searchStartedAt + Math.min(300_000, Math.max(1_000, request.calculation.maxSearchDurationMs));
+  let searchFinishedAt: number | null = null;
+  let timeToBestScoreMs: number | null = null;
+  let pendingProgress: WasmMedleySearchSolution | null = null;
+  let lastProgressAt: number | null = null;
+
+  const publishPendingProgress = (now: number): void => {
+    if (!pendingProgress || !options.onMedleyProgress) {
+      return;
+    }
+    const elapsedMs = now - searchStartedAt;
+    if (elapsedMs < MEDLEY_PROGRESS_INITIAL_DELAY_MS
+      || (lastProgressAt !== null && now - lastProgressAt < MEDLEY_PROGRESS_INTERVAL_MS)) {
+      return;
+    }
+    options.onMedleyProgress(mapMedleyProgress(
+      pendingProgress,
+      input,
+      effectiveCards,
+      cardsById,
+      elapsedMs,
+      timeToBestScoreMs ?? elapsedMs,
+    ));
+    pendingProgress = null;
+    lastProgressAt = now;
+  };
+
+  const resultJson = runMedleySearchJson(
+    inputJson,
+    MEDLEY_FRONTEND_MEMORY_BUDGET_BYTES,
+    () => {
+      const now = performance.now();
+      publishPendingProgress(now);
+      return now >= deadlineAt ? "timed_out" : undefined;
+    },
+    (solutionJson: string) => {
+      const now = performance.now();
+      timeToBestScoreMs = now - searchStartedAt;
+      pendingProgress = JSON.parse(solutionJson) as WasmMedleySearchSolution;
+      publishPendingProgress(now);
+    },
+    () => {
+      searchFinishedAt = performance.now();
+    },
+  );
+  const hydrationFinishedAt = performance.now();
+  const runResult = JSON.parse(resultJson) as WasmMedleySearchRunResult;
+  const candidates = runResult.hydration.candidates.map((candidate, index) => (
+    mapMedleyCandidate(candidate, index + 1, input, effectiveCards, cardsById)
+  ));
+  const maximumScoreCandidateIndex = runResult.hydration.maximumScoreCandidateIndex;
+  const maximumScoreCandidate = maximumScoreCandidateIndex === null
+    ? null
+    : candidates[maximumScoreCandidateIndex] ?? null;
+  const diagnostics = runResult.outcome.diagnostics;
+  const incompleteReason = runResult.outcome.status === "incomplete"
+    ? runResult.outcome.reason
+    : null;
+  const finishedAt = searchFinishedAt ?? hydrationFinishedAt;
+
+  return {
+    kind: "medley",
+    status: runResult.outcome.status,
+    incompleteReason,
+    candidates,
+    maximumScoreCandidate,
+    stats: {
+      elapsedMs: finishedAt - searchStartedAt,
+      hydrationElapsedMs: hydrationFinishedAt - finishedAt,
+      timeToBestScoreMs,
+      memoryBudgetBytes: MEDLEY_FRONTEND_MEMORY_BUDGET_BYTES,
+      diagnostics,
+    },
   };
 }
 
@@ -809,7 +874,7 @@ async function runSearchAttempt(
   request: TeamSearchWorkerSearchRequest,
   options: TeamSearchWorkerRunOptions = {},
   forceRefresh = false,
-): Promise<BandoriTeamSearchResponse | BandoriMedleyTeamSearchResponse> {
+): Promise<TeamSearchWorkerSearchResult> {
   const messages = getWorkerMessages(request.messages);
   const songId = Math.trunc(request.song.songId);
   const medleySongs = request.event.eventType === "medley" ? request.songs?.slice(0, 3) ?? [] : [];
@@ -903,6 +968,10 @@ async function runSearchAttempt(
     if (medleySongs.length !== 3) {
       throw new Error(messages.selectMedleySongs);
     }
+    const perfectRatePercentText = request.song.perfectRatePercentText;
+    if (typeof perfectRatePercentText !== "string") {
+      throw new Error("Medley search requires the original PERFECT percentage text");
+    }
     const medleySongInputs = medleySongs.map((medleySong, index) => {
       const medleySongId = Math.trunc(medleySong.songId);
       const medleySongMaster = songsById[String(medleySongId)];
@@ -916,83 +985,44 @@ async function runSearchAttempt(
         ]);
       }
       return {
-        chart: medleyChartSnapshot.value.chart,
-        chartCacheKey: [
-          TEAM_SEARCH_WORKER_ALGORITHM_REVISION,
-          `master-${masterSnapshot.generation}`,
-          `chart-${medleyChartSnapshot.generation}`,
-          medleySongId,
-          medleySong.difficulty,
-          "medley",
-          index,
-        ].join(":"),
-        song: medleySongMaster,
+        songIdText: String(medleySongId),
         difficulty: medleySong.difficulty,
+        chart: medleyChartSnapshot.value.chart,
       };
     });
-    const characterBonuses = buildBandoriCharacterBonuses(
-      getGameProfileCharacterPotentials(request.profilePayload),
-      getGameProfileCharacterMissionBonuses(request.profilePayload),
-    );
-
-    if (request.calculation.medleyMode === "legacy-greedy-single") {
-      const startedAt = performance.now();
-      const deadlineAt = startedAt + Math.min(300000, Math.max(1000, request.calculation.maxSearchDurationMs));
-      const medleyInput = buildLegacyGreedyMedleyInput({
-        userCards,
-        userAreaItems,
-        characterBonuses,
-        cardsById,
-        charactersById,
-        skillsById,
-        areaItemsById,
-        songs: medleySongInputs,
-        eventBonus,
-        eventFormula: request.event.formula,
-        perfectRate: request.song.perfectRate,
-        server,
-      });
-      return buildSharedConfigurationLegacyGreedyMedleyResponse({
-        input: medleyInput,
-        songInputs: medleySongInputs,
-        server,
-        perfectRate: request.song.perfectRate,
-        resultLimit: request.calculation.resultLimit,
-        startedAt,
-        deadlineAt,
-      });
-    }
-
-    return searchBandoriBestMedleyTeams({
-      userCards,
-      userAreaItems,
-      characterBonuses,
-      cardsById,
+    const profilePayload = replaceGameProfileCards(request.profilePayload, userCards.map((card) => ({
+      cardId: card.cardId,
+      level: card.level,
+      masterRank: card.masterRank,
+      skillLevel: card.skillLevel,
+      episodeCount: card.episodeCount,
+      isTrained: card.isTrained,
+      hasTrainedArt: card.hasTrainedArt,
+      isExcluded: card.isExcluded,
+    })));
+    const cardInstanceKeyById = new Map(userCards.map((card) => [card.cardId, card.cardInstanceKey]));
+    const effectiveCards = getGameProfileCards(profilePayload).map((card) => ({
+      ...card,
+      cardInstanceKey: cardInstanceKeyById.get(card.cardId),
+    }));
+    const medleyInput = buildMedleySearchInput({
+      schemaVersion: MEDLEY_SEARCH_SOURCE_SCHEMA_VERSION,
+      profilePayload,
+      cardsById: cachedCards,
       charactersById,
       skillsById,
       areaItemsById,
-      songs: medleySongInputs,
+      songsById,
       eventBonus,
-      eventType: "medley",
-      eventFormula: request.event.formula,
-      target: "score",
-      resultLimit: request.calculation.resultLimit,
-      perfectRate: request.song.perfectRate,
-      useSpecialRoomBonus: false,
-      server,
-      maxSearchDurationMs: Math.min(300000, Math.max(1000, request.calculation.maxSearchDurationMs)),
-      coarseAreaItemFilter: { mode: "all" },
-      optimization: {
-        debugConfigurationTrace: true,
-        memorySoftLimitMiB: MEDLEY_FRONTEND_MEMORY_SOFT_LIMIT_MIB,
-      },
-      progress: options.onMedleyProgress
-        ? {
-          initialDelayMs: 10_000,
-          scoreUpdateMinIntervalMs: 5_000,
-          onProgress: options.onMedleyProgress,
-        }
-        : undefined,
+      perfectRatePercentText,
+      songs: medleySongInputs,
+    });
+    return runGreenfieldMedleySearch({
+      request,
+      input: medleyInput,
+      effectiveCards,
+      cardsById,
+      options,
     });
   }
 
@@ -1042,7 +1072,7 @@ async function runSearchAttempt(
 function runSearch(
   request: TeamSearchWorkerSearchRequest,
   options: TeamSearchWorkerRunOptions = {},
-): Promise<BandoriTeamSearchResponse | BandoriMedleyTeamSearchResponse> {
+): Promise<TeamSearchWorkerSearchResult> {
   const messages = getWorkerMessages(request.messages);
   return withIntegrityRefreshRetry(
     (forceRefresh) => runSearchAttempt(request, options, forceRefresh),
@@ -1069,17 +1099,18 @@ self.onmessage = (event: MessageEvent<TeamSearchWorkerMessage>) => {
   }
 
   const shouldReportMedleyProgress = Boolean(
-    event.data.songs?.length === 3 && event.data.calculation.medleyMode !== "legacy-greedy-single",
+    event.data.event.eventType === "medley" && event.data.songs?.length === 3,
   );
   void runSearch(event.data, {
     onMedleyProgress: shouldReportMedleyProgress
-      ? (result) => {
+      ? (progress) => {
         self.postMessage({
           requestId: event.data.requestId,
           type: "search-progress",
           ok: true,
           partial: true,
-          result,
+          result: null,
+          progress,
         } satisfies TeamSearchWorkerResponse);
       }
       : undefined,
