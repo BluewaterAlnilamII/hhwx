@@ -204,6 +204,11 @@ struct LocalGroup {
     required: Vec<u32>,
 }
 
+struct LocalCandidates {
+    ids: [[[u32; 8]; 2]; 3],
+    lengths: [[u8; 2]; 3],
+}
+
 impl LocalGroup {
     fn new(ids: &[u32], owners: &[u8], weights: &JointWeights) -> Self {
         let mut best = [[[NO_CARD; 4]; 2]; 3];
@@ -238,11 +243,46 @@ impl LocalGroup {
         }
     }
 
+    fn candidates(&self, owners: &[u8]) -> LocalCandidates {
+        let mut result = LocalCandidates {
+            ids: [[[NO_CARD; 8]; 2]; 3],
+            lengths: [[0; 2]; 3],
+        };
+        for slot in 0..3 {
+            for role in 0..2 {
+                for &id in self.best[slot][role].iter().chain(&self.required) {
+                    let length = usize::from(result.lengths[slot][role]);
+                    if id == NO_CARD
+                        || owners[id as usize] & (1 << slot) == 0
+                        || result.ids[slot][role][..length].contains(&id)
+                    {
+                        continue;
+                    }
+                    result.ids[slot][role][length] = id;
+                    result.lengths[slot][role] += 1;
+                }
+            }
+        }
+        result
+    }
+
+    #[cfg(test)]
     fn choice(
         &self,
         pattern: [usize; 3],
         owners: &[u8],
         weights: &JointWeights,
+        forced: Option<(u32, usize)>,
+    ) -> LocalChoice {
+        self.choice_with(pattern, owners, weights, &self.candidates(owners), forced)
+    }
+
+    fn choice_with(
+        &self,
+        pattern: [usize; 3],
+        owners: &[u8],
+        weights: &JointWeights,
+        candidates: &LocalCandidates,
         forced: Option<(u32, usize)>,
     ) -> LocalChoice {
         if self.required.len() > pattern.iter().filter(|&&role| role != 0).count() {
@@ -264,15 +304,9 @@ impl LocalGroup {
                 continue;
             }
             lengths[slot] = 0;
-            for &id in self.best[slot][pattern[slot] - 1]
-                .iter()
-                .chain(&self.required)
-            {
-                if id == NO_CARD
-                    || owners[id as usize] & (1 << slot) == 0
-                    || forced.is_some_and(|(fixed, _)| fixed == id)
-                    || choices[slot][..lengths[slot]].contains(&id)
-                {
+            let role = pattern[slot] - 1;
+            for &id in &candidates.ids[slot][role][..usize::from(candidates.lengths[slot][role])] {
+                if forced.is_some_and(|(fixed, _)| fixed == id) {
                     continue;
                 }
                 choices[slot][lengths[slot]] = id;
@@ -534,14 +568,16 @@ fn calculate_weights(
             if local.required.len() > 3 {
                 return Ok(JointUpper::infeasible());
             }
+            let candidates = local.candidates(&working.residual_owners);
             let choices: [LocalChoice; PATTERNS] = std::array::from_fn(|pattern| {
                 if working.layout.transitions[pattern].is_empty() {
                     LocalChoice::default()
                 } else {
-                    local.choice(
+                    local.choice_with(
                         roles(pattern),
                         &working.residual_owners,
                         &working.weights,
+                        &candidates,
                         None,
                     )
                 }
@@ -715,6 +751,7 @@ fn calculate_weights(
                 ));
             }
         }
+        let candidates = working.local[group].candidates(&working.residual_owners);
         for &id in ids {
             destinations[id as usize] = [f64::NEG_INFINITY; 4];
             let mask = working.residual_owners[id as usize];
@@ -743,10 +780,11 @@ fn calculate_weights(
                     } else if owner < 3 && pattern_roles[owner] == 0 {
                         LocalChoice::default()
                     } else {
-                        working.local[group].choice(
+                        working.local[group].choice_with(
                             pattern_roles,
                             &working.residual_owners,
                             &working.weights,
+                            &candidates,
                             Some((id, owner)),
                         )
                     };
