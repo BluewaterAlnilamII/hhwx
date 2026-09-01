@@ -79,29 +79,6 @@ impl TeamContext {
     }
 }
 
-#[cfg(test)]
-#[derive(Clone, Copy, Debug)]
-pub(crate) enum RootContextMode {
-    Any,
-    BandSame(u32),
-    BandMixed,
-    AttributeSame(CardAttributeV1),
-    AttributeMixed,
-}
-
-#[cfg(test)]
-impl RootContextMode {
-    fn accepts(self, context: TeamContext) -> bool {
-        match self {
-            Self::Any => true,
-            Self::BandSame(band_id) => context.band_id == Some(band_id),
-            Self::BandMixed => context.band_id.is_none(),
-            Self::AttributeSame(attribute) => context.attribute == Some(attribute),
-            Self::AttributeMixed => context.attribute.is_none(),
-        }
-    }
-}
-
 fn contexts(card: &SearchCardV1) -> [ResolvedScoreSkillV1; 4] {
     [
         card.skill_contexts.mixed,
@@ -354,32 +331,6 @@ impl<'a> FastUpperBoundEngine<'a> {
         groups: &[Vec<u32>],
         fixed_scores: [Option<f64>; 3],
     ) -> Result<Option<crate::joint_upper::JointWeights>, UpperBoundFailure> {
-        self.joint_weights_with_contexts(owners, groups, fixed_scores, |_, _| true)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn joint_weights_for_context_modes(
-        &self,
-        owners: &[u8],
-        groups: &[Vec<u32>],
-        fixed_scores: [Option<f64>; 3],
-        modes: [RootContextMode; 3],
-    ) -> Result<Option<crate::joint_upper::JointWeights>, UpperBoundFailure> {
-        self.joint_weights_with_contexts(owners, groups, fixed_scores, |slot, context| {
-            modes[slot].accepts(context)
-        })
-    }
-
-    fn joint_weights_with_contexts<F>(
-        &self,
-        owners: &[u8],
-        groups: &[Vec<u32>],
-        fixed_scores: [Option<f64>; 3],
-        context_allowed: F,
-    ) -> Result<Option<crate::joint_upper::JointWeights>, UpperBoundFailure>
-    where
-        F: Fn(usize, TeamContext) -> bool,
-    {
         let mut result = crate::joint_upper::JointWeights {
             cards: vec![[[0.0; 2]; 3]; owners.len()],
             constant: 0.0,
@@ -424,24 +375,22 @@ impl<'a> FastUpperBoundEngine<'a> {
                 .contexts
                 .iter()
                 .filter(|weighted| {
-                    context_allowed(slot, weighted.context)
-                        && fixed.iter().all(|&id| {
-                            weighted
-                                .context
-                                .accepts(&self.model.input.cards[id as usize])
-                        })
-                        && remaining_groups
-                            .iter()
-                            .filter(|group| {
-                                group.iter().any(|&id| {
-                                    owners[id as usize] & bit != 0
-                                        && weighted
-                                            .context
-                                            .accepts(&self.model.input.cards[id as usize])
-                                })
+                    fixed.iter().all(|&id| {
+                        weighted
+                            .context
+                            .accepts(&self.model.input.cards[id as usize])
+                    }) && remaining_groups
+                        .iter()
+                        .filter(|group| {
+                            group.iter().any(|&id| {
+                                owners[id as usize] & bit != 0
+                                    && weighted
+                                        .context
+                                        .accepts(&self.model.input.cards[id as usize])
                             })
-                            .count()
-                            >= needed
+                        })
+                        .count()
+                        >= needed
                 })
                 .collect::<Vec<_>>();
             if reachable.is_empty() {
@@ -1394,23 +1343,6 @@ mod tests {
                         }
                         exact
                     });
-                    let semantic_modes = [
-                        if set.iter().all(|&id| {
-                            input.cards[id as usize].band_id == input.cards[set[0] as usize].band_id
-                        }) {
-                            RootContextMode::BandSame(input.cards[set[0] as usize].band_id)
-                        } else {
-                            RootContextMode::BandMixed
-                        },
-                        if set.iter().all(|&id| {
-                            input.cards[id as usize].attribute
-                                == input.cards[set[0] as usize].attribute
-                        }) {
-                            RootContextMode::AttributeSame(input.cards[set[0] as usize].attribute)
-                        } else {
-                            RootContextMode::AttributeMixed
-                        },
-                    ];
                     for fixed_count in 0..=5 {
                         let mut owners = input
                             .cards
@@ -1424,47 +1356,29 @@ mod tests {
                                 owners[(id + slot as u32 * pool_size) as usize] = 1 << slot;
                             }
                         }
-                        let assert_joint_covers = |joint: &crate::joint_upper::JointWeights| {
-                            for (leader, exact) in set.into_iter().zip(exact_by_leader) {
-                                let mut upper = joint.constant;
-                                for slot in 0..3 {
-                                    for &id in &set[fixed_count..] {
-                                        let role = usize::from(id == leader);
-                                        upper = add_up(
-                                            upper,
-                                            joint.cards[(id + slot as u32 * pool_size) as usize]
-                                                [slot][role],
-                                        )
-                                        .unwrap();
-                                    }
-                                    if fixed_count < 5 && set[..fixed_count].contains(&leader) {
-                                        upper = add_up(upper, joint.fixed_leaders[slot].unwrap())
-                                            .unwrap();
-                                    }
-                                }
-                                let upper = mul_up(upper, rounding_factor(4).unwrap()).unwrap();
-                                assert!((exact[0] + exact[1]) + exact[2] <= upper);
-                            }
-                        };
                         let joint = engine
                             .joint_weights(&owners, &groups, [None; 3])
                             .unwrap()
                             .unwrap();
-                        assert_joint_covers(&joint);
-                        if fixed_count == 0 {
+                        for (leader, exact) in set.into_iter().zip(exact_by_leader) {
+                            let mut upper = joint.constant;
                             for slot in 0..3 {
-                                for mode in semantic_modes {
-                                    let mut modes = [RootContextMode::Any; 3];
-                                    modes[slot] = mode;
-                                    let filtered = engine
-                                        .joint_weights_for_context_modes(
-                                            &owners, &groups, [None; 3], modes,
-                                        )
-                                        .unwrap()
-                                        .unwrap();
-                                    assert_joint_covers(&filtered);
+                                for &id in &set[fixed_count..] {
+                                    let role = usize::from(id == leader);
+                                    upper = add_up(
+                                        upper,
+                                        joint.cards[(id + slot as u32 * pool_size) as usize][slot]
+                                            [role],
+                                    )
+                                    .unwrap();
+                                }
+                                if fixed_count < 5 && set[..fixed_count].contains(&leader) {
+                                    upper =
+                                        add_up(upper, joint.fixed_leaders[slot].unwrap()).unwrap();
                                 }
                             }
+                            let upper = mul_up(upper, rounding_factor(4).unwrap()).unwrap();
+                            assert!((exact[0] + exact[1]) + exact[2] <= upper);
                         }
                         if fixed_count == 5 {
                             let scores = std::array::from_fn(|slot| {
