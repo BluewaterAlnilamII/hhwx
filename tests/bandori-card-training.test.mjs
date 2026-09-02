@@ -143,6 +143,7 @@ test("card catalog and max-profile creation treat zero-only training as untraine
     ...zeroTrainingCard,
     resourceSetName: "res001002",
     stat: {
+      episodes: [{}, {}],
       training: {
         performance: 400,
         technique: 400,
@@ -174,6 +175,7 @@ test("card catalog and max-profile creation treat zero-only training as untraine
   assert.equal(zeroTrainingProfileCard.isTrained, false);
   assert.equal(zeroTrainingProfileCard.hasTrainedArt, false);
   assert.equal(zeroTrainingProfileCard.level, 50);
+  assert.equal(zeroTrainingProfileCard.episodeCount, 0);
 
   const trainedProfileCard = createMaxGameProfileCard(2, trainedCard);
   assert.equal(trainedProfileCard.isTrained, true);
@@ -186,7 +188,7 @@ test("card catalog and max-profile creation treat zero-only training as untraine
     level: 50,
     masterRank: 0,
     skillLevel: 1,
-    episodeCount: 2,
+    episodeCount: 0,
     isTrained: false,
     hasTrainedArt: false,
     isExcluded: false,

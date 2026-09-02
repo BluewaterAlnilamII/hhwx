@@ -10,10 +10,12 @@ import { isBandoriCardAttribute, type BandoriCardAttribute } from "@/lib/bandori
 import { type BandoriServer } from "@/lib/bandori-server";
 import {
   getGameProfileCardLevelLimit,
+  getGameProfileCardMaxEpisodeCount,
   hasGameProfileCardChanged,
   pickGameProfileCardName,
   type GameProfileCardMetadata,
 } from "@/lib/bandori/cards/game-profile-card";
+import { hasTrainedCardArt } from "@/lib/bandori/cards/training";
 import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 import {
   calculateBandoriCard,
@@ -132,6 +134,8 @@ export default function GameProfileCardEditorDialog({
   const effectiveTitle = title ?? t("title");
   const effectiveDeleteLabel = deleteLabel ?? t("actions.delete");
   const levelLimit = getGameProfileCardLevelLimit(draft, metadata);
+  const maxEpisodeCount = getGameProfileCardMaxEpisodeCount(metadata);
+  const canTrain = hasTrainedCardArt(metadata);
   const cardName = pickGameProfileCardName(
     draft.cardId,
     metadata,
@@ -177,12 +181,16 @@ export default function GameProfileCardEditorDialog({
       if (field === "isTrained" && value === true) {
         nextDraft.hasTrainedArt = true;
       }
+      if (!canTrain) {
+        nextDraft.isTrained = false;
+        nextDraft.hasTrainedArt = false;
+      }
       return {
         ...nextDraft,
         level: clampInteger(nextDraft.level, 1, getGameProfileCardLevelLimit(nextDraft, metadata)),
         masterRank: clampInteger(nextDraft.masterRank, 0, 4),
         skillLevel: clampInteger(nextDraft.skillLevel, 1, 5),
-        episodeCount: clampInteger(nextDraft.episodeCount, 0, 2),
+        episodeCount: clampInteger(nextDraft.episodeCount, 0, maxEpisodeCount),
       };
     });
   }
@@ -251,9 +259,9 @@ export default function GameProfileCardEditorDialog({
 
                 <SegmentedControl label={t("fields.masterRank")} value={draft.masterRank} options={[0, 1, 2, 3, 4].map((value) => ({ value, label: String(value) }))} onChange={(value) => updateDraft("masterRank", value)} />
                 <SegmentedControl label={t("fields.skillLevel")} value={draft.skillLevel} options={[1, 2, 3, 4, 5].map((value) => ({ value, label: String(value) }))} onChange={(value) => updateDraft("skillLevel", value)} />
-                <SegmentedControl label={t("fields.episodes")} value={draft.episodeCount} options={[0, 1, 2].map((value) => ({ value, label: String(value) }))} onChange={(value) => updateDraft("episodeCount", value)} />
-                <SegmentedControl label={t("fields.trained")} value={draft.isTrained} options={[{ value: false, label: t("states.no") }, { value: true, label: t("states.yes") }]} onChange={(value) => updateDraft("isTrained", value)} />
-                {showTrainedArtControl ? (
+                <SegmentedControl label={t("fields.episodes")} value={draft.episodeCount} options={Array.from({ length: maxEpisodeCount + 1 }, (_, value) => ({ value, label: String(value) }))} onChange={(value) => updateDraft("episodeCount", value)} />
+                <SegmentedControl label={t("fields.trained")} value={draft.isTrained} options={(canTrain ? [false, true] : [false]).map((value) => ({ value, label: t(value ? "states.yes" : "states.no") }))} onChange={(value) => updateDraft("isTrained", value)} />
+                {showTrainedArtControl && canTrain ? (
                   <SegmentedControl label={t("fields.afterTrainingArt")} value={draft.hasTrainedArt} options={[{ value: false, label: t("states.no") }, { value: true, label: t("states.yes") }]} onChange={(value) => updateDraft("hasTrainedArt", value)} />
                 ) : null}
               </div>
