@@ -36,6 +36,7 @@ import {
 } from "@/lib/bandori/team-builder/core/constants";
 import {
   buildMedleySearchInput,
+  MedleyFoundationInputError,
   type MedleySearchInputV1,
 } from "@/lib/bandori/medley-foundation";
 import { MEDLEY_SEARCH_SOURCE_SCHEMA_VERSION } from "@/lib/bandori/medley-foundation/contracts";
@@ -94,6 +95,7 @@ export type TeamSearchWorkerMessages = {
   dataInconsistent: string;
   preloadFailed: string;
   calculateFailed: string;
+  profileDataInvalid: string;
 };
 
 const DEFAULT_WORKER_MESSAGES: TeamSearchWorkerMessages = {
@@ -115,6 +117,7 @@ const DEFAULT_WORKER_MESSAGES: TeamSearchWorkerMessages = {
   dataInconsistent: "Calculation data is incomplete after refresh: {details}",
   preloadFailed: "Failed to prepare data",
   calculateFailed: "Calculation failed",
+  profileDataInvalid: "Profile data is invalid; try syncing or updating the profile",
 };
 
 const MEDLEY_FRONTEND_MEMORY_SOFT_LIMIT_MIB = 1024;
@@ -352,6 +355,16 @@ function formatWorkerMessage(template: string, values: Record<string, string | n
 
 function getWorkerMessages(messages?: TeamSearchWorkerMessages): TeamSearchWorkerMessages {
   return messages ?? DEFAULT_WORKER_MESSAGES;
+}
+
+function formatSearchError(error: unknown, messages: TeamSearchWorkerMessages): string {
+  const detail = error instanceof Error ? error.message : messages.calculateFailed;
+  return error instanceof MedleyFoundationInputError
+    && error.code === "INVALID_CARD"
+    && error.path.startsWith("sourceInput.cardsById.")
+    && error.path.includes(".profile.")
+    ? `${messages.profileDataInvalid}\n${detail}`
+    : detail;
 }
 
 async function requestJsonUncached<T>(
@@ -1123,7 +1136,7 @@ self.onmessage = (event: MessageEvent<TeamSearchWorkerMessage>) => {
         requestId: event.data.requestId,
         type: "search",
         ok: false,
-        error: error instanceof Error ? error.message : messages.calculateFailed,
+        error: formatSearchError(error, messages),
       } satisfies TeamSearchWorkerResponse);
     });
 };

@@ -1043,7 +1043,8 @@
       "medleyChartDataInvalid": "第 {index} 首谱面数据格式无效",
       "dataInconsistent": "刷新后计算数据仍不完整：{details}",
       "preloadFailed": "准备数据失败",
-      "calculateFailed": "计算失败"
+      "calculateFailed": "计算失败",
+      "profileDataInvalid": "档案数据错误，请尝试重新同步或更新档案"
     },
     "errors": {
       "notSignedIn": "请先登录",

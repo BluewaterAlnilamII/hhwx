@@ -379,6 +379,7 @@ const DEFAULT_TEAM_SEARCH_WORKER_MESSAGES: TeamSearchWorkerMessages = {
   dataInconsistent: "Calculation data is incomplete after refresh: {details}",
   preloadFailed: "Failed to prepare data",
   calculateFailed: "Calculation failed",
+  profileDataInvalid: "Profile data is invalid; try syncing or updating the profile",
 };
 
 const TEAM_SEARCH_WORKER_MESSAGE_KEYS = Object.keys(DEFAULT_TEAM_SEARCH_WORKER_MESSAGES) as Array<keyof TeamSearchWorkerMessages>;
@@ -3388,7 +3389,7 @@ function TeamBuilderPanel() {
                 {preloadStatusMessage}
               </div>
             ) : null}
-            {resultError ? <div className="rounded-xl bg-red-50 p-3 text-center text-sm font-semibold text-red-600">{resultError}</div> : null}
+            {resultError ? <div className="whitespace-pre-line rounded-xl bg-red-50 p-3 text-center text-sm font-semibold text-red-600">{resultError}</div> : null}
             {medleyProgress ? (
               <div className="whitespace-pre-line rounded-xl bg-sky-50 p-3 text-center text-sm font-semibold leading-6 text-sky-700">
                 <Loader2 className="mr-1 inline h-4 w-4 animate-spin" />

@@ -1043,7 +1043,8 @@
       "medleyChartDataInvalid": "Song {index} chart data format is invalid",
       "dataInconsistent": "Calculation data is incomplete after refresh: {details}",
       "preloadFailed": "Failed to prepare data",
-      "calculateFailed": "Calculation failed"
+      "calculateFailed": "Calculation failed",
+      "profileDataInvalid": "Profile data is invalid; try syncing or updating the profile"
     },
     "errors": {
       "notSignedIn": "Please log in first",
