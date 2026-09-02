@@ -585,6 +585,43 @@ impl<'a> FastUpperBoundEngine<'a> {
                     (states[needed][1] != f64::NEG_INFINITY).then_some(states[needed][1]),
                 )
             };
+            let minimum_support = |weights: &[[f64; 2]], fixed_leader: Option<f64>| {
+                let mut states = [[f64::INFINITY; 2]; 6];
+                states[0][0] = 0.0;
+                if let Some(leader) = fixed_leader {
+                    states[0][1] = leader;
+                }
+                for group in &remaining_groups {
+                    let mut choices = [f64::INFINITY; 2];
+                    for &id in *group {
+                        if owners[id as usize] & bit != 0 {
+                            for role in 0..2 {
+                                choices[role] = choices[role].min(weights[id as usize][role]);
+                            }
+                        }
+                    }
+                    let previous = states;
+                    for count in 0..needed {
+                        for used_leader in 0..2 {
+                            if previous[count][used_leader] == f64::INFINITY {
+                                continue;
+                            }
+                            for role in 0..(2 - used_leader) {
+                                if choices[role] != f64::INFINITY {
+                                    states[count + 1][used_leader + role] =
+                                        states[count + 1][used_leader + role].min(add_down(
+                                            previous[count][used_leader],
+                                            choices[role],
+                                        )?);
+                                }
+                            }
+                        }
+                    }
+                }
+                Ok::<_, UpperBoundFailure>(
+                    (states[needed][1] != f64::INFINITY).then_some(states[needed][1]),
+                )
+            };
             let scale = (remaining_coefficient / remaining_parameter).sqrt();
             let scale = if scale.is_finite() && scale > 0.0 {
                 scale
@@ -608,7 +645,10 @@ impl<'a> FastUpperBoundEngine<'a> {
                 let Some(maximum) = maximum_support(&weights, fixed_leader_weight)? else {
                     return Ok(None);
                 };
-                let minimum = mul_down(t, minimum_remaining_parameter)?;
+                let Some(minimum) = minimum_support(&weights, fixed_leader_weight)? else {
+                    return Ok(None);
+                };
+                let minimum = mul_down(t, minimum_remaining_parameter)?.max(minimum);
                 // For L<=A=t*Pr+Kr/t<=M, the interval secant gives
                 // Pr*Kr<=A²/4<=((L+M)A-LM)/4. Directed endpoints keep the
                 // joint weights nonnegative; the constant offset is subtracted
