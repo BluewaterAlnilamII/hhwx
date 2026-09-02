@@ -75,6 +75,31 @@ fn score_cache_slots() -> usize {
     SCORE_CACHE_SLOTS
 }
 
+fn mode_consensus_enabled() -> bool {
+    #[cfg(test)]
+    return std::env::var("HHWX_MEDLEY_DIAGNOSTIC_MODE_CONSENSUS")
+        .map_or(true, |value| value != "0");
+    #[cfg(not(test))]
+    true
+}
+
+fn competitive_mode_consensus(mode_uppers: &[f64; 8], incumbent: f64) -> Option<(u8, u8, f64)> {
+    let mut required = 0b111;
+    let mut possible = 0;
+    let mut upper = f64::NEG_INFINITY;
+    let mut found = false;
+    for (mode, &score) in mode_uppers.iter().enumerate() {
+        if score >= incumbent {
+            let mode = mode as u8;
+            required &= mode;
+            possible |= mode;
+            upper = upper.max(score);
+            found = true;
+        }
+    }
+    found.then_some((required, possible, upper))
+}
+
 #[derive(Clone, Copy, Debug)]
 struct ConfigurationPlan {
     configuration_index: usize,
@@ -1535,7 +1560,7 @@ enum JointStep {
     Unavailable,
     Finished,
     Split(OwnershipSplit),
-    CharacterMode { group: usize, mode: u8, upper: f64 },
+    CharacterModes(Vec<(usize, u8, u8, f64)>),
 }
 
 impl JointSearch<'_, '_, '_, '_> {
@@ -1834,31 +1859,32 @@ impl JointSearch<'_, '_, '_, '_> {
             // This table describes residual occupancy before this pass. A newly
             // fixed physical member changes that meaning; descendants rebuild it.
             if !fixed_member && bound.can_update(&owners, &required_teams, fixed_scores) {
-                let mut forced_mode = None;
+                let propagate_consensus = mode_consensus_enabled();
+                let mut forced_modes = Vec::new();
+                let mut best_unique = None;
                 for (group, mode_uppers) in bound.mode_uppers.iter().enumerate() {
-                    let mut competitive = mode_uppers
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, upper)| **upper >= incumbent);
-                    let Some((mode, &upper)) = competitive.next() else {
+                    let Some((required, possible, upper)) =
+                        competitive_mode_consensus(mode_uppers, incumbent)
+                    else {
                         return Ok(JointStep::Finished);
                     };
-                    if competitive.next().is_some() {
+                    if !propagate_consensus && required != possible {
                         continue;
                     }
-                    let mode = mode as u8;
                     let mut changes = 0_u32;
                     for slot in 0..3 {
-                        if mode & (1 << slot) != 0 {
+                        if required & (1 << slot) != 0 {
                             if node.families[slot].has_selected_character(&self.domain, group) {
                                 return Ok(JointStep::Finished);
                             }
                             changes += u32::from(!node.families[slot].has_required_group(group));
-                        } else if node.families[slot].has_required_group(group) {
+                        } else if possible & (1 << slot) == 0
+                            && node.families[slot].has_required_group(group)
+                        {
                             return Ok(JointStep::Finished);
                         }
                     }
-                    let allowed = UNUSED | mode;
+                    let allowed = UNUSED | possible;
                     changes += self.groups[group]
                         .iter()
                         .filter(|id| self.domain.available[**id as usize])
@@ -1867,12 +1893,23 @@ impl JointSearch<'_, '_, '_, '_> {
                     if changes == 0 {
                         continue;
                     }
-                    if forced_mode.is_none_or(|(_, _, _, best_changes)| changes > best_changes) {
-                        forced_mode = Some((group, mode, upper, changes));
+                    if propagate_consensus {
+                        forced_modes.push((group, required, possible, upper));
+                    } else if best_unique
+                        .is_none_or(|(_, _, _, _, best_changes)| changes > best_changes)
+                    {
+                        best_unique = Some((group, required, possible, upper, changes));
                     }
                 }
-                if let Some((group, mode, upper, _)) = forced_mode {
-                    return Ok(JointStep::CharacterMode { group, mode, upper });
+                if !propagate_consensus
+                    && let Some((group, required, possible, upper, _)) = best_unique
+                {
+                    forced_modes.push((group, required, possible, upper));
+                }
+                if !forced_modes.is_empty() {
+                    #[cfg(test)]
+                    crate::profiling::joint_mode_consensus(&forced_modes);
+                    return Ok(JointStep::CharacterModes(forced_modes));
                 }
             }
         }
@@ -1971,37 +2008,37 @@ impl JointSearch<'_, '_, '_, '_> {
         }))
     }
 
-    fn apply_character_mode(
+    fn apply_character_modes(
         &mut self,
         node: &mut SearchNode,
-        group: usize,
-        mode: u8,
-        upper: f64,
+        modes: &[(usize, u8, u8, f64)],
     ) -> bool {
-        node.whole_upper = node.whole_upper.min(upper);
-        for slot in 0..3 {
-            if mode & (1 << slot) != 0 {
-                let Some(family) = node.families[slot].with_required_group(group) else {
-                    return false;
-                };
-                node.families[slot] = family;
+        for &(group, required, possible, upper) in modes {
+            node.whole_upper = node.whole_upper.min(upper);
+            for slot in 0..3 {
+                if required & (1 << slot) != 0 {
+                    let Some(family) = node.families[slot].with_required_group(group) else {
+                        return false;
+                    };
+                    node.families[slot] = family;
+                }
             }
-        }
-        let allowed = UNUSED | mode;
-        for &id in &self.groups[group] {
-            if !self.domain.available[id as usize] {
-                continue;
-            }
-            self.domain.restrict_owners(id, allowed);
-            let mask = self.domain.owners[id as usize];
-            if mask == 0 {
-                return false;
-            }
-            if mask.count_ones() == 1 {
-                if materialize_singleton(&mut self.domain, &mut node.families, id).is_none() {
+            let allowed = UNUSED | possible;
+            for &id in &self.groups[group] {
+                if !self.domain.available[id as usize] {
+                    continue;
+                }
+                self.domain.restrict_owners(id, allowed);
+                let mask = self.domain.owners[id as usize];
+                if mask == 0 {
                     return false;
                 }
-                node.refresh_bounds = [true; 3];
+                if mask.count_ones() == 1 {
+                    if materialize_singleton(&mut self.domain, &mut node.families, id).is_none() {
+                        return false;
+                    }
+                    node.refresh_bounds = [true; 3];
+                }
             }
         }
         true
@@ -2483,8 +2520,8 @@ impl JointSearch<'_, '_, '_, '_> {
             }
             match self.joint_step(&mut node)? {
                 JointStep::Finished => return Ok(None),
-                JointStep::CharacterMode { group, mode, upper } => {
-                    if !self.apply_character_mode(&mut node, group, mode, upper) {
+                JointStep::CharacterModes(modes) => {
+                    if !self.apply_character_modes(&mut node, &modes) {
                         return Ok(None);
                     }
                     continue;
@@ -2817,6 +2854,28 @@ mod tests {
         _state: &mut RunState<'_, '_>,
     ) -> Result<CompactCandidate, SearchAbort> {
         Err(abort(SearchIncompleteReasonV1::InternalFailure))
+    }
+
+    #[test]
+    fn competitive_modes_propagate_only_shared_occupancy() {
+        let mut uppers = [f64::NEG_INFINITY; 8];
+        uppers[0b001] = 10.0;
+        uppers[0b011] = 12.0;
+        uppers[0b101] = 9.0;
+
+        assert_eq!(
+            competitive_mode_consensus(&uppers, 9.0),
+            Some((0b001, 0b111, 12.0))
+        );
+        assert_eq!(
+            competitive_mode_consensus(&uppers, 10.0),
+            Some((0b001, 0b011, 12.0))
+        );
+        assert_eq!(
+            competitive_mode_consensus(&uppers, 12.0),
+            Some((0b011, 0b011, 12.0))
+        );
+        assert_eq!(competitive_mode_consensus(&uppers, 12.1), None);
     }
 
     #[test]

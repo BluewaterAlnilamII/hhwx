@@ -150,6 +150,11 @@ struct Profile {
     joint_whole_cutoffs: u64,
     joint_competitive_patterns: u64,
     joint_losing_patterns: u64,
+    joint_mode_propagations: u64,
+    joint_mode_batches: u64,
+    joint_mode_required_bits: u64,
+    joint_mode_excluded_bits: u64,
+    joint_unique_mode_propagations: u64,
     configurations: Vec<ConfigurationProfile>,
     active_configuration: Option<usize>,
     active_depth: Option<(usize, [u8; 3])>,
@@ -502,6 +507,20 @@ pub(crate) fn joint_pattern_filter(competitive: u64, losing: u64) {
     });
 }
 
+pub(crate) fn joint_mode_consensus(modes: &[(usize, u8, u8, f64)]) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            profile.joint_mode_batches += 1;
+            profile.joint_mode_propagations += modes.len() as u64;
+            for &(_, required, possible, _) in modes {
+                profile.joint_mode_required_bits += u64::from(required.count_ones());
+                profile.joint_mode_excluded_bits += u64::from((!possible & 0b111).count_ones());
+                profile.joint_unique_mode_propagations += u64::from(required == possible);
+            }
+        }
+    });
+}
+
 pub(crate) fn improvement(score: f64, diagnostics: &MedleySearchDiagnosticsV1) {
     PROFILE.with_borrow_mut(|profile| {
         if let Some(profile) = profile {
@@ -555,6 +574,11 @@ pub(crate) fn start() {
             joint_whole_cutoffs: 0,
             joint_competitive_patterns: 0,
             joint_losing_patterns: 0,
+            joint_mode_propagations: 0,
+            joint_mode_batches: 0,
+            joint_mode_required_bits: 0,
+            joint_mode_excluded_bits: 0,
+            joint_unique_mode_propagations: 0,
             configurations: Vec::new(),
             active_configuration: None,
             active_depth: None,
@@ -604,6 +628,11 @@ pub(crate) fn finish() -> Value {
             "jointWholeCutoffs": profile.joint_whole_cutoffs,
             "jointCompetitivePatterns": profile.joint_competitive_patterns,
             "jointLosingPatterns": profile.joint_losing_patterns,
+            "jointModePropagations": profile.joint_mode_propagations,
+            "jointModeBatches": profile.joint_mode_batches,
+            "jointModeRequiredBits": profile.joint_mode_required_bits,
+            "jointModeExcludedBits": profile.joint_mode_excluded_bits,
+            "jointUniqueModePropagations": profile.joint_unique_mode_propagations,
             "improvements": profile.improvements,
             "jointGapBands": ["below", "0%-0.1%", "0.1%-0.5%", "0.5%-1%", "1%-2%", "2%-5%", "above5%"],
             "completionBands": ["<=256", "<=1024", "<=4096", "<=16384", "<=65536", "<=262144", "<=1048576", ">1048576"],
