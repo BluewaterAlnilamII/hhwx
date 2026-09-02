@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
+import { toNormalizedCards } from "../src/lib/user-game-profiles-server.ts";
+
 const serverSource = fs.readFileSync(
   new URL("../src/lib/user-game-profiles-server.ts", import.meta.url),
   "utf8",
@@ -34,6 +36,47 @@ const enMessages = JSON.parse(fs.readFileSync(
   new URL("../messages/en/bandori.json", import.meta.url),
   "utf8",
 ));
+
+test("auto profile card episode inference uses current card master metadata", () => {
+  const cards = toNormalizedCards([
+    {
+      situation_id: 2345,
+      training_status: "done",
+      append_parameter: { performance: 300, technique: 300, visual: 300 },
+    },
+    {
+      situation_id: 999_997,
+      training_status: "done",
+      append_parameter: { performance: 500, technique: 500, visual: 500 },
+    },
+    {
+      situation_id: 999_998,
+      append_parameter: { performance: 300, technique: 300, visual: 300 },
+    },
+    {
+      situation_id: 999_999,
+      training_status: "done",
+      append_parameter: { performance: 300, technique: 300, visual: 300 },
+    },
+  ], {
+    "2345": {
+      rarity: 3,
+      stat: {
+        training: { performance: 300, technique: 300, visual: 300, levelLimit: 10 },
+      },
+    },
+  });
+
+  assert.deepEqual(
+    cards.map((card) => [card.cardId, card.episodeCount]),
+    [
+      [2345, 0],
+      [999_997, 1],
+      [999_998, 2],
+      [999_999, 0],
+    ],
+  );
+});
 
 test("every manual profile creation passes its payload server to the RPC", () => {
   const rpcCalls = [...serverSource.matchAll(

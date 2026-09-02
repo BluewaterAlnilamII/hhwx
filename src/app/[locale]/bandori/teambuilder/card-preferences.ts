@@ -108,12 +108,18 @@ export function normalizeCardPreferences(value: unknown): TeamBuilderCardPrefere
       .map((cardId) => normalizePreferenceInteger(cardId, 1, 999999, 0))
       .filter((cardId) => cardId > 0)))
     : [];
-  const temporaryCards = Array.isArray(record.temporaryCards)
-    ? record.temporaryCards.flatMap((card) => {
+  const temporaryCards: TemporaryGameProfileCard[] = [];
+  const temporaryCardIds = new Set<number>();
+  if (Array.isArray(record.temporaryCards)) {
+    record.temporaryCards.forEach((card) => {
       const normalized = normalizeTemporaryCard(card);
-      return normalized ? [normalized] : [];
-    })
-    : [];
+      if (!normalized || temporaryCardIds.has(normalized.cardId)) {
+        return;
+      }
+      temporaryCardIds.add(normalized.cardId);
+      temporaryCards.push(normalized);
+    });
+  }
   return {
     excludedCardIds,
     temporaryCards,
@@ -131,7 +137,10 @@ export function readCardPreferences(profileCacheKey: string): TeamBuilderCardPre
       return createDefaultCardPreferences();
     }
     const stored = JSON.parse(rawValue) as Record<string, unknown>;
-    return normalizeCardPreferences(stored[profileCacheKey]);
+    return {
+      ...normalizeCardPreferences(stored[profileCacheKey]),
+      temporaryCards: [],
+    };
   } catch {
     return createDefaultCardPreferences();
   }
@@ -148,6 +157,10 @@ export function writeCardPreferences(profileCacheKey: string, preferences: TeamB
   } catch {
     stored = {};
   }
-  stored[profileCacheKey] = normalizeCardPreferences(preferences);
+  const normalized = normalizeCardPreferences(preferences);
+  stored[profileCacheKey] = {
+    excludedCardIds: normalized.excludedCardIds,
+    ownedCardParameters: normalized.ownedCardParameters,
+  };
   window.localStorage.setItem(TEAMBUILDER_CARD_PREFERENCES_STORAGE_KEY, JSON.stringify(stored));
 }

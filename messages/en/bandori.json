@@ -914,8 +914,6 @@
       "firstSong": "Song {index}",
       "startCombo": "Start combo {combo}",
       "scoreAndEventPoint": "Score / Event Pt",
-      "medleyDebug": "Medley debug info",
-      "medleyDebugDescription": "Copy this JSON when reporting issues. It includes the input summary, proof state, memory/time usage, and algorithm stats.",
       "eventSongSource": "Event songs {source}",
       "selectedProfile": "Selected profile",
       "unselectedProfile": "No profile selected",
@@ -942,7 +940,6 @@
       "minLeaderScoreUp": "Minimum leader score-up",
       "minTotalPower": "Minimum total power",
       "unlimited": "Unlimited",
-      "exactEngineWarning": "The exact proof engine uses a large amount of runtime memory. Use a desktop browser to avoid page crashes from memory pressure.",
       "results": "Results",
       "teamLiveRank": "Team Live rank",
       "result": "Result",
@@ -957,9 +954,7 @@
       "areaItemConfigurationCount": "Area item setups {count}",
       "peakMemory": "Peak memory {count} MiB",
       "supportStats": "Support candidates {candidateCount} · Support evaluations {evaluationCount}",
-      "nextStep": "Next: {step}",
-      "copyDebug": "Copy debug info",
-      "copied": "Copied"
+      "nextStep": "Next: {step}"
     },
     "actions": {
       "calculate": "Calculate",
@@ -1028,11 +1023,7 @@
     },
     "messages": {
       "duplicateCardsSkipped": "{count} duplicate cards were skipped",
-      "workerStartFailed": "Failed to start calculation worker",
-      "memoryWatchdog": "Browser memory guard stopped the calculation (currently about {usedMiB} MiB, guard limit {effectiveLimitMiB} MiB{heapLimitLabel}, source {source}).",
-      "heapLimit": ", browser heap limit {limitMiB} MiB",
-      "sourceAgent": "browser process memory",
-      "sourceHeap": "JS heap"
+      "workerStartFailed": "Failed to start calculation worker"
     },
     "worker": {
       "notReady": "{label} is not ready yet",
@@ -1052,7 +1043,8 @@
       "medleyChartDataInvalid": "Song {index} chart data format is invalid",
       "dataInconsistent": "Calculation data is incomplete after refresh: {details}",
       "preloadFailed": "Failed to prepare data",
-      "calculateFailed": "Calculation failed"
+      "calculateFailed": "Calculation failed",
+      "profileDataInvalid": "Profile data is invalid; try syncing or updating the profile"
     },
     "errors": {
       "notSignedIn": "Please log in first",
@@ -1069,6 +1061,7 @@
       "dataNotReady": "Calculation data is not ready yet",
       "profileNotReady": "Profile is not ready yet",
       "invalidWorkerResponse": "Calculation worker response format is invalid",
+      "invalidTimeLimit": "Enter a whole-number time limit from {min} to {max} seconds",
       "calculateFailed": "Calculation failed"
     },
     "preferences": {

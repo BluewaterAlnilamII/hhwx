@@ -2,7 +2,7 @@
 
 本文档说明 HHWX Bandori 单曲组队计算器的游戏模型、计分模型、精确搜索契约、性能设计、正确性论证、验证门禁和实现归属。
 
-组曲搜索是独立优化问题，见 `medley-algorithm.zh-CN.md`。
+组曲搜索是独立的全新实现，见 `../bandori-medley-foundation.zh-CN.md` 和 `../bandori-medley-search.zh-CN.md`。
 
 ## 问题定义
 
@@ -377,7 +377,7 @@ HHWX 的差异：
 - `src/lib/bandori/team-builder/single/`：单曲搜索编排。负责单曲搜索范围、目标适配器、种子队伍、结果排序、统计收尾和精确 DFS。
 - `src/lib/bandori-team-search.ts`：公开兼容入口，重新导出单曲搜索 API。
 
-`core` 层不能导入 `single` 或 `medley`。
+`core` 层不能导入 `single`。
 
 ## 验证门禁
 

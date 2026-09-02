@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "hhwx-medley-scoring-input-v1",
+  "scoringRulesVersion": "hhwx-medley-bestdori-v3",
+  "perfectRate": { "numerator": 995, "decimalScale": 3 },
+  "cards": [
+    { "instanceId": 0, "masterCardId": 1, "characterId": 1, "skill": { "masterSkillId": 1, "skillLevel": 1, "durationSeconds": 2, "behavior": { "kind": "score", "scoreUpPercent": 100 }, "isRateUpWithPerfect": false } },
+    { "instanceId": 1, "masterCardId": 2, "characterId": 2, "skill": { "masterSkillId": 2, "skillLevel": 1, "durationSeconds": 2, "behavior": { "kind": "score", "scoreUpPercent": 100 }, "isRateUpWithPerfect": false } },
+    { "instanceId": 2, "masterCardId": 3, "characterId": 3, "skill": { "masterSkillId": 3, "skillLevel": 1, "durationSeconds": 2, "behavior": { "kind": "score", "scoreUpPercent": 100 }, "isRateUpWithPerfect": false } },
+    { "instanceId": 3, "masterCardId": 4, "characterId": 4, "skill": { "masterSkillId": 4, "skillLevel": 1, "durationSeconds": 2, "behavior": { "kind": "score", "scoreUpPercent": 100 }, "isRateUpWithPerfect": false } },
+    { "instanceId": 4, "masterCardId": 5, "characterId": 5, "skill": { "masterSkillId": 5, "skillLevel": 1, "durationSeconds": 2, "behavior": { "kind": "score", "scoreUpPercent": 100 }, "isRateUpWithPerfect": false } },
+    { "instanceId": 5, "masterCardId": 6, "characterId": 6, "skill": { "masterSkillId": 6, "skillLevel": 1, "durationSeconds": 2, "behavior": { "kind": "score", "scoreUpPercent": 100 }, "isRateUpWithPerfect": false } },
+    { "instanceId": 6, "masterCardId": 7, "characterId": 7, "skill": { "masterSkillId": 7, "skillLevel": 1, "durationSeconds": 2, "behavior": { "kind": "score", "scoreUpPercent": 100 }, "isRateUpWithPerfect": false } },
+    { "instanceId": 7, "masterCardId": 8, "characterId": 8, "skill": { "masterSkillId": 8, "skillLevel": 1, "durationSeconds": 2, "behavior": { "kind": "score", "scoreUpPercent": 100 }, "isRateUpWithPerfect": false } },
+    { "instanceId": 8, "masterCardId": 9, "characterId": 9, "skill": { "masterSkillId": 9, "skillLevel": 1, "durationSeconds": 2, "behavior": { "kind": "score", "scoreUpPercent": 100 }, "isRateUpWithPerfect": false } },
+    { "instanceId": 9, "masterCardId": 10, "characterId": 10, "skill": { "masterSkillId": 10, "skillLevel": 1, "durationSeconds": 2, "behavior": { "kind": "score", "scoreUpPercent": 100 }, "isRateUpWithPerfect": false } },
+    { "instanceId": 10, "masterCardId": 11, "characterId": 11, "skill": { "masterSkillId": 11, "skillLevel": 1, "durationSeconds": 2, "behavior": { "kind": "score", "scoreUpPercent": 100 }, "isRateUpWithPerfect": false } },
+    { "instanceId": 11, "masterCardId": 12, "characterId": 12, "skill": { "masterSkillId": 12, "skillLevel": 1, "durationSeconds": 2, "behavior": { "kind": "score", "scoreUpPercent": 100 }, "isRateUpWithPerfect": false } },
+    { "instanceId": 12, "masterCardId": 13, "characterId": 13, "skill": { "masterSkillId": 13, "skillLevel": 1, "durationSeconds": 2, "behavior": { "kind": "score", "scoreUpPercent": 100 }, "isRateUpWithPerfect": false } },
+    { "instanceId": 13, "masterCardId": 14, "characterId": 14, "skill": { "masterSkillId": 14, "skillLevel": 1, "durationSeconds": 2, "behavior": { "kind": "score", "scoreUpPercent": 100 }, "isRateUpWithPerfect": false } },
+    { "instanceId": 14, "masterCardId": 15, "characterId": 15, "skill": { "masterSkillId": 15, "skillLevel": 1, "durationSeconds": 2, "behavior": { "kind": "score", "scoreUpPercent": 100 }, "isRateUpWithPerfect": false } }
+  ],
+  "teams": [
+    { "slot": 0, "memberInstanceIds": [0, 1, 2, 3, 4], "deckTotalParameter": 17250 },
+    { "slot": 1, "memberInstanceIds": [5, 6, 7, 8, 9], "deckTotalParameter": 17250 },
+    { "slot": 2, "memberInstanceIds": [10, 11, 12, 13, 14], "deckTotalParameter": 17250 }
+  ],
+  "songs": [
+    { "slot": 0, "songId": 1, "difficulty": "expert", "playLevel": 25, "notes": [
+      { "noteId": 0, "timeSeconds": 0, "isSkillTrigger": true },
+      { "noteId": 1, "timeSeconds": 1, "isSkillTrigger": true },
+      { "noteId": 2, "timeSeconds": 2, "isSkillTrigger": true },
+      { "noteId": 3, "timeSeconds": 3, "isSkillTrigger": true },
+      { "noteId": 4, "timeSeconds": 4, "isSkillTrigger": true },
+      { "noteId": 5, "timeSeconds": 5, "isSkillTrigger": true },
+      { "noteId": 6, "timeSeconds": 6, "isSkillTrigger": false }
+    ] },
+    { "slot": 1, "songId": 2, "difficulty": "expert", "playLevel": 25, "notes": [
+      { "noteId": 0, "timeSeconds": 0, "isSkillTrigger": true },
+      { "noteId": 1, "timeSeconds": 1, "isSkillTrigger": true },
+      { "noteId": 2, "timeSeconds": 2, "isSkillTrigger": true },
+      { "noteId": 3, "timeSeconds": 3, "isSkillTrigger": true },
+      { "noteId": 4, "timeSeconds": 4, "isSkillTrigger": true },
+      { "noteId": 5, "timeSeconds": 5, "isSkillTrigger": true },
+      { "noteId": 6, "timeSeconds": 6, "isSkillTrigger": false }
+    ] },
+    { "slot": 2, "songId": 3, "difficulty": "expert", "playLevel": 25, "notes": [
+      { "noteId": 0, "timeSeconds": 0, "isSkillTrigger": true },
+      { "noteId": 1, "timeSeconds": 1, "isSkillTrigger": true },
+      { "noteId": 2, "timeSeconds": 2, "isSkillTrigger": true },
+      { "noteId": 3, "timeSeconds": 3, "isSkillTrigger": true },
+      { "noteId": 4, "timeSeconds": 4, "isSkillTrigger": true },
+      { "noteId": 5, "timeSeconds": 5, "isSkillTrigger": true },
+      { "noteId": 6, "timeSeconds": 6, "isSkillTrigger": false }
+    ] }
+  ]
+}

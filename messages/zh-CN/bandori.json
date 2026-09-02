@@ -914,8 +914,6 @@
       "firstSong": "第 {index} 首",
       "startCombo": "起始 Combo {combo}",
       "scoreAndEventPoint": "分数/活动Pt",
-      "medleyDebug": "组曲调试信息",
-      "medleyDebugDescription": "反馈问题时可以复制这一段 JSON，里面包含输入摘要、证明状态、内存/耗时和算法统计。",
       "eventSongSource": "活动曲目 {source}",
       "selectedProfile": "已选择档案",
       "unselectedProfile": "未选择档案",
@@ -942,7 +940,6 @@
       "minLeaderScoreUp": "最低队长技能倍率",
       "minTotalPower": "最低综合力",
       "unlimited": "不限制",
-      "exactEngineWarning": "精确证明引擎将占用大量运行内存空间，请使用电脑进行计算以避免网页因内存不足而崩溃",
       "results": "结果",
       "teamLiveRank": "团队演出排名",
       "result": "结果",
@@ -957,9 +954,7 @@
       "areaItemConfigurationCount": "区域道具配置 {count}",
       "peakMemory": "峰值内存 {count} MiB",
       "supportStats": "支援候选 {candidateCount} · 支援评估 {evaluationCount}",
-      "nextStep": "下一步：{step}",
-      "copyDebug": "复制调试信息",
-      "copied": "已复制"
+      "nextStep": "下一步：{step}"
     },
     "actions": {
       "calculate": "计算",
@@ -1028,11 +1023,7 @@
     },
     "messages": {
       "duplicateCardsSkipped": "{count} 张重复卡牌已跳过添加",
-      "workerStartFailed": "计算线程启动失败",
-      "memoryWatchdog": "已触发浏览器内存保护，计算已停止（当前约 {usedMiB} MiB，保护上限 {effectiveLimitMiB} MiB{heapLimitLabel}，来源 {source}）。",
-      "heapLimit": "，浏览器 heap 上限 {limitMiB} MiB",
-      "sourceAgent": "浏览器进程级统计",
-      "sourceHeap": "JS heap 统计"
+      "workerStartFailed": "计算线程启动失败"
     },
     "worker": {
       "notReady": "{label}尚未准备完成",
@@ -1052,7 +1043,8 @@
       "medleyChartDataInvalid": "第 {index} 首谱面数据格式无效",
       "dataInconsistent": "刷新后计算数据仍不完整：{details}",
       "preloadFailed": "准备数据失败",
-      "calculateFailed": "计算失败"
+      "calculateFailed": "计算失败",
+      "profileDataInvalid": "档案数据错误，请尝试重新同步或更新档案"
     },
     "errors": {
       "notSignedIn": "请先登录",
@@ -1069,6 +1061,7 @@
       "dataNotReady": "计算数据尚未准备完成",
       "profileNotReady": "档案尚未准备完成",
       "invalidWorkerResponse": "计算线程返回格式无效",
+      "invalidTimeLimit": "时间限制请输入 {min} 到 {max} 秒的整数",
       "calculateFailed": "计算失败"
     },
     "preferences": {

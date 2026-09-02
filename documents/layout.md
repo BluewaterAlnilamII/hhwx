@@ -15,6 +15,7 @@ These local artifacts are not part of the source layout:
 ```text
 hhwx/
 |-- .claude/          # Project rules and collaboration constraints
+|-- crates/           # Greenfield Bandori medley Rust workspace members
 |-- documents/        # Product notes, setup notes, and feature SQL
 |-- messages/         # Locale message catalogs for UI translations
 |-- public/           # Static assets served directly by Next.js
@@ -27,8 +28,16 @@ hhwx/
 |   |-- lib/          # Server logic, business services, validation, and utilities
 |   `-- store/        # Shared client-side state
 |-- supabase/         # Supabase CLI config, migrations, legacy schema SQL, and maintenance SQL
+|-- Cargo.toml        # Rust workspace definition for the greenfield medley implementation
 `-- package.json      # Frontend dependencies and script entry points
 ```
+
+## crates
+
+- `bandori-medley-model/`: versioned normalized scoring inputs and strict validation. It contains no search controls or UI/network contracts.
+- `bandori-medley-reference/`: transparent evaluation of explicitly supplied five-card teams and fixed three-team medleys. It contains no candidate generation, pruning, enumeration, or optimization logic.
+- `bandori-medley-search/`: normalized search input/output, resource controls, and the separately reviewed exact-search implementation. Its runtime uses the model; the reference scorer remains a development-only oracle.
+- The Rust workspace is an independent greenfield boundary. Existing `src/lib/bandori/team-builder/` search or scoring implementations are not dependencies of these crates.
 
 ## src/app
 
@@ -82,7 +91,9 @@ hhwx/
 - `bandori/events/`: event catalogs, API contracts/services, route/region/status helpers, banner proxy logic, and event-specific comment target validation.
 - `bandori/event-tracker/`: Event Tracker cutoff, TOP10, live-series, projection, history, and prediction contracts/services shared by event, song, and monthly tracker modes.
 - `bandori/chart-simulator/`: lossless chart compilation, versioned worker transport, seek-state rebuilding, native presentation/effect/audio runtimes, and CDN manifest resolution. Physical simulator assets stay outside the Web repository and are resolved through logical paths; this module contains no region selection.
-- `bandori/team-builder/`: team-search implementation. `core/` contains shared calculation primitives, `single/` contains single-song exact search orchestration, and `medley/` contains medley exact/bounded search orchestration behind the public compatibility facades.
+- `bandori/medley-foundation/`: greenfield, fixed-team source validation and projection into the bit-exact Rust medley scoring contract. It has no dependency on the existing team-builder or any search representation.
+- `bandori/medley-wasm/pkg/`: generated browser package for the greenfield Rust medley search, loaded only by the team-builder Worker.
+- `bandori/team-builder/`: existing single-song calculator. `core/` contains its calculation primitives and `single/` contains exact search orchestration; the greenfield medley implementation does not import either directory.
 - `comments/`: target-agnostic comment contracts, emoji/stamp catalogs, content parsing, and privileged comment persistence service. Each target type keeps its existence and visibility validation in its own domain.
 - `api-*.ts`: API response conventions and cache policies.
 - `bestdori-profile-codec.ts` and `user-game-*-server.ts`: game profile compatibility, sync, and server-side persistence logic.

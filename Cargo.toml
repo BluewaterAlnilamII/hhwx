@@ -1,0 +1,21 @@
+[workspace]
+members = [
+  "crates/bandori-medley-model",
+  "crates/bandori-medley-reference",
+  "crates/bandori-medley-search",
+  "crates/bandori-medley-wasm",
+]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.98"
+license = "AGPL-3.0-only"
+repository = "https://github.com/BluewaterAlnilamII/hhwx"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

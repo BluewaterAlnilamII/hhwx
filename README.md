@@ -25,6 +25,7 @@ The repository is suitable for local development and self-hosted deployment, but
 
 - Node.js 20.9 or newer
 - npm
+- rustup (the repository pins the Rust toolchain used by the medley foundation)
 - A Supabase project for account-backed features
 - Optional: Cloudflare Turnstile site and secret keys
 - Optional/private: a compatible HHWX user fetcher endpoint for game-account binding and manual sync. This repository does not include that service.
@@ -60,6 +61,10 @@ npm run dev
 npm run lint
 npm run build
 npm run start
+npm run format:medley-foundation
+npm run lint:medley-foundation
+npm run test:medley-foundation
+npm run check:medley-foundation:wasm
 ```
 
 ## Supabase Setup
@@ -70,6 +75,7 @@ New schema changes have one source of truth: [supabase/migrations](supabase/migr
 
 ```text
 hhwx/
+|-- crates/         # greenfield Bandori medley model, reference scorer, and exact-search boundary
 |-- documents/      # product/setup notes and maintenance/backfill/reference SQL
 |-- public/         # static assets served directly by Next.js
 |-- src/
@@ -79,6 +85,7 @@ hhwx/
 |   |-- lib/        # server and shared business logic
 |   `-- store/      # client state
 |-- supabase/       # canonical migrations and legacy/reference schema snapshots
+|-- Cargo.toml      # Rust workspace boundary for the greenfield medley implementation
 `-- package.json    # scripts and dependencies
 ```
 

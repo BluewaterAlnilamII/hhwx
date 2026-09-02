@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 import { ApiRouteError } from "@/lib/api-contracts";
-import { BANDORI_CARD_EPISODE_METADATA } from "@/lib/bandori/cards/card-episode-metadata";
+import {
+  readBandoriCardsApiDatasetForServer,
+  type BandoriCardsApiRecordMap,
+} from "@/lib/bandori/cards/api-server";
 import {
   BESTDORI_CN_SERVER_ID,
   decodeBestdoriProfile,
@@ -149,7 +152,40 @@ function toStringOrNull(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function inferEpisodeCountFromAppendParameter(cardId: number, masterRank: number, appendParameter: unknown, isTrained: boolean): number {
+type BandoriCardEpisodeMetadata = readonly [number, number, number, number];
+
+function readUniformParameterBonus(value: unknown): number {
+  if (!isRecord(value)) {
+    return 0;
+  }
+
+  const performance = toInteger(value.performance);
+  const technique = toInteger(value.technique);
+  const visual = toInteger(value.visual);
+  return performance > 0 && performance === technique && performance === visual ? performance : 0;
+}
+
+function readCardEpisodeMetadata(value: unknown): BandoriCardEpisodeMetadata | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const rarity = toInteger(value.rarity);
+  if (rarity <= 0) {
+    return undefined;
+  }
+
+  const stat = isRecord(value.stat) ? value.stat : {};
+  const episodes = Array.isArray(stat.episodes) ? stat.episodes : [];
+  return [
+    rarity,
+    readUniformParameterBonus(episodes[0]),
+    readUniformParameterBonus(episodes[1]),
+    readUniformParameterBonus(stat.training),
+  ];
+}
+
+function inferEpisodeCountFromAppendParameter(masterRank: number, appendParameter: unknown, isTrained: boolean, metadata?: BandoriCardEpisodeMetadata): number {
   if (!isRecord(appendParameter)) {
     return 0;
   }
@@ -165,7 +201,6 @@ function inferEpisodeCountFromAppendParameter(cardId: number, masterRank: number
     return 0;
   }
 
-  const metadata = BANDORI_CARD_EPISODE_METADATA[cardId];
   if (metadata) {
     const [rarity, firstEpisodeBonus, secondEpisodeBonus, trainingBonus] = metadata;
     const nonEpisodeBonus = (masterRank * rarity * 50) + (isTrained ? trainingBonus : 0);
@@ -212,7 +247,7 @@ function inferEpisodeCountFromAppendParameter(cardId: number, masterRank: number
   ]);
 
   if (isTrained) {
-    return trainedEpisodeCounts.get(performance) ?? untrainedEpisodeCounts.get(performance) ?? 0;
+    return trainedEpisodeCounts.get(performance) ?? 0;
   }
 
   return untrainedEpisodeCounts.get(performance) ?? 0;
@@ -414,7 +449,7 @@ function getSnapshotProfile(snapshot: TrackerUserSnapshotPayload): Record<string
   return isRecord(snapshot.snapshot?.profile) ? snapshot.snapshot.profile : {};
 }
 
-function toNormalizedCards(cards: unknown): NormalizedBestdoriCard[] {
+export function toNormalizedCards(cards: unknown, cardMaster: BandoriCardsApiRecordMap): NormalizedBestdoriCard[] {
   if (!Array.isArray(cards)) {
     return [];
   }
@@ -427,7 +462,7 @@ function toNormalizedCards(cards: unknown): NormalizedBestdoriCard[] {
       const skillLevel = Math.max(1, toInteger(card.skill_level, 1));
       const cardId = toInteger(card.situation_id);
       const masterRank = Math.max(0, toInteger(card.limit_break_rank, 0));
-      const metadata = BANDORI_CARD_EPISODE_METADATA[cardId];
+      const metadata = readCardEpisodeMetadata(cardMaster[String(cardId)]);
       const isBestdoriAlwaysTrained = metadata !== undefined && metadata[1] === 0 && metadata[2] > 0 && metadata[3] === 0;
       const canTrain = metadata === undefined || metadata[3] > 0 || isBestdoriAlwaysTrained;
       const isTrained = isBestdoriAlwaysTrained || (canTrain && (trainingStatus === "done"
@@ -440,7 +475,7 @@ function toNormalizedCards(cards: unknown): NormalizedBestdoriCard[] {
         level: Math.max(1, toInteger(card.level, 1)),
         masterRank,
         skillLevel,
-        episodeCount: inferEpisodeCountFromAppendParameter(cardId, masterRank, card.append_parameter, isTrained),
+        episodeCount: inferEpisodeCountFromAppendParameter(masterRank, card.append_parameter, isTrained, metadata),
         isTrained,
         hasTrainedArt: isBestdoriAlwaysTrained || (canTrain && (illust === "after_training" || illust === "1")),
         isExcluded: false,
@@ -581,7 +616,11 @@ function toPayloadFromNormalizedProfile(
   return payload;
 }
 
-function snapshotToNormalizedProfile(gameUid: string, snapshot: TrackerUserSnapshotPayload): NormalizedBestdoriProfile {
+function snapshotToNormalizedProfile(
+  gameUid: string,
+  snapshot: TrackerUserSnapshotPayload,
+  cardMaster: BandoriCardsApiRecordMap,
+): NormalizedBestdoriProfile {
   const suiteUser = getSnapshotSuiteUser(snapshot);
   const profile = getSnapshotProfile(snapshot);
   const profileName = toStringOrNull(profile.user_name) ?? `UID ${gameUid}`;
@@ -589,7 +628,7 @@ function snapshotToNormalizedProfile(gameUid: string, snapshot: TrackerUserSnaps
   return {
     name: profileName,
     server: BESTDORI_CN_SERVER_ID,
-    cards: toNormalizedCards(suiteUser.cards),
+    cards: toNormalizedCards(suiteUser.cards, cardMaster),
     items: toBestdoriItems(suiteUser.area_items),
     potentials: [],
   };
@@ -1037,8 +1076,11 @@ export async function syncAutoGameProfile(webUserId: string, gameUid: string): P
     throw new ApiRouteError(403, "GAME_UID_NOT_BOUND", "该游戏 UID 尚未绑定到当前账号");
   }
 
-  const snapshot = await fetchGameUserSnapshot(gameUid);
-  const normalizedProfile = snapshotToNormalizedProfile(gameUid, snapshot);
+  const [snapshot, cardMaster] = await Promise.all([
+    fetchGameUserSnapshot(gameUid),
+    readBandoriCardsApiDatasetForServer(BESTDORI_CN_SERVER_ID),
+  ]);
+  const normalizedProfile = snapshotToNormalizedProfile(gameUid, snapshot, cardMaster);
   assertUsableSnapshot(gameUid, snapshot, normalizedProfile);
   const suiteUser = getSnapshotSuiteUser(snapshot);
   const syncedAt = new Date().toISOString();

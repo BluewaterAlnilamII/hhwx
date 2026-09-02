@@ -4,8 +4,8 @@ This document describes the HHWX Bandori single-song team builder: the game
 model, scoring model, exact search contract, performance design, correctness
 argument, validation gates, and implementation ownership.
 
-Medley search is a separate optimization problem and is documented in
-`medley-algorithm.md`.
+Medley search is a separate greenfield implementation documented in
+`../bandori-medley-foundation.md` and `../bandori-medley-search.md`.
 
 ## Problem Definition
 
@@ -546,7 +546,7 @@ The current implementation is split into these layers:
 - `src/lib/bandori-team-search.ts`: public compatibility entrypoint that
   re-exports the single-song search API.
 
-The core layer must not import `single` or `medley`.
+The core layer must not import `single`.
 
 ## Validation Gates
 

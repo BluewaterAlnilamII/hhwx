@@ -19,6 +19,15 @@ npm run lint
 npm run build
 ```
 
+修改 `crates/` 时还必须通过锁定工具链下的 Native 与 WASM 检查：
+
+```bash
+npm run format:medley-foundation
+npm run lint:medley-foundation
+npm run test:medley-foundation
+npm run check:medley-foundation:wasm
+```
+
 ## 基本准则
 
 - 不要提交密钥和私有部署细节。

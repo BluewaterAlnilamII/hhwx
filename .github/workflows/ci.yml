@@ -10,6 +10,28 @@ permissions:
   contents: read
 
 jobs:
+  medley-foundation:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install locked Rust toolchain
+        run: rustup show active-toolchain
+
+      - name: Check Rust formatting
+        run: npm run format:medley-foundation
+
+      - name: Lint Rust workspace
+        run: npm run lint:medley-foundation
+
+      - name: Test Rust workspace
+        run: npm run test:medley-foundation
+
+      - name: Check Rust workspace for WASM
+        run: npm run check:medley-foundation:wasm
+
   lint-and-build:
     runs-on: ubuntu-latest
 
@@ -34,6 +56,9 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Test medley foundation source boundary
+        run: npm run test:medley-foundation:source
 
       - name: Test Bandori cards
         run: npm run test:bandori-cards

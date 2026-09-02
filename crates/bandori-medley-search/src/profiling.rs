@@ -1,0 +1,338 @@
+//! Native diagnostic-test timers. This module is absent from production builds.
+//! Switching phases charges nested work once, rather than adding inclusive times.
+
+use std::cell::RefCell;
+use std::time::{Duration, Instant};
+
+use serde_json::{Value, json};
+
+use crate::MedleySearchDiagnosticsV1;
+
+#[derive(Clone, Copy)]
+pub(crate) enum Phase {
+    Setup,
+    Domains,
+    PartialBounds,
+    CompleteBounds,
+    JointBounds,
+    JointBookkeeping,
+    EffectiveOwners,
+    ApplyJointCuts,
+    JointBranching,
+    LocalBlocks,
+    Proposals,
+    Improvements,
+    Scoring,
+    Join,
+    Other,
+}
+
+const PHASE_NAMES: [&str; 15] = [
+    "setup",
+    "domains",
+    "partialBounds",
+    "completeBounds",
+    "jointBounds",
+    "jointBookkeeping",
+    "effectiveOwners",
+    "applyJointCuts",
+    "jointBranching",
+    "localBlocks",
+    "proposals",
+    "improvements",
+    "scoring",
+    "join",
+    "other",
+];
+
+const JOINT_TIMING_NAMES: [&str; 9] = [
+    "fresh",
+    "incremental",
+    "weights",
+    "clone",
+    "localChoices",
+    "forward",
+    "backward",
+    "proposal",
+    "destinations",
+];
+
+#[derive(Clone, Copy)]
+pub(crate) enum JointTiming {
+    Fresh,
+    Incremental,
+    Weights,
+    Clone,
+    LocalChoices,
+    Forward,
+    Backward,
+    Proposal,
+    Destinations,
+}
+
+struct Profile {
+    started: Instant,
+    last: Instant,
+    phase: Phase,
+    elapsed: [Duration; 15],
+    calls: [u64; 15],
+    support_passes: [u64; 15],
+    support_heads: [u64; 15],
+    improvements: Vec<Value>,
+    warm_start_ms: Option<f64>,
+    peak_bound_index_bytes: usize,
+    peak_domain_bytes: usize,
+    peak_stack_bytes: usize,
+    joint_destinations_pruned: u64,
+    joint_cards_fixed: u64,
+    joint_reuses: u64,
+    joint_model_builds: u64,
+    joint_table_updates: u64,
+    joint_state_count_sum: u64,
+    joint_layers_recomputed: u64,
+    peak_joint_bytes: usize,
+    first_joint_upper: Option<f64>,
+    joint_timing_elapsed: [Duration; 9],
+    joint_timing_calls: [u64; 9],
+    joint_clone_bytes: u64,
+    joint_whole_cutoffs: u64,
+}
+
+impl Profile {
+    fn switch(&mut self, phase: Phase) {
+        let now = Instant::now();
+        self.elapsed[self.phase as usize] += now - self.last;
+        self.last = now;
+        self.phase = phase;
+    }
+}
+
+thread_local! {
+    static PROFILE: RefCell<Option<Profile>> = const { RefCell::new(None) };
+}
+
+pub(crate) struct Scope(Option<Phase>);
+
+impl Drop for Scope {
+    fn drop(&mut self) {
+        if let Some(previous) = self.0 {
+            PROFILE.with_borrow_mut(|profile| profile.as_mut().unwrap().switch(previous));
+        }
+    }
+}
+
+pub(crate) struct JointTimingScope {
+    timing: JointTiming,
+    started: Instant,
+    bytes: usize,
+}
+
+impl Drop for JointTimingScope {
+    fn drop(&mut self) {
+        PROFILE.with_borrow_mut(|profile| {
+            if let Some(profile) = profile {
+                let index = self.timing as usize;
+                profile.joint_timing_elapsed[index] += self.started.elapsed();
+                profile.joint_timing_calls[index] += 1;
+                if matches!(self.timing, JointTiming::Clone) {
+                    profile.joint_clone_bytes += self.bytes as u64;
+                }
+            }
+        });
+    }
+}
+
+pub(crate) fn joint_timing(timing: JointTiming, bytes: usize) -> JointTimingScope {
+    JointTimingScope {
+        timing,
+        started: Instant::now(),
+        bytes,
+    }
+}
+
+pub(crate) fn enter(phase: Phase) -> Scope {
+    PROFILE.with_borrow_mut(|profile| {
+        let Some(profile) = profile else {
+            return Scope(None);
+        };
+        let previous = profile.phase;
+        profile.switch(phase);
+        profile.calls[phase as usize] += 1;
+        Scope(Some(previous))
+    })
+}
+
+pub(crate) fn support_pass(head_count: usize) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            profile.support_passes[profile.phase as usize] += 1;
+            profile.support_heads[profile.phase as usize] += head_count as u64;
+        }
+    });
+}
+
+pub(crate) fn bound_storage(bytes: usize) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            profile.peak_bound_index_bytes = profile.peak_bound_index_bytes.max(bytes);
+        }
+    });
+}
+
+pub(crate) fn domain_storage(bytes: usize) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            profile.peak_domain_bytes = profile.peak_domain_bytes.max(bytes);
+        }
+    });
+}
+
+pub(crate) fn stack_storage(bytes: usize) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            profile.peak_stack_bytes = profile.peak_stack_bytes.max(bytes);
+        }
+    });
+}
+
+pub(crate) fn joint_bound(score: f64, bytes: usize, reused: bool) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            profile.peak_joint_bytes = profile.peak_joint_bytes.max(bytes);
+            profile.joint_reuses += u64::from(reused);
+            if profile.first_joint_upper.is_none() && score.is_finite() {
+                profile.first_joint_upper = Some(score);
+            }
+        }
+    });
+}
+
+pub(crate) fn joint_cuts(destinations: u32, fixed: bool) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            profile.joint_destinations_pruned += u64::from(destinations);
+            profile.joint_cards_fixed += u64::from(fixed);
+        }
+    });
+}
+
+pub(crate) fn joint_model(states: usize, updated: bool) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            profile.joint_model_builds += u64::from(!updated);
+            profile.joint_table_updates += u64::from(updated);
+            profile.joint_state_count_sum += states as u64;
+        }
+    });
+}
+
+pub(crate) fn joint_layer() {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            profile.joint_layers_recomputed += 1;
+        }
+    });
+}
+
+pub(crate) fn joint_whole_cutoff() {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            profile.joint_whole_cutoffs += 1;
+        }
+    });
+}
+
+pub(crate) fn improvement(score: f64, diagnostics: &MedleySearchDiagnosticsV1) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            profile.improvements.push(json!({
+                "elapsedMs": profile.started.elapsed().as_secs_f64() * 1000.0,
+                "score": score,
+                "partialNodes": diagnostics.partial_nodes,
+                "completeTeams": diagnostics.complete_teams,
+                "heuristicProbes": diagnostics.heuristic_probes,
+            }));
+        }
+    });
+}
+
+pub(crate) fn warm_start_finished() {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            profile.warm_start_ms = Some(profile.started.elapsed().as_secs_f64() * 1000.0);
+        }
+    });
+}
+
+pub(crate) fn start() {
+    let now = Instant::now();
+    PROFILE.with_borrow_mut(|profile| {
+        *profile = Some(Profile {
+            started: now,
+            last: now,
+            phase: Phase::Other,
+            elapsed: [Duration::ZERO; 15],
+            calls: [0; 15],
+            support_passes: [0; 15],
+            support_heads: [0; 15],
+            improvements: Vec::new(),
+            warm_start_ms: None,
+            peak_bound_index_bytes: 0,
+            peak_domain_bytes: 0,
+            peak_stack_bytes: 0,
+            joint_destinations_pruned: 0,
+            joint_cards_fixed: 0,
+            joint_reuses: 0,
+            joint_model_builds: 0,
+            joint_table_updates: 0,
+            joint_state_count_sum: 0,
+            joint_layers_recomputed: 0,
+            peak_joint_bytes: 0,
+            first_joint_upper: None,
+            joint_timing_elapsed: [Duration::ZERO; 9],
+            joint_timing_calls: [0; 9],
+            joint_clone_bytes: 0,
+            joint_whole_cutoffs: 0,
+        });
+    });
+}
+
+pub(crate) fn finish() -> Value {
+    PROFILE.with_borrow_mut(|profile| {
+        let mut profile = profile.take().unwrap();
+        profile.switch(Phase::Other);
+        let elapsed = profile.last - profile.started;
+        assert_eq!(profile.elapsed.iter().sum::<Duration>(), elapsed);
+        json!({
+            "elapsedMs": elapsed.as_secs_f64() * 1000.0,
+            "phases": PHASE_NAMES.iter().enumerate().map(|(index, name)| json!({
+                "name": name,
+                "elapsedMs": profile.elapsed[index].as_secs_f64() * 1000.0,
+                "calls": profile.calls[index],
+                "supportPasses": profile.support_passes[index],
+                "supportHeads": profile.support_heads[index],
+            })).collect::<Vec<_>>(),
+            "warmStartMs": profile.warm_start_ms,
+            "peakBoundIndexBytes": profile.peak_bound_index_bytes,
+            "peakDomainBytes": profile.peak_domain_bytes,
+            "peakStackBytes": profile.peak_stack_bytes,
+            "jointDestinationsPruned": profile.joint_destinations_pruned,
+            "jointCardsFixed": profile.joint_cards_fixed,
+            "jointReuses": profile.joint_reuses,
+            "jointModelBuilds": profile.joint_model_builds,
+            "jointTableUpdates": profile.joint_table_updates,
+            "jointStateCountSum": profile.joint_state_count_sum,
+            "jointLayersRecomputed": profile.joint_layers_recomputed,
+            "peakJointReservedBytes": profile.peak_joint_bytes,
+            "firstJointUpper": profile.first_joint_upper,
+            "jointTimings": JOINT_TIMING_NAMES.iter().enumerate().map(|(index, name)| json!({
+                "name": name,
+                "elapsedMs": profile.joint_timing_elapsed[index].as_secs_f64() * 1000.0,
+                "calls": profile.joint_timing_calls[index],
+            })).collect::<Vec<_>>(),
+            "jointCloneBytes": profile.joint_clone_bytes,
+            "jointWholeCutoffs": profile.joint_whole_cutoffs,
+            "improvements": profile.improvements,
+        })
+    })
+}
