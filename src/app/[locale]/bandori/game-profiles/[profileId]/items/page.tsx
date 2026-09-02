@@ -198,6 +198,7 @@ async function requestProfilePayload(profileId: string, messages: ItemPageMessag
   }
 
   const response = await fetch(`/api/account/game-profiles/${profileId}/payload`, {
+    cache: "no-store",
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   const payload = await response.json().catch(() => ({}));

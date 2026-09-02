@@ -1,4 +1,5 @@
 import { ApiRouteError } from "@/lib/api-contracts";
+import { NO_STORE_HTTP_CACHE_POLICY, withHttpCachePolicy } from "@/lib/api-cache";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { requireVerifiedAccount } from "@/lib/auth-server";
 import { createManualGameProfile, listUserGameProfiles } from "@/lib/user-game-profiles-server";
@@ -6,13 +7,17 @@ import { createManualGameProfile, listUserGameProfiles } from "@/lib/user-game-p
 export async function GET(request: Request) {
   try {
     const user = await requireVerifiedAccount(request);
-    return jsonSuccess(await listUserGameProfiles(user.id));
+    return jsonSuccess(await listUserGameProfiles(user.id), {
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
+    });
   } catch (error) {
     console.error("Game profiles GET API error:", error);
     return jsonRouteError(error, {
       status: 500,
       code: "GAME_PROFILES_READ_FAILED",
       message: "读取游戏档案失败",
+    }, {
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   }
 }

@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   MedleyFoundationInputError,
   buildFixedMedleyEvaluationInput,
+  calculateMedleyEventPoint,
 } from "../src/lib/bandori/medley-foundation/index.ts";
 
 const sourceFixtureUrl = new URL("./fixtures/bandori-medley-foundation-source-v1.json", import.meta.url);
@@ -16,6 +17,14 @@ const scorerFixtureUrl = new URL(
 function readFixture(url) {
   return JSON.parse(readFileSync(url, "utf8"));
 }
+
+test("medley event points use the fixed three-song boost totals", () => {
+  assert.deepEqual(
+    [0, 1, 2, 3].map((liveBoostCount) => calculateMedleyEventPoint(18_499, liveBoostCount)),
+    [300, 1_500, 3_000, 4_500],
+  );
+  assert.equal(calculateMedleyEventPoint(18_500, 3), 4_545);
+});
 
 test("tiny raw fixture normalizes exactly to the retained Rust scorer input", () => {
   const result = buildFixedMedleyEvaluationInput(readFixture(sourceFixtureUrl));

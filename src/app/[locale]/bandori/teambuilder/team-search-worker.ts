@@ -42,6 +42,7 @@ import {
 import { MEDLEY_SEARCH_SOURCE_SCHEMA_VERSION } from "@/lib/bandori/medley-foundation/contracts";
 import initMedleyWasm, { runMedleySearchJson } from "@/lib/bandori/medley-wasm/pkg/bandori_medley";
 import { resolveBandoriCardMapForServerWithJpFallback } from "@/lib/bandori/cards/regional-extensions";
+import { getGameProfileCardMaxEpisodeCount } from "@/lib/bandori/cards/game-profile-card";
 import { hasTrainedCardArt } from "@/lib/bandori/cards/training";
 import {
   assertTeamSearchMasterReferences,
@@ -546,13 +547,6 @@ function getMasterCardMaxLevel(card: BestdoriCardMaster | undefined): number {
   return baseLevelLimit + trainingLevelLimit;
 }
 
-function getMasterCardMaxEpisodeCount(card: BestdoriCardMaster | undefined): number {
-  if (!card) {
-    return 2;
-  }
-  return Math.min(2, Math.max(0, Array.isArray(card.stat?.episodes) ? card.stat.episodes.length : 2));
-}
-
 function applyOwnedCardParameterPreferences(
   card: UserGameProfileCardRecord,
   masterCard: BestdoriCardMaster | undefined,
@@ -568,7 +562,7 @@ function applyOwnedCardParameterPreferences(
 
   if (preferences.maxLevelEpisodeTraining) {
     nextCard.level = Math.max(nextCard.level, getMasterCardMaxLevel(masterCard) || nextCard.level);
-    nextCard.episodeCount = Math.max(nextCard.episodeCount, getMasterCardMaxEpisodeCount(masterCard));
+    nextCard.episodeCount = Math.max(nextCard.episodeCount, getGameProfileCardMaxEpisodeCount(masterCard));
     if (hasTraining) {
       nextCard.isTrained = true;
       nextCard.hasTrainedArt = true;

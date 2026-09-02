@@ -59,6 +59,10 @@ import type {
   BandoriTeamSearchTarget,
 } from "@/lib/bandori-team-search";
 import {
+  calculateMedleyEventPoint,
+  type MedleyLiveBoostCount,
+} from "@/lib/bandori/medley-foundation";
+import {
   listLocalGameProfiles,
   readLocalGameProfilePayload,
   type LocalGameProfileSummary,
@@ -324,6 +328,12 @@ const LIVE_BOOST_LABELS: Record<LiveBoostCountOption, string> = {
   "2": "2",
   "3": "3",
 };
+const MEDLEY_LIVE_BOOST_LABELS: Record<LiveBoostCountOption, string> = {
+  "0": "0",
+  "1": "3",
+  "2": "6",
+  "3": "9",
+};
 const CHALLENGE_CP_LABELS: Record<ChallengeCpCostOption, string> = {
   "200": "200",
   "400": "400",
@@ -426,7 +436,11 @@ async function requestJson<T>(
     headers.set("Authorization", `Bearer ${accessToken}`);
   }
 
-  const response = await fetch(path, { ...init, headers });
+  const response = await fetch(path, {
+    ...init,
+    cache: withAuth ? "no-store" : init?.cache,
+    headers,
+  });
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
@@ -1758,6 +1772,7 @@ function MedleyResultCard({
   rankLabel,
   badgeLabel,
   description,
+  liveBoostCount,
   variant = "default",
 }: {
   result: BandoriMedleyFrontendCandidateDto;
@@ -1769,6 +1784,7 @@ function MedleyResultCard({
   rankLabel?: string;
   badgeLabel?: string;
   description?: string;
+  liveBoostCount: MedleyLiveBoostCount;
   variant?: "default" | "candidate" | "max-score-candidate";
 }) {
   const locale = useLocale() as AppLocale;
@@ -1792,6 +1808,7 @@ function MedleyResultCard({
     : "rounded-full border border-amber-200 bg-white px-2 py-0.5 font-bold text-amber-700";
   const sharedAreaItemConfiguration = result.areaItemConfiguration;
   const totalPower = result.songResults.reduce((sum, songResult) => sum + songResult.totalPower, 0);
+  const eventPoint = calculateMedleyEventPoint(result.averageScore, liveBoostCount);
   return (
     <article className={articleClassName}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -1823,7 +1840,7 @@ function MedleyResultCard({
           </div>
           <div className="rounded-xl bg-slate-50 px-3 py-2">
             <div className="font-semibold text-slate-500">{labelsT("eventPoint")}</div>
-            <div className="mt-1 font-bold text-slate-900">-</div>
+            <div className="mt-1 font-bold text-slate-900">{formatNumber(eventPoint, locale)}</div>
           </div>
           <div className="rounded-xl bg-slate-50 px-3 py-2">
             <div className="font-semibold text-slate-500">{labelsT("totalPower")}</div>
@@ -2825,6 +2842,8 @@ function TeamBuilderPanel() {
       : undefined;
     return singleResult?.eventPointOptions.mode ?? "none";
   }, [result]);
+  const resultIsMedley = result !== null && isMedleySearchResponse(result);
+  const resultMedleyLiveBoostCount = Number(resultLiveBoostCount) as MedleyLiveBoostCount;
   const isPreloadReady = preloadState.master === "ready"
     && preloadState.chart === "ready"
     && preloadState.eventBonus === "ready"
@@ -3452,9 +3471,13 @@ function TeamBuilderPanel() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="text-xl font-bold text-slate-900">{labelsT("results")}</h2>
               </div>
-              {resultEventPointMode !== "none" ? (
+              {resultIsMedley || resultEventPointMode !== "none" ? (
                 <div className="flex flex-wrap items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm sm:items-center">
-                  {resultEventPointMode === "liveBoost" || resultEventPointMode === "versus" || resultEventPointMode === "festival" ? (
+                  {resultIsMedley ? (
+                    <ResultOptionControl label="Live Boost">
+                      <Segment value={resultLiveBoostCount} options={LIVE_BOOST_OPTIONS} onChange={setResultLiveBoostCount} labels={MEDLEY_LIVE_BOOST_LABELS} />
+                    </ResultOptionControl>
+                  ) : resultEventPointMode === "liveBoost" || resultEventPointMode === "versus" || resultEventPointMode === "festival" ? (
                     <ResultOptionControl label="Live Boost">
                       <Segment value={resultLiveBoostCount} options={LIVE_BOOST_OPTIONS} onChange={setResultLiveBoostCount} labels={LIVE_BOOST_LABELS} />
                     </ResultOptionControl>
@@ -3497,6 +3520,7 @@ function TeamBuilderPanel() {
                         rankLabel={labelsT("candidate")}
                         badgeLabel={labelsT("maxScoreBadge")}
                         description={labelsT("evaluatedCandidateDescription")}
+                        liveBoostCount={resultMedleyLiveBoostCount}
                         variant="max-score-candidate"
                       />
                     ) : null}
@@ -3512,6 +3536,7 @@ function TeamBuilderPanel() {
                         rankLabel={labelsT("candidateWithIndex", { index: item.rank })}
                         badgeLabel={labelsT("evaluatedAverageBadge")}
                         description={labelsT("evaluatedCandidateDescription")}
+                        liveBoostCount={resultMedleyLiveBoostCount}
                         variant="candidate"
                       />
                     ))}
@@ -3527,6 +3552,7 @@ function TeamBuilderPanel() {
                       skills={data.skills}
                       displayServer={selectedProfileCardServer}
                       songs={displayedMedleySongs}
+                      liveBoostCount={resultMedleyLiveBoostCount}
                     />
                   ) : (
                     <ResultCard

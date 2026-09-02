@@ -10,6 +10,12 @@ import { type UserGameProfileCardRecord } from "@/lib/user-game-profile-payload"
 
 export type GameProfileCardMetadata = BandoriCardMasterRecord;
 
+export function getGameProfileCardMaxEpisodeCount(
+  metadata?: { stat?: Record<string, unknown> | null },
+): number {
+  return Array.isArray(metadata?.stat?.episodes) ? metadata.stat.episodes.length : 0;
+}
+
 export function pickGameProfileCardName(
   cardId: number,
   metadata?: GameProfileCardMetadata,
@@ -43,7 +49,7 @@ function createGameProfileCard(
     level: 1,
     masterRank: values.masterRank,
     skillLevel: values.skillLevel,
-    episodeCount: 2,
+    episodeCount: getGameProfileCardMaxEpisodeCount(metadata),
     isTrained: hasTraining,
     hasTrainedArt: hasTraining,
     isExcluded: false,

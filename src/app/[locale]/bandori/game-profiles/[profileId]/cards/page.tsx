@@ -145,6 +145,7 @@ async function requestProfilePayload(
   if (!accessToken) throw new Error(messages.notSignedIn);
 
   const response = await fetch(`/api/account/game-profiles/${profileId}/payload`, {
+    cache: "no-store",
     headers: { Authorization: `Bearer ${accessToken}` },
     signal,
   });
