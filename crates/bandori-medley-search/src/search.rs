@@ -1788,7 +1788,7 @@ impl JointSearch<'_, '_, '_, '_> {
             crate::profiling::joint_owner_widths(owner_width_counts);
             // This table describes residual occupancy before this pass. A newly
             // fixed physical member changes that meaning; descendants rebuild it.
-            if !fixed_member {
+            if !fixed_member && bound.can_update(&owners, fixed_scores) {
                 let mut forced_mode = None;
                 for (group, mode_uppers) in bound.mode_uppers.iter().enumerate() {
                     let mut competitive = mode_uppers

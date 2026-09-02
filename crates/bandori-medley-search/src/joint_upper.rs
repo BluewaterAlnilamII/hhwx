@@ -1220,6 +1220,9 @@ mod tests {
                 let mut restricted = owners.clone();
                 restricted[id] &= !2;
                 assert!(result.can_update(&restricted, [None; 3]));
+                let mut newly_fixed = owners.clone();
+                newly_fixed[id] = 1;
+                assert!(!result.can_update(&newly_fixed, [None; 3]));
                 let updated = calculate_weights(
                     None,
                     &groups,
