@@ -278,6 +278,16 @@ struct LocalCandidates {
     lengths: [[u8; 2]; 3],
 }
 
+impl LocalCandidates {
+    fn contains(&self, id: u32) -> bool {
+        (0..3).any(|slot| {
+            (0..2).any(|role| {
+                self.ids[slot][role][..usize::from(self.lengths[slot][role])].contains(&id)
+            })
+        })
+    }
+}
+
 impl LocalGroup {
     fn new(ids: &[u32], owners: &[u8], weights: &JointWeights) -> Self {
         let mut best = [[[NO_CARD; 4]; 2]; 3];
@@ -818,6 +828,7 @@ fn calculate_weights(
                 destinations[id as usize][3] = score;
                 continue;
             }
+            let is_local_candidate = candidates.contains(id);
             for (owner, target) in destinations[id as usize].iter_mut().enumerate() {
                 if mask & (1 << owner) == 0 {
                     continue;
@@ -835,19 +846,32 @@ fn calculate_weights(
                         !best.cards.contains(&id)
                     };
                     let conditional = if already_satisfies {
-                        best
+                        best.score
                     } else if owner < 3 && pattern_roles[owner] == 0 {
-                        LocalChoice::default()
-                    } else {
-                        working.local[group].choice_with(
-                            pattern_roles,
-                            &working.residual_owners,
-                            &working.weights,
-                            &candidates,
-                            Some((id, owner)),
+                        f64::NEG_INFINITY
+                    } else if owner < 3 && !is_local_candidate {
+                        // This card cannot occur in another slot's prepared
+                        // candidates. Reuse the already-solved choice with its
+                        // target slot absent, then add the forced contribution
+                        // upward; this remains a bound regardless of sum order.
+                        let place = [1, 3, 9][owner];
+                        let without_owner = pattern - pattern_roles[owner] * place;
+                        sum_up(
+                            working.choices[group][without_owner].score,
+                            working.weights.cards[id as usize][owner][pattern_roles[owner] - 1],
                         )
+                    } else {
+                        working.local[group]
+                            .choice_with(
+                                pattern_roles,
+                                &working.residual_owners,
+                                &working.weights,
+                                &candidates,
+                                Some((id, owner)),
+                            )
+                            .score
                     };
-                    upper = upper.max(sum_up(outside, conditional.score));
+                    upper = upper.max(sum_up(outside, conditional));
                 }
                 *target =
                     score_upper(upper, working.weights.constant, working.weights.offset).min(score);
@@ -980,6 +1004,78 @@ mod tests {
                     assert_eq!(
                         actual.score, expected,
                         "pattern={pattern:?}, forced={forced:?}, owners={owners:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unlisted_forced_card_reuses_the_absent_slot_upper() {
+        let weights = JointWeights {
+            constant: 0.0,
+            offset: 0.0,
+            fixed_members: std::array::from_fn(|_| Vec::new()),
+            fixed_leaders: [None; 3],
+            fixed_scores: [None; 3],
+            cards: (0..6)
+                .map(|id| std::array::from_fn(|slot| [id as f64 + slot as f64, id as f64 + 9.0]))
+                .collect(),
+        };
+        let owners = vec![ALL_OWNERS; 6];
+        let local = LocalGroup::new(&[0, 1, 2, 3, 4, 5], &owners, &weights);
+        let candidates = local.candidates(&owners);
+        for id in [0, 1] {
+            assert!(!candidates.contains(id));
+            for pattern in 0..PATTERNS {
+                let pattern_roles = roles(pattern);
+                for owner in 0..3 {
+                    if pattern_roles[owner] == 0 {
+                        continue;
+                    }
+                    let without_owner = pattern - pattern_roles[owner] * [1, 3, 9][owner];
+                    let upper = sum_up(
+                        local
+                            .choice_with(roles(without_owner), &owners, &weights, &candidates, None)
+                            .score,
+                        weights.cards[id as usize][owner][pattern_roles[owner] - 1],
+                    );
+                    let slot_cards = std::array::from_fn::<_, 3, _>(|slot| {
+                        if pattern_roles[slot] == 0 {
+                            vec![NO_CARD]
+                        } else if slot == owner {
+                            vec![id]
+                        } else {
+                            (0..6).collect()
+                        }
+                    });
+                    let mut exact_sum = f64::NEG_INFINITY;
+                    for &first in &slot_cards[0] {
+                        for &second in &slot_cards[1] {
+                            for &third in &slot_cards[2] {
+                                let selected = [first, second, third];
+                                if selected.iter().enumerate().any(|(slot, &card)| {
+                                    card != NO_CARD && selected[..slot].contains(&card)
+                                }) {
+                                    continue;
+                                }
+                                exact_sum = exact_sum.max(
+                                    selected
+                                        .iter()
+                                        .enumerate()
+                                        .filter(|(_, card)| **card != NO_CARD)
+                                        .map(|(slot, card)| {
+                                            weights.cards[*card as usize][slot]
+                                                [pattern_roles[slot] - 1]
+                                        })
+                                        .sum(),
+                                );
+                            }
+                        }
+                    }
+                    assert!(
+                        upper >= exact_sum,
+                        "id={id} pattern={pattern_roles:?} owner={owner} upper={upper} exact={exact_sum}",
                     );
                 }
             }
