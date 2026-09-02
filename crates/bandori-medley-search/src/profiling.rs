@@ -57,6 +57,7 @@ const JOINT_TIMING_NAMES: [&str; 9] = [
     "proposal",
     "destinations",
 ];
+const COMPLETION_LIMITS: [u128; 7] = [256, 1_024, 4_096, 16_384, 65_536, 262_144, 1_048_576];
 
 #[derive(Clone, Copy)]
 pub(crate) enum JointTiming {
@@ -99,6 +100,16 @@ struct TraversalProfile {
     joint_gap_counts: [u64; 7],
     owner_width_counts: [u64; 4],
     joint_whole_cutoffs: u64,
+    completion_observations: u64,
+    sorted_row_count_buckets: [[u64; 8]; 3],
+    row_sum_buckets: [u64; 8],
+    smallest_pair_product_buckets: [u64; 8],
+    required_count_buckets: [u64; 16],
+    local_input_rows: [u64; 3],
+    local_surviving_rows: [u64; 3],
+    local_pair_checks: u64,
+    local_third_checks: u64,
+    local_conflicts: u64,
 }
 
 struct ConfigurationProfile {
@@ -201,6 +212,16 @@ fn traversal_json(profile: &TraversalProfile) -> Value {
         "jointGapCounts": profile.joint_gap_counts,
         "ownerWidthCounts": profile.owner_width_counts,
         "jointWholeCutoffs": profile.joint_whole_cutoffs,
+        "completionObservations": profile.completion_observations,
+        "sortedRowCountBuckets": profile.sorted_row_count_buckets,
+        "rowSumBuckets": profile.row_sum_buckets,
+        "smallestPairProductBuckets": profile.smallest_pair_product_buckets,
+        "requiredCountBuckets": profile.required_count_buckets,
+        "localInputRows": profile.local_input_rows,
+        "localSurvivingRows": profile.local_surviving_rows,
+        "localPairChecks": profile.local_pair_checks,
+        "localThirdChecks": profile.local_third_checks,
+        "localConflicts": profile.local_conflicts,
     })
 }
 
@@ -319,6 +340,53 @@ pub(crate) fn joint_owner_widths(counts: [u64; 4]) {
                 for (target, count) in traversal.owner_width_counts.iter_mut().zip(counts) {
                     *target += count;
                 }
+            });
+        }
+    });
+}
+
+pub(crate) fn completion_counts(mut counts: [u64; 3], required_count: usize) {
+    counts.sort_unstable();
+    let row_sum = counts.into_iter().map(u128::from).sum::<u128>();
+    let smallest_pair_product = u128::from(counts[0]) * u128::from(counts[1]);
+    let bucket = |value| {
+        COMPLETION_LIMITS
+            .iter()
+            .position(|limit| value <= *limit)
+            .unwrap_or(COMPLETION_LIMITS.len())
+    };
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            record_traversal(profile, |traversal| {
+                traversal.completion_observations += 1;
+                for (position, count) in counts.into_iter().enumerate() {
+                    traversal.sorted_row_count_buckets[position][bucket(u128::from(count))] += 1;
+                }
+                traversal.row_sum_buckets[bucket(row_sum)] += 1;
+                traversal.smallest_pair_product_buckets[bucket(smallest_pair_product)] += 1;
+                traversal.required_count_buckets[required_count.min(15)] += 1;
+            });
+        }
+    });
+}
+
+pub(crate) fn local_block(
+    input_rows: [usize; 3],
+    surviving_rows: [usize; 3],
+    pair_checks: u64,
+    third_checks: u64,
+    conflicts: u64,
+) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            record_traversal(profile, |traversal| {
+                for slot in 0..3 {
+                    traversal.local_input_rows[slot] += input_rows[slot] as u64;
+                    traversal.local_surviving_rows[slot] += surviving_rows[slot] as u64;
+                }
+                traversal.local_pair_checks += pair_checks;
+                traversal.local_third_checks += third_checks;
+                traversal.local_conflicts += conflicts;
             });
         }
     });
@@ -523,6 +591,7 @@ pub(crate) fn finish() -> Value {
             "jointWholeCutoffs": profile.joint_whole_cutoffs,
             "improvements": profile.improvements,
             "jointGapBands": ["below", "0%-0.1%", "0.1%-0.5%", "0.5%-1%", "1%-2%", "2%-5%", "above5%"],
+            "completionBands": ["<=256", "<=1024", "<=4096", "<=16384", "<=65536", "<=262144", "<=1048576", ">1048576"],
             "configurations": profile.configurations.iter().map(|configuration| json!({
                 "rank": configuration.rank,
                 "sourceIndex": configuration.source_index,
@@ -548,6 +617,8 @@ fn traversal_profile_groups_configuration_and_depth() {
     node_started(2, [1, 0, 0]);
     joint_bound(101.0, 2_048, JointMode::Fresh, Some(100.0));
     joint_owner_widths([1, 2, 3, 4]);
+    completion_counts([100, 200, 300], 3);
+    local_block([10, 20, 30], [8, 15, 25], 40, 50, 6);
     joint_whole_cutoff();
     node_finished(NodeOutcome::Branched, 3);
     configuration_finished("searched");
@@ -565,4 +636,12 @@ fn traversal_profile_groups_configuration_and_depth() {
     assert_eq!(depth["memberCounts"], json!([1, 0, 0]));
     assert_eq!(depth["traversal"]["ownerWidthCounts"], json!([1, 2, 3, 4]));
     assert_eq!(depth["traversal"]["jointWholeCutoffs"], 1);
+    assert_eq!(depth["traversal"]["rowSumBuckets"][1], 1);
+    assert_eq!(depth["traversal"]["smallestPairProductBuckets"][4], 1);
+    assert_eq!(depth["traversal"]["requiredCountBuckets"][3], 1);
+    assert_eq!(depth["traversal"]["sortedRowCountBuckets"][0][0], 1);
+    assert_eq!(depth["traversal"]["sortedRowCountBuckets"][1][0], 1);
+    assert_eq!(depth["traversal"]["sortedRowCountBuckets"][2][1], 1);
+    assert_eq!(depth["traversal"]["localSurvivingRows"], json!([8, 15, 25]));
+    assert_eq!(depth["traversal"]["localConflicts"], 6);
 }

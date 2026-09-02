@@ -1305,6 +1305,16 @@ impl JointSearch<'_, '_, '_, '_> {
         if counts.contains(&0) {
             return Ok(JointStep::Finished);
         }
+        #[cfg(test)]
+        crate::profiling::completion_counts(
+            counts,
+            self.domain
+                .available
+                .iter()
+                .zip(&self.domain.owners)
+                .filter(|(available, owners)| **available && **owners & UNUSED == 0)
+                .count(),
+        );
         if counts.into_iter().fold(0_u64, u64::saturating_add) <= self.local_row_limit() as u64 {
             self.finish_block(
                 node.families,
@@ -1571,6 +1581,12 @@ impl JointSearch<'_, '_, '_, '_> {
     ) -> Result<(), SearchAbort> {
         #[cfg(test)]
         let _timing = crate::profiling::enter(crate::profiling::Phase::LocalBlocks);
+        #[cfg(test)]
+        let join_counters_before = (
+            self.evaluation.state.diagnostics.join_pair_checks,
+            self.evaluation.state.diagnostics.join_third_checks,
+            self.evaluation.state.diagnostics.card_conflicts,
+        );
         let mut rows: [Vec<CompactCandidate>; 3] = std::array::from_fn(|_| Vec::new());
         let mut views: [Vec<usize>; 3] = std::array::from_fn(|_| Vec::new());
         for slot in 0..3 {
@@ -1606,6 +1622,14 @@ impl JointSearch<'_, '_, '_, '_> {
         for slot in 0..3 {
             self.generate_rows(families[slot], slot, uppers, &mut rows[slot])?;
             if rows[slot].is_empty() {
+                #[cfg(test)]
+                crate::profiling::local_block(
+                    counts,
+                    rows.each_ref().map(|rows| rows.len()),
+                    0,
+                    0,
+                    0,
+                );
                 add_counter(&mut self.evaluation.state.diagnostics.local_blocks, 1)?;
                 return Ok(());
             }
@@ -1628,6 +1652,26 @@ impl JointSearch<'_, '_, '_, '_> {
             &required,
             self.evaluation.state,
         )?;
+        #[cfg(test)]
+        crate::profiling::local_block(
+            counts,
+            rows.each_ref().map(|rows| rows.len()),
+            self.evaluation
+                .state
+                .diagnostics
+                .join_pair_checks
+                .saturating_sub(join_counters_before.0),
+            self.evaluation
+                .state
+                .diagnostics
+                .join_third_checks
+                .saturating_sub(join_counters_before.1),
+            self.evaluation
+                .state
+                .diagnostics
+                .card_conflicts
+                .saturating_sub(join_counters_before.2),
+        );
         add_counter(&mut self.evaluation.state.diagnostics.local_blocks, 1)
     }
 
@@ -1704,6 +1748,16 @@ impl JointSearch<'_, '_, '_, '_> {
                 .probe_completions(&mut self.domain, node.families, node.bounds, 3)?;
         }
         if counts.into_iter().fold(0_u64, u64::saturating_add) <= limit as u64 {
+            #[cfg(test)]
+            crate::profiling::completion_counts(
+                counts,
+                self.domain
+                    .available
+                    .iter()
+                    .zip(&self.domain.owners)
+                    .filter(|(available, owners)| **available && **owners & UNUSED == 0)
+                    .count(),
+            );
             self.finish_block(node.families, counts.map(|count| count as usize), uppers)?;
             return Ok(None);
         }
