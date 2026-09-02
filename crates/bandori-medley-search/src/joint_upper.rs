@@ -991,6 +991,36 @@ fn calculate_weights(
                 ));
             }
         }
+        #[cfg(test)]
+        let mut competitive_patterns = 0_u64;
+        #[cfg(test)]
+        let mut losing_patterns = 0_u64;
+        if let Some(incumbent) = prune_below {
+            for (pattern, outside) in outside.iter_mut().enumerate() {
+                if *outside == f64::NEG_INFINITY {
+                    continue;
+                }
+                let pattern_upper = score_upper(
+                    sum_up(*outside, working.choices[group][pattern].score),
+                    working.weights.constant,
+                    working.weights.offset,
+                );
+                if pattern_upper < incumbent {
+                    *outside = f64::NEG_INFINITY;
+                    #[cfg(test)]
+                    {
+                        losing_patterns += 1;
+                    }
+                } else {
+                    #[cfg(test)]
+                    {
+                        competitive_patterns += 1;
+                    }
+                }
+            }
+        }
+        #[cfg(test)]
+        crate::profiling::joint_pattern_filter(competitive_patterns, losing_patterns);
         let mut modes = [f64::NEG_INFINITY; 8];
         for (pattern, &outside) in outside.iter().enumerate() {
             let choice = working.choices[group][pattern];
@@ -1386,6 +1416,11 @@ mod tests {
                 )
                 .unwrap();
                 assert_eq!(equal.destinations.len(), owners.len());
+                for (slot, team) in result.proposal.unwrap().iter().enumerate() {
+                    for &id in team {
+                        assert!(equal.destinations[id as usize][slot] >= result.score);
+                    }
+                }
                 let cut = calculate_weights(
                     Some(remaining_weights.clone()),
                     &groups,

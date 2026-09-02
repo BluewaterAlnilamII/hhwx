@@ -148,6 +148,8 @@ struct Profile {
     joint_timing_calls: [u64; 9],
     joint_clone_bytes: u64,
     joint_whole_cutoffs: u64,
+    joint_competitive_patterns: u64,
+    joint_losing_patterns: u64,
     configurations: Vec<ConfigurationProfile>,
     active_configuration: Option<usize>,
     active_depth: Option<(usize, [u8; 3])>,
@@ -491,6 +493,15 @@ pub(crate) fn joint_whole_cutoff() {
     });
 }
 
+pub(crate) fn joint_pattern_filter(competitive: u64, losing: u64) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            profile.joint_competitive_patterns += competitive;
+            profile.joint_losing_patterns += losing;
+        }
+    });
+}
+
 pub(crate) fn improvement(score: f64, diagnostics: &MedleySearchDiagnosticsV1) {
     PROFILE.with_borrow_mut(|profile| {
         if let Some(profile) = profile {
@@ -542,6 +553,8 @@ pub(crate) fn start() {
             joint_timing_calls: [0; 9],
             joint_clone_bytes: 0,
             joint_whole_cutoffs: 0,
+            joint_competitive_patterns: 0,
+            joint_losing_patterns: 0,
             configurations: Vec::new(),
             active_configuration: None,
             active_depth: None,
@@ -589,6 +602,8 @@ pub(crate) fn finish() -> Value {
             })).collect::<Vec<_>>(),
             "jointCloneBytes": profile.joint_clone_bytes,
             "jointWholeCutoffs": profile.joint_whole_cutoffs,
+            "jointCompetitivePatterns": profile.joint_competitive_patterns,
+            "jointLosingPatterns": profile.joint_losing_patterns,
             "improvements": profile.improvements,
             "jointGapBands": ["below", "0%-0.1%", "0.1%-0.5%", "0.5%-1%", "1%-2%", "2%-5%", "above5%"],
             "completionBands": ["<=256", "<=1024", "<=4096", "<=16384", "<=65536", "<=262144", "<=1048576", ">1048576"],
