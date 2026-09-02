@@ -6,7 +6,7 @@
 
 use std::mem::size_of;
 
-use crate::fast_upper::{FastUpperBoundEngine, add_up, mul_up, rounding_factor};
+use crate::fast_upper::{FastUpperBoundEngine, add_up, mul_up, rounding_factor, sub_up};
 use crate::{SearchControl, SearchIncompleteReasonV1, SearchStopReason};
 
 pub(crate) const UNUSED: u8 = 8;
@@ -18,6 +18,7 @@ const NO_CARD: u32 = u32::MAX;
 pub(crate) struct JointWeights {
     pub(crate) cards: Vec<[[f64; 2]; 3]>,
     pub(crate) constant: f64,
+    pub(crate) offset: f64,
     pub(crate) fixed_members: [Vec<u32>; 3],
     pub(crate) fixed_leaders: [Option<f64>; 3],
     pub(crate) fixed_scores: [Option<f64>; 3],
@@ -182,7 +183,7 @@ fn sum_up(left: f64, right: f64) -> f64 {
     }
 }
 
-fn score_upper(value: f64, constant: f64) -> f64 {
+fn score_upper(value: f64, constant: f64, offset: f64) -> f64 {
     if value == f64::NEG_INFINITY {
         return value;
     }
@@ -190,6 +191,7 @@ fn score_upper(value: f64, constant: f64) -> f64 {
     // division by five, and the two canonical song additions. Negative actual
     // song scores can be replaced by zero by monotonicity before this envelope.
     add_up(value, constant)
+        .and_then(|sum| sub_up(sum, offset))
         .and_then(|sum| mul_up(sum, rounding_factor(4)?))
         .unwrap_or(f64::INFINITY)
 }
@@ -641,7 +643,7 @@ fn calculate_weights(
     if value == f64::NEG_INFINITY {
         return Ok(JointUpper::infeasible());
     }
-    let score = score_upper(value, working.weights.constant);
+    let score = score_upper(value, working.weights.constant, working.weights.offset);
     if prune_below.is_some_and(|incumbent| score < incumbent) {
         #[cfg(test)]
         crate::profiling::joint_whole_cutoff();
@@ -790,7 +792,8 @@ fn calculate_weights(
                     };
                     upper = upper.max(sum_up(outside, conditional.score));
                 }
-                *target = score_upper(upper, working.weights.constant).min(score);
+                *target =
+                    score_upper(upper, working.weights.constant, working.weights.offset).min(score);
             }
         }
     }
@@ -829,6 +832,7 @@ mod tests {
         // force the top-four matching shortcut to be checked against all cards.
         let weights = JointWeights {
             constant: 0.0,
+            offset: 0.0,
             fixed_members: std::array::from_fn(|_| Vec::new()),
             fixed_leaders: [None; 3],
             fixed_scores: [None; 3],
@@ -911,6 +915,7 @@ mod tests {
             .collect::<Vec<_>>();
         let weights = JointWeights {
             constant: 17.0,
+            offset: 5.0,
             fixed_members: std::array::from_fn(|_| Vec::new()),
             fixed_leaders: [None; 3],
             fixed_scores: [None; 3],
@@ -1045,7 +1050,7 @@ mod tests {
                 {
                     continue;
                 }
-                let mut score = weights.constant;
+                let mut score = weights.constant - weights.offset;
                 for slot in 0..3 {
                     let mut leader = 0.0_f64;
                     for cards in assignment {
