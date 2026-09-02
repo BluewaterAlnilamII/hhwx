@@ -71,7 +71,7 @@ impl JointUpper {
                 && required_teams
                     .iter()
                     .zip(&working.required_teams)
-                    .all(|(&now, &before)| before & !now == 0)
+                    .all(|(&now, &before)| now == before)
                 && owners
                     .iter()
                     .zip(&working.owners)
@@ -120,39 +120,90 @@ fn roles(mut pattern: usize) -> [usize; 3] {
     })
 }
 
-/// A fresh team uses the original ten ordinary/leader count states. Once it
-/// has fixed members, count only its remaining cards; a fixed member can supply
-/// the leader without consuming another card. A completed team has one state.
-#[derive(Clone)]
-struct CountLayout {
-    remaining: [usize; 3],
-    radices: [usize; 3],
-    states: usize,
-    transitions: [Vec<(u16, u16)>; PATTERNS],
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CountAxis {
+    Complete,
+    Optional(usize),
+    Fresh,
 }
 
-impl CountLayout {
-    fn radix(remaining: usize) -> usize {
-        match remaining {
-            0 => 1,
-            5 => 10,
-            _ => 2 * (remaining + 1),
+impl CountAxis {
+    fn new(remaining: usize, required: usize) -> Option<Self> {
+        if required > remaining {
+            None
+        } else if remaining == 0 {
+            Some(Self::Complete)
+        } else if remaining == 5 && required == 0 {
+            Some(Self::Fresh)
+        } else {
+            Some(Self::Optional(remaining - required))
         }
     }
 
-    fn new(remaining: [usize; 3]) -> Self {
-        let radices = remaining.map(Self::radix);
+    fn index(self) -> usize {
+        match self {
+            Self::Complete => 0,
+            Self::Optional(count) => count + 1,
+            Self::Fresh => 6,
+        }
+    }
+
+    fn radix(self) -> usize {
+        match self {
+            Self::Complete => 1,
+            Self::Optional(count) => 2 * (count + 1),
+            Self::Fresh => 10,
+        }
+    }
+
+    fn leader_offset(self) -> Option<usize> {
+        match self {
+            Self::Complete => None,
+            Self::Optional(count) => Some(count + 1),
+            Self::Fresh => Some(5),
+        }
+    }
+
+    fn destination(self, digit: usize, action: usize) -> Option<usize> {
+        match (self, action) {
+            (_, 0) => Some(digit),
+            (Self::Fresh, 1) if digit % 5 < 4 => Some(digit + 1),
+            (Self::Fresh, 2) if digit < 5 => Some(digit + 5),
+            (Self::Optional(count), 1) if digit % (count + 1) < count => Some(digit + 1),
+            (Self::Optional(count), 2) if digit < count => Some(digit + count + 2),
+            (Self::Optional(count), 3) if digit <= count => Some(digit + count + 1),
+            _ => None,
+        }
+    }
+}
+
+/// Count only unreserved residual members. A required character consumes its
+/// pre-reserved slot when selected, while either kind of member may be leader.
+#[derive(Clone)]
+struct CountLayout {
+    axes: [CountAxis; 3],
+    radices: [usize; 3],
+    states: usize,
+    transitions: [Vec<(u16, u16)>; 64],
+}
+
+impl CountLayout {
+    fn new(axes: [CountAxis; 3]) -> Self {
+        let radices = axes.map(CountAxis::radix);
         let mut layout = Self {
-            remaining,
+            axes,
             radices,
             states: radices.into_iter().product(),
             transitions: std::array::from_fn(|_| Vec::new()),
         };
         assert!(layout.states <= usize::from(u16::MAX));
-        layout.transitions = std::array::from_fn(|pattern| {
-            let mut edges = Vec::with_capacity(layout.states);
+        layout.transitions = std::array::from_fn(|actions| {
+            let edge_count = (0..layout.states)
+                .filter(|&from| layout.destination(from, actions).is_some())
+                .count();
+            let mut edges = Vec::with_capacity(edge_count);
             for from in 0..layout.states {
-                if let Some(to) = layout.destination(from, roles(pattern)) {
+                if let Some(to) = layout.destination(from, actions) {
                     edges.push((from as u16, to as u16));
                 }
             }
@@ -171,24 +222,36 @@ impl CountLayout {
                 .sum::<usize>()
     }
 
-    fn destination(&self, mut state: usize, roles: [usize; 3]) -> Option<usize> {
+    fn action_pattern(pattern: usize, required: u8) -> Option<usize> {
+        let roles = roles(pattern);
         let mut result = 0;
         let mut place = 1;
         for (slot, role) in roles.into_iter().enumerate() {
+            let is_required = required & (1 << slot) != 0;
+            let action = match (role, is_required) {
+                (0, true) => return None,
+                (0, false) | (1, true) => 0,
+                (1, false) => 1,
+                (2, false) => 2,
+                (2, true) => 3,
+                _ => unreachable!(),
+            };
+            result += action * place;
+            place *= 4;
+        }
+        Some(result)
+    }
+
+    fn destination(&self, mut state: usize, mut actions: usize) -> Option<usize> {
+        let mut result = 0;
+        let mut place = 1;
+        for slot in 0..3 {
             let radix = self.radices[slot];
             let digit = state % radix;
             state /= radix;
-            let remaining = self.remaining[slot];
-            let delta = match role {
-                0 => 0,
-                _ if remaining == 0 => return None,
-                1 if remaining == 5 && digit % 5 < 4 => 1,
-                2 if remaining == 5 && digit < 5 => 5,
-                1 if remaining < 5 && digit % (remaining + 1) < remaining => 1,
-                2 if remaining < 5 && digit < remaining => remaining + 2,
-                _ => return None,
-            };
-            result += (digit + delta) * place;
+            let action = actions % 4;
+            actions /= 4;
+            result += self.axes[slot].destination(digit, action)? * place;
             place *= radix;
         }
         Some(result)
@@ -205,7 +268,11 @@ impl CountLayout {
                         value = f64::NEG_INFINITY;
                         break;
                     };
-                    index += (self.remaining[slot] + 1) * place;
+                    let Some(offset) = self.axes[slot].leader_offset() else {
+                        value = f64::NEG_INFINITY;
+                        break;
+                    };
+                    index += offset * place;
                     value = sum_up(value, leader);
                 }
                 place *= self.radices[slot];
@@ -218,7 +285,7 @@ impl CountLayout {
 }
 
 pub(crate) struct JointLayoutCache {
-    layouts: [Option<Rc<CountLayout>>; 216],
+    layouts: [Option<Rc<CountLayout>>; 343],
     bytes: usize,
 }
 
@@ -236,18 +303,34 @@ impl JointLayoutCache {
 
     /// Conservative allocation peak for a new model or copied child snapshot.
     /// A transition layout already retained by this search is not reserved twice.
-    pub(crate) fn workspace_bytes(&self, owners: &[u8], groups: usize) -> Option<usize> {
+    pub(crate) fn workspace_bytes(
+        &self,
+        owners: &[u8],
+        required_teams: &[u8],
+        groups: usize,
+    ) -> Option<usize> {
         let remaining = std::array::from_fn::<_, 3, _>(|slot| {
             5_usize.checked_sub(owners.iter().filter(|&&mask| mask == 1 << slot).count())
         });
         let remaining = [remaining[0]?, remaining[1]?, remaining[2]?];
-        let states = remaining
+        let required = std::array::from_fn::<_, 3, _>(|slot| {
+            required_teams
+                .iter()
+                .filter(|&&mask| mask & (1 << slot) != 0)
+                .count()
+        });
+        let axes =
+            std::array::from_fn::<_, 3, _>(|slot| CountAxis::new(remaining[slot], required[slot]));
+        let axes = [axes[0]?, axes[1]?, axes[2]?];
+        let states = axes
             .into_iter()
-            .map(CountLayout::radix)
+            .map(CountAxis::radix)
             .try_fold(1_usize, usize::checked_mul)?;
-        let index = (remaining[0] * 6 + remaining[1]) * 6 + remaining[2];
+        let index = (axes[0].index() * 7 + axes[1].index()) * 7 + axes[2].index();
         let transition_bytes = if self.layouts[index].is_none() {
-            states.checked_mul(PATTERNS * size_of::<(u16, u16)>())?
+            size_of::<CountLayout>()
+                .checked_add(2 * size_of::<usize>())?
+                .checked_add(states.checked_mul(64 * size_of::<(u16, u16)>())?)?
         } else {
             0
         };
@@ -262,15 +345,17 @@ impl JointLayoutCache {
             .checked_add(2 * size_of::<JointUpper>() + 4096)
     }
 
-    fn get(&mut self, remaining: [usize; 3]) -> Rc<CountLayout> {
-        debug_assert!(remaining.iter().all(|&count| count <= 5));
-        let index = (remaining[0] * 6 + remaining[1]) * 6 + remaining[2];
+    fn get(&mut self, remaining: [usize; 3], required: [usize; 3]) -> Option<Rc<CountLayout>> {
+        let axes =
+            std::array::from_fn::<_, 3, _>(|slot| CountAxis::new(remaining[slot], required[slot]));
+        let axes = [axes[0]?, axes[1]?, axes[2]?];
+        let index = (axes[0].index() * 7 + axes[1].index()) * 7 + axes[2].index();
         if self.layouts[index].is_none() {
-            let layout = Rc::new(CountLayout::new(remaining));
+            let layout = Rc::new(CountLayout::new(axes));
             self.bytes += layout.heap_bytes();
             self.layouts[index] = Some(layout);
         }
-        Rc::clone(self.layouts[index].as_ref().unwrap())
+        Some(Rc::clone(self.layouts[index].as_ref().unwrap()))
     }
 }
 
@@ -645,7 +730,15 @@ fn calculate_weights(
         None => {
             let weights = weights.unwrap();
             let remaining = std::array::from_fn(|slot| 5 - weights.fixed_members[slot].len());
-            let layout = layouts.get(remaining);
+            let required = std::array::from_fn(|slot| {
+                required_teams
+                    .iter()
+                    .filter(|&&mask| mask & (1 << slot) != 0)
+                    .count()
+            });
+            let Some(layout) = layouts.get(remaining, required) else {
+                return Ok(JointUpper::infeasible());
+            };
             JointWorking::new(weights, groups, owners, required_teams, layout)?
         }
     };
@@ -683,7 +776,10 @@ fn calculate_weights(
                 }
                 let candidates = local.candidates(&working.residual_owners);
                 let choices: [LocalChoice; PATTERNS] = std::array::from_fn(|pattern| {
-                    if working.layout.transitions[pattern].is_empty() {
+                    let present_required =
+                        working.required_teams[group] & PATTERN_OCCUPANCIES[pattern];
+                    let actions = CountLayout::action_pattern(pattern, present_required).unwrap();
+                    if working.layout.transitions[actions].is_empty() {
                         LocalChoice::default()
                     } else {
                         local.choice_with(
@@ -722,12 +818,14 @@ fn calculate_weights(
                 let next = &mut rest[..states];
                 next.fill(f64::NEG_INFINITY);
                 working.paths[(group + 1) * states..(group + 2) * states].fill(u8::MAX);
-                for (pattern, edges) in working.layout.transitions.iter().enumerate() {
-                    if PATTERN_OCCUPANCIES[pattern] & working.required_teams[group]
-                        != working.required_teams[group]
-                    {
+                for (pattern, &occupancy) in PATTERN_OCCUPANCIES.iter().enumerate() {
+                    if occupancy & working.required_teams[group] != working.required_teams[group] {
                         continue;
                     }
+                    let actions =
+                        CountLayout::action_pattern(pattern, working.required_teams[group])
+                            .unwrap();
+                    let edges = &working.layout.transitions[actions];
                     let choice = working.choices[group][pattern];
                     if choice.score == f64::NEG_INFINITY {
                         continue;
@@ -784,12 +882,14 @@ fn calculate_weights(
                 let next = &mut prefix[group * states..];
                 let suffix = &suffix[..states];
                 next.fill(f64::NEG_INFINITY);
-                for (pattern, edges) in working.layout.transitions.iter().enumerate() {
-                    if PATTERN_OCCUPANCIES[pattern] & working.required_teams[group]
-                        != working.required_teams[group]
-                    {
+                for (pattern, &occupancy) in PATTERN_OCCUPANCIES.iter().enumerate() {
+                    if occupancy & working.required_teams[group] != working.required_teams[group] {
                         continue;
                     }
+                    let actions =
+                        CountLayout::action_pattern(pattern, working.required_teams[group])
+                            .unwrap();
+                    let edges = &working.layout.transitions[actions];
                     let choice = working.choices[group][pattern];
                     if choice.score == f64::NEG_INFINITY {
                         continue;
@@ -833,7 +933,9 @@ fn calculate_weights(
                     counts[slot] += 1;
                 }
             }
-            current -= working.layout.destination(0, roles(pattern)).unwrap();
+            let actions =
+                CountLayout::action_pattern(pattern, working.required_teams[group]).unwrap();
+            current -= working.layout.destination(0, actions).unwrap();
         }
         debug_assert_eq!(counts, [5; 3]);
         proposal
@@ -863,12 +965,15 @@ fn calculate_weights(
             continue;
         }
         let mut outside = [f64::NEG_INFINITY; PATTERNS];
-        for (pattern, edges) in working.layout.transitions.iter().enumerate() {
+        for pattern in 0..PATTERNS {
             if PATTERN_OCCUPANCIES[pattern] & working.required_teams[group]
                 != working.required_teams[group]
             {
                 continue;
             }
+            let actions =
+                CountLayout::action_pattern(pattern, working.required_teams[group]).unwrap();
+            let edges = &working.layout.transitions[actions];
             if working.choices[group][pattern].score == f64::NEG_INFINITY {
                 continue;
             }
@@ -1011,22 +1116,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn count_layouts_are_shared_by_remaining_counts() {
+    fn count_layouts_are_shared_by_optional_counts() {
         let mut cache = JointLayoutCache::new();
         let mut pointers = Vec::new();
-        for zero in 0..=5 {
-            for one in 0..=5 {
-                for two in 0..=5 {
-                    let remaining = [zero, one, two];
-                    let layout = cache.get(remaining);
-                    assert_eq!(layout.remaining, remaining);
-                    pointers.push((remaining, Rc::as_ptr(&layout)));
+        let axes = [
+            (0, 0, CountAxis::Complete),
+            (1, 1, CountAxis::Optional(0)),
+            (2, 1, CountAxis::Optional(1)),
+            (3, 1, CountAxis::Optional(2)),
+            (4, 1, CountAxis::Optional(3)),
+            (5, 1, CountAxis::Optional(4)),
+            (5, 0, CountAxis::Fresh),
+        ];
+        for &(zero_remaining, zero_required, zero_axis) in &axes {
+            for &(one_remaining, one_required, one_axis) in &axes {
+                for &(two_remaining, two_required, two_axis) in &axes {
+                    let remaining = [zero_remaining, one_remaining, two_remaining];
+                    let required = [zero_required, one_required, two_required];
+                    let layout = cache.get(remaining, required).unwrap();
+                    assert_eq!(layout.axes, [zero_axis, one_axis, two_axis]);
+                    pointers.push((remaining, required, Rc::as_ptr(&layout)));
                 }
             }
         }
         let bytes = cache.bytes();
-        for (remaining, pointer) in pointers {
-            assert_eq!(Rc::as_ptr(&cache.get(remaining)), pointer);
+        for (remaining, required, pointer) in pointers {
+            assert_eq!(
+                Rc::as_ptr(&cache.get(remaining, required).unwrap()),
+                pointer
+            );
         }
         assert_eq!(cache.bytes(), bytes);
     }
@@ -1286,7 +1404,7 @@ mod tests {
             let expected_states = remaining_weights
                 .fixed_members
                 .iter()
-                .map(|ids| CountLayout::radix(5 - ids.len()))
+                .map(|ids| CountAxis::new(5 - ids.len(), 0).unwrap().radix())
                 .product::<usize>();
             assert_eq!(
                 result.working.as_ref().unwrap().layout.states,
@@ -1476,18 +1594,8 @@ mod tests {
 
         let mut required = required_teams.clone();
         required[5] = 0b111;
-        assert!(result.can_update(&owners, &required, [None; 3]));
+        assert!(!result.can_update(&owners, &required, [None; 3]));
         let updated = calculate_weights(
-            None,
-            &groups,
-            (&owners, &required),
-            Some(&result),
-            None,
-            &mut layouts,
-            &mut control,
-        )
-        .unwrap();
-        let fresh = calculate_weights(
             Some(weights.clone()),
             &groups,
             (&owners, &required),
@@ -1497,25 +1605,25 @@ mod tests {
             &mut control,
         )
         .unwrap();
-        assert_eq!(updated.score, fresh.score);
-        assert_eq!(updated.destinations, fresh.destinations);
-        assert_eq!(updated.mode_uppers, fresh.mode_uppers);
-        assert_eq!(updated.proposal, fresh.proposal);
         assert!(!updated.can_update(&owners, &required_teams, [None; 3]));
 
         let mut required_expected = f64::NEG_INFINITY;
+        let mut required_destinations = [[f64::NEG_INFINITY; 4]; 3];
         for first in 15..18 {
             for second in 15..18 {
                 for third in 15..18 {
                     if first == second || first == third || second == third {
                         continue;
                     }
-                    required_expected = required_expected.max(
-                        weights.constant - weights.offset
-                            + weights.cards[first][0][1]
-                            + weights.cards[second][1][1]
-                            + weights.cards[third][2][1],
-                    );
+                    let score = weights.constant - weights.offset
+                        + weights.cards[first][0][1]
+                        + weights.cards[second][1][1]
+                        + weights.cards[third][2][1];
+                    required_expected = required_expected.max(score);
+                    for (owner, id) in [first, second, third].into_iter().enumerate() {
+                        required_destinations[id - 15][owner] =
+                            required_destinations[id - 15][owner].max(score);
+                    }
                 }
             }
         }
@@ -1533,6 +1641,15 @@ mod tests {
                 .iter()
                 .all(|team| team.iter().any(|id| *id >= 15))
         );
-        assert!((15..18).all(|id| updated.destinations[id][3] == f64::NEG_INFINITY));
+        for (offset, expected) in required_destinations.into_iter().enumerate() {
+            for (owner, expected) in expected.into_iter().enumerate() {
+                let upper = updated.destinations[offset + 15][owner];
+                if expected == f64::NEG_INFINITY {
+                    assert_eq!(upper, expected);
+                } else {
+                    assert!(upper >= expected && upper < expected + 1e-8);
+                }
+            }
+        }
     }
 }

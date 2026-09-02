@@ -1681,7 +1681,9 @@ impl JointSearch<'_, '_, '_, '_> {
         // Otherwise keep the numeric model: reuse its optimum if still allowed,
         // or update only affected working-table layers when it is excluded.
         if !proposal_fits || !same_model {
-            let workspace = self.layouts.workspace_bytes(&owners, self.groups.len());
+            let workspace =
+                self.layouts
+                    .workspace_bytes(&owners, &required_teams, self.groups.len());
             let resident =
                 self.evaluation.cache.bytes() + self.joint_storage.get() + self.layouts.bytes();
             if let (Some(engine), Some(bytes)) = (&self.domain.engine, workspace)
