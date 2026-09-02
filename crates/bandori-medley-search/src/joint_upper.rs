@@ -900,6 +900,22 @@ fn calculate_weights(
                 score_upper(*upper, working.weights.constant, working.weights.offset).min(score);
         }
         mode_uppers[group] = modes;
+        let mut nonlocal_bases = [[f64::NEG_INFINITY; 2]; 3];
+        for (pattern, &outside) in outside.iter().enumerate() {
+            if outside == f64::NEG_INFINITY {
+                continue;
+            }
+            let pattern_roles = roles(pattern);
+            for owner in 0..3 {
+                let role = pattern_roles[owner];
+                if role == 0 {
+                    continue;
+                }
+                let without_owner = pattern - role * [1, 3, 9][owner];
+                nonlocal_bases[owner][role - 1] = nonlocal_bases[owner][role - 1]
+                    .max(sum_up(outside, working.choices[group][without_owner].score));
+            }
+        }
         let candidates = working.local[group].candidates(&working.residual_owners);
         for &id in ids {
             destinations[id as usize] = [f64::NEG_INFINITY; 4];
@@ -909,8 +925,25 @@ fn calculate_weights(
                 continue;
             }
             let is_local_candidate = candidates.contains(id);
+            if !is_local_candidate && mask & UNUSED != 0 {
+                destinations[id as usize][3] = score;
+            }
             for (owner, target) in destinations[id as usize].iter_mut().enumerate() {
                 if mask & (1 << owner) == 0 {
+                    continue;
+                }
+                if !is_local_candidate {
+                    if owner == 3 {
+                        continue;
+                    }
+                    let weights = working.weights.cards[id as usize][owner];
+                    *target = score_upper(
+                        sum_up(nonlocal_bases[owner][0], weights[0])
+                            .max(sum_up(nonlocal_bases[owner][1], weights[1])),
+                        working.weights.constant,
+                        working.weights.offset,
+                    )
+                    .min(score);
                     continue;
                 }
                 let mut upper = f64::NEG_INFINITY;
@@ -929,17 +962,6 @@ fn calculate_weights(
                         best.score
                     } else if owner < 3 && pattern_roles[owner] == 0 {
                         f64::NEG_INFINITY
-                    } else if owner < 3 && !is_local_candidate {
-                        // This card cannot occur in another slot's prepared
-                        // candidates. Reuse the already-solved choice with its
-                        // target slot absent, then add the forced contribution
-                        // upward; this remains a bound regardless of sum order.
-                        let place = [1, 3, 9][owner];
-                        let without_owner = pattern - pattern_roles[owner] * place;
-                        sum_up(
-                            working.choices[group][without_owner].score,
-                            working.weights.cards[id as usize][owner][pattern_roles[owner] - 1],
-                        )
                     } else {
                         working.local[group]
                             .choice_with(
