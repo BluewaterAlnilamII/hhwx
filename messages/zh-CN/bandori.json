@@ -1061,6 +1061,7 @@
       "dataNotReady": "计算数据尚未准备完成",
       "profileNotReady": "档案尚未准备完成",
       "invalidWorkerResponse": "计算线程返回格式无效",
+      "invalidTimeLimit": "时间限制请输入 {min} 到 {max} 秒的整数",
       "calculateFailed": "计算失败"
     },
     "preferences": {

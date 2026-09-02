@@ -1061,6 +1061,7 @@
       "dataNotReady": "Calculation data is not ready yet",
       "profileNotReady": "Profile is not ready yet",
       "invalidWorkerResponse": "Calculation worker response format is invalid",
+      "invalidTimeLimit": "Enter a whole-number time limit from {min} to {max} seconds",
       "calculateFailed": "Calculation failed"
     },
     "preferences": {

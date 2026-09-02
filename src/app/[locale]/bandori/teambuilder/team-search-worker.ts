@@ -122,6 +122,7 @@ const DEFAULT_WORKER_MESSAGES: TeamSearchWorkerMessages = {
 
 const MEDLEY_FRONTEND_MEMORY_SOFT_LIMIT_MIB = 1024;
 const MEDLEY_FRONTEND_MEMORY_BUDGET_BYTES = MEDLEY_FRONTEND_MEMORY_SOFT_LIMIT_MIB * 1024 * 1024;
+const MEDLEY_FRONTEND_MAX_SEARCH_DURATION_MS = 3_600_000;
 const MEDLEY_PROGRESS_INITIAL_DELAY_MS = 10_000;
 const MEDLEY_PROGRESS_INTERVAL_MS = 5_000;
 type MedleyCalculationMode = "maximize";
@@ -768,7 +769,11 @@ async function runGreenfieldMedleySearch({
   await initMedleyWasm();
   const inputJson = JSON.stringify(input);
   const searchStartedAt = performance.now();
-  const deadlineAt = searchStartedAt + Math.min(300_000, Math.max(1_000, request.calculation.maxSearchDurationMs));
+  const requestedSearchDurationMs = request.calculation.maxSearchDurationMs;
+  const searchDurationMs = Number.isFinite(requestedSearchDurationMs)
+    ? Math.min(MEDLEY_FRONTEND_MAX_SEARCH_DURATION_MS, Math.max(1_000, requestedSearchDurationMs))
+    : 1_000;
+  const deadlineAt = searchStartedAt + searchDurationMs;
   let searchFinishedAt: number | null = null;
   let timeToBestScoreMs: number | null = null;
   let pendingProgress: WasmMedleySearchSolution | null = null;

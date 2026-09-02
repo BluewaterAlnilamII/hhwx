@@ -272,7 +272,9 @@ const DEFAULT_MEDLEY_DIFFICULTIES: MedleyDifficultyTuple = [
   DEFAULT_DIFFICULTY,
 ];
 const DEFAULT_SEARCH_DURATION_SECONDS = "30";
-const MEDLEY_PREVIEW_SEARCH_DURATION_SECONDS = "300";
+const DEFAULT_MEDLEY_SEARCH_DURATION_SECONDS = "300";
+const MIN_SEARCH_DURATION_SECONDS = 1;
+const MAX_SEARCH_DURATION_SECONDS = 3_600;
 const DEFAULT_PERFECT_RATE = "100";
 const NO_EVENT_BANNER_URL = "/res/530.png";
 const TEAMBUILDER_LIVE_PREFERENCES_STORAGE_KEY = "hhwx-bandori-teambuilder-live-preferences:v1";
@@ -924,6 +926,19 @@ function getSearchTimeLimitLabel(maxSearchDurationSeconds: string | undefined, s
   }
   const seconds = Number(maxSearchDurationSeconds);
   return Number.isFinite(seconds) && seconds > 0 ? `${seconds} ${secondsLabel}` : null;
+}
+
+function parseSearchDurationSeconds(value: string): number | null {
+  const token = value.trim();
+  if (!/^[0-9]+$/.test(token)) {
+    return null;
+  }
+  const seconds = Number(token);
+  return Number.isSafeInteger(seconds)
+    && seconds >= MIN_SEARCH_DURATION_SECONDS
+    && seconds <= MAX_SEARCH_DURATION_SECONDS
+    ? seconds
+    : null;
 }
 
 function parsePositiveConstraintInput(value: string): number | undefined {
@@ -2733,12 +2748,12 @@ function TeamBuilderPanel() {
     if (isMedleyEvent) {
       setLiveType("free");
       setResultLimit("1");
-      setMaxSearchDurationSeconds(MEDLEY_PREVIEW_SEARCH_DURATION_SECONDS);
+      setMaxSearchDurationSeconds(DEFAULT_MEDLEY_SEARCH_DURATION_SECONDS);
       return;
     }
     setResultLimit((current) => (current === "1" ? "10" : current));
     setMaxSearchDurationSeconds((current) => (
-      current === MEDLEY_PREVIEW_SEARCH_DURATION_SECONDS ? DEFAULT_SEARCH_DURATION_SECONDS : current
+      current === DEFAULT_MEDLEY_SEARCH_DURATION_SECONDS ? DEFAULT_SEARCH_DURATION_SECONDS : current
     ));
   }, [isMedleyEvent]);
 
@@ -2825,7 +2840,9 @@ function TeamBuilderPanel() {
     ? Math.max(0, Math.floor((calculationNow - calculationStartedAt) / 1000))
     : 0;
   const calculationElapsedLabel = formatDurationLabel(calculationElapsedSeconds);
-  const medleyPreviewSearchDurationLabel = formatDurationLabel(Number(MEDLEY_PREVIEW_SEARCH_DURATION_SECONDS));
+  const medleySearchDurationLabel = formatDurationLabel(Number(
+    medleyResultInputSnapshot?.maxSearchDurationSeconds ?? DEFAULT_MEDLEY_SEARCH_DURATION_SECONDS,
+  ));
   const displayedResultIsMedley = result !== null && isMedleySearchResponse(result);
   const displayedMedleySongs = useMemo(() => {
     const sourceSongIds = displayedResultIsMedley && medleyResultInputSnapshot
@@ -2868,6 +2885,16 @@ function TeamBuilderPanel() {
       return;
     }
 
+    const searchDurationSeconds = parseSearchDurationSeconds(maxSearchDurationSeconds);
+    if (searchDurationSeconds === null) {
+      setResultError(errorsT("invalidTimeLimit", {
+        min: MIN_SEARCH_DURATION_SECONDS,
+        max: MAX_SEARCH_DURATION_SECONDS,
+      }));
+      setActiveStep("calculate");
+      return;
+    }
+
     if (!isPreloadReady) {
       setResultError(preloadStatusMessage || errorsT("dataNotReady"));
       return;
@@ -2882,7 +2909,7 @@ function TeamBuilderPanel() {
       ? {
         medleySongIds: [...medleySongIds] as MedleySongIdTuple,
         medleyDifficulties: [...medleyDifficulties] as MedleyDifficultyTuple,
-        maxSearchDurationSeconds,
+        maxSearchDurationSeconds: String(searchDurationSeconds),
       }
       : null;
     let constraints: TeamSearchWorkerRequest["calculation"]["constraints"];
@@ -2906,7 +2933,7 @@ function TeamBuilderPanel() {
     setResultError("");
     setResult(null);
     setMedleyProgress(null);
-    setMedleyResultInputSnapshot(null);
+    setMedleyResultInputSnapshot(medleyInputSnapshot);
     const shouldShowMedleyProgress = isMedleyEvent && medleyCalculationMode === "maximize";
     try {
       const response = await postTeamSearchWorkerMessage({
@@ -2956,17 +2983,13 @@ function TeamBuilderPanel() {
         calculation: {
           target: isMedleyEvent ? "score" : target,
           resultLimit: isMedleyEvent ? 1 : Number(resultLimit),
-          maxSearchDurationMs: Math.min(
-            isMedleyEvent ? 300000 : Number.POSITIVE_INFINITY,
-            Math.max(1, Number(maxSearchDurationSeconds)) * 1000,
-          ),
+          maxSearchDurationMs: searchDurationSeconds * 1000,
           medleyMode: isMedleyEvent ? medleyCalculationMode : undefined,
           constraints,
         },
       }, {
         onProgress: shouldShowMedleyProgress
           ? (progressResponse) => {
-            setMedleyResultInputSnapshot(medleyInputSnapshot);
             setMedleyProgress(progressResponse.progress);
             setActiveStep("calculate");
           }
@@ -3332,10 +3355,14 @@ function TeamBuilderPanel() {
             <FieldRow label={labelsT("timeLimit")}>
               <div className="flex items-center gap-2">
                 <TextInput
+                  type="number"
                   value={maxSearchDurationSeconds}
                   onChange={(event) => setMaxSearchDurationSeconds(event.target.value)}
                   inputMode="numeric"
-                  max={isMedleyEvent ? MEDLEY_PREVIEW_SEARCH_DURATION_SECONDS : undefined}
+                  min={MIN_SEARCH_DURATION_SECONDS}
+                  max={MAX_SEARCH_DURATION_SECONDS}
+                  step={1}
+                  disabled={submitting}
                 />
                 <span className="shrink-0 text-sm font-semibold text-slate-500">{termsT("seconds")}</span>
               </div>
@@ -3379,7 +3406,7 @@ function TeamBuilderPanel() {
             {submitting ? (
               <div className="rounded-xl bg-slate-50 p-3 text-center text-sm font-semibold text-slate-600">
                 {actionsT("calculating", { elapsed: calculationElapsedLabel })}
-                {isMedleyEvent ? ` / ${medleyPreviewSearchDurationLabel}` : ""}
+                {isMedleyEvent ? ` / ${medleySearchDurationLabel}` : ""}
               </div>
             ) : null}
             {!isPreloadReady && preloadStatusMessage ? (
