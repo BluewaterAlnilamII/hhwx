@@ -60,6 +60,9 @@ jobs:
       - name: Test medley foundation source boundary
         run: npm run test:medley-foundation:source
 
+      - name: Test cache contracts
+        run: npm run test:cache
+
       - name: Test Bandori cards
         run: npm run test:bandori-cards
 
