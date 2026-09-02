@@ -539,8 +539,12 @@ fn assert_budget_independent_result(
     let large = assert_exact_search(input, expected, LARGE_MEMORY_BUDGET);
     let small = assert_exact_search(input, expected, SMALL_MEMORY_BUDGET);
     assert!(
-        large.local_blocks > 1,
-        "the fixture must span multiple blocks"
+        large.local_blocks > 0,
+        "the fixture must reach an exact join"
+    );
+    assert!(
+        small.local_blocks > 1,
+        "the constrained run must preserve cross-block coverage"
     );
     assert!(
         small.partial_nodes > large.partial_nodes,

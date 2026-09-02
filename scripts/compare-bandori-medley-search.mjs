@@ -23,10 +23,12 @@ const { values } = parseArgs({ options: {
   case: { type: "string" },
   "duration-ms": { type: "string" },
   "local-row-target": { type: "string" },
+  "indexed-join-row-target": { type: "string" },
+  "indexed-join-pair-target": { type: "string" },
   "score-cache-slots": { type: "string" },
 } });
 assert([values["completed-profiles"], values["high-pressure"], values.remaining, values.six, values.diagnose].filter(Boolean).length <= 1, "choose one run mode");
-assert(values.diagnose || (!values["duration-ms"] && !values["local-row-target"] && !values["score-cache-slots"]), "diagnostic controls require --diagnose");
+assert(values.diagnose || (!values["duration-ms"] && !values["local-row-target"] && !values["indexed-join-row-target"] && !values["indexed-join-pair-target"] && !values["score-cache-slots"]), "diagnostic controls require --diagnose");
 const diagnosticCase = values.diagnose && values.case?.match(/^(\d+)-(no-event|event-(\d+))$/u);
 assert(!values.diagnose || !values.case || diagnosticCase, "invalid diagnostic case");
 const DURATION_MS = Number(values["duration-ms"] ?? (values.diagnose ? 60_000 : 300_000));
@@ -188,6 +190,8 @@ function runNative(id) {
           HHWX_MEDLEY_DIAGNOSTIC_DURATION_MS: String(DURATION_MS),
           HHWX_MEDLEY_DIAGNOSTIC_BUDGET_BYTES: String(CANDIDATE_BUDGET_BYTES),
           ...(values["local-row-target"] ? { HHWX_MEDLEY_DIAGNOSTIC_LOCAL_ROW_TARGET: values["local-row-target"] } : {}),
+          ...(values["indexed-join-row-target"] ? { HHWX_MEDLEY_DIAGNOSTIC_INDEXED_JOIN_ROW_TARGET: values["indexed-join-row-target"] } : {}),
+          ...(values["indexed-join-pair-target"] ? { HHWX_MEDLEY_DIAGNOSTIC_INDEXED_JOIN_PAIR_TARGET: values["indexed-join-pair-target"] } : {}),
           ...(values["score-cache-slots"] ? { HHWX_MEDLEY_DIAGNOSTIC_SCORE_CACHE_SLOTS: values["score-cache-slots"] } : {}),
         } : {}),
       },

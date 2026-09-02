@@ -23,6 +23,8 @@ const TEAM_SIZE: usize = 5;
 const MEDLEY_TEAM_COUNT: usize = 3;
 // These limits control temporary work, never which families are searched.
 const LOCAL_ROW_TARGET: usize = 256;
+const INDEXED_JOIN_ROW_TARGET: usize = 4_096;
+const INDEXED_JOIN_PAIR_TARGET: u64 = 65_536;
 const SCORE_CACHE_SLOTS: usize = 65_536;
 const WARM_CONFIGURATION_COUNT: usize = 8;
 const COMPLETION_PROBE_INTERVAL: u64 = 512;
@@ -44,6 +46,24 @@ fn local_row_target() -> usize {
 
     #[cfg(not(test))]
     LOCAL_ROW_TARGET
+}
+
+fn indexed_join_row_target() -> usize {
+    #[cfg(test)]
+    return std::env::var("HHWX_MEDLEY_DIAGNOSTIC_INDEXED_JOIN_ROW_TARGET")
+        .map_or(INDEXED_JOIN_ROW_TARGET, |value| value.parse().unwrap());
+
+    #[cfg(not(test))]
+    INDEXED_JOIN_ROW_TARGET
+}
+
+fn indexed_join_pair_target() -> u64 {
+    #[cfg(test)]
+    return std::env::var("HHWX_MEDLEY_DIAGNOSTIC_INDEXED_JOIN_PAIR_TARGET")
+        .map_or(INDEXED_JOIN_PAIR_TARGET, |value| value.parse().unwrap());
+
+    #[cfg(not(test))]
+    INDEXED_JOIN_PAIR_TARGET
 }
 
 fn score_cache_slots() -> usize {
@@ -963,6 +983,199 @@ fn join_block(
     Ok(())
 }
 
+fn indexed_join_storage_bytes(card_count: usize, indexed_rows: usize) -> Option<usize> {
+    card_count
+        .checked_mul(indexed_rows.div_ceil(u64::BITS as usize))?
+        .checked_mul(size_of::<u64>())
+}
+
+struct IndexedJoinContext {
+    indexed_slot: usize,
+    card_count: usize,
+    candidate_base_bytes: usize,
+    search_base_bytes: usize,
+}
+
+/// Exact three-way join with one candidate table indexed by physical card.
+/// Ranked bit positions preserve the indexed table's score order, so strict
+/// score cuts and the complete floating-point tie remain identical to join_block.
+fn join_indexed_block(
+    configuration: &AreaItemConfigurationV1,
+    rows: &[Vec<CompactCandidate>; 3],
+    views: &[Vec<usize>; 3],
+    required: &[u32],
+    context: IndexedJoinContext,
+    state: &mut RunState<'_, '_>,
+) -> Result<(), SearchAbort> {
+    #[cfg(test)]
+    let _timing = crate::profiling::enter(crate::profiling::Phase::Join);
+    if rows.iter().any(Vec::is_empty) || required.len() > TEAM_SIZE * MEDLEY_TEAM_COUNT {
+        return Ok(());
+    }
+    let IndexedJoinContext {
+        indexed_slot,
+        card_count,
+        candidate_base_bytes,
+        search_base_bytes,
+    } = context;
+    if indexed_slot >= MEDLEY_TEAM_COUNT || required.iter().any(|&id| id as usize >= card_count) {
+        return Err(abort(SearchIncompleteReasonV1::InternalFailure));
+    }
+    let pair_slots = match indexed_slot {
+        0 => [1, 2],
+        1 => [0, 2],
+        2 => [0, 1],
+        _ => unreachable!(),
+    };
+    let indexed_count = views[indexed_slot].len();
+    let word_count = indexed_count.div_ceil(u64::BITS as usize);
+    let membership_len = card_count
+        .checked_mul(word_count)
+        .ok_or_else(|| abort(SearchIncompleteReasonV1::CountOrIndexOverflow))?;
+    let mut membership = Vec::new();
+    membership
+        .try_reserve_exact(membership_len)
+        .map_err(|_| abort(SearchIncompleteReasonV1::MemoryExhausted))?;
+    membership.resize(membership_len, 0_u64);
+    let index_bytes = membership
+        .capacity()
+        .checked_mul(size_of::<u64>())
+        .ok_or_else(|| abort(SearchIncompleteReasonV1::CountOrIndexOverflow))?;
+    let candidate_bytes = candidate_base_bytes
+        .checked_add(index_bytes)
+        .ok_or_else(|| abort(SearchIncompleteReasonV1::CountOrIndexOverflow))?;
+    let search_bytes = search_base_bytes
+        .checked_add(index_bytes)
+        .ok_or_else(|| abort(SearchIncompleteReasonV1::CountOrIndexOverflow))?;
+    state.diagnostics.peak_candidate_bytes = state
+        .diagnostics
+        .peak_candidate_bytes
+        .max(candidate_bytes as u64);
+    state.diagnostics.peak_search_storage_bytes = state
+        .diagnostics
+        .peak_search_storage_bytes
+        .max(search_bytes as u64);
+    if search_bytes > state.control.memory_budget_bytes() {
+        return Err(abort(SearchIncompleteReasonV1::MemoryExhausted));
+    }
+    for (rank, &row_index) in views[indexed_slot].iter().enumerate() {
+        let word = rank / u64::BITS as usize;
+        let bit = 1_u64 << (rank % u64::BITS as usize);
+        for &id in &rows[indexed_slot][row_index].member_instance_ids {
+            let Some(entry) = membership.get_mut(id as usize * word_count + word) else {
+                return Err(abort(SearchIncompleteReasonV1::InternalFailure));
+            };
+            *entry |= bit;
+        }
+    }
+
+    let maximums =
+        std::array::from_fn::<_, 3, _>(|slot| rows[slot][views[slot][0]].song_scores[slot]);
+    let tail_bits = indexed_count % u64::BITS as usize;
+    let final_word_mask = if tail_bits == 0 {
+        u64::MAX
+    } else {
+        (1_u64 << tail_bits) - 1
+    };
+    let mut poll_counter = 0_u16;
+    for &outer_index in &views[pair_slots[0]] {
+        state.poll_stop()?;
+        let outer = &rows[pair_slots[0]][outer_index];
+        let mut upper = maximums;
+        upper[pair_slots[0]] = outer.song_scores[pair_slots[0]];
+        if state
+            .incumbent_score()
+            .is_some_and(|incumbent| (upper[0] + upper[1]) + upper[2] < incumbent)
+        {
+            break;
+        }
+        'inner: for &inner_index in &views[pair_slots[1]] {
+            add_counter(&mut state.diagnostics.join_pair_checks, 1)?;
+            poll_counter = poll_counter.wrapping_add(1);
+            if poll_counter == 0 {
+                state.poll_stop()?;
+            }
+            let inner = &rows[pair_slots[1]][inner_index];
+            upper[pair_slots[1]] = inner.song_scores[pair_slots[1]];
+            if state
+                .incumbent_score()
+                .is_some_and(|incumbent| (upper[0] + upper[1]) + upper[2] < incumbent)
+            {
+                break;
+            }
+            if candidates_overlap(outer, inner) {
+                add_counter(&mut state.diagnostics.card_conflicts, 1)?;
+                continue;
+            }
+
+            let mut missing = [0_u32; TEAM_SIZE];
+            let mut missing_count = 0;
+            for &id in required {
+                if !outer.member_instance_ids.contains(&id)
+                    && !inner.member_instance_ids.contains(&id)
+                {
+                    if missing_count == TEAM_SIZE {
+                        continue 'inner;
+                    }
+                    missing[missing_count] = id;
+                    missing_count += 1;
+                }
+            }
+
+            let mut pair_best_score = None;
+            'indexed: for word in 0..word_count {
+                let mut allowed = if word + 1 == word_count {
+                    final_word_mask
+                } else {
+                    u64::MAX
+                };
+                for &id in outer
+                    .member_instance_ids
+                    .iter()
+                    .chain(&inner.member_instance_ids)
+                {
+                    allowed &= !membership[id as usize * word_count + word];
+                }
+                for &id in &missing[..missing_count] {
+                    allowed &= membership[id as usize * word_count + word];
+                }
+                while allowed != 0 {
+                    let bit = allowed.trailing_zeros() as usize;
+                    allowed &= allowed - 1;
+                    let indexed_rank = word * u64::BITS as usize + bit;
+                    let indexed_index = views[indexed_slot][indexed_rank];
+                    let indexed = &rows[indexed_slot][indexed_index];
+                    let mut selected_indexes = [0_usize; 3];
+                    selected_indexes[pair_slots[0]] = outer_index;
+                    selected_indexes[pair_slots[1]] = inner_index;
+                    selected_indexes[indexed_slot] = indexed_index;
+                    let selected = std::array::from_fn(|slot| &rows[slot][selected_indexes[slot]]);
+                    let total = (selected[0].song_scores[0] + selected[1].song_scores[1])
+                        + selected[2].song_scores[2];
+                    add_counter(&mut state.diagnostics.join_third_checks, 1)?;
+                    poll_counter = poll_counter.wrapping_add(1);
+                    if poll_counter == 0 {
+                        state.poll_stop()?;
+                    }
+                    if state
+                        .incumbent_score()
+                        .is_some_and(|incumbent| total < incumbent)
+                        || pair_best_score.is_some_and(|best| total < best)
+                    {
+                        break 'indexed;
+                    }
+                    debug_assert!(
+                        !candidates_overlap(outer, indexed) && !candidates_overlap(inner, indexed)
+                    );
+                    state.record_solution(candidate_solution(configuration, selected)?)?;
+                    pair_best_score = Some(total);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 #[derive(Clone)]
 struct SearchNode {
     families: [TeamFamily; 3],
@@ -1091,6 +1304,51 @@ impl JointSearch<'_, '_, '_, '_> {
                 .saturating_sub(self.evaluation.cache.bytes() + self.joint_storage.get())
                 / (size_of::<CompactCandidate>() + size_of::<usize>()),
         )
+    }
+
+    fn indexed_join_slot(&self, counts: [u64; 3]) -> Option<usize> {
+        let row_target = indexed_join_row_target();
+        let pair_target = indexed_join_pair_target();
+        if row_target == 0 || pair_target == 0 {
+            return None;
+        }
+        let counts = [
+            usize::try_from(counts[0]).ok()?,
+            usize::try_from(counts[1]).ok()?,
+            usize::try_from(counts[2]).ok()?,
+        ];
+        let total_rows = counts.into_iter().try_fold(0_usize, usize::checked_add)?;
+        if total_rows > row_target {
+            return None;
+        }
+        let mut indexed_slot = 0;
+        for slot in 1..MEDLEY_TEAM_COUNT {
+            if counts[slot] > counts[indexed_slot] {
+                indexed_slot = slot;
+            }
+        }
+        let pair_slots = match indexed_slot {
+            0 => [1, 2],
+            1 => [0, 2],
+            2 => [0, 1],
+            _ => unreachable!(),
+        };
+        let pair_count = u64::try_from(counts[pair_slots[0]])
+            .ok()?
+            .checked_mul(u64::try_from(counts[pair_slots[1]]).ok()?)?;
+        if pair_count > pair_target {
+            return None;
+        }
+        let candidate_bytes = total_rows
+            .checked_mul(size_of::<CompactCandidate>() + size_of::<usize>())?
+            .checked_add(indexed_join_storage_bytes(
+                self.domain.owners.len(),
+                counts[indexed_slot],
+            )?)?;
+        let total_bytes = candidate_bytes
+            .checked_add(self.evaluation.cache.bytes())?
+            .checked_add(self.joint_storage.get())?;
+        (total_bytes <= self.evaluation.state.control.memory_budget_bytes()).then_some(indexed_slot)
     }
 
     fn effective_owners(&self, node: &SearchNode) -> Vec<u8> {
@@ -1320,6 +1578,16 @@ impl JointSearch<'_, '_, '_, '_> {
                 node.families,
                 counts.map(|count| count as usize),
                 node.bounds.map(|bound| bound.score),
+                None,
+            )?;
+            return Ok(JointStep::Finished);
+        }
+        if let Some(indexed_slot) = self.indexed_join_slot(counts) {
+            self.finish_block(
+                node.families,
+                counts.map(|count| count as usize),
+                node.bounds.map(|bound| bound.score),
+                Some(indexed_slot),
             )?;
             return Ok(JointStep::Finished);
         }
@@ -1578,6 +1846,7 @@ impl JointSearch<'_, '_, '_, '_> {
         families: [TeamFamily; 3],
         counts: [usize; 3],
         uppers: [f64; 3],
+        indexed_slot: Option<usize>,
     ) -> Result<(), SearchAbort> {
         #[cfg(test)]
         let _timing = crate::profiling::enter(crate::profiling::Phase::LocalBlocks);
@@ -1605,8 +1874,24 @@ impl JointSearch<'_, '_, '_, '_> {
             .iter()
             .map(|view| view.capacity() * size_of::<usize>())
             .sum::<usize>();
-        let candidate_bytes = row_bytes + view_bytes;
-        let bytes = candidate_bytes + self.evaluation.cache.bytes() + self.joint_storage.get();
+        let index_bytes = match indexed_slot {
+            Some(slot) => indexed_join_storage_bytes(self.domain.owners.len(), counts[slot])
+                .ok_or_else(|| abort(SearchIncompleteReasonV1::CountOrIndexOverflow))?,
+            None => 0,
+        };
+        let candidate_base_bytes = row_bytes
+            .checked_add(view_bytes)
+            .ok_or_else(|| abort(SearchIncompleteReasonV1::CountOrIndexOverflow))?;
+        let candidate_bytes = candidate_base_bytes
+            .checked_add(index_bytes)
+            .ok_or_else(|| abort(SearchIncompleteReasonV1::CountOrIndexOverflow))?;
+        let search_base_bytes = candidate_base_bytes
+            .checked_add(self.evaluation.cache.bytes())
+            .and_then(|bytes| bytes.checked_add(self.joint_storage.get()))
+            .ok_or_else(|| abort(SearchIncompleteReasonV1::CountOrIndexOverflow))?;
+        let bytes = search_base_bytes
+            .checked_add(index_bytes)
+            .ok_or_else(|| abort(SearchIncompleteReasonV1::CountOrIndexOverflow))?;
         let state = &mut self.evaluation.state;
         state.diagnostics.peak_candidate_bytes = state
             .diagnostics
@@ -1645,13 +1930,32 @@ impl JointSearch<'_, '_, '_, '_> {
             .enumerate()
             .filter_map(|(id, &mask)| (mask & UNUSED == 0).then_some(id as u32))
             .collect::<Vec<_>>();
-        join_block(
-            self.evaluation.configuration,
-            &rows,
-            &views,
-            &required,
-            self.evaluation.state,
-        )?;
+        if let Some(indexed_slot) = indexed_slot {
+            let indexed_slot = (0..MEDLEY_TEAM_COUNT)
+                .max_by_key(|&slot| rows[slot].len())
+                .unwrap_or(indexed_slot);
+            join_indexed_block(
+                self.evaluation.configuration,
+                &rows,
+                &views,
+                &required,
+                IndexedJoinContext {
+                    indexed_slot,
+                    card_count: self.domain.owners.len(),
+                    candidate_base_bytes,
+                    search_base_bytes,
+                },
+                self.evaluation.state,
+            )?;
+        } else {
+            join_block(
+                self.evaluation.configuration,
+                &rows,
+                &views,
+                &required,
+                self.evaluation.state,
+            )?;
+        }
         #[cfg(test)]
         crate::profiling::local_block(
             counts,
@@ -1758,7 +2062,12 @@ impl JointSearch<'_, '_, '_, '_> {
                     .filter(|(available, owners)| **available && **owners & UNUSED == 0)
                     .count(),
             );
-            self.finish_block(node.families, counts.map(|count| count as usize), uppers)?;
+            self.finish_block(
+                node.families,
+                counts.map(|count| count as usize),
+                uppers,
+                None,
+            )?;
             return Ok(None);
         }
         match self.joint_step(&mut node)? {
@@ -2185,6 +2494,8 @@ mod tests {
                 "profile": profile,
                 "tuning": {
                     "localRowTarget": local_row_target(),
+                    "indexedJoinRowTarget": indexed_join_row_target(),
+                    "indexedJoinPairTarget": indexed_join_pair_target(),
                     "scoreCacheSlots": score_cache_slots(),
                 },
             })
@@ -2290,47 +2601,150 @@ mod tests {
                     row([11, 12, 13, 14, 15], 14, alternative_score),
                 ],
             ];
-            let mut never_stop = || None;
-            let mut control = SearchControl::new(1024, &mut never_stop);
-            let mut state = RunState {
-                control: &mut control,
-                diagnostics: MedleySearchDiagnosticsV1::default(),
-                best: None,
-                discovered: Vec::new(),
+            let views = [vec![0], vec![0], vec![0, 1]];
+            let run = |indexed_slot, required: &[u32]| {
+                let mut never_stop = || None;
+                let mut control = SearchControl::new(1024, &mut never_stop);
+                let mut state = RunState {
+                    control: &mut control,
+                    diagnostics: MedleySearchDiagnosticsV1::default(),
+                    best: None,
+                    discovered: Vec::new(),
+                };
+                if let Some(indexed_slot) = indexed_slot {
+                    join_indexed_block(
+                        &AreaItemConfigurationV1 {
+                            selected_area_item_ids: vec![],
+                        },
+                        &rows,
+                        &views,
+                        required,
+                        IndexedJoinContext {
+                            indexed_slot,
+                            card_count: 16,
+                            candidate_base_bytes: 0,
+                            search_base_bytes: 0,
+                        },
+                        &mut state,
+                    )
+                    .unwrap();
+                } else {
+                    join_block(
+                        &AreaItemConfigurationV1 {
+                            selected_area_item_ids: vec![],
+                        },
+                        &rows,
+                        &views,
+                        required,
+                        &mut state,
+                    )
+                    .unwrap();
+                }
+                (state.best, state.discovered)
             };
-            join_block(
-                &AreaItemConfigurationV1 {
-                    selected_area_item_ids: vec![],
-                },
-                &rows,
-                &[vec![0], vec![0], vec![0, 1]],
-                &[],
-                &mut state,
-            )
-            .unwrap();
-            let best = state.best.take().unwrap();
+            let baseline = run(None, &[]);
+            let best = baseline.0.as_ref().unwrap();
             assert_eq!(best.total_average_score, 2.0 * base_score + 10.0);
             assert_eq!(best.teams[2].member_instance_ids, [11, 12, 14, 13, 15]);
             assert_eq!(
                 best.teams[2].average_score.to_bits(),
                 alternative_score.to_bits()
             );
+            for indexed_slot in 0..3 {
+                assert_eq!(run(Some(indexed_slot), &[]), baseline);
+            }
             // Batch pruning may forbid leaving a still-unassigned card unused.
             // The local join must then reject an otherwise tied alternative.
-            join_block(
-                &AreaItemConfigurationV1 {
-                    selected_area_item_ids: vec![],
-                },
-                &rows,
-                &[vec![0], vec![0], vec![0, 1]],
-                &[10],
-                &mut state,
-            )
-            .unwrap();
+            let required_baseline = run(None, &[10]);
             assert_eq!(
-                state.best.unwrap().teams[2].member_instance_ids,
+                required_baseline.0.as_ref().unwrap().teams[2].member_instance_ids,
                 [12, 13, 10, 14, 15]
             );
+            for indexed_slot in 0..3 {
+                assert_eq!(run(Some(indexed_slot), &[10]), required_baseline);
+            }
+        }
+    }
+
+    #[test]
+    fn indexed_join_matches_scan_across_bitset_words_and_float_order() {
+        const ROW_COUNT: usize = 70;
+        const REQUIRED: [u32; 2] = [1_200, 1_201];
+        let rows: [Vec<CompactCandidate>; 3] = std::array::from_fn(|slot| {
+            (0..ROW_COUNT)
+                .map(|rank| {
+                    let base = slot as u32 * 400 + rank as u32 * 5;
+                    let mut members = [base, base + 1, base + 2, base + 3, base + 4];
+                    if rank == 65 {
+                        members[3..].copy_from_slice(&REQUIRED);
+                        members.sort_unstable();
+                    }
+                    let mut scores = [0.0; 3];
+                    scores[slot] = match slot {
+                        0 => 1.0e16,
+                        1 => -1.0e16,
+                        2 => 1.0 - rank as f64 / 1_000.0,
+                        _ => unreachable!(),
+                    };
+                    CompactCandidate {
+                        member_instance_ids: members,
+                        song_scores: scores,
+                        leader_instance_ids: [members[0]; 3],
+                    }
+                })
+                .collect()
+        });
+        let mut views: [Vec<usize>; 3] = std::array::from_fn(|_| (0..ROW_COUNT).collect());
+        for slot in 0..3 {
+            views[slot].sort_unstable_by(|left, right| {
+                candidate_rank_cmp(&rows[slot], slot, *left, *right)
+            });
+        }
+        let run = |indexed_slot| {
+            let mut never_stop = || None;
+            let mut control = SearchControl::new(1024 * 1024, &mut never_stop);
+            let mut state = RunState {
+                control: &mut control,
+                diagnostics: MedleySearchDiagnosticsV1::default(),
+                best: None,
+                discovered: Vec::new(),
+            };
+            if let Some(indexed_slot) = indexed_slot {
+                join_indexed_block(
+                    &AreaItemConfigurationV1 {
+                        selected_area_item_ids: vec![],
+                    },
+                    &rows,
+                    &views,
+                    &REQUIRED,
+                    IndexedJoinContext {
+                        indexed_slot,
+                        card_count: 1_202,
+                        candidate_base_bytes: 0,
+                        search_base_bytes: 0,
+                    },
+                    &mut state,
+                )
+                .unwrap();
+            } else {
+                join_block(
+                    &AreaItemConfigurationV1 {
+                        selected_area_item_ids: vec![],
+                    },
+                    &rows,
+                    &views,
+                    &REQUIRED,
+                    &mut state,
+                )
+                .unwrap();
+            }
+            state.best.unwrap()
+        };
+        let baseline = run(None);
+        assert_eq!(baseline.total_average_score.to_bits(), 1.0_f64.to_bits());
+        assert_ne!((1.0e16 + -1.0e16) + 1.0, 1.0e16 + (-1.0e16 + 1.0));
+        for indexed_slot in 0..3 {
+            assert_eq!(run(Some(indexed_slot)), baseline);
         }
     }
 }
