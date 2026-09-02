@@ -1,4 +1,5 @@
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
+import { NO_STORE_HTTP_CACHE_POLICY, withHttpCachePolicy } from "@/lib/api-cache";
 import { requireVerifiedAccount } from "@/lib/auth-server";
 import { ApiRouteError } from "@/lib/api-contracts";
 import { normalizeProfileId, readGameProfileItemsView, updateGameProfileItems } from "@/lib/user-game-profiles-server";
@@ -11,13 +12,17 @@ export async function GET(
     const user = await requireVerifiedAccount(request);
     const { profileId: rawProfileId } = await context.params;
     const profileId = normalizeProfileId(rawProfileId);
-    return jsonSuccess(await readGameProfileItemsView(user.id, profileId));
+    return jsonSuccess(await readGameProfileItemsView(user.id, profileId), {
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
+    });
   } catch (error) {
     console.error("Game profile items API error:", error);
     return jsonRouteError(error, {
       status: 500,
       code: "GAME_PROFILE_ITEMS_READ_FAILED",
       message: "读取档案道具失败",
+    }, {
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   }
 }

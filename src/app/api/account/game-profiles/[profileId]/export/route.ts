@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { NO_STORE_HTTP_CACHE_POLICY, withHttpCachePolicy } from "@/lib/api-cache";
 import { jsonRouteError } from "@/lib/api-response";
 import { requireVerifiedAccount } from "@/lib/auth-server";
 import { exportBestdoriGameProfile, normalizeProfileId } from "@/lib/user-game-profiles-server";
@@ -14,13 +15,17 @@ export async function GET(
     const profile = await exportBestdoriGameProfile(user.id, profileId);
 
     // 导出保留兼容格式，并把 HHWX 专用字段放在顶层扩展里，方便其他读取方忽略。
-    return NextResponse.json(profile);
+    return NextResponse.json(profile, {
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
+    });
   } catch (error) {
     console.error("Game profile export API error:", error);
     return jsonRouteError(error, {
       status: 500,
       code: "GAME_PROFILE_EXPORT_FAILED",
       message: "导出游戏档案失败",
+    }, {
+      headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),
     });
   }
 }

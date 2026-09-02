@@ -436,7 +436,11 @@ async function requestJson<T>(
     headers.set("Authorization", `Bearer ${accessToken}`);
   }
 
-  const response = await fetch(path, { ...init, headers });
+  const response = await fetch(path, {
+    ...init,
+    cache: withAuth ? "no-store" : init?.cache,
+    headers,
+  });
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {

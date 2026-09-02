@@ -94,6 +94,7 @@ async function requestJson<T>(path: string, init: RequestInit | undefined, messa
 
   const response = await fetch(path, {
     ...init,
+    cache: "no-store",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
@@ -487,6 +488,7 @@ export default function GameProfilesPanel() {
         }
 
         const response = await fetch(`/api/account/game-profiles/${profile.cloudProfile.id}/export`, {
+          cache: "no-store",
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
