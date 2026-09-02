@@ -9,6 +9,7 @@ export {
 } from "./parameters";
 export { buildFixedTeamSkillContext, resolveBestdoriScoreSkill } from "./skills";
 export { buildFixedMedleyEvaluationInput } from "./evaluation";
+export { calculateMedleyEventPoint } from "./event-point";
 export { buildMedleySearchInput } from "./search-source";
 export { MedleyFoundationInputError } from "./errors";
 
@@ -37,3 +38,4 @@ export type {
   Triple,
 } from "./contracts";
 export type { MedleyFoundationInputErrorCode } from "./errors";
+export type { MedleyLiveBoostCount } from "./event-point";
