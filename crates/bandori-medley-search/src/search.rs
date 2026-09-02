@@ -727,6 +727,28 @@ impl TeamFamily {
     }
 }
 
+/// Remove an ownership decision from the residual domain. A non-unused
+/// singleton is a fixed physical member, so it also fulfils any reservation
+/// for that character before another joint model is built.
+fn materialize_singleton(
+    domain: &mut SearchDomain<'_>,
+    families: &mut [TeamFamily; 3],
+    id: u32,
+) -> Option<bool> {
+    let mask = domain.owners[id as usize];
+    debug_assert_eq!(mask.count_ones(), 1);
+    let fixed_member = mask != UNUSED;
+    if fixed_member {
+        let slot = mask.trailing_zeros() as usize;
+        if !families[slot].can_include(domain, id, slot) {
+            return None;
+        }
+        families[slot] = families[slot].with_required(id, domain.character_indexes[id as usize]);
+    }
+    domain.remove(id);
+    Some(fixed_member)
+}
+
 fn team_upper(
     domain: &SearchDomain<'_>,
     family: TeamFamily,
@@ -1622,6 +1644,14 @@ impl JointSearch<'_, '_, '_, '_> {
             return Ok(JointStep::Finished);
         }
         let required_teams = self.required_teams(node);
+        debug_assert!(required_teams.iter().enumerate().all(|(group, &required)| {
+            (0..3).all(|slot| {
+                required & (1 << slot) == 0
+                    || self.groups[group]
+                        .iter()
+                        .all(|&id| owners[id as usize] != 1 << slot)
+            })
+        }));
         let proposal_fits = node
             .joint
             .as_ref()
@@ -1788,18 +1818,12 @@ impl JointSearch<'_, '_, '_, '_> {
                 #[cfg(test)]
                 crate::profiling::joint_cuts((previous & !*mask).count_ones(), fixed);
                 if fixed {
-                    if *mask != UNUSED {
-                        let slot = mask.trailing_zeros() as usize;
-                        // Two simultaneous forced cards may reveal an infeasible
-                        // character/capacity combination. Never append past five.
-                        if !node.families[slot].can_include(&self.domain, id as u32, slot) {
-                            return Ok(JointStep::Finished);
-                        }
-                        node.families[slot] = node.families[slot]
-                            .with_required(id as u32, self.domain.character_indexes[id]);
-                        fixed_member = true;
-                    }
-                    self.domain.remove(id as u32);
+                    let Some(member) =
+                        materialize_singleton(&mut self.domain, &mut node.families, id as u32)
+                    else {
+                        return Ok(JointStep::Finished);
+                    };
+                    fixed_member |= member;
                     node.refresh_bounds = [true; 3];
                 }
             }
@@ -1962,20 +1986,21 @@ impl JointSearch<'_, '_, '_, '_> {
             }
         }
         let allowed = UNUSED | mode;
-        let mut refresh = false;
         for &id in &self.groups[group] {
             if !self.domain.available[id as usize] {
                 continue;
             }
             self.domain.restrict_owners(id, allowed);
-            match self.domain.owners[id as usize] {
-                0 => return false,
-                UNUSED => refresh |= self.domain.remove(id),
-                _ => {}
+            let mask = self.domain.owners[id as usize];
+            if mask == 0 {
+                return false;
             }
-        }
-        if refresh {
-            node.refresh_bounds = [true; 3];
+            if mask.count_ones() == 1 {
+                if materialize_singleton(&mut self.domain, &mut node.families, id).is_none() {
+                    return false;
+                }
+                node.refresh_bounds = [true; 3];
+            }
         }
         true
     }
@@ -2817,6 +2842,19 @@ mod tests {
         let resolved_group = required_group.with_required(15, 5);
         assert_eq!(resolved_group.next_group, 0);
         assert_eq!(resolved_group.completion_count(&domain, 0), 405);
+
+        let mut singleton_families = [TeamFamily::default(); 3];
+        singleton_families[0] = singleton_families[0].with_required_group(5).unwrap();
+        domain.restrict_owners(15, 1);
+        assert_eq!(
+            materialize_singleton(&mut domain, &mut singleton_families, 15),
+            Some(true)
+        );
+        assert_eq!(singleton_families[0].selected(), &[15]);
+        assert_eq!(singleton_families[0].required_group_count, 0);
+        assert!(!domain.available[15]);
+        domain.restore(0);
+
         let card = 15;
         let eligible = std::array::from_fn(|slot| {
             slot == 3 || parent.families[slot].can_include(&domain, card, slot)
