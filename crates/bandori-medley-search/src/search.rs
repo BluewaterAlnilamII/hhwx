@@ -23,7 +23,7 @@ const TEAM_SIZE: usize = 5;
 const MEDLEY_TEAM_COUNT: usize = 3;
 // These limits control temporary work, never which families are searched.
 const LOCAL_ROW_TARGET: usize = 256;
-const INDEXED_JOIN_ROW_TARGET: usize = 4_096;
+const INDEXED_JOIN_ROW_TARGET: usize = 1_024;
 const INDEXED_JOIN_PAIR_TARGET: u64 = 65_536;
 const SCORE_CACHE_SLOTS: usize = 65_536;
 const WARM_CONFIGURATION_COUNT: usize = 8;
@@ -437,26 +437,29 @@ fn finite_slot_sum(values: [f64; 3]) -> f64 {
     add_song_uppers(values).unwrap_or(f64::INFINITY)
 }
 
-fn candidate_solution(
+fn candidate_solution_from_assigned(
     configuration: &AreaItemConfigurationV1,
-    rows: [&CompactCandidate; 3],
+    member_instance_ids: [[u32; 5]; 3],
+    leader_instance_ids: [u32; 3],
+    song_scores: [f64; 3],
 ) -> Result<MedleySearchSolutionV1, SearchAbort> {
     let mut teams = Vec::with_capacity(3);
-    for (song_slot, row) in rows.iter().enumerate() {
-        let members =
-            member_order_for_leader(row.member_instance_ids, row.leader_instance_ids[song_slot])
-                .map_err(map_candidate_failure)?;
+    for song_slot in 0..MEDLEY_TEAM_COUNT {
+        let members = member_order_for_leader(
+            member_instance_ids[song_slot],
+            leader_instance_ids[song_slot],
+        )
+        .map_err(map_candidate_failure)?;
         teams.push(MedleySearchTeamV1 {
             slot: song_slot as u8,
             member_instance_ids: members,
-            average_score: row.song_scores[song_slot],
+            average_score: song_scores[song_slot],
         });
     }
     let teams: [MedleySearchTeamV1; 3] = teams
         .try_into()
         .map_err(|_| abort(SearchIncompleteReasonV1::InternalFailure))?;
-    let total_average_score =
-        (teams[0].average_score + teams[1].average_score) + teams[2].average_score;
+    let total_average_score = (song_scores[0] + song_scores[1]) + song_scores[2];
     if !total_average_score.is_finite() {
         return Err(abort(SearchIncompleteReasonV1::ArithmeticOverflow));
     }
@@ -467,12 +470,56 @@ fn candidate_solution(
     })
 }
 
+fn candidate_solution(
+    configuration: &AreaItemConfigurationV1,
+    rows: [&CompactCandidate; 3],
+) -> Result<MedleySearchSolutionV1, SearchAbort> {
+    candidate_solution_from_assigned(
+        configuration,
+        rows.map(|row| row.member_instance_ids),
+        std::array::from_fn(|slot| rows[slot].leader_instance_ids[slot]),
+        std::array::from_fn(|slot| rows[slot].song_scores[slot]),
+    )
+}
+
 fn map_candidate_failure(failure: CandidateFailure) -> SearchAbort {
     match failure {
         CandidateFailure::InvalidInternalReference => {
             abort(SearchIncompleteReasonV1::InternalFailure)
         }
         CandidateFailure::ArithmeticFailure => abort(SearchIncompleteReasonV1::ArithmeticOverflow),
+    }
+}
+
+/// A local product row starts with only a proof-safe assigned-song upper.
+/// Exact score work is deferred until the join establishes that the row can
+/// still reach the incumbent.
+#[derive(Clone, Copy, Debug)]
+struct LocalCandidate {
+    member_instance_ids: [u32; 5],
+    upper_score: f64,
+    exact_score: f64,
+    exact_leader_instance_id: Option<u32>,
+}
+
+impl LocalCandidate {
+    fn from_upper(mut member_instance_ids: [u32; 5], upper_score: f64) -> Self {
+        member_instance_ids.sort_unstable();
+        Self {
+            member_instance_ids,
+            upper_score,
+            exact_score: 0.0,
+            exact_leader_instance_id: None,
+        }
+    }
+
+    fn from_exact(row: CompactCandidate, song_slot: usize) -> Self {
+        Self {
+            member_instance_ids: row.member_instance_ids,
+            upper_score: row.song_scores[song_slot],
+            exact_score: row.song_scores[song_slot],
+            exact_leader_instance_id: Some(row.leader_instance_ids[song_slot]),
+        }
     }
 }
 
@@ -485,7 +532,7 @@ struct ScoreCache {
 
 impl ScoreCache {
     fn new(state: &mut RunState<'_, '_>) -> Result<Self, SearchAbort> {
-        let row_bytes = size_of::<CompactCandidate>() + size_of::<usize>();
+        let row_bytes = size_of::<LocalCandidate>() + size_of::<usize>();
         let budget = state.control.memory_budget_bytes();
         let minimum_block = 3 * row_bytes;
         if budget < minimum_block {
@@ -518,6 +565,31 @@ impl ScoreCache {
         self.slots.capacity() * size_of::<Option<CompactCandidate>>()
     }
 
+    fn slot_index(&self, members: [u32; 5]) -> Option<usize> {
+        if self.slots.is_empty() {
+            return None;
+        }
+        let hash = members.into_iter().fold(0_usize, |value, id| {
+            value.wrapping_mul(16777619) ^ id as usize
+        });
+        Some(hash % self.slots.len())
+    }
+
+    fn cached(
+        &self,
+        members: [u32; 5],
+        state: &mut RunState<'_, '_>,
+    ) -> Result<Option<CompactCandidate>, SearchAbort> {
+        let Some(index) = self.slot_index(members) else {
+            return Ok(None);
+        };
+        let Some(row) = self.slots[index].filter(|row| row.member_instance_ids == members) else {
+            return Ok(None);
+        };
+        add_counter(&mut state.diagnostics.cache_hits, 1)?;
+        Ok(Some(row))
+    }
+
     fn evaluate(
         &mut self,
         input: &MedleySearchInputV1,
@@ -528,19 +600,8 @@ impl ScoreCache {
     ) -> Result<CompactCandidate, SearchAbort> {
         state.poll_stop()?;
         members.sort_unstable();
-        let index = if self.slots.is_empty() {
-            None
-        } else {
-            let hash = members.into_iter().fold(0_usize, |value, id| {
-                value.wrapping_mul(16777619) ^ id as usize
-            });
-            Some(hash % self.slots.len())
-        };
-        if let Some(index) = index
-            && let Some(row) = self.slots[index]
-            && row.member_instance_ids == members
-        {
-            add_counter(&mut state.diagnostics.cache_hits, 1)?;
+        let index = self.slot_index(members);
+        if let Some(row) = self.cached(members, state)? {
             return Ok(row);
         }
         let row = evaluate_candidate(input, configuration, members, songs)
@@ -690,6 +751,12 @@ struct EvaluationContext<'input, 'state, 'control, 'callback> {
 }
 
 impl EvaluationContext<'_, '_, '_, '_> {
+    fn cached(&mut self, mut members: [u32; 5]) -> Result<Option<CompactCandidate>, SearchAbort> {
+        self.state.poll_stop()?;
+        members.sort_unstable();
+        self.cache.cached(members, self.state)
+    }
+
     fn evaluate(&mut self, members: [u32; 5]) -> Result<CompactCandidate, SearchAbort> {
         self.cache.evaluate(
             self.input,
@@ -832,6 +899,29 @@ impl EvaluationContext<'_, '_, '_, '_> {
     }
 }
 
+fn exact_local_score<'control, 'callback, F>(
+    row: &mut LocalCandidate,
+    song_slot: usize,
+    state: &mut RunState<'control, 'callback>,
+    score_candidate: &mut F,
+) -> Result<(f64, u32), SearchAbort>
+where
+    F: FnMut([u32; 5], &mut RunState<'control, 'callback>) -> Result<CompactCandidate, SearchAbort>,
+{
+    if let Some(leader) = row.exact_leader_instance_id {
+        return Ok((row.exact_score, leader));
+    }
+    let exact = score_candidate(row.member_instance_ids, state)?;
+    let score = exact.song_scores[song_slot];
+    if score > row.upper_score {
+        return Err(abort(SearchIncompleteReasonV1::ScorerDisagreement));
+    }
+    let leader = exact.leader_instance_ids[song_slot];
+    row.exact_score = score;
+    row.exact_leader_instance_id = Some(leader);
+    Ok((score, leader))
+}
+
 fn plan_configurations(
     input: &MedleySearchInputV1,
     model: Option<&FastScoreModel<'_>>,
@@ -888,14 +978,10 @@ fn plan_configurations(
     Ok(plans)
 }
 
-fn candidate_rank_cmp(
-    rows: &[CompactCandidate],
-    song_slot: usize,
-    left: usize,
-    right: usize,
-) -> Ordering {
-    rows[right].song_scores[song_slot]
-        .total_cmp(&rows[left].song_scores[song_slot])
+fn local_candidate_rank_cmp(rows: &[LocalCandidate], left: usize, right: usize) -> Ordering {
+    rows[right]
+        .upper_score
+        .total_cmp(&rows[left].upper_score)
         .then_with(|| {
             rows[left]
                 .member_instance_ids
@@ -903,28 +989,38 @@ fn candidate_rank_cmp(
         })
 }
 
-fn join_block(
+fn join_block<'control, 'callback, F>(
     configuration: &AreaItemConfigurationV1,
-    rows: &[Vec<CompactCandidate>; 3],
+    rows: &mut [Vec<LocalCandidate>; 3],
     views: &[Vec<usize>; 3],
     required: &[u32],
-    state: &mut RunState<'_, '_>,
-) -> Result<(), SearchAbort> {
+    state: &mut RunState<'control, 'callback>,
+    score_candidate: &mut F,
+) -> Result<(), SearchAbort>
+where
+    F: FnMut([u32; 5], &mut RunState<'control, 'callback>) -> Result<CompactCandidate, SearchAbort>,
+{
     #[cfg(test)]
     let _timing = crate::profiling::enter(crate::profiling::Phase::Join);
     if rows.iter().any(Vec::is_empty) {
         return Ok(());
     }
-    let maximums =
-        std::array::from_fn::<_, 3, _>(|slot| rows[slot][views[slot][0]].song_scores[slot]);
+    let maximums = std::array::from_fn::<_, 3, _>(|slot| rows[slot][views[slot][0]].upper_score);
     let mut poll_counter = 0_u16;
     for &zero in &views[0] {
         state.poll_stop()?;
-        let row_zero = &rows[0][zero];
         if state.incumbent_score().is_some_and(|incumbent| {
-            (row_zero.song_scores[0] + maximums[1]) + maximums[2] < incumbent
+            finite_slot_sum([rows[0][zero].upper_score, maximums[1], maximums[2]]) < incumbent
         }) {
             break;
+        }
+        let (zero_score, zero_leader) =
+            exact_local_score(&mut rows[0][zero], 0, state, score_candidate)?;
+        let zero_members = rows[0][zero].member_instance_ids;
+        if state.incumbent_score().is_some_and(|incumbent| {
+            finite_slot_sum([zero_score, maximums[1], maximums[2]]) < incumbent
+        }) {
+            continue;
         }
         for &one in &views[1] {
             add_counter(&mut state.diagnostics.join_pair_checks, 1)?;
@@ -932,14 +1028,24 @@ fn join_block(
             if poll_counter == 0 {
                 state.poll_stop()?;
             }
-            let row_one = &rows[1][one];
             if state.incumbent_score().is_some_and(|incumbent| {
-                (row_zero.song_scores[0] + row_one.song_scores[1]) + maximums[2] < incumbent
+                finite_slot_sum([zero_score, rows[1][one].upper_score, maximums[2]]) < incumbent
             }) {
                 break;
             }
-            if candidates_overlap(row_zero, row_one) {
+            if zero_members
+                .iter()
+                .any(|id| rows[1][one].member_instance_ids.contains(id))
+            {
                 add_counter(&mut state.diagnostics.card_conflicts, 1)?;
+                continue;
+            }
+            let (one_score, one_leader) =
+                exact_local_score(&mut rows[1][one], 1, state, score_candidate)?;
+            let one_members = rows[1][one].member_instance_ids;
+            if state.incumbent_score().is_some_and(|incumbent| {
+                finite_slot_sum([zero_score, one_score, maximums[2]]) < incumbent
+            }) {
                 continue;
             }
             let mut pair_best_score = None;
@@ -949,34 +1055,45 @@ fn join_block(
                 if poll_counter == 0 {
                     state.poll_stop()?;
                 }
-                let row_two = &rows[2][two];
-                let total =
-                    (row_zero.song_scores[0] + row_one.song_scores[1]) + row_two.song_scores[2];
-                if state
-                    .incumbent_score()
-                    .is_some_and(|incumbent| total < incumbent)
-                    || pair_best_score.is_some_and(|best| total < best)
-                {
+                let cutoff = match (state.incumbent_score(), pair_best_score) {
+                    (Some(incumbent), Some(best)) => Some(incumbent.max(best)),
+                    (incumbent, best) => incumbent.or(best),
+                };
+                if cutoff.is_some_and(|cutoff| {
+                    finite_slot_sum([zero_score, one_score, rows[2][two].upper_score]) < cutoff
+                }) {
                     break;
                 }
-                if candidates_overlap(row_zero, row_two) || candidates_overlap(row_one, row_two) {
+                let two_members = rows[2][two].member_instance_ids;
+                if zero_members.iter().any(|id| two_members.contains(id))
+                    || one_members.iter().any(|id| two_members.contains(id))
+                {
                     add_counter(&mut state.diagnostics.card_conflicts, 1)?;
                     continue;
                 }
                 if required.iter().any(|id| {
-                    !row_zero.member_instance_ids.contains(id)
-                        && !row_one.member_instance_ids.contains(id)
-                        && !row_two.member_instance_ids.contains(id)
+                    !zero_members.contains(id)
+                        && !one_members.contains(id)
+                        && !two_members.contains(id)
                 }) {
                     continue;
                 }
-                state.record_solution(candidate_solution(
+                let (two_score, two_leader) =
+                    exact_local_score(&mut rows[2][two], 2, state, score_candidate)?;
+                let song_scores = [zero_score, one_score, two_score];
+                let total = (song_scores[0] + song_scores[1]) + song_scores[2];
+                if cutoff.is_some_and(|cutoff| total < cutoff) {
+                    continue;
+                }
+                let solution = candidate_solution_from_assigned(
                     configuration,
-                    [row_zero, row_one, row_two],
-                )?)?;
-                pair_best_score = Some(total);
-                // A smaller third score may still round to the same total.
-                // Keep that entire total-score tie, regardless of row order.
+                    [zero_members, one_members, two_members],
+                    [zero_leader, one_leader, two_leader],
+                    song_scores,
+                )?;
+                state.record_solution(solution)?;
+                pair_best_score = Some(pair_best_score.map_or(total, |best: f64| best.max(total)));
+                // Strict upper cuts retain the complete floating-point tie.
             }
         }
     }
@@ -997,16 +1114,20 @@ struct IndexedJoinContext {
 }
 
 /// Exact three-way join with one candidate table indexed by physical card.
-/// Ranked bit positions preserve the indexed table's score order, so strict
-/// score cuts and the complete floating-point tie remain identical to join_block.
-fn join_indexed_block(
+/// Ranked bit positions preserve the indexed table's safe-upper order. Strict
+/// upper cuts keep the complete floating-point tie and match join_block.
+fn join_indexed_block<'control, 'callback, F>(
     configuration: &AreaItemConfigurationV1,
-    rows: &[Vec<CompactCandidate>; 3],
+    rows: &mut [Vec<LocalCandidate>; 3],
     views: &[Vec<usize>; 3],
     required: &[u32],
     context: IndexedJoinContext,
-    state: &mut RunState<'_, '_>,
-) -> Result<(), SearchAbort> {
+    state: &mut RunState<'control, 'callback>,
+    score_candidate: &mut F,
+) -> Result<(), SearchAbort>
+where
+    F: FnMut([u32; 5], &mut RunState<'control, 'callback>) -> Result<CompactCandidate, SearchAbort>,
+{
     #[cfg(test)]
     let _timing = crate::profiling::enter(crate::profiling::Phase::Join);
     if rows.iter().any(Vec::is_empty) || required.len() > TEAM_SIZE * MEDLEY_TEAM_COUNT {
@@ -1069,8 +1190,7 @@ fn join_indexed_block(
         }
     }
 
-    let maximums =
-        std::array::from_fn::<_, 3, _>(|slot| rows[slot][views[slot][0]].song_scores[slot]);
+    let maximums = std::array::from_fn::<_, 3, _>(|slot| rows[slot][views[slot][0]].upper_score);
     let tail_bits = indexed_count % u64::BITS as usize;
     let final_word_mask = if tail_bits == 0 {
         u64::MAX
@@ -1080,14 +1200,27 @@ fn join_indexed_block(
     let mut poll_counter = 0_u16;
     for &outer_index in &views[pair_slots[0]] {
         state.poll_stop()?;
-        let outer = &rows[pair_slots[0]][outer_index];
         let mut upper = maximums;
-        upper[pair_slots[0]] = outer.song_scores[pair_slots[0]];
+        upper[pair_slots[0]] = rows[pair_slots[0]][outer_index].upper_score;
         if state
             .incumbent_score()
-            .is_some_and(|incumbent| (upper[0] + upper[1]) + upper[2] < incumbent)
+            .is_some_and(|incumbent| finite_slot_sum(upper) < incumbent)
         {
             break;
+        }
+        let (outer_score, outer_leader) = exact_local_score(
+            &mut rows[pair_slots[0]][outer_index],
+            pair_slots[0],
+            state,
+            score_candidate,
+        )?;
+        let outer_members = rows[pair_slots[0]][outer_index].member_instance_ids;
+        upper[pair_slots[0]] = outer_score;
+        if state
+            .incumbent_score()
+            .is_some_and(|incumbent| finite_slot_sum(upper) < incumbent)
+        {
+            continue;
         }
         'inner: for &inner_index in &views[pair_slots[1]] {
             add_counter(&mut state.diagnostics.join_pair_checks, 1)?;
@@ -1095,25 +1228,41 @@ fn join_indexed_block(
             if poll_counter == 0 {
                 state.poll_stop()?;
             }
-            let inner = &rows[pair_slots[1]][inner_index];
-            upper[pair_slots[1]] = inner.song_scores[pair_slots[1]];
+            upper[indexed_slot] = maximums[indexed_slot];
+            upper[pair_slots[1]] = rows[pair_slots[1]][inner_index].upper_score;
             if state
                 .incumbent_score()
-                .is_some_and(|incumbent| (upper[0] + upper[1]) + upper[2] < incumbent)
+                .is_some_and(|incumbent| finite_slot_sum(upper) < incumbent)
             {
                 break;
             }
-            if candidates_overlap(outer, inner) {
+            if outer_members.iter().any(|id| {
+                rows[pair_slots[1]][inner_index]
+                    .member_instance_ids
+                    .contains(id)
+            }) {
                 add_counter(&mut state.diagnostics.card_conflicts, 1)?;
+                continue;
+            }
+            let (inner_score, inner_leader) = exact_local_score(
+                &mut rows[pair_slots[1]][inner_index],
+                pair_slots[1],
+                state,
+                score_candidate,
+            )?;
+            let inner_members = rows[pair_slots[1]][inner_index].member_instance_ids;
+            upper[pair_slots[1]] = inner_score;
+            if state
+                .incumbent_score()
+                .is_some_and(|incumbent| finite_slot_sum(upper) < incumbent)
+            {
                 continue;
             }
 
             let mut missing = [0_u32; TEAM_SIZE];
             let mut missing_count = 0;
             for &id in required {
-                if !outer.member_instance_ids.contains(&id)
-                    && !inner.member_instance_ids.contains(&id)
-                {
+                if !outer_members.contains(&id) && !inner_members.contains(&id) {
                     if missing_count == TEAM_SIZE {
                         continue 'inner;
                     }
@@ -1129,11 +1278,7 @@ fn join_indexed_block(
                 } else {
                     u64::MAX
                 };
-                for &id in outer
-                    .member_instance_ids
-                    .iter()
-                    .chain(&inner.member_instance_ids)
-                {
+                for &id in outer_members.iter().chain(&inner_members) {
                     allowed &= !membership[id as usize * word_count + word];
                 }
                 for &id in &missing[..missing_count] {
@@ -1144,31 +1289,51 @@ fn join_indexed_block(
                     allowed &= allowed - 1;
                     let indexed_rank = word * u64::BITS as usize + bit;
                     let indexed_index = views[indexed_slot][indexed_rank];
-                    let indexed = &rows[indexed_slot][indexed_index];
-                    let mut selected_indexes = [0_usize; 3];
-                    selected_indexes[pair_slots[0]] = outer_index;
-                    selected_indexes[pair_slots[1]] = inner_index;
-                    selected_indexes[indexed_slot] = indexed_index;
-                    let selected = std::array::from_fn(|slot| &rows[slot][selected_indexes[slot]]);
-                    let total = (selected[0].song_scores[0] + selected[1].song_scores[1])
-                        + selected[2].song_scores[2];
                     add_counter(&mut state.diagnostics.join_third_checks, 1)?;
                     poll_counter = poll_counter.wrapping_add(1);
                     if poll_counter == 0 {
                         state.poll_stop()?;
                     }
-                    if state
-                        .incumbent_score()
-                        .is_some_and(|incumbent| total < incumbent)
-                        || pair_best_score.is_some_and(|best| total < best)
-                    {
+                    let cutoff = match (state.incumbent_score(), pair_best_score) {
+                        (Some(incumbent), Some(best)) => Some(incumbent.max(best)),
+                        (incumbent, best) => incumbent.or(best),
+                    };
+                    upper[indexed_slot] = rows[indexed_slot][indexed_index].upper_score;
+                    if cutoff.is_some_and(|cutoff| finite_slot_sum(upper) < cutoff) {
                         break 'indexed;
                     }
-                    debug_assert!(
-                        !candidates_overlap(outer, indexed) && !candidates_overlap(inner, indexed)
-                    );
-                    state.record_solution(candidate_solution(configuration, selected)?)?;
-                    pair_best_score = Some(total);
+                    let (indexed_score, indexed_leader) = exact_local_score(
+                        &mut rows[indexed_slot][indexed_index],
+                        indexed_slot,
+                        state,
+                        score_candidate,
+                    )?;
+                    let indexed_members = rows[indexed_slot][indexed_index].member_instance_ids;
+                    let mut song_scores = [0.0; 3];
+                    song_scores[pair_slots[0]] = outer_score;
+                    song_scores[pair_slots[1]] = inner_score;
+                    song_scores[indexed_slot] = indexed_score;
+                    let total = (song_scores[0] + song_scores[1]) + song_scores[2];
+                    if cutoff.is_some_and(|cutoff| total < cutoff) {
+                        continue;
+                    }
+                    let mut member_instance_ids = [[0; 5]; 3];
+                    member_instance_ids[pair_slots[0]] = outer_members;
+                    member_instance_ids[pair_slots[1]] = inner_members;
+                    member_instance_ids[indexed_slot] = indexed_members;
+                    let mut leader_instance_ids = [0; 3];
+                    leader_instance_ids[pair_slots[0]] = outer_leader;
+                    leader_instance_ids[pair_slots[1]] = inner_leader;
+                    leader_instance_ids[indexed_slot] = indexed_leader;
+                    let solution = candidate_solution_from_assigned(
+                        configuration,
+                        member_instance_ids,
+                        leader_instance_ids,
+                        song_scores,
+                    )?;
+                    state.record_solution(solution)?;
+                    pair_best_score =
+                        Some(pair_best_score.map_or(total, |best: f64| best.max(total)));
                 }
             }
         }
@@ -1302,7 +1467,7 @@ impl JointSearch<'_, '_, '_, '_> {
                 .control
                 .memory_budget_bytes()
                 .saturating_sub(self.evaluation.cache.bytes() + self.joint_storage.get())
-                / (size_of::<CompactCandidate>() + size_of::<usize>()),
+                / (size_of::<LocalCandidate>() + size_of::<usize>()),
         )
     }
 
@@ -1340,7 +1505,7 @@ impl JointSearch<'_, '_, '_, '_> {
             return None;
         }
         let candidate_bytes = total_rows
-            .checked_mul(size_of::<CompactCandidate>() + size_of::<usize>())?
+            .checked_mul(size_of::<LocalCandidate>() + size_of::<usize>())?
             .checked_add(indexed_join_storage_bytes(
                 self.domain.owners.len(),
                 counts[indexed_slot],
@@ -1775,19 +1940,26 @@ impl JointSearch<'_, '_, '_, '_> {
         family: TeamFamily,
         song_slot: usize,
         family_uppers: [f64; 3],
-        rows: &mut Vec<CompactCandidate>,
+        rows: &mut Vec<LocalCandidate>,
     ) -> Result<(), SearchAbort> {
         self.evaluation.state.poll_stop()?;
         if family.member_count == TEAM_SIZE {
-            // Transient leaf sets still get the cheap filter. A persistent
-            // complete team already has an exact score carried down the path.
-            let upper = if let Some(score) = family.fixed_score {
-                score
+            let mut members = family.members;
+            members.sort_unstable();
+            let row = if let Some(exact) = self.evaluation.cached(members)? {
+                LocalCandidate::from_exact(exact, song_slot)
             } else {
-                team_upper(&self.domain, family, song_slot, self.evaluation.state)?.score
+                // Transient leaf sets retain only their proof-safe upper. A
+                // persistent complete team already carries its exact score.
+                let upper = if let Some(score) = family.fixed_score {
+                    score
+                } else {
+                    team_upper(&self.domain, family, song_slot, self.evaluation.state)?.score
+                };
+                LocalCandidate::from_upper(members, upper)
             };
             let mut uppers = family_uppers;
-            uppers[song_slot] = upper;
+            uppers[song_slot] = row.upper_score;
             if self
                 .evaluation
                 .state
@@ -1797,23 +1969,12 @@ impl JointSearch<'_, '_, '_, '_> {
                 add_counter(&mut self.evaluation.state.diagnostics.rows_pruned, 1)?;
                 return Ok(());
             }
-            let row = self.evaluation.evaluate(family.members)?;
-            uppers[song_slot] = row.song_scores[song_slot];
-            if self
-                .evaluation
-                .state
-                .incumbent_score()
-                .is_some_and(|incumbent| finite_slot_sum(uppers) < incumbent)
-            {
-                add_counter(&mut self.evaluation.state.diagnostics.rows_pruned, 1)?;
-            } else {
-                // The exact capped count was reserved before entering the block.
-                if rows.len() == rows.capacity() {
-                    return Err(abort(SearchIncompleteReasonV1::InternalFailure));
-                }
-                rows.push(row);
-                add_counter(&mut self.evaluation.state.diagnostics.compact_rows, 1)?;
+            // The exact capped count was reserved before entering the block.
+            if rows.len() == rows.capacity() {
+                return Err(abort(SearchIncompleteReasonV1::InternalFailure));
             }
+            rows.push(row);
+            add_counter(&mut self.evaluation.state.diagnostics.compact_rows, 1)?;
             return Ok(());
         }
         let needed = TEAM_SIZE - family.member_count;
@@ -1856,7 +2017,7 @@ impl JointSearch<'_, '_, '_, '_> {
             self.evaluation.state.diagnostics.join_third_checks,
             self.evaluation.state.diagnostics.card_conflicts,
         );
-        let mut rows: [Vec<CompactCandidate>; 3] = std::array::from_fn(|_| Vec::new());
+        let mut rows: [Vec<LocalCandidate>; 3] = std::array::from_fn(|_| Vec::new());
         let mut views: [Vec<usize>; 3] = std::array::from_fn(|_| Vec::new());
         for slot in 0..3 {
             rows[slot]
@@ -1868,7 +2029,7 @@ impl JointSearch<'_, '_, '_, '_> {
         }
         let row_bytes = rows
             .iter()
-            .map(|rows| rows.capacity() * size_of::<CompactCandidate>())
+            .map(|rows| rows.capacity() * size_of::<LocalCandidate>())
             .sum::<usize>();
         let view_bytes = views
             .iter()
@@ -1904,8 +2065,11 @@ impl JointSearch<'_, '_, '_, '_> {
         if bytes > state.control.memory_budget_bytes() {
             return Err(abort(SearchIncompleteReasonV1::MemoryExhausted));
         }
-        for slot in 0..3 {
-            self.generate_rows(families[slot], slot, uppers, &mut rows[slot])?;
+        let mut generation_uppers = uppers;
+        let mut generation_order = [0, 1, 2];
+        generation_order.sort_by_key(|slot| (counts[*slot], *slot));
+        for slot in generation_order {
+            self.generate_rows(families[slot], slot, generation_uppers, &mut rows[slot])?;
             if rows[slot].is_empty() {
                 #[cfg(test)]
                 crate::profiling::local_block(
@@ -1918,9 +2082,14 @@ impl JointSearch<'_, '_, '_, '_> {
                 add_counter(&mut self.evaluation.state.diagnostics.local_blocks, 1)?;
                 return Ok(());
             }
+            generation_uppers[slot] = rows[slot]
+                .iter()
+                .map(|row| row.upper_score)
+                .max_by(f64::total_cmp)
+                .ok_or_else(|| abort(SearchIncompleteReasonV1::InternalFailure))?;
             views[slot].extend(0..rows[slot].len());
             views[slot].sort_unstable_by(|left, right| {
-                candidate_rank_cmp(&rows[slot], slot, *left, *right)
+                local_candidate_rank_cmp(&rows[slot], *left, *right)
             });
         }
         let required = self
@@ -1930,13 +2099,21 @@ impl JointSearch<'_, '_, '_, '_> {
             .enumerate()
             .filter_map(|(id, &mask)| (mask & UNUSED == 0).then_some(id as u32))
             .collect::<Vec<_>>();
+        let input = self.evaluation.input;
+        let configuration = self.evaluation.configuration;
+        let songs = self.evaluation.songs;
+        let cache = &mut *self.evaluation.cache;
+        let state = &mut *self.evaluation.state;
+        let mut score_candidate = |members, state: &mut RunState<'_, '_>| {
+            cache.evaluate(input, configuration, members, songs, state)
+        };
         if let Some(indexed_slot) = indexed_slot {
             let indexed_slot = (0..MEDLEY_TEAM_COUNT)
                 .max_by_key(|&slot| rows[slot].len())
                 .unwrap_or(indexed_slot);
             join_indexed_block(
-                self.evaluation.configuration,
-                &rows,
+                configuration,
+                &mut rows,
                 &views,
                 &required,
                 IndexedJoinContext {
@@ -1945,15 +2122,17 @@ impl JointSearch<'_, '_, '_, '_> {
                     candidate_base_bytes,
                     search_base_bytes,
                 },
-                self.evaluation.state,
+                state,
+                &mut score_candidate,
             )?;
         } else {
             join_block(
-                self.evaluation.configuration,
-                &rows,
+                configuration,
+                &mut rows,
                 &views,
                 &required,
-                self.evaluation.state,
+                state,
+                &mut score_candidate,
             )?;
         }
         #[cfg(test)]
@@ -2067,6 +2246,25 @@ impl JointSearch<'_, '_, '_, '_> {
                 counts.map(|count| count as usize),
                 uppers,
                 None,
+            )?;
+            return Ok(None);
+        }
+        if let Some(indexed_slot) = self.indexed_join_slot(counts) {
+            #[cfg(test)]
+            crate::profiling::completion_counts(
+                counts,
+                self.domain
+                    .available
+                    .iter()
+                    .zip(&self.domain.owners)
+                    .filter(|(available, owners)| **available && **owners & UNUSED == 0)
+                    .count(),
+            );
+            self.finish_block(
+                node.families,
+                counts.map(|count| count as usize),
+                uppers,
+                Some(indexed_slot),
             )?;
             return Ok(None);
         }
@@ -2379,6 +2577,13 @@ pub fn search_medley(
 mod tests {
     use super::*;
 
+    fn unexpected_local_score(
+        _members: [u32; 5],
+        _state: &mut RunState<'_, '_>,
+    ) -> Result<CompactCandidate, SearchAbort> {
+        Err(abort(SearchIncompleteReasonV1::InternalFailure))
+    }
+
     #[test]
     fn ownership_keeps_unskipped_characters_and_the_unused_case() {
         // Exercise traversal state, not a new game/chart fixture: six character
@@ -2588,10 +2793,11 @@ mod tests {
         for (base_score, alternative_score) in [100.0, -100.0].into_iter().flat_map(|base| {
             [10.0_f64, 10.0_f64.next_down()].map(|alternative| (base, alternative))
         }) {
-            let row = |member_instance_ids, leader, score| CompactCandidate {
+            let row = |member_instance_ids, leader, score| LocalCandidate {
                 member_instance_ids,
-                leader_instance_ids: [leader; 3],
-                song_scores: [score; 3],
+                upper_score: score,
+                exact_score: score,
+                exact_leader_instance_id: Some(leader),
             };
             let rows = [
                 vec![row([0, 1, 2, 3, 4], 0, base_score)],
@@ -2603,6 +2809,7 @@ mod tests {
             ];
             let views = [vec![0], vec![0], vec![0, 1]];
             let run = |indexed_slot, required: &[u32]| {
+                let mut rows = rows.clone();
                 let mut never_stop = || None;
                 let mut control = SearchControl::new(1024, &mut never_stop);
                 let mut state = RunState {
@@ -2611,12 +2818,14 @@ mod tests {
                     best: None,
                     discovered: Vec::new(),
                 };
+                let configuration = AreaItemConfigurationV1 {
+                    selected_area_item_ids: vec![],
+                };
+                let mut unexpected_score = unexpected_local_score;
                 if let Some(indexed_slot) = indexed_slot {
                     join_indexed_block(
-                        &AreaItemConfigurationV1 {
-                            selected_area_item_ids: vec![],
-                        },
-                        &rows,
+                        &configuration,
+                        &mut rows,
                         &views,
                         required,
                         IndexedJoinContext {
@@ -2626,17 +2835,17 @@ mod tests {
                             search_base_bytes: 0,
                         },
                         &mut state,
+                        &mut unexpected_score,
                     )
                     .unwrap();
                 } else {
                     join_block(
-                        &AreaItemConfigurationV1 {
-                            selected_area_item_ids: vec![],
-                        },
-                        &rows,
+                        &configuration,
+                        &mut rows,
                         &views,
                         required,
                         &mut state,
+                        &mut unexpected_score,
                     )
                     .unwrap();
                 }
@@ -2670,7 +2879,7 @@ mod tests {
     fn indexed_join_matches_scan_across_bitset_words_and_float_order() {
         const ROW_COUNT: usize = 70;
         const REQUIRED: [u32; 2] = [1_200, 1_201];
-        let rows: [Vec<CompactCandidate>; 3] = std::array::from_fn(|slot| {
+        let rows: [Vec<LocalCandidate>; 3] = std::array::from_fn(|slot| {
             (0..ROW_COUNT)
                 .map(|rank| {
                     let base = slot as u32 * 400 + rank as u32 * 5;
@@ -2679,17 +2888,19 @@ mod tests {
                         members[3..].copy_from_slice(&REQUIRED);
                         members.sort_unstable();
                     }
-                    let mut scores = [0.0; 3];
-                    scores[slot] = match slot {
+                    let score = match slot {
                         0 => 1.0e16,
                         1 => -1.0e16,
                         2 => 1.0 - rank as f64 / 1_000.0,
                         _ => unreachable!(),
                     };
-                    CompactCandidate {
+                    LocalCandidate {
                         member_instance_ids: members,
-                        song_scores: scores,
-                        leader_instance_ids: [members[0]; 3],
+                        // Deliberately scramble upper order relative to exact
+                        // order; only the upper may stop the deferred join.
+                        upper_score: score.max(0.0) + (rank % 7) as f64,
+                        exact_score: score,
+                        exact_leader_instance_id: Some(members[0]),
                     }
                 })
                 .collect()
@@ -2697,10 +2908,11 @@ mod tests {
         let mut views: [Vec<usize>; 3] = std::array::from_fn(|_| (0..ROW_COUNT).collect());
         for slot in 0..3 {
             views[slot].sort_unstable_by(|left, right| {
-                candidate_rank_cmp(&rows[slot], slot, *left, *right)
+                local_candidate_rank_cmp(&rows[slot], *left, *right)
             });
         }
         let run = |indexed_slot| {
+            let mut rows = rows.clone();
             let mut never_stop = || None;
             let mut control = SearchControl::new(1024 * 1024, &mut never_stop);
             let mut state = RunState {
@@ -2709,12 +2921,14 @@ mod tests {
                 best: None,
                 discovered: Vec::new(),
             };
+            let configuration = AreaItemConfigurationV1 {
+                selected_area_item_ids: vec![],
+            };
+            let mut unexpected_score = unexpected_local_score;
             if let Some(indexed_slot) = indexed_slot {
                 join_indexed_block(
-                    &AreaItemConfigurationV1 {
-                        selected_area_item_ids: vec![],
-                    },
-                    &rows,
+                    &configuration,
+                    &mut rows,
                     &views,
                     &REQUIRED,
                     IndexedJoinContext {
@@ -2724,17 +2938,17 @@ mod tests {
                         search_base_bytes: 0,
                     },
                     &mut state,
+                    &mut unexpected_score,
                 )
                 .unwrap();
             } else {
                 join_block(
-                    &AreaItemConfigurationV1 {
-                        selected_area_item_ids: vec![],
-                    },
-                    &rows,
+                    &configuration,
+                    &mut rows,
                     &views,
                     &REQUIRED,
                     &mut state,
+                    &mut unexpected_score,
                 )
                 .unwrap();
             }
