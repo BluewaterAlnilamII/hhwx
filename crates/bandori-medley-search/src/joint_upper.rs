@@ -28,6 +28,7 @@ pub(crate) struct JointWeights {
 pub(crate) struct JointUpper {
     pub(crate) score: f64,
     pub(crate) destinations: Vec<[f64; 4]>,
+    pub(crate) mode_uppers: Vec<[f64; 8]>,
     pub(crate) proposal: Option<[[u32; 5]; 3]>,
     working: Option<JointWorking>,
 }
@@ -36,6 +37,7 @@ impl JointUpper {
     pub(crate) fn bytes(&self) -> usize {
         size_of::<Self>()
             + self.destinations.capacity() * size_of::<[f64; 4]>()
+            + self.mode_uppers.capacity() * size_of::<[f64; 8]>()
             + self.working.as_ref().map_or(0, JointWorking::heap_bytes)
     }
 
@@ -60,6 +62,7 @@ impl JointUpper {
         Self {
             score: f64::NEG_INFINITY,
             destinations: Vec::new(),
+            mode_uppers: Vec::new(),
             proposal: None,
             working: None,
         }
@@ -717,6 +720,7 @@ fn calculate_weights(
         return Ok(JointUpper {
             score,
             destinations: Vec::new(),
+            mode_uppers: Vec::new(),
             proposal: None,
             working: None,
         });
@@ -786,6 +790,10 @@ fn calculate_weights(
         || vec![[f64::NEG_INFINITY; 4]; owners.len()],
         |bound| bound.destinations.clone(),
     );
+    let mut mode_uppers = previous.map_or_else(
+        || vec![[f64::NEG_INFINITY; 8]; groups.len()],
+        |bound| bound.mode_uppers.clone(),
+    );
     #[cfg(test)]
     let destination_timing =
         crate::profiling::joint_timing(crate::profiling::JointTiming::Destinations, 0);
@@ -820,6 +828,25 @@ fn calculate_weights(
                 ));
             }
         }
+        let mut modes = [f64::NEG_INFINITY; 8];
+        for (pattern, &outside) in outside.iter().enumerate() {
+            let choice = working.choices[group][pattern];
+            if outside == f64::NEG_INFINITY || choice.score == f64::NEG_INFINITY {
+                continue;
+            }
+            let mode = roles(pattern)
+                .into_iter()
+                .enumerate()
+                .fold(0, |mode, (slot, role)| {
+                    mode | (usize::from(role != 0) << slot)
+                });
+            modes[mode] = modes[mode].max(sum_up(outside, choice.score));
+        }
+        for upper in &mut modes {
+            *upper =
+                score_upper(*upper, working.weights.constant, working.weights.offset).min(score);
+        }
+        mode_uppers[group] = modes;
         let candidates = working.local[group].candidates(&working.residual_owners);
         for &id in ids {
             destinations[id as usize] = [f64::NEG_INFINITY; 4];
@@ -898,6 +925,7 @@ fn calculate_weights(
     Ok(JointUpper {
         score,
         destinations,
+        mode_uppers,
         proposal: Some(proposal),
         working: Some(working),
     })
@@ -1203,7 +1231,7 @@ mod tests {
                 )
                 .unwrap();
                 let fresh = calculate_weights(
-                    Some(remaining_weights),
+                    Some(remaining_weights.clone()),
                     &groups,
                     &restricted,
                     None,
@@ -1214,10 +1242,12 @@ mod tests {
                 .unwrap();
                 assert_eq!(updated.score, fresh.score);
                 assert_eq!(updated.destinations, fresh.destinations);
+                assert_eq!(updated.mode_uppers, fresh.mode_uppers);
                 assert_eq!(updated.proposal, fresh.proposal);
             }
             let mut expected = f64::NEG_INFINITY;
             let mut conditional = [[f64::NEG_INFINITY; 4]; 15];
+            let mut conditional_modes = [[f64::NEG_INFINITY; 8]; 5];
             for mut combination in 0..6_usize.pow(5) {
                 let assignment = std::array::from_fn::<_, 5, _>(|character| {
                     let order = orders[combination % 6];
@@ -1246,6 +1276,16 @@ mod tests {
                         conditional[cards[slot]][slot] = conditional[cards[slot]][slot].max(score);
                     }
                 }
+                for (group, ids) in groups.iter().enumerate() {
+                    let mode = (0..3).fold(0, |mode, slot| {
+                        mode | (usize::from(
+                            !remaining_weights.fixed_members[slot]
+                                .iter()
+                                .any(|id| ids.contains(id)),
+                        ) << slot)
+                    });
+                    conditional_modes[group][mode] = conditional_modes[group][mode].max(score);
+                }
             }
             assert!(result.score >= expected && result.score < expected + 1e-8);
             for (id, values) in conditional.iter().enumerate() {
@@ -1259,6 +1299,83 @@ mod tests {
                             "card={id}, owner={owner}"
                         );
                     }
+                }
+            }
+            for (group, modes) in conditional_modes.iter().enumerate() {
+                for (mode, &value) in modes.iter().enumerate() {
+                    if value != f64::NEG_INFINITY {
+                        assert!(result.mode_uppers[group][mode] >= value);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn occupancy_mode_bounds_cover_optional_character_use() {
+        let groups = (0..6)
+            .map(|character| (character * 3..character * 3 + 3).collect::<Vec<u32>>())
+            .collect::<Vec<_>>();
+        let weights = JointWeights {
+            constant: 17.0,
+            offset: 5.0,
+            fixed_members: [vec![0, 3, 6, 9], vec![1, 4, 7, 12], vec![2, 5, 10, 13]],
+            fixed_leaders: [Some(0.0); 3],
+            fixed_scores: [None; 3],
+            cards: (0..18)
+                .map(|id| {
+                    std::array::from_fn(|slot| {
+                        let regular = (3 + (id * 17 + slot * 5) % 29) as f64;
+                        [regular, regular + (1 + (id + slot * 3) % 11) as f64]
+                    })
+                })
+                .collect(),
+        };
+        let owners = vec![ALL_OWNERS; 18];
+        let mut layouts = JointLayoutCache::new();
+        let mut never_stop = || None;
+        let mut control = SearchControl::new(1024 * 1024, &mut never_stop);
+        let result = calculate_weights(
+            Some(weights.clone()),
+            &groups,
+            &owners,
+            None,
+            None,
+            &mut layouts,
+            &mut control,
+        )
+        .unwrap();
+        let residual = &result.working.as_ref().unwrap().residual_owners;
+        let mut expected = [[f64::NEG_INFINITY; 8]; 6];
+        for first in 0..18 {
+            for second in 0..18 {
+                for third in 0..18 {
+                    let selected = [first, second, third];
+                    if selected[0] == selected[1]
+                        || selected[0] == selected[2]
+                        || selected[1] == selected[2]
+                        || (0..3).any(|slot| residual[selected[slot]] & (1 << slot) == 0)
+                    {
+                        continue;
+                    }
+                    let score = weights.constant - weights.offset
+                        + (0..3)
+                            .map(|slot| weights.cards[selected[slot]][slot][1])
+                            .sum::<f64>();
+                    for (group, modes) in expected.iter_mut().enumerate() {
+                        let mode = (0..3).fold(0, |mode, slot| {
+                            mode | (usize::from(selected[slot] / 3 == group) << slot)
+                        });
+                        modes[mode] = modes[mode].max(score);
+                    }
+                }
+            }
+        }
+        assert!(expected[5].iter().all(|upper| upper.is_finite()));
+        for (group, modes) in expected.iter().enumerate() {
+            for (mode, &value) in modes.iter().enumerate() {
+                if value != f64::NEG_INFINITY {
+                    assert!(result.mode_uppers[group][mode] >= value);
                 }
             }
         }

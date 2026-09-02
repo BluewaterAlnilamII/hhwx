@@ -623,6 +623,8 @@ impl ScoreCache {
 struct TeamFamily {
     members: [u32; 5],
     member_count: usize,
+    required_groups: [usize; 5],
+    required_group_count: usize,
     next_group: usize,
     fixed_score: Option<f64>,
 }
@@ -632,7 +634,35 @@ impl TeamFamily {
         &self.members[..self.member_count]
     }
 
-    fn with_required(mut self, instance_id: u32) -> Self {
+    fn reserved_count(&self) -> usize {
+        self.member_count + self.required_group_count
+    }
+
+    fn has_required_group(&self, group: usize) -> bool {
+        self.required_groups[..self.required_group_count].contains(&group)
+    }
+
+    fn with_required_group(mut self, group: usize) -> Option<Self> {
+        if self.has_required_group(group) {
+            return Some(self);
+        }
+        if self.reserved_count() == TEAM_SIZE {
+            return None;
+        }
+        self.required_groups[self.required_group_count] = group;
+        self.required_group_count += 1;
+        self.fixed_score = None;
+        Some(self)
+    }
+
+    fn with_required(mut self, instance_id: u32, group: usize) -> Self {
+        if let Some(position) = self.required_groups[..self.required_group_count]
+            .iter()
+            .position(|required| *required == group)
+        {
+            self.required_group_count -= 1;
+            self.required_groups[position] = self.required_groups[self.required_group_count];
+        }
         self.members[self.member_count] = instance_id;
         self.member_count += 1;
         self.fixed_score = None;
@@ -640,33 +670,47 @@ impl TeamFamily {
     }
 
     fn with_member(self, instance_id: u32, group_index: usize) -> Self {
+        debug_assert_eq!(self.required_group_count, 0);
         Self {
             next_group: group_index + 1,
-            ..self.with_required(instance_id)
+            ..self.with_required(instance_id, group_index)
         }
     }
 
-    fn has_character(&self, domain: &SearchDomain<'_>, character: usize) -> bool {
+    fn has_selected_character(&self, domain: &SearchDomain<'_>, character: usize) -> bool {
         self.selected()
             .iter()
             .any(|id| domain.character_indexes[*id as usize] == character)
     }
 
+    fn has_character(&self, domain: &SearchDomain<'_>, character: usize) -> bool {
+        self.has_selected_character(domain, character) || self.has_required_group(character)
+    }
+
     fn can_include(&self, domain: &SearchDomain<'_>, id: u32, slot: usize) -> bool {
         let character = domain.character_indexes[id as usize];
-        self.member_count < TEAM_SIZE
+        let is_required = self.has_required_group(character);
+        (is_required || self.reserved_count() < TEAM_SIZE)
             && domain.available[id as usize]
             && domain.owners[id as usize] & (1 << slot) != 0
-            && character >= self.next_group
-            && !self.has_character(domain, character)
+            && (is_required
+                || (character >= self.next_group && !self.has_character(domain, character)))
     }
 
     fn completion_count(&self, domain: &SearchDomain<'_>, slot: usize) -> u64 {
         #[cfg(test)]
         let _timing = crate::profiling::enter(crate::profiling::Phase::Domains);
-        let needed = TEAM_SIZE - self.member_count;
+        let required_ways = self.required_groups[..self.required_group_count]
+            .iter()
+            .fold(1_u64, |ways, &group| {
+                ways.saturating_mul(domain.counts[group][slot])
+            });
+        if required_ways == 0 {
+            return 0;
+        }
+        let needed = TEAM_SIZE - self.reserved_count();
         if needed == 0 {
-            return 1;
+            return required_ways;
         }
         let mut counts = [0_u64; TEAM_SIZE + 1];
         counts[0] = 1;
@@ -679,7 +723,7 @@ impl TeamFamily {
                     counts[depth].saturating_add(counts[depth - 1].saturating_mul(available[slot]));
             }
         }
-        counts[needed]
+        counts[needed].saturating_mul(required_ways)
     }
 }
 
@@ -715,6 +759,12 @@ fn propose_assignment(
     order: [usize; 3],
     rank: usize,
 ) -> Option<[[u32; 5]; 3]> {
+    if families
+        .iter()
+        .any(|family| family.required_group_count != 0)
+    {
+        return None;
+    }
     let checkpoint = domain.checkpoint();
     for family in families {
         for &id in family.selected() {
@@ -1366,6 +1416,7 @@ impl Drop for CachedJointUpper {
 
 struct OwnershipSplit {
     card: u32,
+    character: usize,
     included: [TeamUpper; 3],
     excluded: [TeamUpper; 3],
     eligible: [bool; 4],
@@ -1389,7 +1440,7 @@ impl OwnershipSplit {
             if !self.eligible[owner] {
                 return None;
             }
-            child.families[owner] = parent.families[owner].with_required(self.card);
+            child.families[owner] = parent.families[owner].with_required(self.card, self.character);
             child.bounds[owner] = self.included[owner];
         }
         Some(child)
@@ -1434,7 +1485,11 @@ impl SearchFrame {
                     refresh_bounds: [domain.remove(id); 3],
                     ..self.node.clone()
                 };
-                child.families[*slot] = child.families[*slot].with_member(id, group);
+                child.families[*slot] = if child.families[*slot].has_required_group(group) {
+                    child.families[*slot].with_required(id, group)
+                } else {
+                    child.families[*slot].with_member(id, group)
+                };
                 // Unchanged heads preserve both the other teams' numeric
                 // bounds and their selected hints. This team's prefix changed.
                 child.refresh_bounds[*slot] = true;
@@ -1458,6 +1513,7 @@ enum JointStep {
     Unavailable,
     Finished,
     Split(OwnershipSplit),
+    CharacterMode { group: usize, mode: u8, upper: f64 },
 }
 
 impl JointSearch<'_, '_, '_, '_> {
@@ -1688,6 +1744,7 @@ impl JointSearch<'_, '_, '_, '_> {
             let _timing = crate::profiling::enter(crate::profiling::Phase::ApplyJointCuts);
             #[cfg(test)]
             let mut owner_width_counts = [0_u64; 4];
+            let mut fixed_member = false;
             for (id, mask) in owners.iter_mut().enumerate() {
                 if !self.domain.available[id] {
                     continue;
@@ -1719,7 +1776,9 @@ impl JointSearch<'_, '_, '_, '_> {
                         if !node.families[slot].can_include(&self.domain, id as u32, slot) {
                             return Ok(JointStep::Finished);
                         }
-                        node.families[slot] = node.families[slot].with_required(id as u32);
+                        node.families[slot] = node.families[slot]
+                            .with_required(id as u32, self.domain.character_indexes[id]);
+                        fixed_member = true;
                     }
                     self.domain.remove(id as u32);
                     node.refresh_bounds = [true; 3];
@@ -1727,6 +1786,50 @@ impl JointSearch<'_, '_, '_, '_> {
             }
             #[cfg(test)]
             crate::profiling::joint_owner_widths(owner_width_counts);
+            // This table describes residual occupancy before this pass. A newly
+            // fixed physical member changes that meaning; descendants rebuild it.
+            if !fixed_member {
+                let mut forced_mode = None;
+                for (group, mode_uppers) in bound.mode_uppers.iter().enumerate() {
+                    let mut competitive = mode_uppers
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, upper)| **upper >= incumbent);
+                    let Some((mode, &upper)) = competitive.next() else {
+                        return Ok(JointStep::Finished);
+                    };
+                    if competitive.next().is_some() {
+                        continue;
+                    }
+                    let mode = mode as u8;
+                    let mut changes = 0_u32;
+                    for slot in 0..3 {
+                        if mode & (1 << slot) != 0 {
+                            if node.families[slot].has_selected_character(&self.domain, group) {
+                                return Ok(JointStep::Finished);
+                            }
+                            changes += u32::from(!node.families[slot].has_required_group(group));
+                        } else if node.families[slot].has_required_group(group) {
+                            return Ok(JointStep::Finished);
+                        }
+                    }
+                    let allowed = UNUSED | mode;
+                    changes += self.groups[group]
+                        .iter()
+                        .filter(|id| self.domain.available[**id as usize])
+                        .map(|id| (self.domain.owners[*id as usize] & !allowed).count_ones())
+                        .sum::<u32>();
+                    if changes == 0 {
+                        continue;
+                    }
+                    if forced_mode.is_none_or(|(_, _, _, best_changes)| changes > best_changes) {
+                        forced_mode = Some((group, mode, upper, changes));
+                    }
+                }
+                if let Some((group, mode, upper, _)) = forced_mode {
+                    return Ok(JointStep::CharacterMode { group, mode, upper });
+                }
+            }
         }
         let counts = std::array::from_fn::<_, 3, _>(|slot| {
             node.families[slot].completion_count(&self.domain, slot)
@@ -1813,6 +1916,7 @@ impl JointSearch<'_, '_, '_, '_> {
         self.domain.remove(card as u32);
         Ok(JointStep::Split(OwnershipSplit {
             card: card as u32,
+            character: self.domain.character_indexes[card],
             included: node.bounds,
             excluded: node.bounds,
             eligible,
@@ -1820,6 +1924,41 @@ impl JointSearch<'_, '_, '_, '_> {
             whole_uppers,
             refresh_bounds: [true; 3],
         }))
+    }
+
+    fn apply_character_mode(
+        &mut self,
+        node: &mut SearchNode,
+        group: usize,
+        mode: u8,
+        upper: f64,
+    ) -> bool {
+        node.whole_upper = node.whole_upper.min(upper);
+        for slot in 0..3 {
+            if mode & (1 << slot) != 0 {
+                let Some(family) = node.families[slot].with_required_group(group) else {
+                    return false;
+                };
+                node.families[slot] = family;
+            }
+        }
+        let allowed = UNUSED | mode;
+        let mut refresh = false;
+        for &id in &self.groups[group] {
+            if !self.domain.available[id as usize] {
+                continue;
+            }
+            self.domain.restrict_owners(id, allowed);
+            match self.domain.owners[id as usize] {
+                0 => return false,
+                UNUSED => refresh |= self.domain.remove(id),
+                _ => {}
+            }
+        }
+        if refresh {
+            node.refresh_bounds = [true; 3];
+        }
+        true
     }
 
     fn family_bound(
@@ -1892,6 +2031,7 @@ impl JointSearch<'_, '_, '_, '_> {
         let heads_changed = self.domain.remove(card);
         let mut split = OwnershipSplit {
             card,
+            character: self.domain.character_indexes[card as usize],
             eligible,
             // A skipped include query leaves a valid inherited number, but no
             // hint. Its whole child is already below the incumbent.
@@ -1924,7 +2064,8 @@ impl JointSearch<'_, '_, '_, '_> {
                 {
                     continue;
                 }
-                let included = node.families[slot].with_required(card);
+                let included = node.families[slot]
+                    .with_required(card, self.domain.character_indexes[card as usize]);
                 split.included[slot] = self.family_bound(included, slot, node.bounds[slot])?;
             }
         }
@@ -1949,6 +2090,20 @@ impl JointSearch<'_, '_, '_, '_> {
         rows: &mut Vec<LocalCandidate>,
     ) -> Result<(), SearchAbort> {
         self.evaluation.state.poll_stop()?;
+        if family.required_group_count != 0 {
+            let group = family.required_groups[family.required_group_count - 1];
+            for &id in &self.groups[group] {
+                if family.can_include(&self.domain, id, song_slot) {
+                    self.generate_rows(
+                        family.with_required(id, group),
+                        song_slot,
+                        family_uppers,
+                        rows,
+                    )?;
+                }
+            }
+            return Ok(());
+        }
         if family.member_count == TEAM_SIZE {
             let mut members = family.members;
             members.sort_unstable();
@@ -1983,7 +2138,7 @@ impl JointSearch<'_, '_, '_, '_> {
             add_counter(&mut self.evaluation.state.diagnostics.compact_rows, 1)?;
             return Ok(());
         }
-        let needed = TEAM_SIZE - family.member_count;
+        let needed = TEAM_SIZE - family.reserved_count();
         if self.groups.len().saturating_sub(family.next_group) < needed {
             return Ok(());
         }
@@ -2188,96 +2343,118 @@ impl JointSearch<'_, '_, '_, '_> {
     fn expand(&mut self, mut node: SearchNode) -> Result<Option<SearchFrame>, SearchAbort> {
         self.evaluation.state.poll_stop()?;
         add_counter(&mut self.evaluation.state.diagnostics.partial_nodes, 1)?;
-        // Parent bounds remain valid after restricting a family. Check them
-        // before doing any fresh query, and stop after the first sufficient cut.
-        if self.prune_node(&node)? {
-            return Ok(None);
-        }
-        let limit = self.local_row_limit();
-        let counts = std::array::from_fn::<_, 3, _>(|slot| {
-            node.families[slot].completion_count(&self.domain, slot)
-        });
-        if counts.contains(&0) {
-            return Ok(None);
-        }
-        for slot in 0..3 {
-            if node.refresh_bounds[slot] {
-                node.bounds[slot] =
-                    self.family_bound(node.families[slot], slot, node.bounds[slot])?;
-                if self.prune_node(&node)? {
-                    return Ok(None);
+        loop {
+            // Parent bounds remain valid after restricting a family. Check them
+            // before doing any fresh query, and stop after the first sufficient cut.
+            if self.prune_node(&node)? {
+                return Ok(None);
+            }
+            let limit = self.local_row_limit();
+            let counts = std::array::from_fn::<_, 3, _>(|slot| {
+                node.families[slot].completion_count(&self.domain, slot)
+            });
+            if counts.contains(&0) {
+                return Ok(None);
+            }
+            for slot in 0..3 {
+                if node.refresh_bounds[slot] {
+                    node.bounds[slot] =
+                        self.family_bound(node.families[slot], slot, node.bounds[slot])?;
+                    if self.prune_node(&node)? {
+                        return Ok(None);
+                    }
                 }
             }
-        }
-        node.refresh_bounds = [false; 3];
-        // Newly completed teams first pass the whole-medley bound filter.
-        // Only survivors pay for exact scoring; descendants retain that value.
-        for slot in 0..3 {
-            let family = &mut node.families[slot];
-            if family.member_count == TEAM_SIZE && family.fixed_score.is_none() {
-                let score = self.evaluation.evaluate(family.members)?.song_scores[slot];
-                family.fixed_score = Some(score);
-                node.bounds[slot] = TeamUpper {
-                    score,
-                    members: Some(family.members),
-                };
-                if self.prune_node(&node)? {
-                    return Ok(None);
+            node.refresh_bounds = [false; 3];
+            // Newly completed teams first pass the whole-medley bound filter.
+            // Only survivors pay for exact scoring; descendants retain that value.
+            for slot in 0..3 {
+                let family = &mut node.families[slot];
+                if family.member_count == TEAM_SIZE && family.fixed_score.is_none() {
+                    let score = self.evaluation.evaluate(family.members)?.song_scores[slot];
+                    family.fixed_score = Some(score);
+                    node.bounds[slot] = TeamUpper {
+                        score,
+                        members: Some(family.members),
+                    };
+                    if self.prune_node(&node)? {
+                        return Ok(None);
+                    }
                 }
             }
-        }
-        let uppers = node.bounds.map(|bound| bound.score);
-        if self
-            .evaluation
-            .state
-            .diagnostics
-            .partial_nodes
-            .is_multiple_of(COMPLETION_PROBE_INTERVAL)
-        {
-            self.evaluation
-                .probe_completions(&mut self.domain, node.families, node.bounds, 3)?;
-        }
-        if counts.into_iter().fold(0_u64, u64::saturating_add) <= limit as u64 {
-            #[cfg(test)]
-            crate::profiling::completion_counts(
-                counts,
-                self.domain
-                    .available
-                    .iter()
-                    .zip(&self.domain.owners)
-                    .filter(|(available, owners)| **available && **owners & UNUSED == 0)
-                    .count(),
-            );
-            self.finish_block(
-                node.families,
-                counts.map(|count| count as usize),
-                uppers,
-                None,
-            )?;
-            return Ok(None);
-        }
-        if let Some(indexed_slot) = self.indexed_join_slot(counts) {
-            #[cfg(test)]
-            crate::profiling::completion_counts(
-                counts,
-                self.domain
-                    .available
-                    .iter()
-                    .zip(&self.domain.owners)
-                    .filter(|(available, owners)| **available && **owners & UNUSED == 0)
-                    .count(),
-            );
-            self.finish_block(
-                node.families,
-                counts.map(|count| count as usize),
-                uppers,
-                Some(indexed_slot),
-            )?;
-            return Ok(None);
-        }
-        match self.joint_step(&mut node)? {
-            JointStep::Finished => return Ok(None),
-            JointStep::Split(split) => {
+            let uppers = node.bounds.map(|bound| bound.score);
+            if self
+                .evaluation
+                .state
+                .diagnostics
+                .partial_nodes
+                .is_multiple_of(COMPLETION_PROBE_INTERVAL)
+            {
+                self.evaluation.probe_completions(
+                    &mut self.domain,
+                    node.families,
+                    node.bounds,
+                    3,
+                )?;
+            }
+            if counts.into_iter().fold(0_u64, u64::saturating_add) <= limit as u64 {
+                #[cfg(test)]
+                crate::profiling::completion_counts(
+                    counts,
+                    self.domain
+                        .available
+                        .iter()
+                        .zip(&self.domain.owners)
+                        .filter(|(available, owners)| **available && **owners & UNUSED == 0)
+                        .count(),
+                );
+                self.finish_block(
+                    node.families,
+                    counts.map(|count| count as usize),
+                    uppers,
+                    None,
+                )?;
+                return Ok(None);
+            }
+            if let Some(indexed_slot) = self.indexed_join_slot(counts) {
+                #[cfg(test)]
+                crate::profiling::completion_counts(
+                    counts,
+                    self.domain
+                        .available
+                        .iter()
+                        .zip(&self.domain.owners)
+                        .filter(|(available, owners)| **available && **owners & UNUSED == 0)
+                        .count(),
+                );
+                self.finish_block(
+                    node.families,
+                    counts.map(|count| count as usize),
+                    uppers,
+                    Some(indexed_slot),
+                )?;
+                return Ok(None);
+            }
+            match self.joint_step(&mut node)? {
+                JointStep::Finished => return Ok(None),
+                JointStep::CharacterMode { group, mode, upper } => {
+                    if !self.apply_character_mode(&mut node, group, mode, upper) {
+                        return Ok(None);
+                    }
+                    continue;
+                }
+                JointStep::Split(split) => {
+                    return Ok(Some(SearchFrame {
+                        node,
+                        branches: Branches::Ownership(split),
+                        next: 0,
+                        checkpoint: self.domain.checkpoint(),
+                    }));
+                }
+                JointStep::Unavailable => {}
+            }
+            if let Some(card) = self.contested_card(&node) {
+                let split = self.ownership_split(&node, card)?;
                 return Ok(Some(SearchFrame {
                     node,
                     branches: Branches::Ownership(split),
@@ -2285,61 +2462,64 @@ impl JointSearch<'_, '_, '_, '_> {
                     checkpoint: self.domain.checkpoint(),
                 }));
             }
-            JointStep::Unavailable => {}
-        }
-        if let Some(card) = self.contested_card(&node) {
-            let split = self.ownership_split(&node, card)?;
+            if let [Some(zero), Some(one), Some(two)] = node.bounds.map(|bound| bound.members) {
+                self.evaluation.score_assignment([zero, one, two])?;
+            }
+
+            // With no contested suggestion, retain the complete ordinary prefix
+            // partition. Required characters are skipped without skipping other groups.
+            let slot = (0..3)
+                .filter(|slot| {
+                    node.families[*slot].required_group_count != 0
+                        || node.families[*slot].reserved_count() < TEAM_SIZE
+                })
+                .max_by(|left, right| {
+                    counts[*left]
+                        .cmp(&counts[*right])
+                        .then_with(|| {
+                            node.families[*right]
+                                .member_count
+                                .cmp(&node.families[*left].member_count)
+                        })
+                        .then_with(|| right.cmp(left))
+                })
+                .ok_or_else(|| abort(SearchIncompleteReasonV1::InternalFailure))?;
+            let family = node.families[slot];
+            let hint = node.bounds[slot].members;
+            let mut choices = Vec::new();
+            if family.required_group_count != 0 {
+                let group = family.required_groups[family.required_group_count - 1];
+                for &id in &self.groups[group] {
+                    if family.can_include(&self.domain, id, slot) {
+                        choices.push((group, id));
+                    }
+                }
+            } else {
+                let needed = TEAM_SIZE - family.reserved_count();
+                for group in family.next_group..=self.groups.len() - needed {
+                    if family.has_character(&self.domain, group) {
+                        continue;
+                    }
+                    // The group check already covers prefix and character uniqueness.
+                    for &id in &self.groups[group] {
+                        if self.domain.available[id as usize]
+                            && self.domain.owners[id as usize] & (1 << slot) != 0
+                        {
+                            choices.push((group, id));
+                        }
+                    }
+                }
+            }
+            choices.sort_by_key(|(group, id)| {
+                (!hint.is_some_and(|team| team.contains(id)), *group, *id)
+            });
             return Ok(Some(SearchFrame {
                 node,
-                branches: Branches::Ownership(split),
+                branches: Branches::Prefix { slot, choices },
                 next: 0,
                 checkpoint: self.domain.checkpoint(),
             }));
         }
-        if let [Some(zero), Some(one), Some(two)] = node.bounds.map(|bound| bound.members) {
-            self.evaluation.score_assignment([zero, one, two])?;
-        }
-
-        // With no contested suggestion, retain the complete ordinary prefix
-        // partition. Required characters are skipped without skipping other groups.
-        let slot = (0..3)
-            .filter(|slot| node.families[*slot].member_count < TEAM_SIZE)
-            .max_by(|left, right| {
-                counts[*left]
-                    .cmp(&counts[*right])
-                    .then_with(|| {
-                        node.families[*right]
-                            .member_count
-                            .cmp(&node.families[*left].member_count)
-                    })
-                    .then_with(|| right.cmp(left))
-            })
-            .ok_or_else(|| abort(SearchIncompleteReasonV1::InternalFailure))?;
-        let family = node.families[slot];
-        let hint = node.bounds[slot].members;
-        let needed = TEAM_SIZE - family.member_count;
-        let mut choices = Vec::new();
-        for group in family.next_group..=self.groups.len() - needed {
-            if family.has_character(&self.domain, group) {
-                continue;
-            }
-            // The group check already covers prefix and character uniqueness.
-            for &id in &self.groups[group] {
-                if self.domain.available[id as usize]
-                    && self.domain.owners[id as usize] & (1 << slot) != 0
-                {
-                    choices.push((group, id));
-                }
-            }
-        }
-        choices
-            .sort_by_key(|(group, id)| (!hint.is_some_and(|team| team.contains(id)), *group, *id));
-        Ok(Some(SearchFrame {
-            node,
-            branches: Branches::Prefix { slot, choices },
-            next: 0,
-            checkpoint: self.domain.checkpoint(),
-        }))
     }
 
     fn visit(&mut self, root: SearchNode) -> Result<(), SearchAbort> {
@@ -2357,7 +2537,7 @@ impl JointSearch<'_, '_, '_, '_> {
                 #[cfg(test)]
                 crate::profiling::node_started(
                     stack.len(),
-                    node.families.map(|family| family.member_count as u8),
+                    node.families.map(|family| family.reserved_count() as u8),
                 );
                 let expanded = self.expand(node)?;
                 #[cfg(test)]
@@ -2613,6 +2793,11 @@ mod tests {
             joint: None,
         };
         let total = parent.families[0].completion_count(&domain, 0);
+        let required_group = parent.families[0].with_required_group(5).unwrap();
+        assert_eq!(required_group.completion_count(&domain, 0), 1_215);
+        let resolved_group = required_group.with_required(15, 5);
+        assert_eq!(resolved_group.next_group, 0);
+        assert_eq!(resolved_group.completion_count(&domain, 0), 405);
         let card = 15;
         let eligible = std::array::from_fn(|slot| {
             slot == 3 || parent.families[slot].can_include(&domain, card, slot)
@@ -2621,6 +2806,7 @@ mod tests {
         domain.remove(card);
         let split = OwnershipSplit {
             card,
+            character: domain.character_indexes[card as usize],
             eligible,
             included: [TeamUpper::default(); 3],
             excluded: [TeamUpper::default(); 3],
