@@ -2,6 +2,7 @@
 //! Switching phases charges nested work once, rather than adding inclusive times.
 
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
@@ -70,6 +71,46 @@ pub(crate) enum JointTiming {
     Destinations,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum JointMode {
+    Fresh,
+    Incremental,
+    Reused,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum NodeOutcome {
+    Pruned,
+    LocalBlock,
+    Branched,
+    Finished,
+}
+
+#[derive(Default)]
+struct TraversalProfile {
+    nodes: u64,
+    pruned: u64,
+    local_blocks: u64,
+    branched: u64,
+    finished: u64,
+    branch_children: u64,
+    joint_calls: u64,
+    joint_modes: [u64; 3],
+    joint_gap_counts: [u64; 7],
+    owner_width_counts: [u64; 4],
+    joint_whole_cutoffs: u64,
+}
+
+struct ConfigurationProfile {
+    rank: usize,
+    source_index: usize,
+    selected_area_item_ids: Vec<u32>,
+    started: Duration,
+    elapsed: Option<Duration>,
+    status: &'static str,
+    traversal: TraversalProfile,
+}
+
 struct Profile {
     started: Instant,
     last: Instant,
@@ -96,6 +137,10 @@ struct Profile {
     joint_timing_calls: [u64; 9],
     joint_clone_bytes: u64,
     joint_whole_cutoffs: u64,
+    configurations: Vec<ConfigurationProfile>,
+    active_configuration: Option<usize>,
+    active_depth: Option<(usize, [u8; 3])>,
+    depths: BTreeMap<(usize, [u8; 3]), TraversalProfile>,
 }
 
 impl Profile {
@@ -105,6 +150,58 @@ impl Profile {
         self.last = now;
         self.phase = phase;
     }
+}
+
+fn record_traversal(profile: &mut Profile, mut record: impl FnMut(&mut TraversalProfile)) {
+    if let Some(index) = profile.active_configuration {
+        record(&mut profile.configurations[index].traversal);
+    }
+    if let Some(key) = profile.active_depth {
+        record(profile.depths.entry(key).or_default());
+    }
+}
+
+fn joint_gap_bucket(score: f64, incumbent: Option<f64>) -> Option<usize> {
+    let incumbent = incumbent.filter(|value| value.is_finite() && *value > 0.0)?;
+    if !score.is_finite() {
+        return None;
+    }
+    let percent = (score - incumbent) / incumbent * 100.0;
+    Some(if percent < 0.0 {
+        0
+    } else if percent <= 0.1 {
+        1
+    } else if percent <= 0.5 {
+        2
+    } else if percent <= 1.0 {
+        3
+    } else if percent <= 2.0 {
+        4
+    } else if percent <= 5.0 {
+        5
+    } else {
+        6
+    })
+}
+
+fn traversal_json(profile: &TraversalProfile) -> Value {
+    json!({
+        "nodes": profile.nodes,
+        "pruned": profile.pruned,
+        "localBlocks": profile.local_blocks,
+        "branched": profile.branched,
+        "finished": profile.finished,
+        "branchChildren": profile.branch_children,
+        "jointCalls": profile.joint_calls,
+        "jointModes": {
+            "fresh": profile.joint_modes[JointMode::Fresh as usize],
+            "incremental": profile.joint_modes[JointMode::Incremental as usize],
+            "reused": profile.joint_modes[JointMode::Reused as usize],
+        },
+        "jointGapCounts": profile.joint_gap_counts,
+        "ownerWidthCounts": profile.owner_width_counts,
+        "jointWholeCutoffs": profile.joint_whole_cutoffs,
+    })
 }
 
 thread_local! {
@@ -195,14 +292,97 @@ pub(crate) fn stack_storage(bytes: usize) {
     });
 }
 
-pub(crate) fn joint_bound(score: f64, bytes: usize, reused: bool) {
+pub(crate) fn joint_bound(score: f64, bytes: usize, mode: JointMode, incumbent: Option<f64>) {
     PROFILE.with_borrow_mut(|profile| {
         if let Some(profile) = profile {
             profile.peak_joint_bytes = profile.peak_joint_bytes.max(bytes);
-            profile.joint_reuses += u64::from(reused);
+            profile.joint_reuses += u64::from(matches!(mode, JointMode::Reused));
             if profile.first_joint_upper.is_none() && score.is_finite() {
                 profile.first_joint_upper = Some(score);
             }
+            let gap = joint_gap_bucket(score, incumbent);
+            record_traversal(profile, |traversal| {
+                traversal.joint_calls += 1;
+                traversal.joint_modes[mode as usize] += 1;
+                if let Some(bucket) = gap {
+                    traversal.joint_gap_counts[bucket] += 1;
+                }
+            });
+        }
+    });
+}
+
+pub(crate) fn joint_owner_widths(counts: [u64; 4]) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            record_traversal(profile, |traversal| {
+                for (target, count) in traversal.owner_width_counts.iter_mut().zip(counts) {
+                    *target += count;
+                }
+            });
+        }
+    });
+}
+
+pub(crate) fn configuration_started(
+    rank: usize,
+    source_index: usize,
+    selected_area_item_ids: &[u32],
+) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            debug_assert!(profile.active_configuration.is_none());
+            let index = profile.configurations.len();
+            profile.configurations.push(ConfigurationProfile {
+                rank,
+                source_index,
+                selected_area_item_ids: selected_area_item_ids.to_vec(),
+                started: profile.started.elapsed(),
+                elapsed: None,
+                status: "incomplete",
+                traversal: TraversalProfile::default(),
+            });
+            profile.active_configuration = Some(index);
+        }
+    });
+}
+
+pub(crate) fn configuration_finished(status: &'static str) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile
+            && let Some(index) = profile.active_configuration.take()
+        {
+            let configuration = &mut profile.configurations[index];
+            configuration.elapsed = Some(profile.started.elapsed() - configuration.started);
+            configuration.status = status;
+        }
+    });
+}
+
+pub(crate) fn node_started(depth: usize, member_counts: [u8; 3]) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            debug_assert!(profile.active_depth.is_none());
+            let key = (depth, member_counts);
+            profile.active_depth = Some(key);
+            record_traversal(profile, |traversal| traversal.nodes += 1);
+        }
+    });
+}
+
+pub(crate) fn node_finished(outcome: NodeOutcome, branch_children: usize) {
+    PROFILE.with_borrow_mut(|profile| {
+        if let Some(profile) = profile {
+            record_traversal(profile, |traversal| match outcome {
+                NodeOutcome::Pruned => traversal.pruned += 1,
+                NodeOutcome::LocalBlock => traversal.local_blocks += 1,
+                NodeOutcome::Branched => {
+                    traversal.branched += 1;
+                    traversal.branch_children += branch_children as u64;
+                }
+                NodeOutcome::Finished => traversal.finished += 1,
+            });
+            profile.active_depth = None;
         }
     });
 }
@@ -238,6 +418,7 @@ pub(crate) fn joint_whole_cutoff() {
     PROFILE.with_borrow_mut(|profile| {
         if let Some(profile) = profile {
             profile.joint_whole_cutoffs += 1;
+            record_traversal(profile, |traversal| traversal.joint_whole_cutoffs += 1);
         }
     });
 }
@@ -293,6 +474,10 @@ pub(crate) fn start() {
             joint_timing_calls: [0; 9],
             joint_clone_bytes: 0,
             joint_whole_cutoffs: 0,
+            configurations: Vec::new(),
+            active_configuration: None,
+            active_depth: None,
+            depths: BTreeMap::new(),
         });
     });
 }
@@ -302,6 +487,10 @@ pub(crate) fn finish() -> Value {
         let mut profile = profile.take().unwrap();
         profile.switch(Phase::Other);
         let elapsed = profile.last - profile.started;
+        if let Some(index) = profile.active_configuration.take() {
+            let configuration = &mut profile.configurations[index];
+            configuration.elapsed = Some(elapsed - configuration.started);
+        }
         assert_eq!(profile.elapsed.iter().sum::<Duration>(), elapsed);
         json!({
             "elapsedMs": elapsed.as_secs_f64() * 1000.0,
@@ -333,6 +522,47 @@ pub(crate) fn finish() -> Value {
             "jointCloneBytes": profile.joint_clone_bytes,
             "jointWholeCutoffs": profile.joint_whole_cutoffs,
             "improvements": profile.improvements,
+            "jointGapBands": ["below", "0%-0.1%", "0.1%-0.5%", "0.5%-1%", "1%-2%", "2%-5%", "above5%"],
+            "configurations": profile.configurations.iter().map(|configuration| json!({
+                "rank": configuration.rank,
+                "sourceIndex": configuration.source_index,
+                "selectedAreaItemIds": configuration.selected_area_item_ids,
+                "startedMs": configuration.started.as_secs_f64() * 1000.0,
+                "elapsedMs": configuration.elapsed.unwrap_or_default().as_secs_f64() * 1000.0,
+                "status": configuration.status,
+                "traversal": traversal_json(&configuration.traversal),
+            })).collect::<Vec<_>>(),
+            "depths": profile.depths.iter().map(|((depth, member_counts), traversal)| json!({
+                "depth": depth,
+                "memberCounts": member_counts,
+                "traversal": traversal_json(traversal),
+            })).collect::<Vec<_>>(),
         })
     })
+}
+
+#[test]
+fn traversal_profile_groups_configuration_and_depth() {
+    start();
+    configuration_started(0, 3, &[5, 9]);
+    node_started(2, [1, 0, 0]);
+    joint_bound(101.0, 2_048, JointMode::Fresh, Some(100.0));
+    joint_owner_widths([1, 2, 3, 4]);
+    joint_whole_cutoff();
+    node_finished(NodeOutcome::Branched, 3);
+    configuration_finished("searched");
+
+    let profile = finish();
+    let configuration = &profile["configurations"][0];
+    assert_eq!(configuration["sourceIndex"], 3);
+    assert_eq!(configuration["status"], "searched");
+    assert_eq!(configuration["traversal"]["nodes"], 1);
+    assert_eq!(configuration["traversal"]["branchChildren"], 3);
+    assert_eq!(configuration["traversal"]["jointGapCounts"][3], 1);
+
+    let depth = &profile["depths"][0];
+    assert_eq!(depth["depth"], 2);
+    assert_eq!(depth["memberCounts"], json!([1, 0, 0]));
+    assert_eq!(depth["traversal"]["ownerWidthCounts"], json!([1, 2, 3, 4]));
+    assert_eq!(depth["traversal"]["jointWholeCutoffs"], 1);
 }

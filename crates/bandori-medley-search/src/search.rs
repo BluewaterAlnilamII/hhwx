@@ -1183,7 +1183,12 @@ impl JointSearch<'_, '_, '_, '_> {
                     crate::profiling::joint_bound(
                         bound.score,
                         self.joint_storage.get() + bytes,
-                        false,
+                        if same_model {
+                            crate::profiling::JointMode::Incremental
+                        } else {
+                            crate::profiling::JointMode::Fresh
+                        },
+                        self.evaluation.state.incumbent_score(),
                     );
                     if bound.score == f64::NEG_INFINITY {
                         return Ok(JointStep::Finished);
@@ -1223,7 +1228,8 @@ impl JointSearch<'_, '_, '_, '_> {
             crate::profiling::joint_bound(
                 node.joint.as_ref().unwrap().bound.score,
                 self.joint_storage.get(),
-                true,
+                crate::profiling::JointMode::Reused,
+                self.evaluation.state.incumbent_score(),
             );
         }
         let Some(cached) = node.joint.as_ref() else {
@@ -1251,6 +1257,8 @@ impl JointSearch<'_, '_, '_, '_> {
         {
             #[cfg(test)]
             let _timing = crate::profiling::enter(crate::profiling::Phase::ApplyJointCuts);
+            #[cfg(test)]
+            let mut owner_width_counts = [0_u64; 4];
             for (id, mask) in owners.iter_mut().enumerate() {
                 if !self.domain.available[id] {
                     continue;
@@ -1265,6 +1273,10 @@ impl JointSearch<'_, '_, '_, '_> {
                 }
                 if *mask == 0 {
                     return Ok(JointStep::Finished);
+                }
+                #[cfg(test)]
+                {
+                    owner_width_counts[mask.count_ones() as usize - 1] += 1;
                 }
                 self.domain.restrict_owners(id as u32, *mask);
                 let fixed = mask.count_ones() == 1;
@@ -1284,6 +1296,8 @@ impl JointSearch<'_, '_, '_, '_> {
                     node.refresh_bounds = [true; 3];
                 }
             }
+            #[cfg(test)]
+            crate::profiling::joint_owner_widths(owner_width_counts);
         }
         let counts = std::array::from_fn::<_, 3, _>(|slot| {
             node.families[slot].completion_count(&self.domain, slot)
@@ -1767,21 +1781,57 @@ impl JointSearch<'_, '_, '_, '_> {
         #[cfg(test)]
         let mut choice_bytes = 0;
         loop {
-            if let Some(node) = next.take()
-                && let Some(frame) = self.expand(node)?
-            {
+            if let Some(node) = next.take() {
                 #[cfg(test)]
-                if let Branches::Prefix { choices, .. } = &frame.branches {
-                    choice_bytes += choices.capacity() * size_of::<(usize, u32)>();
-                }
-                stack
-                    .try_reserve(1)
-                    .map_err(|_| abort(SearchIncompleteReasonV1::MemoryExhausted))?;
-                stack.push(frame);
+                let profile_pruned_before = self.evaluation.state.diagnostics.partial_nodes_pruned;
                 #[cfg(test)]
-                crate::profiling::stack_storage(
-                    stack.capacity() * size_of::<SearchFrame>() + choice_bytes,
+                let profile_blocks_before = self.evaluation.state.diagnostics.local_blocks;
+                #[cfg(test)]
+                crate::profiling::node_started(
+                    stack.len(),
+                    node.families.map(|family| family.member_count as u8),
                 );
+                let expanded = self.expand(node)?;
+                #[cfg(test)]
+                {
+                    let (outcome, branch_children) = match expanded.as_ref() {
+                        Some(frame) => {
+                            let children = match &frame.branches {
+                                Branches::Ownership(split) => {
+                                    split.eligible.iter().filter(|eligible| **eligible).count()
+                                }
+                                Branches::Prefix { choices, .. } => choices.len(),
+                            };
+                            (crate::profiling::NodeOutcome::Branched, children)
+                        }
+                        None if self.evaluation.state.diagnostics.partial_nodes_pruned
+                            > profile_pruned_before =>
+                        {
+                            (crate::profiling::NodeOutcome::Pruned, 0)
+                        }
+                        None if self.evaluation.state.diagnostics.local_blocks
+                            > profile_blocks_before =>
+                        {
+                            (crate::profiling::NodeOutcome::LocalBlock, 0)
+                        }
+                        None => (crate::profiling::NodeOutcome::Finished, 0),
+                    };
+                    crate::profiling::node_finished(outcome, branch_children);
+                }
+                if let Some(frame) = expanded {
+                    #[cfg(test)]
+                    if let Branches::Prefix { choices, .. } = &frame.branches {
+                        choice_bytes += choices.capacity() * size_of::<(usize, u32)>();
+                    }
+                    stack
+                        .try_reserve(1)
+                        .map_err(|_| abort(SearchIncompleteReasonV1::MemoryExhausted))?;
+                    stack.push(frame);
+                    #[cfg(test)]
+                    crate::profiling::stack_storage(
+                        stack.capacity() * size_of::<SearchFrame>() + choice_bytes,
+                    );
+                }
             }
             let Some(frame) = stack.last_mut() else {
                 break;
@@ -1872,12 +1922,20 @@ fn run_search(
 
     for (index, plan) in plans.into_iter().enumerate() {
         state.poll_stop()?;
+        #[cfg(test)]
+        crate::profiling::configuration_started(
+            index,
+            plan.configuration_index,
+            &input.area_configurations[plan.configuration_index].selected_area_item_ids,
+        );
         if state
             .incumbent_score()
             .is_some_and(|incumbent| plan.whole_medley_upper < incumbent)
         {
             add_counter(&mut state.diagnostics.configurations_pruned, 1)?;
             add_counter(&mut state.diagnostics.configurations_completed, 1)?;
+            #[cfg(test)]
+            crate::profiling::configuration_finished("rootPruned");
             continue;
         }
         let configuration = &input.area_configurations[plan.configuration_index];
@@ -1912,6 +1970,8 @@ fn run_search(
             joint: None,
         })?;
         add_counter(&mut state.diagnostics.configurations_completed, 1)?;
+        #[cfg(test)]
+        crate::profiling::configuration_finished("searched");
     }
     Ok(())
 }
