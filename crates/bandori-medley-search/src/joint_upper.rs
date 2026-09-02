@@ -5,6 +5,7 @@
 //! allocation, so all four destinations are bounded without re-running the DP.
 
 use std::mem::size_of;
+use std::rc::Rc;
 
 use crate::fast_upper::{FastUpperBoundEngine, add_up, mul_up, rounding_factor, sub_up};
 use crate::{SearchControl, SearchIncompleteReasonV1, SearchStopReason};
@@ -129,6 +130,16 @@ impl CountLayout {
         layout
     }
 
+    fn heap_bytes(&self) -> usize {
+        size_of::<Self>()
+            + 2 * size_of::<usize>()
+            + self
+                .transitions
+                .iter()
+                .map(|edges| edges.capacity() * size_of::<(u16, u16)>())
+                .sum::<usize>()
+    }
+
     fn destination(&self, mut state: usize, roles: [usize; 3]) -> Option<usize> {
         let mut result = 0;
         let mut place = 1;
@@ -172,6 +183,62 @@ impl CountLayout {
                 first[index] = value;
             }
         }
+    }
+}
+
+pub(crate) struct JointLayoutCache {
+    layouts: [Option<Rc<CountLayout>>; 216],
+    bytes: usize,
+}
+
+impl JointLayoutCache {
+    pub(crate) fn new() -> Self {
+        Self {
+            layouts: std::array::from_fn(|_| None),
+            bytes: 0,
+        }
+    }
+
+    pub(crate) fn bytes(&self) -> usize {
+        self.bytes
+    }
+
+    /// Conservative allocation peak for a new model or copied child snapshot.
+    /// A transition layout already retained by this search is not reserved twice.
+    pub(crate) fn workspace_bytes(&self, owners: &[u8], groups: usize) -> Option<usize> {
+        let remaining = std::array::from_fn::<_, 3, _>(|slot| {
+            5_usize.checked_sub(owners.iter().filter(|&&mask| mask == 1 << slot).count())
+        });
+        let remaining = [remaining[0]?, remaining[1]?, remaining[2]?];
+        let states = remaining
+            .into_iter()
+            .map(CountLayout::radix)
+            .try_fold(1_usize, usize::checked_mul)?;
+        let index = (remaining[0] * 6 + remaining[1]) * 6 + remaining[2];
+        let transition_bytes = if self.layouts[index].is_none() {
+            states.checked_mul(PATTERNS * size_of::<(u16, u16)>())?
+        } else {
+            0
+        };
+        (groups.checked_add(1)?.checked_mul(states)?)
+            .checked_mul(17)?
+            .checked_add(owners.len().checked_mul(256)?)?
+            .checked_add(groups.checked_mul(
+                2 * PATTERNS * size_of::<LocalChoice>() + 2 * size_of::<LocalGroup>(),
+            )?)?
+            .checked_add(transition_bytes)?
+            .checked_add(2 * size_of::<JointUpper>() + 4096)
+    }
+
+    fn get(&mut self, remaining: [usize; 3]) -> Rc<CountLayout> {
+        debug_assert!(remaining.iter().all(|&count| count <= 5));
+        let index = (remaining[0] * 6 + remaining[1]) * 6 + remaining[2];
+        if self.layouts[index].is_none() {
+            let layout = Rc::new(CountLayout::new(remaining));
+            self.bytes += layout.heap_bytes();
+            self.layouts[index] = Some(layout);
+        }
+        Rc::clone(self.layouts[index].as_ref().unwrap())
     }
 }
 
@@ -362,7 +429,7 @@ fn poll(control: &mut SearchControl<'_>) -> Result<(), SearchIncompleteReasonV1>
 #[derive(Clone)]
 struct JointWorking {
     weights: JointWeights,
-    layout: CountLayout,
+    layout: Rc<CountLayout>,
     owners: Vec<u8>,
     residual_owners: Vec<u8>,
     local: Vec<LocalGroup>,
@@ -379,12 +446,6 @@ impl JointWorking {
                 .fixed_members
                 .iter()
                 .map(|ids| ids.capacity() * size_of::<u32>())
-                .sum::<usize>()
-            + self
-                .layout
-                .transitions
-                .iter()
-                .map(|edges| edges.capacity() * size_of::<(u16, u16)>())
                 .sum::<usize>()
             + self.owners.capacity()
             + self.residual_owners.capacity()
@@ -403,10 +464,8 @@ impl JointWorking {
         weights: JointWeights,
         groups: &[Vec<u32>],
         owners: &[u8],
+        layout: Rc<CountLayout>,
     ) -> Result<Self, SearchIncompleteReasonV1> {
-        let layout = CountLayout::new(std::array::from_fn(|slot| {
-            5 - weights.fixed_members[slot].len()
-        }));
         let length = (groups.len() + 1) * layout.states;
         let mut tables = Vec::new();
         tables
@@ -462,65 +521,57 @@ impl JointWorking {
     }
 }
 
-/// Conservative allocation peak for a new model or a copied child snapshot.
-/// Cache/ancestor storage is already charged separately by the caller.
-pub(crate) fn workspace_bytes(owners: &[u8], groups: usize) -> Option<usize> {
-    let mut states = 1_usize;
-    for slot in 0..3 {
-        let fixed = owners.iter().filter(|&&mask| mask == 1 << slot).count();
-        states = states.checked_mul(CountLayout::radix(5_usize.checked_sub(fixed)?))?;
-    }
-    (groups.checked_add(1)?.checked_mul(states)?)
-        .checked_mul(17)?
-        .checked_add(owners.len().checked_mul(256)?)?
-        .checked_add(
-            groups.checked_mul(
-                2 * PATTERNS * size_of::<LocalChoice>() + 2 * size_of::<LocalGroup>(),
-            )?,
-        )?
-        .checked_add(states * PATTERNS * size_of::<(u16, u16)>())?
-        .checked_add(2 * size_of::<JointUpper>() + 4096)
-}
-
-pub(crate) fn calculate(
-    engine: &FastUpperBoundEngine<'_>,
-    groups: &[Vec<u32>],
-    owners: &[u8],
-    fixed_scores: [Option<f64>; 3],
-    previous: Option<&JointUpper>,
-    prune_below: Option<f64>,
-    control: &mut SearchControl<'_>,
-) -> Result<Option<JointUpper>, SearchIncompleteReasonV1> {
-    #[cfg(test)]
-    let _timing = crate::profiling::enter(crate::profiling::Phase::JointBounds);
-    poll(control)?;
-    if owners.contains(&0) {
-        return Ok(Some(JointUpper::infeasible()));
-    }
-    let previous = previous.filter(|bound| bound.can_update(owners, fixed_scores));
-    #[cfg(test)]
-    let _calculation_timing = crate::profiling::joint_timing(
-        if previous.is_some() {
-            crate::profiling::JointTiming::Incremental
-        } else {
-            crate::profiling::JointTiming::Fresh
-        },
-        0,
-    );
-    let weights = {
+impl JointLayoutCache {
+    pub(crate) fn calculate(
+        &mut self,
+        engine: &FastUpperBoundEngine<'_>,
+        groups: &[Vec<u32>],
+        restrictions: (&[u8], [Option<f64>; 3]),
+        previous: Option<&JointUpper>,
+        prune_below: Option<f64>,
+        control: &mut SearchControl<'_>,
+    ) -> Result<Option<JointUpper>, SearchIncompleteReasonV1> {
+        let (owners, fixed_scores) = restrictions;
         #[cfg(test)]
-        let _timing = crate::profiling::joint_timing(crate::profiling::JointTiming::Weights, 0);
-        if previous.is_some() {
-            None
-        } else {
-            match engine.joint_weights(owners, groups, fixed_scores) {
-                Ok(Some(weights)) => Some(weights),
-                Ok(None) => return Ok(Some(JointUpper::infeasible())),
-                Err(_) => return Ok(None),
-            }
+        let _timing = crate::profiling::enter(crate::profiling::Phase::JointBounds);
+        poll(control)?;
+        if owners.contains(&0) {
+            return Ok(Some(JointUpper::infeasible()));
         }
-    };
-    calculate_weights(weights, groups, owners, previous, prune_below, control).map(Some)
+        let previous = previous.filter(|bound| bound.can_update(owners, fixed_scores));
+        #[cfg(test)]
+        let _calculation_timing = crate::profiling::joint_timing(
+            if previous.is_some() {
+                crate::profiling::JointTiming::Incremental
+            } else {
+                crate::profiling::JointTiming::Fresh
+            },
+            0,
+        );
+        let weights = {
+            #[cfg(test)]
+            let _timing = crate::profiling::joint_timing(crate::profiling::JointTiming::Weights, 0);
+            if previous.is_some() {
+                None
+            } else {
+                match engine.joint_weights(owners, groups, fixed_scores) {
+                    Ok(Some(weights)) => Some(weights),
+                    Ok(None) => return Ok(Some(JointUpper::infeasible())),
+                    Err(_) => return Ok(None),
+                }
+            }
+        };
+        calculate_weights(
+            weights,
+            groups,
+            owners,
+            previous,
+            prune_below,
+            self,
+            control,
+        )
+        .map(Some)
+    }
 }
 
 fn calculate_weights(
@@ -529,6 +580,7 @@ fn calculate_weights(
     owners: &[u8],
     previous: Option<&JointUpper>,
     prune_below: Option<f64>,
+    layouts: &mut JointLayoutCache,
     control: &mut SearchControl<'_>,
 ) -> Result<JointUpper, SearchIncompleteReasonV1> {
     let old = previous.and_then(|bound| bound.working.as_ref());
@@ -541,7 +593,12 @@ fn calculate_weights(
             );
             old.clone()
         }
-        None => JointWorking::new(weights.unwrap(), groups, owners)?,
+        None => {
+            let weights = weights.unwrap();
+            let remaining = std::array::from_fn(|slot| 5 - weights.fixed_members[slot].len());
+            let layout = layouts.get(remaining);
+            JointWorking::new(weights, groups, owners, layout)?
+        }
     };
     let states = working.layout.states;
     let goal = states - 1;
@@ -827,6 +884,27 @@ mod tests {
     use super::*;
 
     #[test]
+    fn count_layouts_are_shared_by_remaining_counts() {
+        let mut cache = JointLayoutCache::new();
+        let mut pointers = Vec::new();
+        for zero in 0..=5 {
+            for one in 0..=5 {
+                for two in 0..=5 {
+                    let remaining = [zero, one, two];
+                    let layout = cache.get(remaining);
+                    assert_eq!(layout.remaining, remaining);
+                    pointers.push((remaining, Rc::as_ptr(&layout)));
+                }
+            }
+        }
+        let bytes = cache.bytes();
+        for (remaining, pointer) in pointers {
+            assert_eq!(Rc::as_ptr(&cache.get(remaining)), pointer);
+        }
+        assert_eq!(cache.bytes(), bytes);
+    }
+
+    #[test]
     fn local_matching_keeps_every_forced_and_unused_destination() {
         // Linear allocation weights, not another game/chart fixture. Six cards
         // force the top-four matching shortcut to be checked against all cards.
@@ -936,6 +1014,7 @@ mod tests {
             [2, 0, 1],
             [2, 1, 0],
         ];
+        let mut layouts = JointLayoutCache::new();
         for owners in [
             vec![ALL_OWNERS; 15],
             vec![1, 15, 15, 15, 6, 15, 15, 15, 13, 7, 15, 15, 15, 15, 15],
@@ -973,6 +1052,7 @@ mod tests {
                 &owners,
                 None,
                 None,
+                &mut layouts,
                 &mut control,
             )
             .unwrap();
@@ -983,6 +1063,7 @@ mod tests {
                     &owners,
                     None,
                     Some(result.score),
+                    &mut layouts,
                     &mut control,
                 )
                 .unwrap();
@@ -993,6 +1074,7 @@ mod tests {
                     &owners,
                     None,
                     Some(f64::from_bits(result.score.to_bits() + 1)),
+                    &mut layouts,
                     &mut control,
                 )
                 .unwrap();
@@ -1020,6 +1102,7 @@ mod tests {
                     &restricted,
                     Some(&result),
                     None,
+                    &mut layouts,
                     &mut control,
                 )
                 .unwrap();
@@ -1029,6 +1112,7 @@ mod tests {
                     &restricted,
                     None,
                     None,
+                    &mut layouts,
                     &mut control,
                 )
                 .unwrap();

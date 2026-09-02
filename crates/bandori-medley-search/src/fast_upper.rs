@@ -1501,7 +1501,7 @@ mod tests {
         use crate::SearchControl;
         use crate::candidate::evaluate_candidate;
         use crate::exact_score::PreparedSong;
-        use crate::joint_upper::{UNUSED, calculate};
+        use crate::joint_upper::{JointLayoutCache, UNUSED};
 
         let (input, pool_size) = three_pool_fixture();
         let model = FastScoreModel::new(&input).unwrap();
@@ -1526,29 +1526,30 @@ mod tests {
 
         let mut never_stop = || None;
         let mut control = SearchControl::new(1024 * 1024, &mut never_stop);
-        let parent = calculate(
-            &engine,
-            &groups,
-            &owners,
-            [None; 3],
-            None,
-            None,
-            &mut control,
-        )
-        .unwrap()
-        .unwrap();
+        let mut layouts = JointLayoutCache::new();
+        let parent = layouts
+            .calculate(
+                &engine,
+                &groups,
+                (&owners, [None; 3]),
+                None,
+                None,
+                &mut control,
+            )
+            .unwrap()
+            .unwrap();
         owners[0] &= !1;
-        let updated = calculate(
-            &engine,
-            &groups,
-            &owners,
-            [None; 3],
-            Some(&parent),
-            None,
-            &mut control,
-        )
-        .unwrap()
-        .unwrap();
+        let updated = layouts
+            .calculate(
+                &engine,
+                &groups,
+                (&owners, [None; 3]),
+                Some(&parent),
+                None,
+                &mut control,
+            )
+            .unwrap()
+            .unwrap();
 
         let perfect_rate = exact_probability_to_f64(input.perfect_rate);
         let starts = [

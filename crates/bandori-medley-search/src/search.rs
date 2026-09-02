@@ -10,7 +10,7 @@ use crate::candidate::{
 };
 use crate::exact_score::{PreparedSong, exact_probability_to_f64};
 use crate::fast_upper::{FastScoreModel, FastUpperBoundEngine, TeamUpper};
-use crate::joint_upper::{self, ALL_OWNERS, JointUpper, UNUSED};
+use crate::joint_upper::{ALL_OWNERS, JointLayoutCache, JointUpper, UNUSED};
 use crate::upper_bound::add_song_uppers;
 use crate::{
     AreaItemConfigurationV1, MedleySearchDiagnosticsV1, MedleySearchInputV1, MedleySearchOutcomeV1,
@@ -1449,6 +1449,7 @@ struct JointSearch<'input, 'state, 'control, 'callback> {
     groups: &'input [CharacterGroup],
     domain: SearchDomain<'input>,
     joint_storage: Rc<Cell<usize>>,
+    layouts: &'state mut JointLayoutCache,
 }
 
 // Returned on the stack, not a separately allocated object per expansion.
@@ -1466,7 +1467,9 @@ impl JointSearch<'_, '_, '_, '_> {
                 .state
                 .control
                 .memory_budget_bytes()
-                .saturating_sub(self.evaluation.cache.bytes() + self.joint_storage.get())
+                .saturating_sub(
+                    self.evaluation.cache.bytes() + self.joint_storage.get() + self.layouts.bytes(),
+                )
                 / (size_of::<LocalCandidate>() + size_of::<usize>()),
         )
     }
@@ -1512,7 +1515,8 @@ impl JointSearch<'_, '_, '_, '_> {
             )?)?;
         let total_bytes = candidate_bytes
             .checked_add(self.evaluation.cache.bytes())?
-            .checked_add(self.joint_storage.get())?;
+            .checked_add(self.joint_storage.get())?
+            .checked_add(self.layouts.bytes())?;
         (total_bytes <= self.evaluation.state.control.memory_budget_bytes()).then_some(indexed_slot)
     }
 
@@ -1572,8 +1576,9 @@ impl JointSearch<'_, '_, '_, '_> {
         // Otherwise keep the numeric model: reuse its optimum if still allowed,
         // or update only affected working-table layers when it is excluded.
         if !proposal_fits || !same_model {
-            let workspace = joint_upper::workspace_bytes(&owners, self.groups.len());
-            let resident = self.evaluation.cache.bytes() + self.joint_storage.get();
+            let workspace = self.layouts.workspace_bytes(&owners, self.groups.len());
+            let resident =
+                self.evaluation.cache.bytes() + self.joint_storage.get() + self.layouts.bytes();
             if let (Some(engine), Some(bytes)) = (&self.domain.engine, workspace)
                 && bytes
                     <= self
@@ -1591,21 +1596,22 @@ impl JointSearch<'_, '_, '_, '_> {
                     .peak_search_storage_bytes
                     .max(storage_peak as u64);
                 add_counter(&mut self.evaluation.state.diagnostics.bound_evaluations, 1)?;
-                if let Some(bound) = joint_upper::calculate(
-                    engine,
-                    self.groups,
-                    &owners,
-                    fixed_scores,
-                    node.joint.as_ref().map(|cached| &cached.bound),
-                    self.evaluation.state.incumbent_score(),
-                    self.evaluation.state.control,
-                )
-                .map_err(abort)?
+                if let Some(bound) = self
+                    .layouts
+                    .calculate(
+                        engine,
+                        self.groups,
+                        (&owners, fixed_scores),
+                        node.joint.as_ref().map(|cached| &cached.bound),
+                        self.evaluation.state.incumbent_score(),
+                        self.evaluation.state.control,
+                    )
+                    .map_err(abort)?
                 {
                     #[cfg(test)]
                     crate::profiling::joint_bound(
                         bound.score,
-                        self.joint_storage.get() + bytes,
+                        self.joint_storage.get() + self.layouts.bytes() + bytes,
                         if same_model {
                             crate::profiling::JointMode::Incremental
                         } else {
@@ -1650,7 +1656,7 @@ impl JointSearch<'_, '_, '_, '_> {
             #[cfg(test)]
             crate::profiling::joint_bound(
                 node.joint.as_ref().unwrap().bound.score,
-                self.joint_storage.get(),
+                self.joint_storage.get() + self.layouts.bytes(),
                 crate::profiling::JointMode::Reused,
                 self.evaluation.state.incumbent_score(),
             );
@@ -2049,6 +2055,7 @@ impl JointSearch<'_, '_, '_, '_> {
         let search_base_bytes = candidate_base_bytes
             .checked_add(self.evaluation.cache.bytes())
             .and_then(|bytes| bytes.checked_add(self.joint_storage.get()))
+            .and_then(|bytes| bytes.checked_add(self.layouts.bytes()))
             .ok_or_else(|| abort(SearchIncompleteReasonV1::CountOrIndexOverflow))?;
         let bytes = search_base_bytes
             .checked_add(index_bytes)
@@ -2481,6 +2488,7 @@ fn run_search(
     #[cfg(test)]
     crate::profiling::warm_start_finished();
 
+    let mut layouts = JointLayoutCache::new();
     for (index, plan) in plans.into_iter().enumerate() {
         state.poll_stop()?;
         #[cfg(test)]
@@ -2514,6 +2522,7 @@ fn run_search(
             groups: &groups,
             domain,
             joint_storage: Rc::new(Cell::new(0)),
+            layouts: &mut layouts,
         };
         if index >= WARM_CONFIGURATION_COUNT {
             search.evaluation.probe_completions(
