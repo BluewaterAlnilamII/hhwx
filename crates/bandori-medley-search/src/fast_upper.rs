@@ -1527,11 +1527,12 @@ mod tests {
         let mut never_stop = || None;
         let mut control = SearchControl::new(1024 * 1024, &mut never_stop);
         let mut layouts = JointLayoutCache::new();
+        let required_teams = vec![0; groups.len()];
         let parent = layouts
             .calculate(
                 &engine,
                 &groups,
-                (&owners, [None; 3]),
+                (&owners, &required_teams, [None; 3]),
                 None,
                 None,
                 &mut control,
@@ -1543,7 +1544,7 @@ mod tests {
             .calculate(
                 &engine,
                 &groups,
-                (&owners, [None; 3]),
+                (&owners, &required_teams, [None; 3]),
                 Some(&parent),
                 None,
                 &mut control,

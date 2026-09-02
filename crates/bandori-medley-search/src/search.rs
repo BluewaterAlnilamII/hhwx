@@ -1600,6 +1600,16 @@ impl JointSearch<'_, '_, '_, '_> {
         owners
     }
 
+    fn required_teams(&self, node: &SearchNode) -> Vec<u8> {
+        let mut required = vec![0; self.groups.len()];
+        for (slot, family) in node.families.iter().enumerate() {
+            for &group in &family.required_groups[..family.required_group_count] {
+                required[group] |= 1 << slot;
+            }
+        }
+        required
+    }
+
     fn joint_step(&mut self, node: &mut SearchNode) -> Result<JointStep, SearchAbort> {
         #[cfg(test)]
         let _timing = crate::profiling::enter(crate::profiling::Phase::JointBookkeeping);
@@ -1611,6 +1621,7 @@ impl JointSearch<'_, '_, '_, '_> {
         if owners.contains(&0) {
             return Ok(JointStep::Finished);
         }
+        let required_teams = self.required_teams(node);
         let proposal_fits = node
             .joint
             .as_ref()
@@ -1621,13 +1632,21 @@ impl JointSearch<'_, '_, '_, '_> {
                         .all(|&id| owners[id as usize] & (1 << slot) != 0)
                 }) && owners.iter().enumerate().all(|(id, &mask)| {
                     mask & UNUSED != 0 || proposal.iter().any(|team| team.contains(&(id as u32)))
+                }) && required_teams.iter().enumerate().all(|(group, &required)| {
+                    (0..3).all(|slot| {
+                        required & (1 << slot) == 0
+                            || proposal[slot]
+                                .iter()
+                                .any(|&id| self.domain.character_indexes[id as usize] == group)
+                    })
                 })
             });
         let fixed_scores = node.families.map(|family| family.fixed_score);
-        let same_model = node
-            .joint
-            .as_ref()
-            .is_some_and(|cached| cached.bound.can_update(&owners, fixed_scores));
+        let same_model = node.joint.as_ref().is_some_and(|cached| {
+            cached
+                .bound
+                .can_update(&owners, &required_teams, fixed_scores)
+        });
         // Fixed members change the remaining product and count dimensions.
         // Otherwise keep the numeric model: reuse its optimum if still allowed,
         // or update only affected working-table layers when it is excluded.
@@ -1657,7 +1676,7 @@ impl JointSearch<'_, '_, '_, '_> {
                     .calculate(
                         engine,
                         self.groups,
-                        (&owners, fixed_scores),
+                        (&owners, &required_teams, fixed_scores),
                         node.joint.as_ref().map(|cached| &cached.bound),
                         self.evaluation.state.incumbent_score(),
                         self.evaluation.state.control,
@@ -1788,7 +1807,7 @@ impl JointSearch<'_, '_, '_, '_> {
             crate::profiling::joint_owner_widths(owner_width_counts);
             // This table describes residual occupancy before this pass. A newly
             // fixed physical member changes that meaning; descendants rebuild it.
-            if !fixed_member && bound.can_update(&owners, fixed_scores) {
+            if !fixed_member && bound.can_update(&owners, &required_teams, fixed_scores) {
                 let mut forced_mode = None;
                 for (group, mode_uppers) in bound.mode_uppers.iter().enumerate() {
                     let mut competitive = mode_uppers

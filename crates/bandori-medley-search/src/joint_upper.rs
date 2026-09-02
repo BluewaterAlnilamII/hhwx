@@ -15,6 +15,24 @@ pub(crate) const ALL_OWNERS: u8 = 15;
 const PATTERNS: usize = 27;
 const NO_CARD: u32 = u32::MAX;
 
+const PATTERN_OCCUPANCIES: [u8; PATTERNS] = {
+    let mut occupancies = [0; PATTERNS];
+    let mut pattern = 0;
+    while pattern < PATTERNS {
+        let mut roles = pattern;
+        let mut slot = 0;
+        while slot < 3 {
+            if roles % 3 != 0 {
+                occupancies[pattern] |= 1 << slot;
+            }
+            roles /= 3;
+            slot += 1;
+        }
+        pattern += 1;
+    }
+    occupancies
+};
+
 #[derive(Clone)]
 pub(crate) struct JointWeights {
     pub(crate) cards: Vec<[[f64; 2]; 3]>,
@@ -41,9 +59,19 @@ impl JointUpper {
             + self.working.as_ref().map_or(0, JointWorking::heap_bytes)
     }
 
-    pub(crate) fn can_update(&self, owners: &[u8], fixed_scores: [Option<f64>; 3]) -> bool {
+    pub(crate) fn can_update(
+        &self,
+        owners: &[u8],
+        required_teams: &[u8],
+        fixed_scores: [Option<f64>; 3],
+    ) -> bool {
         self.working.as_ref().is_some_and(|working| {
             working.weights.fixed_scores == fixed_scores
+                && working.required_teams.len() == required_teams.len()
+                && required_teams
+                    .iter()
+                    .zip(&working.required_teams)
+                    .all(|(&now, &before)| before & !now == 0)
                 && owners
                     .iter()
                     .zip(&working.owners)
@@ -229,6 +257,7 @@ impl JointLayoutCache {
             .checked_add(groups.checked_mul(
                 2 * PATTERNS * size_of::<LocalChoice>() + 2 * size_of::<LocalGroup>(),
             )?)?
+            .checked_add(groups.checked_mul(size_of::<u8>())?)?
             .checked_add(transition_bytes)?
             .checked_add(2 * size_of::<JointUpper>() + 4096)
     }
@@ -445,6 +474,7 @@ struct JointWorking {
     layout: Rc<CountLayout>,
     owners: Vec<u8>,
     residual_owners: Vec<u8>,
+    required_teams: Vec<u8>,
     local: Vec<LocalGroup>,
     choices: Vec<[LocalChoice; PATTERNS]>,
     tables: Vec<f64>,
@@ -462,6 +492,7 @@ impl JointWorking {
                 .sum::<usize>()
             + self.owners.capacity()
             + self.residual_owners.capacity()
+            + self.required_teams.capacity()
             + self.local.capacity() * size_of::<LocalGroup>()
             + self
                 .local
@@ -477,6 +508,7 @@ impl JointWorking {
         weights: JointWeights,
         groups: &[Vec<u32>],
         owners: &[u8],
+        required_teams: &[u8],
         layout: Rc<CountLayout>,
     ) -> Result<Self, SearchIncompleteReasonV1> {
         let length = (groups.len() + 1) * layout.states;
@@ -499,6 +531,7 @@ impl JointWorking {
             paths,
             owners: owners.to_vec(),
             residual_owners: owners.to_vec(),
+            required_teams: required_teams.to_vec(),
             local: groups
                 .iter()
                 .map(|_| LocalGroup {
@@ -510,9 +543,10 @@ impl JointWorking {
         })
     }
 
-    fn restrict(&mut self, groups: &[Vec<u32>], owners: &[u8]) {
+    fn restrict(&mut self, groups: &[Vec<u32>], owners: &[u8], required_teams: &[u8]) {
         self.owners.copy_from_slice(owners);
         self.residual_owners.copy_from_slice(owners);
+        self.required_teams.copy_from_slice(required_teams);
         let complete = (0..3)
             .filter(|&slot| self.weights.fixed_members[slot].len() == 5)
             .fold(0_u8, |mask, slot| mask | (1 << slot));
@@ -539,19 +573,20 @@ impl JointLayoutCache {
         &mut self,
         engine: &FastUpperBoundEngine<'_>,
         groups: &[Vec<u32>],
-        restrictions: (&[u8], [Option<f64>; 3]),
+        restrictions: (&[u8], &[u8], [Option<f64>; 3]),
         previous: Option<&JointUpper>,
         prune_below: Option<f64>,
         control: &mut SearchControl<'_>,
     ) -> Result<Option<JointUpper>, SearchIncompleteReasonV1> {
-        let (owners, fixed_scores) = restrictions;
+        let (owners, required_teams, fixed_scores) = restrictions;
         #[cfg(test)]
         let _timing = crate::profiling::enter(crate::profiling::Phase::JointBounds);
         poll(control)?;
         if owners.contains(&0) {
             return Ok(Some(JointUpper::infeasible()));
         }
-        let previous = previous.filter(|bound| bound.can_update(owners, fixed_scores));
+        let previous =
+            previous.filter(|bound| bound.can_update(owners, required_teams, fixed_scores));
         #[cfg(test)]
         let _calculation_timing = crate::profiling::joint_timing(
             if previous.is_some() {
@@ -577,7 +612,7 @@ impl JointLayoutCache {
         calculate_weights(
             weights,
             groups,
-            owners,
+            (owners, required_teams),
             previous,
             prune_below,
             self,
@@ -590,12 +625,13 @@ impl JointLayoutCache {
 fn calculate_weights(
     weights: Option<JointWeights>,
     groups: &[Vec<u32>],
-    owners: &[u8],
+    restrictions: (&[u8], &[u8]),
     previous: Option<&JointUpper>,
     prune_below: Option<f64>,
     layouts: &mut JointLayoutCache,
     control: &mut SearchControl<'_>,
 ) -> Result<JointUpper, SearchIncompleteReasonV1> {
+    let (owners, required_teams) = restrictions;
     let old = previous.and_then(|bound| bound.working.as_ref());
     let mut working = match old {
         Some(old) => {
@@ -610,7 +646,7 @@ fn calculate_weights(
             let weights = weights.unwrap();
             let remaining = std::array::from_fn(|slot| 5 - weights.fixed_members[slot].len());
             let layout = layouts.get(remaining);
-            JointWorking::new(weights, groups, owners, layout)?
+            JointWorking::new(weights, groups, owners, required_teams, layout)?
         }
     };
     let states = working.layout.states;
@@ -623,47 +659,53 @@ fn calculate_weights(
         #[cfg(test)]
         let _timing =
             crate::profiling::joint_timing(crate::profiling::JointTiming::LocalChoices, 0);
-        working.restrict(groups, owners);
+        working.restrict(groups, owners, required_teams);
         if working.residual_owners.contains(&0) {
             return Ok(JointUpper::infeasible());
         }
         for (group, ids) in groups.iter().enumerate() {
             poll(control)?;
-            if old.is_some_and(|old| {
+            let owners_unchanged = old.is_some_and(|old| {
                 ids.iter().all(|&id| {
                     old.residual_owners[id as usize] == working.residual_owners[id as usize]
                 })
-            }) {
+            });
+            let requirement_changed =
+                old.is_none_or(|old| old.required_teams[group] != working.required_teams[group]);
+            if owners_unchanged && !requirement_changed {
                 continue;
             }
-            let local = LocalGroup::new(ids, &working.residual_owners, &working.weights);
-            if local.required.len() > 3 {
-                return Ok(JointUpper::infeasible());
-            }
-            let candidates = local.candidates(&working.residual_owners);
-            let choices: [LocalChoice; PATTERNS] = std::array::from_fn(|pattern| {
-                if working.layout.transitions[pattern].is_empty() {
-                    LocalChoice::default()
-                } else {
-                    local.choice_with(
-                        roles(pattern),
-                        &working.residual_owners,
-                        &working.weights,
-                        &candidates,
-                        None,
-                    )
+            let mut values_changed = requirement_changed;
+            if !owners_unchanged {
+                let local = LocalGroup::new(ids, &working.residual_owners, &working.weights);
+                if local.required.len() > 3 {
+                    return Ok(JointUpper::infeasible());
                 }
-            });
-            if old.is_none()
-                || choices
-                    .iter()
-                    .zip(&working.choices[group])
-                    .any(|(now, before)| now.score != before.score)
-            {
+                let candidates = local.candidates(&working.residual_owners);
+                let choices: [LocalChoice; PATTERNS] = std::array::from_fn(|pattern| {
+                    if working.layout.transitions[pattern].is_empty() {
+                        LocalChoice::default()
+                    } else {
+                        local.choice_with(
+                            roles(pattern),
+                            &working.residual_owners,
+                            &working.weights,
+                            &candidates,
+                            None,
+                        )
+                    }
+                });
+                values_changed |= old.is_none()
+                    || choices
+                        .iter()
+                        .zip(&working.choices[group])
+                        .any(|(now, before)| now.score != before.score);
+                working.local[group] = local;
+                working.choices[group] = choices;
+            }
+            if values_changed {
                 changed = Some((changed.map_or(group, |range| range.0), group));
             }
-            working.local[group] = local;
-            working.choices[group] = choices;
         }
     }
     let (forward, backward) = working.tables.split_at_mut(length);
@@ -681,6 +723,11 @@ fn calculate_weights(
                 next.fill(f64::NEG_INFINITY);
                 working.paths[(group + 1) * states..(group + 2) * states].fill(u8::MAX);
                 for (pattern, edges) in working.layout.transitions.iter().enumerate() {
+                    if PATTERN_OCCUPANCIES[pattern] & working.required_teams[group]
+                        != working.required_teams[group]
+                    {
+                        continue;
+                    }
                     let choice = working.choices[group][pattern];
                     if choice.score == f64::NEG_INFINITY {
                         continue;
@@ -738,6 +785,11 @@ fn calculate_weights(
                 let suffix = &suffix[..states];
                 next.fill(f64::NEG_INFINITY);
                 for (pattern, edges) in working.layout.transitions.iter().enumerate() {
+                    if PATTERN_OCCUPANCIES[pattern] & working.required_teams[group]
+                        != working.required_teams[group]
+                    {
+                        continue;
+                    }
                     let choice = working.choices[group][pattern];
                     if choice.score == f64::NEG_INFINITY {
                         continue;
@@ -802,6 +854,7 @@ fn calculate_weights(
         if old.is_some_and(|old| {
             ids.iter()
                 .all(|&id| old.residual_owners[id as usize] == working.residual_owners[id as usize])
+                && old.required_teams[group] == working.required_teams[group]
                 && forward[group * states..(group + 1) * states]
                     == old.tables[group * states..(group + 1) * states]
                 && backward[(group + 1) * states..(group + 2) * states]
@@ -811,6 +864,11 @@ fn calculate_weights(
         }
         let mut outside = [f64::NEG_INFINITY; PATTERNS];
         for (pattern, edges) in working.layout.transitions.iter().enumerate() {
+            if PATTERN_OCCUPANCIES[pattern] & working.required_teams[group]
+                != working.required_teams[group]
+            {
+                continue;
+            }
             if working.choices[group][pattern].score == f64::NEG_INFINITY {
                 continue;
             }
@@ -834,12 +892,7 @@ fn calculate_weights(
             if outside == f64::NEG_INFINITY || choice.score == f64::NEG_INFINITY {
                 continue;
             }
-            let mode = roles(pattern)
-                .into_iter()
-                .enumerate()
-                .fold(0, |mode, (slot, role)| {
-                    mode | (usize::from(role != 0) << slot)
-                });
+            let mode = usize::from(PATTERN_OCCUPANCIES[pattern]);
             modes[mode] = modes[mode].max(sum_up(outside, choice.score));
         }
         for upper in &mut modes {
@@ -1139,6 +1192,7 @@ mod tests {
             [2, 1, 0],
         ];
         let mut layouts = JointLayoutCache::new();
+        let required_teams = vec![0; groups.len()];
         for owners in [
             vec![ALL_OWNERS; 15],
             vec![1, 15, 15, 15, 6, 15, 15, 15, 13, 7, 15, 15, 15, 15, 15],
@@ -1173,7 +1227,7 @@ mod tests {
             let result = calculate_weights(
                 Some(remaining_weights.clone()),
                 &groups,
-                &owners,
+                (&owners, &required_teams),
                 None,
                 None,
                 &mut layouts,
@@ -1184,7 +1238,7 @@ mod tests {
                 let equal = calculate_weights(
                     Some(remaining_weights.clone()),
                     &groups,
-                    &owners,
+                    (&owners, &required_teams),
                     None,
                     Some(result.score),
                     &mut layouts,
@@ -1195,7 +1249,7 @@ mod tests {
                 let cut = calculate_weights(
                     Some(remaining_weights.clone()),
                     &groups,
-                    &owners,
+                    (&owners, &required_teams),
                     None,
                     Some(f64::from_bits(result.score.to_bits() + 1)),
                     &mut layouts,
@@ -1219,14 +1273,14 @@ mod tests {
             if let Some(id) = owners.iter().position(|&mask| mask == ALL_OWNERS) {
                 let mut restricted = owners.clone();
                 restricted[id] &= !2;
-                assert!(result.can_update(&restricted, [None; 3]));
+                assert!(result.can_update(&restricted, &required_teams, [None; 3]));
                 let mut newly_fixed = owners.clone();
                 newly_fixed[id] = 1;
-                assert!(!result.can_update(&newly_fixed, [None; 3]));
+                assert!(!result.can_update(&newly_fixed, &required_teams, [None; 3]));
                 let updated = calculate_weights(
                     None,
                     &groups,
-                    &restricted,
+                    (&restricted, &required_teams),
                     Some(&result),
                     None,
                     &mut layouts,
@@ -1236,7 +1290,7 @@ mod tests {
                 let fresh = calculate_weights(
                     Some(remaining_weights.clone()),
                     &groups,
-                    &restricted,
+                    (&restricted, &required_teams),
                     None,
                     None,
                     &mut layouts,
@@ -1316,6 +1370,15 @@ mod tests {
 
     #[test]
     fn occupancy_mode_bounds_cover_optional_character_use() {
+        for (pattern, &occupancy) in PATTERN_OCCUPANCIES.iter().enumerate() {
+            assert_eq!(
+                occupancy,
+                roles(pattern)
+                    .into_iter()
+                    .enumerate()
+                    .fold(0, |mask, (slot, role)| mask | (u8::from(role != 0) << slot))
+            );
+        }
         let groups = (0..6)
             .map(|character| (character * 3..character * 3 + 3).collect::<Vec<u32>>())
             .collect::<Vec<_>>();
@@ -1334,14 +1397,20 @@ mod tests {
                 })
                 .collect(),
         };
-        let owners = vec![ALL_OWNERS; 18];
+        let mut owners = vec![ALL_OWNERS; 18];
+        for (slot, fixed) in weights.fixed_members.iter().enumerate() {
+            for &id in fixed {
+                owners[id as usize] = 1 << slot;
+            }
+        }
+        let required_teams = vec![0; groups.len()];
         let mut layouts = JointLayoutCache::new();
         let mut never_stop = || None;
         let mut control = SearchControl::new(1024 * 1024, &mut never_stop);
         let result = calculate_weights(
             Some(weights.clone()),
             &groups,
-            &owners,
+            (&owners, &required_teams),
             None,
             None,
             &mut layouts,
@@ -1382,5 +1451,66 @@ mod tests {
                 }
             }
         }
+
+        let mut required = required_teams.clone();
+        required[5] = 0b111;
+        assert!(result.can_update(&owners, &required, [None; 3]));
+        let updated = calculate_weights(
+            None,
+            &groups,
+            (&owners, &required),
+            Some(&result),
+            None,
+            &mut layouts,
+            &mut control,
+        )
+        .unwrap();
+        let fresh = calculate_weights(
+            Some(weights.clone()),
+            &groups,
+            (&owners, &required),
+            None,
+            None,
+            &mut layouts,
+            &mut control,
+        )
+        .unwrap();
+        assert_eq!(updated.score, fresh.score);
+        assert_eq!(updated.destinations, fresh.destinations);
+        assert_eq!(updated.mode_uppers, fresh.mode_uppers);
+        assert_eq!(updated.proposal, fresh.proposal);
+        assert!(!updated.can_update(&owners, &required_teams, [None; 3]));
+
+        let mut required_expected = f64::NEG_INFINITY;
+        for first in 15..18 {
+            for second in 15..18 {
+                for third in 15..18 {
+                    if first == second || first == third || second == third {
+                        continue;
+                    }
+                    required_expected = required_expected.max(
+                        weights.constant - weights.offset
+                            + weights.cards[first][0][1]
+                            + weights.cards[second][1][1]
+                            + weights.cards[third][2][1],
+                    );
+                }
+            }
+        }
+        assert!(updated.score >= required_expected && updated.score < required_expected + 1e-8);
+        assert!(
+            updated.mode_uppers[5][..7]
+                .iter()
+                .all(|upper| *upper == f64::NEG_INFINITY)
+        );
+        assert!(updated.mode_uppers[5][7].is_finite());
+        assert!(
+            updated
+                .proposal
+                .unwrap()
+                .iter()
+                .all(|team| team.iter().any(|id| *id >= 15))
+        );
+        assert!((15..18).all(|id| updated.destinations[id][3] == f64::NEG_INFINITY));
     }
 }
