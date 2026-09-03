@@ -15,6 +15,7 @@ const ARCHIVE_ROOT = join(REPO_ROOT, "temp/medley-regression-fixtures");
 const CANDIDATE_BUDGET_BYTES = 256 * 1024 ** 2;
 const PROCESS_LIMIT_BYTES = 1024 ** 3;
 const { values } = parseArgs({ options: {
+  "all-profiles": { type: "boolean", default: false },
   "completed-profiles": { type: "boolean", default: false },
   "high-pressure": { type: "boolean", default: false },
   remaining: { type: "boolean", default: false },
@@ -27,14 +28,16 @@ const { values } = parseArgs({ options: {
   "indexed-join-pair-target": { type: "string" },
   "score-cache-slots": { type: "string" },
 } });
-assert([values["completed-profiles"], values["high-pressure"], values.remaining, values.six, values.diagnose].filter(Boolean).length <= 1, "choose one run mode");
+assert([values["all-profiles"], values["completed-profiles"], values["high-pressure"], values.remaining, values.six, values.diagnose].filter(Boolean).length <= 1, "choose one run mode");
 assert(values.diagnose || (!values["duration-ms"] && !values["local-row-target"] && !values["indexed-join-row-target"] && !values["indexed-join-pair-target"] && !values["score-cache-slots"]), "diagnostic controls require --diagnose");
 const diagnosticCase = values.diagnose && values.case?.match(/^(\d+)-(no-event|event-(\d+))$/u);
 assert(!values.diagnose || !values.case || diagnosticCase, "invalid diagnostic case");
 const DURATION_MS = Number(values["duration-ms"] ?? (values.diagnose ? 60_000 : 300_000));
 assert(Number.isSafeInteger(DURATION_MS) && DURATION_MS > 0, "invalid duration");
-const continueAfterFailure = values["completed-profiles"] || values["high-pressure"] || values.remaining || values.six || values.diagnose;
-const profileCardCounts = values["completed-profiles"]
+const continueAfterFailure = values["all-profiles"] || values["completed-profiles"] || values["high-pressure"] || values.remaining || values.six || values.diagnose;
+const profileCardCounts = values["all-profiles"]
+  ? [961, 962, 972, 1036, 1039, 1051, 1127, 1161, 1211, 1229, 1252, 1318, 1329, 1425, 1433, 1513, 1522, 1703, 1747, 1889]
+  : values["completed-profiles"]
   ? [1036, 1039, 1161, 1211, 1229, 1252, 1318, 1425, 1433, 1513, 1522, 1703]
   : values["high-pressure"] ? [1051, 1127, 1329, 1513, 1703, 1747, 1889]
   : values.remaining ? [119, 961, 962, 972] : values.six ? [119, 961]
@@ -92,7 +95,7 @@ function readBaseline(testCase, profile) {
     row.profileSha256 === profile.payloadSha256 && row.sourceId === "main"
     && row.eventKey === String(testCase.eventId ?? "none") && /^rows\[\d+\]\.all$/u.test(row.resultPath)
   ));
-  if (!entry && (values["high-pressure"] || values.diagnose)) return null;
+  if (!entry && (values["all-profiles"] || values["high-pressure"] || values.diagnose)) return null;
   assert(entry, `missing full-scope historical result: ${testCase.id}`);
   assert.deepEqual(entry.songIds, testCase.songIds);
   assert.deepEqual(entry.difficulties, ["expert", "expert", "expert"]);
