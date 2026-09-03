@@ -91,11 +91,16 @@ The accepted run was generated on 2026-09-03 from clean source commit `01a6b09b7
 | Higher than reference | 5 |
 | Lower than reference | 0 |
 | Total native search time | 675.553 s |
+| Mean native scene time | 8.444 s |
 | Median native scene time | 2.182 s |
+| P75 native scene time | 3.864 s |
+| P95 native scene time | 17.971 s |
 | Longest scene | 1889/event244, 192.377 s |
 | Scenes with a process working-set sample | 69/80 |
 | Process peak among sampled scenes | 34.32 MiB |
 | Budget-accounted search-storage peak | 23.39 MiB |
+
+The mean is the arithmetic mean across all 80 scenes. P75 and P95 use nearest rank: after sorting native durations, they are the 60th and 76th observations respectively.
 
 The five higher exact results were 972/event244 `+2,976`, 1211/no-event `+193`, 1211/event260 `+155`, 1252/event323 `+154`, and 1747/event260 `+7,343`. The eight 1329/1889 scenes have no reference matching all recorded inputs; all eight nevertheless completed `exact`. No scene timed out, hit the process or search-storage limit, failed, or returned a lower comparable score.
 
