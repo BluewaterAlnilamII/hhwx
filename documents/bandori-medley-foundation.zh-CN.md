@@ -4,7 +4,7 @@ English version: [bandori-medley-foundation.md](bandori-medley-foundation.md)
 
 ## 依据与范围
 
-本文规定 `dev/medley-v2-greenfield` 新计算器共用的输入与计分规则。代码完全新写，不导入、包装或重构旧组队器计分与搜索。HHWX 已有输入和产品规则仍须遵守，旧求解器及实验分支的架构不具有权威性；来源检查会约束 TypeScript 的导入边界。
+本文规定全新组曲计算器代码线共用的输入与计分规则。代码完全新写，不导入、包装或重构旧组队器计分与搜索。HHWX 已有输入和产品规则仍须遵守，旧求解器及实验分支的架构不具有权威性；来源检查会约束 TypeScript 的导入边界。
 
 计分采用 Bestdori 的平均判定／技能倍率方法，加上下文明确约定的 HHWX 组曲规则。它既不是原生游戏模拟，也不是照搬 Bestdori 单曲计算器。游戏实际表现只作记录，未经重新讨论不得写进实现。
 

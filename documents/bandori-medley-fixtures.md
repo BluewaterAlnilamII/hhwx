@@ -2,99 +2,104 @@
 
 Chinese version: [bandori-medley-fixtures.zh-CN.md](bandori-medley-fixtures.zh-CN.md)
 
-## Purpose and boundaries
+## Purpose and boundary
 
-Historical main/dev results are retained to check the independent calculator, not to import old search architecture. The archive contains original HHWX profiles, cached master/chart/event data, selected original reports, and an index. It runs neither the old solver nor the new search.
+The private fixture archive checks the independent medley calculator against previously recorded real HHWX inputs and scores. It is evidence against search regressions, not architectural authority: the runner does not execute the old solver, replay an old winning team, or seed the new search from historical results.
 
-All real profiles, original containers, reports, local paths, and generated indexes stay in the Git-ignored `temp/medley-regression-fixtures/` directory. Do not commit or publish them. Only documentation and test utilities are versioned. There are no new dependencies or application changes.
+Profiles, source containers, cached masters and charts, historical reports, generated inputs, outputs, and indexes remain under the Git-ignored `temp/medley-regression-fixtures/`. They may contain private account data and must not be committed or published. Only the collection/comparison utilities and these procedural notes belong in Git.
 
-The initial collection contains 21 distinct CN profiles: the 119/1329/1889-card benchmarks and two ten-profile batches with two shared profiles. These are full rosters; even 119 cards is not a tiny exhaustive-search fixture.
+The archive currently contains 21 distinct CN profiles. The full acceptance set deliberately excludes the early 119-card profile and uses the other 20 complete rosters, from 961 through 1,889 cards. Even the 119-card profile is not treated as a trivial exhaustive input.
 
-## Collect and verify
+## Evidence model
 
-Use the existing private fixture package as `--seed`, and pass each retained report directory separately:
+`manifest.json` is the local index. It records file hashes, profile payload hashes, dated aliases, data snapshots, historical report locations, saved settings, scores, and whether teams, area items, and leaders were retained. Account identity and a displayed card count are labels, not proof that two payloads are identical.
+
+For each source/profile/song/settings combination, collection retains the highest primary reported score and the strongest available supporting object. Byte-identical evidence is stored once. Verification checks archive hashes, profile decoding, and index references.
+
+Historical evidence has explicit limits:
+
+- old reports generally omit the exact source commit and per-run data hashes;
+- the early 119-card reports omit their configurable PERFECT rate;
+- a later version of the same account is a different input when its payload hash differs;
+- a report using different event parameters, songs, order, difficulty, PERFECT rate, or data is not a same-input comparison; and
+- a directory name such as `main` or `dev` identifies where evidence was found, not necessarily the commit that produced it.
+
+The runner records its own source commit and dirty diff, runtime, limits, profile and normalized-input hashes, used-file hashes, complete output, elapsed time, sampled working set, and budget-accounted search storage. These fields make the new run reproducible without upgrading incomplete historical provenance into certainty.
+
+## Collection and verification
+
+Use the existing private package as the seed and list each retained report directory independently:
 
 ```sh
 node --import tsx scripts/archive-bandori-medley-fixtures.mjs --seed <private-fixture-package> --source main=<report-directory> --source dev=<report-directory>
 node --import tsx scripts/archive-bandori-medley-fixtures.mjs --verify
 ```
 
-The seed is the existing `manifest.json` package with profiles, source containers, assets, and `reference-only/` reports. The utility preserves its raw files and scans the known medley benchmark, scope-matrix, isolated-run, and low-memory HHWX report formats. It does not collect logs, binaries, or solver code. Recollect using the same source arguments to update the generated index; previously copied evidence files are not deleted.
+Collection preserves existing raw files and scans only known HHWX report formats. It does not collect binaries, logs, or solver source. Repeating the command updates the index without deleting previously retained evidence.
 
-The generated `README.md` lists profiles. `manifest.json` records:
+## Comparison contract
 
-- profile payload hashes and dated aliases; account identity locates only a candidate payload, and a report with a different recorded card count remains unindexed;
-- separate source-directory data snapshots, sharing identical stored files;
-- original report paths, dates, settings, scores, and locations inside each retained report;
-- whether cards, area-item IDs, and explicit leaders were saved;
-- source directories with missing caches or unmatched profile identities.
+A historical comparison is admitted only when the archived profile and every setting recorded by the old report agree: song IDs and order, difficulties, PERFECT rate, and event settings. Old reports generally did not retain a per-run data hash or source commit, so matching the historical master-data snapshot cannot be proved after the fact. Such a reference is a regression target adopted under the explicit assumption that the retained `main` snapshot represents the data used by the old report; by itself it proves neither feasibility under the current input nor byte-identical source data. The new search itself is always run on a normalized input rebuilt from the archived profile and retained raw data.
 
-For each source/profile/song/settings combination, retain the highest reported score, the highest score with cards and area IDs, and the highest with explicit leaders. Seed reference reports are also preserved. These categories may select the same file; byte-identical files are stored once. Verification checks file hashes, actual HHWX profile decoding, and index references.
+Two separate gates apply:
 
-## Score comparison rules
+1. **Score regression:** for a reference matching all recorded inputs, the new result must be at least as high as the recorded primary average score.
+2. **Proof completion:** the new outcome must be `exact`. Reaching a reference and timing out is not an exactness pass.
 
-1. Routine regression runs the new search directly and compares its total average score with the retained historical average under matching profile, song order, difficulty, PERFECT rate, event settings, and data. Do not rerun the old solver, replay old teams, or feed old winners into the search as a prerequisite. Targeted replay is reserved for a separately needed discrepancy investigation.
-2. With identical complete inputs, the score-regression check passes when the new search reaches at least the historical average. Exact completion is tracked separately: an incomplete result does not prove optimality, but it is not a score-regression failure after reaching the reference. A higher score alone does not prove scoring correctness; overcounting could also raise it.
-3. Keep `score`, `averageScore`, and old exact/completion claims as originally recorded. Do not silently equate score fields or promote an old claim to a new proof. Auxiliary saved candidates are not necessarily the reported winner.
-4. Retained caches are the files found in each source directory, not proof of the exact data used by every historical run. Reports lacking per-run data hashes or commit IDs remain explicitly unverified in those respects. Directory labels do not identify the generating branch.
-5. Real-profile runners fixed expert/full-P/no-fever; generic benchmark reports omitted their configurable PERFECT rate, which remains unknown in the index. Record any comparison assumption rather than filling this historical gap silently. Missing leaders are not inferred from old card order and do not block direct score comparison.
-6. A fifteen-card projection and the original full roster are different search inputs. Do not compare their optimal scores as if they covered the same search space.
+A higher score does not by itself prove the scorer correct because overcounting could also raise a result. Scoring correctness is covered by the focused Bestdori/reference checks in [the foundation document](bandori-medley-foundation.md); real-profile acceptance chiefly checks the retained regression targets under the stated snapshot assumption and whether the search can finish its proof.
 
-## Direct comparison runs
+Keep historical `score`, `averageScore`, and completion flags under their original names. An auxiliary candidate is not substituted for a report's primary result. A fifteen-card projection and its full source roster are different search inputs.
 
-The existing runner rebuilds input from the archived HHWX profile and raw data, builds the native release executable, and compares the new search directly with saved historical averages. It uses the retained main-directory snapshot, not the old search implementation. The 119-card songs are expert `295 → 300 → 703`; the 961/962/972-card songs are expert `385 → 193 → 619`. All use full PERFECT, no fever and the complete owned area scope.
+## Runner
 
-To rerun the four-profile, fourteen-scene matrix without adding another runner:
+The full 80-scene acceptance command is:
+
+```sh
+node --import tsx scripts/compare-bandori-medley-search.mjs --all-profiles
+```
+
+It runs four settings—no event, event 244, event 260, and event 323—for each of these complete profiles:
+
+```text
+961, 962, 972, 1036, 1039, 1051, 1127, 1161, 1211, 1229,
+1252, 1318, 1329, 1425, 1433, 1513, 1522, 1703, 1747, 1889
+```
+
+All use expert songs `385 -> 193 -> 619`, full PERFECT, no fever, and every generated owned-area configuration; the retained full-ownership inputs have 108 configurations. The run is sequential. Each scene has 300 seconds, 256 MiB of budgeted search storage, a 1 GiB sampled native-process stop, and a 315-second outer deadline. Windows samples working set once per second, so a short final peak may be missed; this is neither an OS allocation cap nor browser/WASM incremental memory.
+
+The runner continues after a failed scene so the final report remains complete and exits nonzero if any selected scene fails. Useful smaller selections remain:
 
 ```sh
 node --import tsx scripts/compare-bandori-medley-search.mjs --case 119-no-event
 node --import tsx scripts/compare-bandori-medley-search.mjs --remaining
-```
-
-Without flags, the runner selects both 119-card cases. `--remaining` selects the other thirteen cases and continues after individual failures; `--six` selects only 119/961 cards. The existing `--diagnose` mode is described in [the search document](bandori-medley-search.md).
-
-Each case remains limited to 300 seconds and 256 MiB of budgeted search storage. Cases run sequentially. Windows samples native peak working set every second and stops at 1 GiB, with a 315-second outer deadline. These are sampled native-process limits, not OS allocation guarantees or browser/WASM incremental memory. Do not automatically raise budgets or change the algorithm after a failure.
-
-The larger-profile references read the known scope-matrix field `rows[n].all.score`, which stores the primary medley average. Preserve that original field and the reported exact status; auxiliary saved candidates are not substitutes for the primary result. The 119-card reports still lack historical PERFECT rates; every historical run still lacks verified per-run data hashes. New runs explicitly record their own inputs, hashes, settings, code commit, outputs, timing and memory.
-
-## Accepted small-roster checkpoint
-
-On 2026-08-31, clean code commit `eb66f9b` completed all fourteen scenes after the combined potential/mission rounding correction: thirteen matched their historical averages, and 972/event244 reached 8,594,227, exceeding its historical 8,591,251 by 2,976. This is a complete final-version search rerun, not merely saved-team rescoring.
-
-Native search time totaled 159.922 seconds; the longest case took 35.232 seconds. Sampled native peak working set was 29.30 MiB; maximum budgeted search storage was 20.34 MiB. Both 119-card runs finished before the first memory sample, so their process memory is unavailable, not zero. Raw profiles, masters, charts, settings and historical references matched the preceding matrix; normalized-input changes were confined to character/event parameters affected by the approved bonus rule.
-
-Full results and checks remain in the private archive under `runs/2026-08-31-final-low-pressure/`, referring to the two raw runs `2026-08-31T14-48-26.892Z` and `2026-08-31T14-48-29.719Z`. The separate 972/event244 investigation explains its higher score; this rerun changes neither solver. Acceptance covers these fourteen scenes only.
-
-## Completed-profile stage
-
-Select whole profiles over 1,000 cards whose no-event, event244, event260 and event323 scenes all have retained full-area-scope exact results. The approved list is **1036, 1039, 1161, 1211, 1229, 1252, 1318, 1425, 1433, 1513, 1522 and 1703 cards**: twelve profiles, four scenes each, **48 runs**.
-
-```sh
 node --import tsx scripts/compare-bandori-medley-search.mjs --completed-profiles
-```
-
-This reuses the existing runner, input normalization and resource recording. Card counts are display labels; each run records the immutable profile payload hash used for comparison. All scenes use the retained main-directory data, expert songs 385/193/619, full PERFECT, no fever and all owned area configurations. The retained event323 input is used only for same-input search regression here; this batch does not separately validate the live HHWX event323 parameter set. Keep the existing per-case 300-second / 256-MiB search-storage / 1-GiB sampled-process limits. Finish all 48 scenes sequentially without increasing budgets or changing the algorithm.
-
-The batch finished on 2026-09-01 at clean commit `8c758bf`: **all 48 same-input score-regression checks passed**. Forty-five searches completed exact (42 equal to their primary references, 3 higher); the higher scores were 1211/no-event (+193), 1211/event260 (+155) and 1252/event323 (+154). **1229/event244, 1513/event244 and 1703/event260 timed out** at 300 seconds after reaching their primary reference scores. These were the batch's three proof-completion failures. There were no lower primary scores, process failures or memory-limit stops.
-
-Native search totaled 3,606.484 seconds; the across-scene median was 28.550 seconds. Sampled process peak was 40.36 MiB; budgeted search-storage peak was 32.16 MiB. All scenes had memory samples. Input/file hashes, saved-output consistency, team legality and integer song-score sums were checked without rescoring. Full per-scene scores, timing, memory, diagnostic counters and report references are retained under `runs/2026-08-31T15-20-54.142Z/`, including `report.md`, `run.json` and `summary.json`.
-
-A provenance audit rejected five extra comparisons that had been attached after the run. The four supposed 1229-card reports actually record a later 1252-card version of the same account, with a different payload hash. The 1513/event323 report uses the same profile payload but a different event323 parameter set, including the HHWX performance bonus, and uncommitted experimental search code. None is a same-input reference for this batch. The approved search-regression objective is therefore **accepted for all 48 scenes**. A later 300-second rerun at search checkpoint `8c69a04` completed 1229/event244 exact in 286.488 seconds at 8,475,133; 1513/event244 and 1703/event260 still timed out inside their first configuration after matching 9,758,172 and 10,106,861. Two proof-completion failures now remain. Neither run increased budgets or replayed historical teams.
-
-## Final high-pressure stage
-
-The first high-pressure batch combines **1513 and 1703 cards** with the five reserved profiles: **1051, 1127, 1329, 1747 and 1889 cards**. All seven whole profiles use no-event, event244, event260 and event323, for **28 sequential scenes**:
-
-```sh
 node --import tsx scripts/compare-bandori-medley-search.mjs --high-pressure
 ```
 
-Inputs stay fixed at expert songs 385 → 193 → 619, full PERFECT, no fever and all 108 owned-area configurations. Twenty scenes have strict same-input historical references. The eight 1329/1889 scenes do not: their generic reports use other song sets and omit the historical PERFECT rate, so this batch does not pretend those scores are comparable.
+`--diagnose` enables time-limited profiling and the explicit threshold overrides accepted by the script. Those controls are for A/B measurement only; they are rejected in normal acceptance mode and do not alter production constants.
 
-The batch ran on 2026-09-01 at clean commit `6b5bebb`. **Twenty-four scenes completed exact; four timed out at 300 seconds:** 1513/event244 at 9,758,172, 1703/event260 at 10,106,861, 1747/event244 at 9,891,757 and 1889/event244 at 10,122,138. The first three reached their strict references; the last has no comparable reference and remains only best-so-far.
+## Current 80-scene checkpoint
 
-All **20/20 valid score-regression comparisons passed**: 19 were equal and exact 1747/event260 was 7,343 higher at 9,484,242. Of the eight scenes without references, seven completed exact. There were no lower comparable scores, skipped scenes, process failures or memory-limit stops.
+The accepted run was generated on 2026-09-03 from clean source commit `6b1e2afa1e956f27705d3887eb7022e222608fcb`. Its private evidence is in `runs/2026-09-03T01-58-49.492Z/`.
 
-Native search totaled 2,660.221 seconds; the scene median was 38.197 seconds. Sampled process peak was 40.73 MiB and budget-accounted search-storage peak was 32.42 MiB. The four timeouts consumed 45.1% of total native time and remained inside their first few configurations, while their warm starts were already within 0.36% of best-so-far. This batch therefore identifies proof traversal, not initial score quality or memory exhaustion, as the current high-pressure failure.
+| Result | Measurement |
+| --- | ---: |
+| Selected scenes | 80 |
+| `exact` outcomes | 80 |
+| References matching all recorded inputs | 72 |
+| Equal to reference | 67 |
+| Higher than reference | 5 |
+| Lower than reference | 0 |
+| Total native search time | 750.783 s |
+| Median native scene time | 2.562 s |
+| Longest scene | 1889/event244, 195.527 s |
+| Sampled process peak | 34.50 MiB |
+| Budget-accounted search-storage peak | 23.39 MiB |
 
-The complete 28-scene table, counters, hashes, audit and analysis are retained in `runs/2026-09-01T06-26-53.930Z/report.md`, alongside `run.json` and `summary.json`. No higher-budget retry or algorithm change followed the results.
+The five higher exact results were 972/event244 `+2,976`, 1211/no-event `+193`, 1211/event260 `+155`, 1252/event323 `+154`, and 1747/event260 `+7,343`. The eight 1329/1889 scenes have no reference matching all recorded inputs; all eight nevertheless completed `exact`. No scene timed out, hit the process or search-storage limit, failed, or returned a lower comparable score.
+
+An independent artifact audit checked the 80 winner fields and 800 diagnostic-list entries. The winner is also present in its scene's list, so these are 880 serialized objects rather than 880 distinct solutions. Every area selection exists in its input, every song slot has five distinct characters, all fifteen physical cards are distinct, song scores are integers, and medley totals equal the three song-score sum. All 80 outputs report every input area configuration completed. This is a structural/output check, not a second scorer.
+
+This checkpoint was intentionally preceded by a complete run at clean commit `7801470bd752d532f700e5650e69185f5424a648`. The two new runs used identical profile, normalized-input, and source-file hashes. The first run returned `exact` for all scenes but fell below a matching retained reference in five cases: 1127/event260, 1127/event323, 1161/event323, 1433/event323, and 1522/event323. The gate therefore rejected it. Investigation found that an effective single-destination physical card could be counted both as fixed and as an unresolved required character in the joint bound. Commit `6b1e2afa` materialized those forced cards before rebuilding the joint model. Each of the five counterexamples was first recovered independently, then the complete 80-scene run above verified the fix across the full set.
+
+This result accepts the current native search checkpoint for the retained suite. It is not a universal complexity guarantee, a browser-memory measurement, or proof about future profiles and game data.

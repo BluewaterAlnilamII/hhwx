@@ -2,158 +2,262 @@
 
 Chinese version: [bandori-medley-search.zh-CN.md](bandori-medley-search.zh-CN.md)
 
-## Authority and objective
+## Abstract
 
-This is the approved, revisable search design, not additional game rules. [The foundation contract](bandori-medley-foundation.md) controls inputs and scoring. The implementation is independent of old team-builder and experiment code.
+This document specifies the current exact search, states the invariants on which pruning depends, and proves why a completed run cannot omit a better legal medley. It describes the implementation at the current checkpoint rather than preserving a chronology of experiments; Git and the private benchmark reports retain that history.
 
-For each legal owned area configuration shared by all teams, choose three five-card teams with distinct characters within each team and no repeated physical card across teams. Exclusions are hard. Songs keep their input slots, including repeats. The objective is the proven top-1 total average score; ties retain a deterministic representative. Up to ten discovered solutions are diagnostic, not proven global top-10.
+The search considers every legal shared area-item configuration and every legal assignment of fifteen physical cards to three fixed song slots. Its practical core is a branch-and-bound search with two safe score relaxations: an individual-team bound and a stronger joint three-team allocation bound. Small residual products are closed by exact enumeration. Heuristics affect only traversal order and the quality of the incumbent. They never remove a candidate.
 
-## Exact complete-team scoring
+The input and exact scoring contract is defined by [the foundation document](bandori-medley-foundation.md). If this document and the scorer disagree, the foundation contract and executable scorer control; the bound must be weakened or rejected, never the scorer.
 
-Dense instance IDs follow HHWX profile order. A five-card set is sorted by instance ID; the selected leader is moved to member index two without changing other members' relative order. Equal song scores retain the first leader. Area-item order and the final `(song0 + song1) + song2` sum stay fixed.
+The corresponding implementation is intentionally split by responsibility: `exact_score.rs` and `candidate.rs` settle complete teams; `fast_upper.rs` and `upper_bound.rs` construct single-team numeric bounds; `joint_upper.rs` solves the relaxed three-team allocation; `search.rs` owns the exhaustive partition, reversible state, local joins, and terminal status. These files are under `crates/bandori-medley-search/src/`.
 
-The scorer follows `hhwx-medley-bestdori-v3`: Bestdori BPM-anchored timestamps, base operation order and average judgment/skill multipliers, with independently rounded window extras and a final floor per song. The 120 first-five orders remain equiprobable; the sixth repeats the leader. There is no P/G history state or joint-overlap path.
+## 1. Problem definition
 
-- Prepare combo segments and trigger indexes once per input; the existing note order is unchanged.
-- Resolve full-team skills once per five-card set. Per song, find each skill's six endpoints once. Constant multipliers are evaluated once; rate-up varies only before covered note 100; continued PERFECT may vary for the whole window. Reuse the varying prefix across all six windows and leaders.
-- Floor each combo segment's base score once. For a constant multiplier, calculate one integer extra per intersecting combo segment and multiply by its note count. Only genuinely varying multipliers retain individual note floors.
-- Sum the 30 member/window integer extras, including overlaps. For leader `l`, convert `5*(baseTotal + extra[5][l]) + sum(firstFiveExtras)` once to binary64, divide by five, then floor. Candidate comparisons and the medley sum use these settled song scores; no 120-order materialization is needed.
-- Reuse base-score work only when the final parameter has identical binary64 bits. Member reordering can affect parameter addition; do not normalize away that difference.
+Let `C` be the normalized set of non-excluded physical card instances, partitioned into character groups. Let `Q` be the finite list of legal owned area-item configurations constructed by the source adapter. For song slot `s in {0,1,2}`, a team consists of five physical cards and one of those cards as leader.
 
-Signed i128 accumulation covers every permitted u32 note count and note score, including negative skill extras. It avoids a second chronological-scoring fallback. The independent 120-order reference cancels its common factor of 24 before the same final conversion/division/floor and checks production results bitwise.
+A legal medley `(q, T0, T1, T2)` satisfies all of the following:
 
-## Partial-team upper bound
+1. `q` is in `Q` and is shared by all three teams.
+2. Each `Ts` contains exactly five cards with five distinct character IDs.
+3. No physical card instance occurs in two teams.
+4. Each song remains in its input slot; repeated songs are allowed and slots are never reordered.
 
-An input-local model prepares chart/combo coefficients and duration coverage. Each area configuration supplies additive per-card parameter uppers. Partial nodes do not rescan charts.
-
-For any reachable whole-team skill context, the ideal average is at most `P * K`. `P` sums five per-card parameter uppers; `K` includes a base coefficient, the first-five contributions and exactly one sixth-trigger leader contribution. The bound uses the input's average judgment coefficient and a nonnegative upper for each skill's actual average-rate formula. Dropping negative deltas only raises the result. Each card appears in each first-five position in 24/120 orders, so its coefficient is the five-window sum divided by five.
-
-For any positive weight `t`:
+For the exact integer score `score(q, Ts, s)` defined by `hhwx-medley-bestdori-v3`, the objective is
 
 ```text
-P * K <= (t * P + K / t)^2 / 4
+S(q, T0, T1, T2) = (score(q, T0, 0) + score(q, T1, 1))
+                    + score(q, T2, 2).
 ```
 
-A small dynamic program maximizes the additive quantity: one card per remaining character, exactly one leader, fixed cards kept, and parameter/skill contributions still attached to their card. Maximize across reachable band/attribute contexts; minimize across valid weights within each context. This is an upper bound, not a claim that its favorable choices can all be attained together. Once all five cards are fixed, use their actual whole-team context and the direct upward `P * K` bound; weighted maximization is no longer needed. The same note-range and final mean-rounding checks apply.
+The result is the legal medley with maximum `S`. For one five-card set and song, equal best song scores retain the smallest leader instance ID. Complete medleys with equal total scores then use a stable lexicographic identity: selected area-item IDs first, followed by the three resulting canonical member arrays. The diagnostic list retains at most ten distinct solutions encountered during the search; it is not a proof of the global top ten.
 
-For the current area configuration only, prepare the three weights per song and complete ordered regular/leader card lists per character and context. A card belongs to at most four contexts. Removing a card advances only affected available heads; a change trail restores them on return. Bounds and temporary proposals share that availability. The parameter-range check has its own ordered heads. No list is truncated, and no remaining-roster scan is needed per support calculation. Reuse the bound's five-card selection as an ordering hint; it is not an exact optimum.
+## 2. Exact leaf scoring
 
-Binary64 proof obligations are explicit:
+Bounds never become result scores. Every complete candidate that may enter the result is evaluated by the exact scorer described in the foundation contract.
 
-- Treat already-rounded card/event sums and area products as atoms; cover the remaining parameter additions upward for every leader order.
-- Calculate skill multiplier limits in the same scalar operation order as scoring. Rate-up uses the capped endpoint. Continued uses the extrema of actual `powf` results over chart note counts, computed once, without an invented library epsilon.
-- Treat the materialized Bestdori base coefficient as an atom. Upward chart coefficients cover the three following multiplications; a subnormal intermediate cannot reach an integer note score of one.
-- For an upper skill multiplier above one, one upward floating step covers `innerScore * multiplier` rounding and a second covers subtracting one. This bounds each independent integer extra without assuming exact multiplication.
-- Independently bound the whole family's parameter to prove each base/skill-scored note fits u32. The weighted maximizing team alone is not sufficient.
-- Totals use exact signed integers. If `C` bounds the ideal mean, monotone conversion and division give the actual-mean bound `f64(5*C) / 5`. The final song floor can only reduce the score, so this bound remains valid; the old 120-addition rounding envelope is unnecessary.
+For one unordered five-card set, the scorer evaluates all five possible leaders in increasing instance-ID order and keeps the first on an equal song score. Members are first sorted by dense instance ID; the chosen leader is moved to output index two while the other members keep their relative order. The scorer prepares chart and combo work once, groups constant skill multipliers by combo segment, and evaluates only genuinely varying skill multipliers per note. This is algebraically checked against the independent 120-order reference.
 
-Unavailable proof means positive infinity, not an infeasible family. Only a strict whole-medley upper below the exactly scored incumbent prunes; equality remains searchable.
-
-## Joint allocation and batch pruning
-
-The large-family bound allocates physical cards across all three teams together. It reuses the same parameter/skill coefficients; unknown whole-team contexts are conservatively maximized per card, not multiplied into a three-context search. Separate fixed parameters `P0` and the base/fixed first-five coefficient `K0` from remaining parameters `Pr` and skill contributions `Kr` (including the still-unselected leader):
+Each song is settled independently:
 
 ```text
-P*K = P0*K0 + P0*Kr + K0*Pr + Pr*Kr
-Pr*Kr <= A²/4 <= M*A/4,  A = t*Pr + Kr/t,  0 <= A <= M
+song(l) = floor((5 * (base + sixthWindowExtra[l])
+                 + sum(firstFiveWindowExtras[all five members])) / 5).
 ```
 
-Only the remaining product needs an envelope; the other terms are constant or linear. A small single-team program bounds `M`; choose among the existing three positive weights by the final bound including all terms, not by `M` alone. All coefficients are nonnegative and rounded upward. Zero remaining parameter/skill contribution needs only the linear terms. A completed team's settled score becomes a constant; before exact scoring, its direct `P*K` upper is sufficient.
+The numerator is accumulated exactly in signed `i128`; it is converted to binary64 once, divided by five, and floored. The three resulting integer-valued scores are then added in the fixed order shown above. A fixed-size cache may reuse the complete five-card result. Cache eviction or collision causes recomputation and cannot change the candidate set.
 
-The joint program processes one character at a time, with 27 absent/ordinary/leader patterns. A fresh team uses ten count states; a partially fixed team with `r` cards left uses `2*(r+1)`; a complete team uses one. Thus 1,000 states is the maximum, not the size of every pass. Fixed members are removed from the allocation, their characters cannot be selected again for that team, and their best leader contribution is an optional initial state consuming no remaining card. An unresolved required character reserves one remaining slot for its team; selecting that character consumes the reservation rather than an ordinary free-member count, so no extra state dimension is needed. Local matching forbids physical-card reuse and honors every required card. The four highest-weight cards per local role suffice when at most two other roles and one excluded card can block alternatives; required/forced cards are inserted explicitly. Every roster card still receives all permitted destination checks.
+## 3. Search state and invariants
 
-Forward and backward tables join each local pattern to compatible outside counts. This gives an upper for every card going to team 0/1/2 or remaining unused, without four new global solves per card. They also retain one upper for each character's eight three-team occupancy masks. Across every mask that can still tie or beat the incumbent, teams present in all masks require that character and teams absent from all masks exclude it, without choosing a physical card; local enumeration later keeps every eligible card. Any restriction that leaves a mandatory card with one team immediately fixes that physical member and fulfils the matching character requirement before another joint model is built. Directed sums and a four-operation rounding envelope cover the unchanged integer-to-float mean and final song sum. If the forward whole bound already strictly loses to the incumbent, stop before building the backward table and conditional bounds; equality must continue so deterministic ties remain searchable. Remove a destination only when its upper strictly loses, or no allocation exists; force single remaining destinations. All cuts apply together to the same parent superset. The maximizing allocation is scored by the existing exact scorer, never accepted as an exact optimum.
+Cards are stored under dense instance IDs and character groups are ordered deterministically. A search node contains three `TeamFamily` values and one reversible shared domain.
 
-Keep the numeric weights, local choices, forward/backward tables and conditional uppers together. New fixed members or a newly settled team score require a fresh, smaller model. Otherwise, if the maximizing allocation still fits, compare the retained uppers without rebuilding. If it is excluded, copy the parent's working snapshot, rebuild changed character choices, and propagate scores only until unchanged table rows are reached. Recompute destination uppers only where local masks or outside rows changed. A parent bound remains safe but possibly loose in every descendant; sharing ends with the last DFS user. This budgeted reuse is not a candidate limit, and updates can still reach every character.
+A team family records:
 
-## Early solutions and complete search
+- physical cards already selected for that song;
+- character groups required for that song but not yet tied to a physical card;
+- the next ordinary character-group index; and
+- an exact song score once all five physical cards are fixed.
 
-1. Find a legal fifteen-card assignment. A failed heuristic is not a no-solution proof.
-2. Order configurations using complete-team estimates, immediately scoring each complete proposal already constructed during planning. In at most eight configurations, try up to six deterministic constructions with different allocation orders and contribution weights. At every 512th visited node that survives its bound check, repeat a bounded probe. Deduplicate each probe's triples and perform one neighborhood sweep per new triple: at most 75 cross-team one-card swaps and 225 one-card replacements from the union of the three bound suggestions. Only affected teams are re-scored (at most 375 five-card evaluations before legality/cache savings). Try all six team-to-fixed-song assignments using their existing three-song scores. Improvements never trigger another sweep, and heuristic failure never removes a family.
-3. Search one configuration at a time using an explicit DFS stack, reversible availability and a four-bit destination mask per card. A required card does not advance the ordinary character prefix. Counts and enumeration honor each team's mask, prefix and selected characters; another team may still use another card of the same character.
-4. Check inherited joint and individual-team uppers before fresh work. Intersect tighter bounds with their parents. Fixed five-card teams pass the cheap bound before exact scoring and carry their assigned-song score. Individual-team ordered heads may ignore a team-only mask restriction, which enlarges that bound; they cannot remove a legal completion. Joint allocation and enumeration always honor the restriction.
-5. If the three families fit within 256 total local rows, or the smaller remaining-budget limit, exhaust their product directly. A larger block may also finish exactly before or after joint cuts when it has at most 1,024 rows in total, the product of its two smaller tables is at most 65,536, and all storage fits the budget. Otherwise branch on one unresolved card, retaining every allowed owner including non-use. Conditional gaps and the maximizing allocation only order work. If a fresh joint pass cannot fit or its proof is unavailable, reuse a safe ancestor table when present; without one, use the complete individual-bound ownership/prefix traversal. Unavailable optimization never discards an unresolved branch.
-6. Sort local rows by assigned-song score. The small join scans all three tables. The larger join enumerates pairs from the two smaller tables and uses a short-lived card-to-ranked-row bitset for the third, intersecting required cards and removing physical conflicts. Both use the fixed `(song0 + song1) + song2` order, stop only on a strict loss, and retain the complete floating-point total tie for the deterministic representative.
-7. Release local rows, sorting indexes and any bitset after each block. A bounded configuration-local cache reuses complete five-card results across blocks and song slots. Collisions and eviction only cause re-scoring.
+Ordinary characters are selected in strictly increasing group order. Required groups are resolved before the ordinary prefix advances and therefore do not advance it themselves. When a new requirement is inferred, `can_include` has already removed every not-yet-required group before that team's `next_group`; while any requirement remains, fallback branching resolves one before advancing the prefix. By induction, every unresolved required group is unique within its team, is not already selected there, and is at or after `next_group`. Consequently an individual-team bound may omit reservations and maximize over the ordinary suffix; that suffix is a superset of every real completion. This representation gives one ordinary order for each unordered team without eliminating another team's use of a different physical card of the same character.
 
-The row and pair switches, cache capacity and heuristic effort are work controls, not candidate caps. Completion counts saturate only at u64 maximum for ordering; every selected block is still exhausted exactly. The DFS stack permits long unused-card paths without deep recursion; ordinary frames share bound snapshots rather than copying the roster. There is no global candidate pool, materialized pair table, persistent row bitset or best-first frontier. Worst-case search remains exponential.
+For every currently available physical card, the domain stores four possible destinations: song 0, song 1, song 2, and unused. Every restriction is intersected with the existing mask and recorded on an undo trail. `counts[g][s]` equals the number of available physical cards in character group `g` whose stored mask still contains song `s`. A selected card is removed from availability; a card assigned to `unused` is also removed. Restoring a DFS checkpoint restores availability, masks, and counts together. Completion counts multiply the alternatives for distinct required groups and use a combination dynamic program for the ordinary suffix; saturated counts can only keep a node out of an exact local block, not delete a completion.
 
-## Completion and resource accounting
+The following invariants are required before constructing a joint bound:
 
-Exact success requires every configuration and family to be exhausted or safely pruned. Cancellation, timeout, memory exhaustion, invalid data, arithmetic overflow, scorer disagreement, count/index overflow or internal failure returns incomplete, optionally with diagnostic `bestSoFar`. A high score is not proof of completion.
+1. A selected physical card appears in exactly one team and is not residual input.
+2. A team has at most five selected-plus-required character slots.
+3. Selected and required characters are unique within a team, and every unresolved required group is at or after its ordinary prefix.
+4. If a physical card cannot be unused and has only one feasible team destination, it is materialized into that team; any reservation for its character is simultaneously fulfilled.
+5. Consequently, no unresolved required character duplicates a residual physical card that the joint model already regards as fixed.
 
-The storage budget covers local rows/indexes and their temporary card bitset, the score cache, the search-local shared count-layout catalog, joint working reservations and all live ancestor snapshots, including weights, masks, local choices, forward/backward tables, paths, destination uppers and occupancy-mask uppers. Shared transition layouts are charged once. `peakSearchStorageBytes` includes the conservative new/copy reservation and the bitset's actual allocated capacity, not a sampled heap total; `peakCandidateBytes` and `peakCacheBytes` retain their narrower meanings. For 40 characters and 1,000 states, forward/backward scores plus paths require about 0.665 MiB per snapshot; fixed members reduce that size. Do not trade away useful reuse merely to minimize RSS. Input/model/configuration data, the individual-bound index/undo, scoring scratch and traversal scratch remain outside this budget. Native diagnosis reports those capacities separately and samples process memory; separate peaks are not simultaneous totals or browser/WASM incremental memory.
+The fourth invariant must be established from the *effective* destination masks, not only the stored masks. Team capacity, character uniqueness, and prefix position can remove a destination without modifying the stored card mask. The implementation therefore writes every effective non-unused singleton back to the trailed domain, materializes it, and restarts node analysis until no such singleton remains. A conflict during this closure proves that the node has no legal completion.
 
-Stop checks occur between nodes/candidates and character-table passes, not inside model preparation or one complete-team evaluation; the deadline is not hard real time. Native diagnosis separates joint-bound time, removals, forced cards, whole-bound reuse, new models, table updates, state counts, recomputed layers and reserved bytes. These show work and pruning, not proof of useful score progress. Complete-team evaluations count cache misses; `exactSongScores` counts 15 song/leader results per set, not chart scans.
+This closure is set-preserving. Every completion of the node must send a non-unused singleton to its sole remaining team. Materializing all singletons merely records those forced choices. Earlier materializations can only remove destinations from later cards; they cannot create a completion that was absent or remove a completion that chose a different destination.
 
-## Verification and stop line
+## 4. Individual-team upper bound
 
-For scoring corrections, use the small upstream formula vectors, bitwise reference parity (including overlapping windows and leader parameter groups), existing tiny exhaustive search across budgets/configurations, bound coverage, ties and incomplete outcomes. Run necessary type/compile checks. Do not routinely replay historical teams or rerun long profile benchmarks for a scoring-only change.
+### 4.1 Ideal product
 
-For a scoring-only real-chart check, run `node --import tsx scripts/benchmark-bandori-medley-score.mjs --main <clean-main-worktree>`. It uses the retained 119/961-card data and six real expert charts, tests 100%/95% PERFECT with reset/carried combo, and includes two legal real-card skill variants. Raw-chart timestamps and trigger order are checked against the original Bestdori getter before scoring. It times one fixed-power, best-leader score against main with computed-answer caches disabled; accuracy uses the unchanged pinned Bestdori functions, followed by HHWX's per-song floor. Original single-window/ordinary-combo results and the deliberately different HHWX rules are reported separately. Private inputs, source hashes, timings and results stay under `temp/medley-score-benchmark/`; this is native Rust versus Node, not browser/WASM or full-search throughput.
+For a fixed song and a reachable whole-team skill context, let:
 
-Approved full-search benchmarks remain separate and retain unchanged inputs and budgets; historical results are never search seeds. Private evidence follows [the fixture procedure](bandori-medley-fixtures.md).
+- `P` be an upward-rounded sum of the five card parameters under the current area configuration;
+- `K` be the song's base coefficient plus the five cards' average first-five-window contributions and exactly one leader contribution.
 
-For current-search diagnosis, run `node --import tsx scripts/compare-bandori-medley-search.mjs --diagnose`; add `--case 119-no-event` to run only that case. An exact retained case such as `--case 1229-event-244` is also accepted. `--duration-ms`, `--local-row-target`, `--indexed-join-row-target`, `--indexed-join-pair-target` and `--score-cache-slots` are test-only controls for bounded A/B measurements; they do not change production search settings. The default diagnosis regenerates the retained 119/961-card no-event inputs from raw profiles and masters under the current rule version, then runs each for 60 seconds with the existing 256 MiB storage and 1 GiB sampled-process limits. Results include direct differences from the archived historical averages, with their original settings and known missing data; those scores never enter the search, and no old solver or team replay is run. Test-only native timers report exclusive wall-clock phases, including joint calculation, owner reconstruction, cut application, branching and local blocks; nested work is counted once. Indexed filtering changes which rejected third rows become explicit checks, so its conflict/check counters are not compared with scan-join density. Timings include instrumentation overhead and are not an uninstrumented throughput benchmark. Input hashes, commit, outcomes, counters and native process memory remain in the private `runs/` archive. Reaching the diagnostic deadline completes the measurement, not the exact search; `passed` still requires exact completion and a score at least as high as the historical reference.
+The exact settled song score is no greater than the ideal nonnegative product `P*K` after the documented final-rounding envelope. Negative skill deltas may be replaced by zero because doing so can only raise the score. Each card contributes one fifth of the sum of its first five windows because it occupies every one of those positions in exactly 24 of the 120 orders.
 
-No dominance, quantization, SIMD/FMA, approximate retention, external storage, new dependency, frontend/API integration or maximum-score output hydration is part of this search scope.
+The bridge from the integer scorer to this product is explicit. Let `R(n) = 2^52 / (2^52 - n)`, evaluated upward; for nonnegative binary64 additions this is a conservative `n`-operation rounding factor. For `m` selected area items, the parameter model starts from the scorer's already-rounded card/event sums and area products, then multiplies by `R(12 + 16m)` to cover the remaining addition tree. Thus its additive `P` is not smaller than the scorer's deck parameter. For a note, `R(3)` covers the scorer's ordered base products `(parameter * chartCoefficient) * combo * judgment`. Let their exact floored `u32` result be `B`, let `fl` denote the implemented binary64 operation order, and let `muMax >= mu` cover every materialized skill multiplier reachable by that card and window. The implementation takes `delta = nextUp(fl(nextUp(muMax) - 1))`. The first upward step covers rounding in `B*mu`; the second covers the subtraction from one, giving
 
-Current checkpoint (through 2026-09-02): the accepted fourteen-scene small-roster rerun and the later 48-scene batch both passed their same-input score-regression objectives. The 48-scene batch completed 45 exact; a later rerun completed 1229/event244 exact in 286.488 seconds, while 1513/event244 and 1703/event260 again reached 9,758,172 and 10,106,861 but timed out inside their first configuration. The provenance audit still excludes five non-comparable historical reports.
+```text
+floor(fl(B * mu)) - B <= B * delta.
+```
 
-Clean commit `6b5bebb` then ran the first 28-scene high-pressure batch: whole 1051, 1127, 1329, 1513, 1703, 1747 and 1889-card profiles, four event settings each. Twenty-four completed exact. The unresolved proofs are 1513/event244, 1703/event260, 1747/event244 and 1889/event244; the first three reached strict same-input references, while the 1889 scene has no comparable reference. All 20 valid score comparisons passed (19 equal, exact 1747/event260 higher by 7,343); seven of the eight no-reference scenes completed exact.
+Multipliers no greater than one use `delta = 0`, which is an upper relaxation. Summing the base and window contributions, then applying the exact `24/120 = 1/5` positional frequency, gives `P*K` above the unrounded 120-order mean. If `U` is that calculated upper and `N` is the scorer's exact signed-`i128` mean numerator, then `N <= 5*ceil(U)`. Integer-to-binary64 conversion and division by positive five are monotone; `reference_ceiling(ceil(U))` therefore also covers the final conversion and floor. All following inequalities use `P >= 0`, `K >= 0`, and `t > 0`.
 
-The high-pressure batch totaled 2,660.221 native seconds, with 40.73 MiB sampled process peak and 32.42 MiB budget-accounted search-storage peak. The four timeouts consumed 45.1% of total time and completed at most two of 108 configurations, despite warm starts already being within 0.36% of best-so-far. A later checkpoint completed 1747/event244 exactly at 9,891,757. The current directed-rounding implementation then completed the other three former timeouts under the same 300-second limit: 1513/event244 in 49.245 seconds at 9,758,172, 1703/event260 in 110.167 seconds at 10,106,861, and 1889/event244 in 155.809 seconds at 10,122,138. Each exhausted or safely pruned all 108 configurations, so no retained high-pressure scene remains unproved.
+For every `t > 0`, arithmetic-geometric mean gives
 
-Earlier paired 30-second profiles identified two proof shapes rather than one roster-size effect. In 1513/event244 and 1889/event244, 44%–49% of nodes were at least six ownership decisions deeper than the total selected-or-required team slots; in 1703/event260, 84.5% of nodes had already filled or reserved at least nine of fifteen slots. Joint calculation took 60%–69%, while budget-accounted storage remained only 17.5–32.4 MiB. The tighter secant lower endpoint subsequently solved all three proofs without adding storage. Further work must therefore use new exact profiles rather than treating either old symptom as still established. [The fixture procedure](bandori-medley-fixtures.md) retains the private reports.
+```text
+4 * P * K <= (t * P + K / t)^2.
+```
 
-## Measured search decisions (through 2026-09-03)
+For fixed `t`, the expression inside the square is additive over cards once ordinary and leader roles are separated. A small dynamic program therefore maximizes it while enforcing five distinct characters, fixed members, and exactly one leader. It is evaluated for three positive scales near the parameter/coefficient balance point. Each scale is independently safe, so the minimum of their completed upper bounds remains safe.
 
-Nineteen implementation changes are retained. First, 6.7%–20.6% of joint passes in the original three timeout cases already lost after the forward whole bound. Stopping there raised 60-second node progress by 44.6%–55.8%; the identical 961-card exact result took 6.06 instead of 8.47 seconds. Second, the joint DP has at most 1,000 states, so transition endpoints use exact 16-bit indexes. The instrumented 961 exact run kept all non-time counters and improved from 7.80 to 7.53 seconds; three 30-second progress changes were -0.9%, +5.8% and +3.6%, while sampled process peaks fell 7.8%–11.6%. Third, forward, backward and destination passes skip impossible table entries before arithmetic. The same 961 result improved from 7.32 to 6.91 seconds; timeout progress changed by +2.0%, +6.4% and -0.9%.
+Skill context is not guessed. The bound enumerates every still-reachable mixed, same-band, same-attribute, and same-band-and-attribute context and takes the maximum. A context may relax compatibility per remaining card, which can make the value unattainably high but never too low. Once all five cards are fixed, the implementation uses their actual context and a direct upward `P*K` calculation.
 
-Fourth, a forced card-to-team condition is rejected before local matching when that role is absent from the pattern. A 1229 trace found 12.77 million such calls in 30 seconds; after removal, the unchanged 961 exact result took 4.98 seconds and the three 30-second node counts rose by 52%, 65% and 69% over the preceding checkpoint. Fifth, when a team has four fixed members, the final card carries the complete directed `P*K` bound for fixed-member and final-card leader cases instead of the general quadratic envelope. Three exact cases kept identical answers while total bound evaluations fell by 0.03%, 4.4% and 1.5%; wall-clock variance was too large for a stronger speed claim. Sixth, local row generation and prefix enumeration now check character uniqueness once per group, not once per physical card. All exact counters stayed identical; 1703/event323 local-block time fell from 12.75 to 5.34 seconds and total time from 53.48 to 47.39 seconds. Seventh, each changed character group now prepares one temporary merge of its top-four and required cards for reuse by all 27 patterns and forced destinations; no persistent cache is added. The 961-card exact case kept the same score and 3,416 nodes while improving from 4.131 to 4.039 seconds; four 30-second pressure cases advanced 52.1%, 38.4%, 13.2% and 5.0% more nodes.
+### 4.2 Reversible ranked support
 
-Eighth, the exact indexed join closes medium residual products without more ownership branches. A 70-row parity test covers every indexed slot, multiple bitset words, multiple required cards, physical conflicts, non-associative floating sums and deterministic ties against the scan join; the existing exhaustive oracle remains bitwise identical across 1 MiB and 16 KiB budgets. In the same instrumented 1889/event260 run, the 256-row baseline remained incomplete at 30 seconds, a 1,024-row scan finished in 26.714 seconds, and the 4,096-row/65,536-pair indexed join finished in 22.080 seconds. Raising the pair threshold to 262,144 regressed it to 26.744 seconds and was rejected. An instrumented 1747/event244 run still proved the same 9,891,757 in 286.477 seconds, so the join is retained as a structural improvement but does not by itself solve the remaining hard proofs.
+Each area configuration prepares complete ranked lists by character, context, song, scale, and ordinary/leader role. Lists contain the entire eligible roster; their heads merely skip cards removed from global availability and an undo log restores changed heads during DFS. Per-team owner masks and required reservations are intentionally omitted here, so the maximization is over a superset. Thus ranking avoids repeated roster scans but is not a candidate cap. A team proposed by a maximizing bound is used only as a search hint and is scored exactly before it can become an incumbent.
 
-Ninth, the quadratic remainder of each joint team now uses an interval secant. A downward-rounded lower endpoint comes from the weakest eligible parameters in distinct character groups; the previous additive support remains the upward endpoint. The resulting nonnegative weights are maximized by the unchanged joint DP, then their downward-rounded constant offset is subtracted upward. The exhaustive real-scorer replay covers every legal five-character completion and leader at every fixed-member count; the forward/backward oracle also exercises a nonzero offset, and the end-to-end tiny oracle remains bitwise exact. The instrumented 1889/event260 proof kept the same score and team while falling from 22.080 to 6.476 seconds and from 10,286 to 1,671 nodes. Thirty-second progress on the three unresolved scenes changed only modestly, so this bound is retained for its large proven win without treating it as their solution.
+If construction, range checking, or directed arithmetic cannot prove a finite upper, the individual bound is positive infinity. Unknown means “cannot prune,” not “infeasible.”
 
-Tenth, local product rows retain a safe assigned-song upper and defer exact scoring until card conflicts, required-card coverage and the incumbent upper test have passed. Products totaling at most 1,024 rows with at most 65,536 pairs now close before another joint-DP pass; larger products keep the previous proof path. Strict upper cuts preserve equality, an exact score above its claimed upper fails closed, the indexed/scan parity test deliberately scrambles upper and exact order, and the tiny exhaustive oracle remains bitwise identical across budgets. In matched 30-second diagnostics, unresolved-scene node progress changed from 13,119 to 18,817 for 1513/event244, 19,537 to 31,497 for 1703/event260, and 18,103 to 35,606 for 1889/event244, without changing their retained best scores. Uninstrumented 300-second runs still did not prove those scenes: they retained 9,758,172, 10,106,861 and 10,122,138 while completing 2, 1 and 1 configurations. Sampled process peaks remained 31.6–39.6 MiB. The change is retained as a structural throughput improvement, not as resolution of the three timeouts.
+## 5. Joint three-team upper bound
 
-Eleventh, the 27 count-state transition lists are shared by the ordered triple of remaining team sizes. There are at most 216 such immutable layouts, while each pressure run previously rebuilt them over ten thousand times and copied them into incremental snapshots. The exact 1889/event260 case kept the same score, team, 2,322 nodes and 27,890 complete-team evaluations while improving from 7.460 to 6.111 instrumented seconds. Matched 30-second node progress rose from 18,817 to 25,351 for 1513/event244, 31,497 to 43,952 for 1703/event260, and 35,606 to 38,991 for 1889/event244. Sampled process peaks stayed at 34–36 MiB; cached layouts are search-local and charged once to the search budget.
+The individual bounds ignore competition for physical cards. The joint relaxation assigns all remaining character groups to the three teams simultaneously.
 
-Twelfth, forcing an ordinary card absent from a character group's prepared top-four candidates reuses that group's already-solved bound with the destination slot absent, then adds the forced card upward. Such a card cannot occupy another slot; required or prepared candidates retain full conditional matching. An exhaustive local test covers every occupancy pattern, forced destination and physical-card conflict. The exact 1889/event260 result kept the same score, team, 2,322 nodes and 27,890 complete-team evaluations while improving from 6.111 to 4.821 instrumented seconds. Matched 30-second node progress rose from 25,351 to 27,544 for 1513/event244, 43,952 to 48,584 for 1703/event260, and 38,991 to 44,448 for 1889/event244.
+### 5.1 Linearizing the remaining product
 
-Thirteenth, the same joint pass retains the upper for each character occupancy mask. When only one mask can tie or beat the incumbent, absent team destinations are removed and included teams carry an unresolved required character; every physical-card alternative is still enumerated. Occupancy conditions are consumed only while the cached table's fixed-member residual model matches the current node; a table therefore cannot supply them after a new physical member changes that meaning. The six-character mode oracle covers all eight masks and leader choices; incremental/fresh mode tables, tiny exhaustive search and local required-character counts also agree. Exact 1889/event260 kept the same score and team while moving from 2,322 to 1,401 nodes, 27,890 to 19,922 complete-team evaluations and 245,042 to 132,907 bound evaluations. Across five matched long exact cases, total diagnostic time changed from 391.702 to 282.175 seconds; every case improved by 24.8%–30.7% and every score stayed identical. The three 30-second timeout cases used 10%–21% fewer bound evaluations, but all three enumerated more complete teams; 1889/event244 reached the retained 10,122,138 best-so-far within 30 seconds. This is retained as a structural gain, not a resolution of those proofs.
+The joint bound uses the same nonnegative relaxed upper model as the individual bound. For each card, its parameter atom is an upper value and its ordinary/leader coefficient is the largest compatible contribution over every still-reachable whole-team context. Different cards may therefore receive maxima from mutually incompatible contexts; this only enlarges the represented space. Every real completion maps to the same cards and roles in this model with a `P*K` value no smaller than its unrounded ideal mean; settlement and medley-level rounding are covered below.
 
-Fourteenth, unresolved required characters now constrain the existing joint program instead of only the later row generator. Each character stores a three-bit required-team mask; complete patterns that omit a required team are skipped, while raw local choices remain available for forced-card conditional bounds. The six-character oracle checks a character required by all three teams against exhaustive physical-card assignments and a fresh calculation. Across the same five long exact cases, total diagnostic time fell from 282.175 to 261.653 seconds; every score, team and area configuration stayed identical, while nodes fell 1.7%, complete-team evaluations 2.6% and bound evaluations 3.3%. In the three 30-second timeout cases, nodes advanced 17.8% and bound evaluations 10.9% while total joint-table time fell 0.9%; all retained best scores were preserved. This still does not prove those three cases within 30 seconds.
+For one model team, separate fixed and residual terms. `P0` and `K0` are the upward-represented parameter and coefficient terms already fixed at the node. `Pr` and `Kr` are the model terms assigned by the residual allocation; `Kr` includes exactly one leader contribution, whether the leader is already fixed or remains residual:
 
-Fifteenth, cards outside a character's prepared local candidates share six `team × role` outside maxima instead of scanning up to eighteen patterns per team destination; their unused destination is the unchanged whole upper. Prepared and required cards keep the full conditional match. Directed additions preserve an upper despite regrouping, and the exhaustive destination oracle still covers every physical assignment. The five matched long exact cases kept identical results and traversal counts while total diagnostic time fell from 261.653 to 250.090 seconds; their destination phase fell from 54.989 to 50.460 seconds. All fifteen changes keep equality and every unpruned completion in the proof.
+```text
+P = P0 + Pr
+K = K0 + Kr
+P*K = P0*K0 + P0*Kr + K0*Pr + Pr*Kr.
+```
 
-Sixteenth, a required character reserves its team slot inside the joint count state instead of also consuming an ordinary free-member transition. The state still records whether a leader has been chosen, including a required character used as leader; requirements are enforced by physical character groups exactly as before. Any requirement change rebuilds the table because it changes the count meaning. The required-character oracle now also checks every forced card destination. The five matched long exact cases kept identical scores, teams and exact outcomes while total diagnostic time fell from 250.090 to 226.624 seconds; every case improved by 3.6%–15.6%, and the summed joint-state count fell by 43.9%. Thirty-second progress was mixed: 1703/event260 and 1889/event244 advanced 5.5% and 2.1% more nodes, while 1513/event244 advanced 13.4% fewer because fresh model builds increased. The state reduction is retained, but the three timeout proofs remain unresolved.
+This is an algebraic decomposition of the relaxed model, not a claim that the four symbols are exact scorer values. The first term is constant and the next two are linear in residual card choices. Only `Pr*Kr` is nonlinear. For any chosen `t > 0`, define
 
-Seventeenth, once a character pattern's outside contribution has been computed, its existing whole-score upper is compared with the incumbent before any occupancy or per-card conditional work. Only strict losers are skipped; equality remains. Eight exact scenes, including three newly retained regression scenes and five current long cases, kept identical complete results and traversal counts; the destination phase fell 16.6%, while total instrumented time changed by 0.6%. Uninstrumented repeated runs improved 1229/event244 by about 10% and 1703/event244 by about 2%. The proof tree is unchanged, so this is retained only as a small CPU reduction, not a solution to the remaining timeouts.
+```text
+A = t*Pr + Kr/t.
+```
 
-Eighteenth, every occupancy mask that can tie or beat the incumbent contributes shared facts: intersection bits require a character, while teams absent from the union exclude it. Facts for all characters come from the same parent relaxation and are applied together before rebuilding. Equality remains competitive and no physical-card choice is removed. Nine exact scenes kept bitwise-identical complete results; the three newly added regression scenes improved 4.3% in aggregate against their own current-checkpoint baselines, while all nine instrumented scenes improved 4.4%. A separate uninstrumented three-scene pass improved 3.7% in aggregate, with 1229/event244 varying between neutral and about 10% faster across repeated pairs. Thirty-second proof work improved in two unresolved scenes but regressed in 1513/event244, so this is retained as a modest safe tree reduction, not a timeout solution.
+Then `Pr*Kr <= A^2/4`. Suppose directed calculations establish `L <= A <= M` for every completion in a relaxed legal residual space. Convexity of `x^2` places the graph below the chord joining `(L,L^2)` and `(M,M^2)`:
 
-Nineteenth, the interval-secant lower endpoint also uses the minimum of `t*parameter + coefficient/t` over the relaxed legal choices of distinct characters and one leader. Every card-level multiplication, division and addition is rounded downward before the minimum program combines the cards; reusing upward-rounded upper-bound weights is explicitly rejected by a two-card arithmetic regression. Taking the larger of this result and the existing parameter-only lower bound is therefore still below every real completion. Nine paired uninstrumented exact scenes kept identical complete best results. Against the same `3b84e80` inputs, the corrected implementation took 120.206 instead of 289.234 seconds (-58.4%), with nodes falling from 301,473 to 105,928, bound evaluations from 39,245,922 to 16,907,601, and complete-team scores from 881,782 to 442,429. The newly added cases are compared only with their own current-checkpoint baselines. It also completed the three former 300-second timeouts in 49.245, 110.167 and 155.809 seconds without changing their retained best objects.
+```text
+A^2 <= (L + M)*A - L*M,
+Pr*Kr <= ((L + M)/4)*A - L*M/4.
+```
 
-Rejected prototypes remain deleted; Git retains their implementation history.
+The right side is linear in the residual ordinary/leader card weights. For each model card, the upper endpoint atom is `add_up(mul_up(t,p), div_up(c,t))`; the lower atom uses the corresponding three downward operations. `M` is the upward-added maximum support over distinct characters and exactly one leader. `Lchoice` is the downward-added minimum support over the same relaxed choices, and `L = max(Lchoice, mul_down(t,minResidualParameter))`. Both operands of this maximum are no greater than every allowed model `A`, so `L` remains a lower endpoint. Omitting required-character conditions enlarges the common endpoint domain: its maximum cannot decrease and its minimum cannot increase. Hence `M` remains an upper endpoint and `Lchoice` a lower endpoint, while the prefix invariant above ensures every real completion remains in the domain.
 
-| Rejected direction | Decisive result |
-| --- | --- |
-| 27 root weight combinations | No whole or destination bound changed. |
-| 42 root band/attribute contexts | Only 0.033%–0.057% root reduction for 0.48–0.62 seconds per configuration. |
-| Alternative ownership ordering | Fewer-destinations-first slowed 961 from 6.06 to 18.43 seconds; making conditional gap globally primary failed to finish the current 961 case in 30 seconds instead of about 4.7 seconds. |
-| Eight/sixteen parameter bins | Stronger root cuts, but 60-second node progress fell 5.3%–25.5%; whole-only made 961 take 11.04 seconds. |
-| Saturated destination scans | Skipped 56.36 million pattern visits but weakened descendants so 961 completed only 4/108 configurations in 60 seconds. |
-| One-level deferred joint rebuild | 961 grew from 3,412 to 7,641 nodes and from 6.06 to 9.90 seconds. |
-| Cross-node forced-choice cache | An early census found only 1.49%–8.73% reusable calls; actual shared tables, even lazily filled, reduced three 10-second node counts by 18%–38% and raised budget-accounted peaks to 47–135 MiB. |
-| Changing local-block size or gap-triggered refinement | 128 rows made 1703/event323 8.6% slower and also regressed two medium exact cases; 512 rows was neutral there and 1.4%–6.5% slower elsewhere. Since 56%–62% of surviving bounds were already within 0.5%, gap refinement was not selective either. |
-| Sparse/bitset destination traversal | Destination time did not improve, hard-case progress stayed flat, and each snapshot gained about 45 KiB. |
-| Global best-bound frontier | An independent node must copy or replay the mutable domain, a roughly 2 MiB bound index, and joint snapshots; it changes order but not the settled-incumbent proof set. A shallow cutset had no evidence strong enough to justify that replay machinery. |
-| Independent contribution frontier | Single-team root frontiers held only 21–42 entries, but summing three independent teams discarded physical-card competition and was 379,669–755,036 looser than the current joint root. A per-character frontier used only in weight preparation made that subphase 6%–8% faster while changing three 10-second node counts by only -0.8% to +0.5%; this does not justify a nine-dimensional joint-frontier rewrite. |
-| Separate 1,024/4,096 pre/post-joint row limits | The larger post-joint block improved 1889/event260 from 6.111 to 5.630 seconds, but the matched 1747/event244 proof regressed from 65.921 to 68.133 seconds and 30-second progress fell materially in 1513/event244 and 1703/event260. The common 1,024-row limit remains. |
-| Global strict card dominance | Three permanent same-character witnesses removed 43.5%–46.5% of cards, but exact-case time regressed about 8% overall and 30-second progress fell 1.7%–12.4% in all three timeout scenes. The roughly 400-line certificate was deleted. |
-| Intersecting destination bounds with ancestor values | Millions of destinations were compared, but none became newly removable, narrower or fixed in the three timeout scenes; the scan reduced 30-second progress by 0.9%–4.7%. |
-| Filtering before a larger direct join | Materializing up to 4,096 rows only when incumbent filtering later fit the existing join limits still raised 1229/event244 from 90.528 to 95.012 seconds and increased hard-scene bound work by 17%–50%. Even a 97.8% successful speculative-join rate did not repay the extra row generation. |
-| Branching on one character’s team occupancy | The exact Boolean split dismantled combinations already represented together by the joint program: exact 1889/event260 grew from 1,169 to 9,131 nodes and from 3.363 to 8.976 seconds. |
-| Two-piece interval secants | Taking the maximum of two subinterval chords is safe and reduced proof work, but the two additional joint programs cost more than they saved: exact 1889/event260 regressed 13%, and gated 1211/event244 regressed 9.7%. |
+The slope `s = (L+M)/4` is rounded upward. The offset `o = L*M/4`, which is subtracted only after the maximizing allocation has been found, is rounded downward. Each card receives `add_up(linearUpper, mul_up(s,upperEndpointAtom))`; the three offsets are combined downward before `sub_up` subtracts them from the upward allocation maximum. All resulting weights therefore dominate the intended model expression. Three `t` values are tried, and the completed single-team upper—not merely `M`—selects the tightest safe envelope. The special cases of zero residual parameter/coefficient and one remaining card use direct linear or complete-product bounds.
+
+For a team whose exact song score is already known, that score contributes directly as a nonnegative constant. Replacing a negative settled score by zero is again only a relaxation. The remaining model terms bound unrounded song means. Converting each real mean numerator from `i128` to binary64, dividing by five, flooring, and adding the three settled scores in fixed order cannot exceed the nonnegative joint ideal-sum upper multiplied upward by `R(4)`: one rounding allowance covers conversion/division on a contributing path and the other steps cover the two medley additions. This is the final joint score envelope applied after constants and offsets.
+
+### 5.2 Character-local choices
+
+For each character group and each team, the character has three roles: absent, ordinary member, or leader. Across three teams there are `3^3 = 27` role patterns. For each pattern, a local exact matching chooses distinct physical cards for the occupied roles, respects destination masks, and contains every physical card that cannot be unused.
+
+Only four ranked non-required cards per team/role are needed inside this local matching. At most three role positions consume physical cards from one character, and a conditional query may additionally forbid or force one card. If a candidate lies below the first four for a role, at least one of those four remains available whenever that lower candidate could be used. Required and forced cards are added explicitly, so this lemma is not a global roster truncation.
+
+### 5.3 Count-state dynamic program
+
+The joint program scans character groups. Its state stores, independently for each team, the number of consumed *optional* residual positions and whether a leader has been supplied. A required character reserves its position before the program starts; consuming that character does not also consume an optional position. The Cartesian state count is at most `10^3 = 1,000` and usually shrinks as teams fill.
+
+For character `g`, state transition `x -> y` exists for every locally feasible role pattern whose occupancy and leader effects match the three count axes. If `w(g,r)` is the upward-rounded local weight for pattern `r`, the forward recurrence is
+
+```text
+F[g+1,y] = max(F[g,x] + w(g,r))
+             over every valid transition (x,r) -> y.
+```
+
+The terminal state requires every optional position to be consumed and every team to have exactly one leader. Hence the terminal maximum covers every residual three-team allocation admitted by the relaxation while enforcing physical-card non-reuse within every character group and character uniqueness within every team. Adding constants, subtracting downward offsets, and applying the final upward rounding envelope yields the whole-medley upper.
+
+Backward tables compute the corresponding best suffix. Joining a local choice between a forward prefix and backward suffix gives, without rerunning the whole program:
+
+- an upper for assigning each physical card to each of its four destinations; and
+- an upper for each character's eight residual three-team occupancy masks; fixed members and full-team destinations have already left the residual domain.
+
+A destination or occupancy mode is removed only when its conditional upper is strictly below the exact incumbent, or when no conditional completion exists. If all competitive occupancy modes include a team, that character becomes required there; if none include a team, that destination is removed. All deductions in one pass are consequences of the same parent relaxation and may be applied together. Equality always remains searchable.
+
+An incremental joint update is allowed only when fixed members and fixed scores are unchanged, required masks are identical, and every owner mask only shrinks. Changed character choices are rebuilt, and a forward prefix or backward suffix is reused only where its boundary table is element-for-element identical. Otherwise the implementation attempts a fresh model. If a new proof bound is unavailable or does not fit the configured search budget, an already valid ancestor whole/destination bound may still constrain its smaller descendant space, but occupancy deductions are consumed only while the incremental-update predicate holds; otherwise the optimization is skipped. Reuse changes work, not the represented completion set.
+
+## 6. Exact closure of small residual products
+
+When the sum of the three family row counts is at most the local limit—at most 256 and reduced further when the remaining memory budget requires it—the search materializes every team completion in the three families. A larger block may also close directly when total rows are at most 1,024, the product of the two smaller row sets is at most 65,536, and its temporary storage fits the budget. These thresholds select an exact method; they never discard rows.
+
+Every row initially carries a proof-safe song upper. Exact five-card scoring is deferred until a row participates in a conflict-free, incumbent-competitive triple. The direct join scans all eligible triples. The indexed join instead builds temporary bitsets mapping physical cards and required cards to rows of the largest table, then enumerates all pairs from the other two tables and every compatible indexed row. Both joins:
+
+1. reject repeated physical cards across teams;
+2. require every card whose `unused` destination has been removed;
+3. use strict upper cuts, retaining equal-score candidates; and
+4. compute the final total as `(song0 + song1) + song2`.
+
+Sorting and bitsets alter enumeration order only. After the block completes, rows, indexes, and bitsets are released.
+
+## 7. Complete traversal
+
+The search proceeds as follows:
+
+1. Validate that at least one legal fifteen-card assignment exists.
+2. Build chart-local score data and safe root bounds for every area configuration.
+3. Score a bounded set of deterministic proposals and one-sweep card swaps/replacements to obtain an early incumbent. A failed proposal proves nothing.
+4. Visit every area configuration in descending estimated quality, unless its root upper is strictly below the incumbent.
+5. At each DFS node, repeatedly apply inherited bounds, refresh changed individual bounds, and settle completed teams. If the node is not first closed by an exact local block, enforce projected singleton closure before calculating or updating the joint bound and applying proved conditional deductions.
+6. Close a sufficiently small residual product exactly. Otherwise branch on one contested physical card into every feasible destination, including `unused`; if no joint choice is available, use the complete increasing-character prefix partition.
+7. Restore the reversible domain and continue until every child and every configuration is exhausted or safely pruned.
+
+The explicit stack avoids call-stack depth proportional to the roster. Branch order favors maximizing proposals and large conditional gaps, but all feasible children remain present. Completion probes run periodically and can improve the incumbent; they cannot certify or remove a branch.
+
+## 8. Exactness argument
+
+### Lemma 1: leaf scores are exact
+
+Every reported solution is legal-checked and evaluated by the canonical scorer. Bounds and heuristic estimates cannot enter the result directly.
+
+### Lemma 2: the unpruned traversal is complete
+
+The source adapter lists every legal `q` in `Q`. Within one configuration, increasing character prefixes enumerate every unordered five-character team once. Ownership splits partition a card's remaining completions by its three team destinations and `unused`. Required-character resolution enumerates every eligible physical card of that character. Local closure enumerates every row and every conflict-free triple. The exact scorer evaluates every leader for each reached five-card set and retains its best deterministic representative. Therefore, with pruning disabled, every legal triple of card sets—and the best score obtainable from every leader choice for that triple—is represented.
+
+### Lemma 3: each pruning value is an upper bound
+
+The scorer-to-product bridge in Section 4 makes `reference_ceiling(ceil(P*K))` an individual settled-song upper, and AM-GM safely bounds its `P*K` input. The joint bound retains the relaxed model's constant and linear algebraic terms through directed upper representations and replaces only `Pr*Kr` by a valid interval-secant upper; its final `R(4)` factor covers settlement and medley addition. It then maximizes over a relaxation containing every legal residual allocation. A forward/backward conditional maximizes the corresponding conditioned relaxation; a local pattern is recorded as unavailable only after its safe upper is strictly below an exact feasible cutoff. Upward operations enlarge positive terms and downward operations reduce subtracted offsets. If a finite proof value cannot be established, the individual bound becomes infinity or the joint optimization is disabled. Thus no bound is below the best exact completion it represents.
+
+### Lemma 4: every structural deduction preserves completions
+
+An owner or occupancy option is removed only if infeasible or strictly unable to tie the incumbent under a safe conditional upper. Required-character consensus records a property shared by every competitive occupancy mode. Projected singleton closure records the only destination present in every completion. None of these operations removes a completion that could equal or beat the incumbent.
+
+### Theorem: an `exact` outcome contains the global optimum
+
+By Lemma 2, every legal medley belongs to a visited or pruned range. By Lemmas 3 and 4, a pruned range has no solution strictly better than the incumbent; equal ranges are retained for deterministic tie selection. By Lemma 1, the incumbent is a legal exact score. When traversal exhausts all configurations and ranges, no better legal score exists; the per-team leader rule and complete-medley comparator select the specified deterministic representative among ties.
+
+If no legal leaf exists, the same exhaustion proves `best = null`. The theorem does not apply to an `incomplete` outcome.
+
+## 9. Numeric and failure safety
+
+Proof arithmetic uses explicit upward/downward binary64 helpers. Positive upper terms, slopes, and rounding envelopes are directed upward; lower endpoints and subtracted offsets are directed downward. Fallible scalar conversions and arithmetic are checked. Signed-`i128` score accumulations are statically bounded by validated `u32` note counts and per-note scores; count and index operations are either checked or bounded by fixed-size state and validated input invariants. An exact row exceeding its claimed local upper produces `scorer_disagreement` rather than continuing with a false proof.
+
+Every score cut is strict against an exact feasible cutoff: normally the global incumbent, and inside a local join possibly the best candidate already scored for that fixed pair. Equality remains because the deterministic tie representative may improve. An unavailable finite proof bound becomes infinity or disables that optimization, so exhaustive search may still finish `exact`. Detectable exact-scoring/input arithmetic failures, controlled allocation failures, timeout, cancellation, counter overflow, and internal inconsistency fail closed as `incomplete`, optionally with diagnostic `bestSoFar` and discovered solutions. If the process, worker, or browser is terminated outright, no final outcome can be promised, but it cannot be reported as `exact`. There is no score-gap success state.
+
+Stop checks occur between nodes, candidates, and character-table work, not inside every scalar scoring operation, so a deadline is cooperative rather than hard real time.
+
+## 10. Resource model
+
+The configured search-storage budget covers local rows and indexes, score-cache capacity, shared count layouts, joint snapshots retained by live DFS ancestors, and conservative workspace reservations. `peakSearchStorageBytes` is a budget-accounting peak, not process RSS. The input, source model, exact scorer temporaries, single-team ranked lists, and some traversal data are outside that counter; native benchmark runs separately sample process working set.
+
+Joint snapshots are retained only while a descendant can reuse them and are released with the final reference. Shared count layouts are charged once. Local rows and bitsets live only for one closure block. The score cache has fixed capacity. Exhaustive correctness does not depend on any cache entry surviving.
+
+The worst-case search remains exponential. The implementation deliberately does not claim a polynomial bound or a fixed practical runtime for arbitrary rosters.
+
+## 11. Verification obligations
+
+Every change to enumeration, bounds, or deductions must pass the narrowest applicable checks and the complete Rust suite. In particular, the retained suite covers:
+
+- tiny exhaustive search against an independent oracle under different memory budgets and configurations;
+- individual and joint upper coverage over every legal tiny completion and leader;
+- forward/backward whole, destination, and occupancy-mode values against exhaustive assignment;
+- required characters, physical-card conflicts, fixed teams, negative extras, and deterministic ties;
+- scan/indexed-join parity with more than one bitset word and deliberately different upper/exact ordering;
+- projected effective-owner singleton materialization and reservation fulfilment;
+- exact scorer agreement with the independent 120-order implementation; and
+- stop-reason propagation, search-budget exhaustion as `incomplete`, strict input validation, hydration score disagreement, and the complete projected-singleton `joint_step -> Restart` order.
+
+After Rust search code changes, rebuild the committed browser artifact with `npm run build:medley-foundation:wasm`; the ordinary Next.js build does not regenerate it. Exercise the generated JavaScript/WASM binding on a retained counterexample before release so source-only success cannot leave an older browser solver deployed.
+
+Real-profile acceptance rebuilds normalized input from archived profiles and retained raw data, never from saved winning teams. A historical score is compared only when the archived profile and every recorded song, difficulty, PERFECT-rate, and event setting match. Most old reports do not carry per-run data hashes, so exact historical master/chart identity remains unproved and is stated as such. A run passes the exactness gate only if it finishes `exact`; merely reaching a reference score is not proof.
+
+The complete private procedure and provenance rules are in [the fixture document](bandori-medley-fixtures.md). Diagnostic environment overrides are measurement tools only and do not change the production thresholds. Historical experiment ledgers and rejected prototypes are intentionally absent here: they are not part of the proof and belong in Git or private reports.
+
+## 12. Current scope boundary
+
+This design proves top-1 under the fixed foundation rules. It does not prove a global top ten, model native judgment histories, use life state, choose song order, or optimize event points. It adds no dominance assumption, score quantization, approximate retention, external storage, or alternate server computation. Any future optimization must identify the represented completion set and the inequality or exact partition that preserves it before performance evidence is relevant.

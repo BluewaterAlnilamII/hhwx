@@ -4,7 +4,7 @@
 
 ## Authority and scope
 
-This is the shared input and scoring contract for the new calculator on `dev/medley-v2-greenfield`. The implementation is written independently: it does not import, wrap or refactor the existing team-builder scorer or search. Existing HHWX input and product rules remain authoritative; old solver and experiment architectures do not. The source guard enforces the TypeScript import boundary.
+This is the shared input and scoring contract for the greenfield calculator line. The implementation is written independently: it does not import, wrap or refactor the existing team-builder scorer or search. Existing HHWX input and product rules remain authoritative; old solver and experiment architectures do not. The source guard enforces the TypeScript import boundary.
 
 The scoring method uses Bestdori's average judgment and skill multipliers, together with the explicitly agreed HHWX medley rules below. It is not a simulation of native gameplay, nor a byte-for-byte copy of Bestdori's single-song calculator. Native findings remain documentation-only unless the product rules are explicitly reconsidered.
 
