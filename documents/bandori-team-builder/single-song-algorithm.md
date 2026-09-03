@@ -5,7 +5,7 @@ model, scoring model, exact search contract, performance design, correctness
 argument, validation gates, and implementation ownership.
 
 Medley search is a separate greenfield implementation documented in
-`../bandori-medley-foundation.md` and `../bandori-medley-search.md`.
+`medley-foundation.md` and `medley-search.md`.
 
 ## Problem Definition
 

@@ -1,6 +1,6 @@
 # Greenfield Bandori Medley Search
 
-Chinese version: [bandori-medley-search.zh-CN.md](bandori-medley-search.zh-CN.md)
+Chinese version: [medley-search.zh-CN.md](medley-search.zh-CN.md)
 
 ## Abstract
 
@@ -8,7 +8,7 @@ This document specifies the current exact search, states the invariants on which
 
 The search considers every legal shared area-item configuration and every legal assignment of fifteen physical cards to three fixed song slots. Its practical core is a branch-and-bound search with two safe score relaxations: an individual-team bound and a stronger joint three-team allocation bound. Small residual products are closed by exact enumeration. Heuristics affect only traversal order and the quality of the incumbent. They never remove a candidate.
 
-The input and exact scoring contract is defined by [the foundation document](bandori-medley-foundation.md). If this document and the scorer disagree, the foundation contract and executable scorer control; the bound must be weakened or rejected, never the scorer.
+The input and exact scoring contract is defined by [the foundation document](medley-foundation.md). If this document and the scorer disagree, the foundation contract and executable scorer control; the bound must be weakened or rejected, never the scorer.
 
 The corresponding implementation is intentionally split by responsibility: `exact_score.rs` and `candidate.rs` settle complete teams; `fast_upper.rs` and `upper_bound.rs` construct single-team numeric bounds; `joint_upper.rs` solves the relaxed three-team allocation; `search.rs` owns the exhaustive partition, reversible state, local joins, and terminal status. These files are under `crates/bandori-medley-search/src/`.
 
@@ -256,7 +256,7 @@ After Rust search code changes, rebuild the committed browser artifact with `npm
 
 Real-profile acceptance rebuilds normalized input from archived profiles and retained raw data, never from saved winning teams. A historical score is compared only when the archived profile and every recorded song, difficulty, PERFECT-rate, and event setting match. Most old reports do not carry per-run data hashes, so exact historical master/chart identity remains unproved and is stated as such. A run passes the exactness gate only if it finishes `exact`; merely reaching a reference score is not proof.
 
-The complete private procedure and provenance rules are in [the fixture document](bandori-medley-fixtures.md). Diagnostic environment overrides are measurement tools only and do not change the production thresholds. Historical experiment ledgers and rejected prototypes are intentionally absent here: they are not part of the proof and belong in Git or private reports.
+The complete private procedure and provenance rules are in [the testing document](medley-testing.md). Diagnostic environment overrides are measurement tools only and do not change the production thresholds. Historical experiment ledgers and rejected prototypes are intentionally absent here: they are not part of the proof and belong in Git history or private reports.
 
 ## 12. Current scope boundary
 

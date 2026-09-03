@@ -20,7 +20,7 @@ This file is the canonical shared rule entry point for the `hhwx` repository. Co
 
 ## Greenfield Medley Work
 
-- Before working on or delegating the greenfield medley calculator, read `documents/bandori-medley-foundation.md` and the current greenfield foundation implementation. Require every delegated reviewer to do the same before offering conclusions.
+- Before working on or delegating the greenfield medley calculator, read `documents/bandori-team-builder/medley-foundation.md` and the current greenfield foundation implementation. Require every delegated reviewer to do the same before offering conclusions.
 - Delegated conclusions are evidence, not authority. The primary agent must independently verify them against the documented contract, greenfield code, and authoritative calculation sources before adoption; old solver and experiment code is not architectural authority.
 - Keep changes within the established contract and current phase. Do not add speculative optimization, fallback, validation, abstraction, or compatibility behavior without a concrete requirement and a reviewed need.
 

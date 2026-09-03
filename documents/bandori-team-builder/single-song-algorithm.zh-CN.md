@@ -2,7 +2,7 @@
 
 本文档说明 HHWX Bandori 单曲组队计算器的游戏模型、计分模型、精确搜索契约、性能设计、正确性论证、验证门禁和实现归属。
 
-组曲搜索是独立的全新实现，见 `../bandori-medley-foundation.zh-CN.md` 和 `../bandori-medley-search.zh-CN.md`。
+组曲搜索是独立的全新实现，见 `medley-foundation.zh-CN.md` 和 `medley-search.zh-CN.md`。
 
 ## 问题定义
 

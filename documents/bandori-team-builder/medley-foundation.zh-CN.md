@@ -1,6 +1,6 @@
 # 全新 Bandori 组曲基础设施
 
-English version: [bandori-medley-foundation.md](bandori-medley-foundation.md)
+English version: [medley-foundation.md](medley-foundation.md)
 
 ## 依据与范围
 
@@ -40,7 +40,7 @@ English version: [bandori-medley-foundation.md](bandori-medley-foundation.md)
 
 约 2,000 卡是未来困难验收，不是早期或默认测试规模。该场景目标仍为 300 秒、具有竞争力的 200–300 MiB 增量内存，以及低于 1 GiB 的硬峰值。先用极小输入确认正确性，超时不算成功。
 
-暂定搜索方向是计算三队联合分配上界，用前后表复用计算并批量排除卡牌去向（包括不用），限量构造完整方案并做一轮改进，以及短期保存穷举小块和预算内缓存。有用的内存复用优先于最低 RSS。这些工程做法可以复核推翻，不是游戏规则；细节见[搜索设计](bandori-medley-search.zh-CN.md)。
+暂定搜索方向是计算三队联合分配上界，用前后表复用计算并批量排除卡牌去向（包括不用），限量构造完整方案并做一轮改进，以及短期保存穷举小块和预算内缓存。有用的内存复用优先于最低 RSS。这些工程做法可以复核推翻，不是游戏规则；细节见[搜索设计](medley-search.zh-CN.md)。
 
 ## 参数、技能与谱面
 
