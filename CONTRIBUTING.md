@@ -28,6 +28,8 @@ npm run test:medley-foundation
 npm run check:medley-foundation:wasm
 ```
 
+If the changed Rust code is used by the browser binding, also run `npm run build:medley-foundation:wasm` and include the updated package under `src/lib/bandori/medley-wasm/pkg/`.
+
 ## Guidelines
 
 - Keep secrets and private deployment details out of commits.
@@ -42,7 +44,7 @@ npm run check:medley-foundation:wasm
 - Keep pull requests focused on one bug fix, feature, or documentation update.
 - Explain user-visible behavior changes and any migration or deployment steps.
 - Include screenshots or short recordings for meaningful UI changes.
-- Do not include generated build output, local caches, real environment files, or private deployment scripts.
+- Do not include generated build output, local caches, real environment files, or private deployment scripts. The versioned WebAssembly package under `src/lib/bandori/medley-wasm/pkg/` is the deliberate exception because the application imports it directly.
 - Update README, setup notes, or schema documentation when commands, environment variables, database objects, API contracts, or external service assumptions change.
 
 ## Documentation Language

@@ -1,4 +1,4 @@
-//! Browser binding for the greenfield Bandori medley search.
+//! Browser binding for Bandori medley exact search and result hydration.
 
 #![forbid(unsafe_code)]
 

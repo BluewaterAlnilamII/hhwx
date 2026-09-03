@@ -25,7 +25,8 @@ HHWX 是非官方粉丝/工具项目，不隶属于、未获得、也不代表 B
 
 - Node.js 20.9 或更新版本
 - npm
-- rustup（仓库会锁定组曲基础设施所使用的 Rust 工具链）
+- rustup（仓库会锁定组曲计分与搜索所使用的 Rust 工具链）
+- 重建浏览器包时，需要与 workspace 中 `wasm-bindgen` 锁定版本一致的 `wasm-bindgen-cli`（当前安装命令为 `cargo install wasm-bindgen-cli --version 0.2.127 --locked`）
 - 用于账号功能的 Supabase 项目
 - 可选：Cloudflare Turnstile site key 和 secret key
 - 可选/私有：兼容的 HHWX user fetcher endpoint，用于游戏账号绑定和手动同步。本仓库不包含该服务。
@@ -67,6 +68,8 @@ npm run test:medley-foundation
 npm run check:medley-foundation:wasm
 ```
 
+Bandori 单曲与组曲计算器的契约、算法及验证入口见 [documents/bandori-team-builder](documents/bandori-team-builder/README.zh-CN.md)。
+
 ## Supabase 设置
 
 新 schema 变更只有一个 source of truth：[supabase/migrations](supabase/migrations)。[supabase/schema](supabase/schema) 下的文件是 legacy/reference snapshot，`documents/**/*.sql` 用于 maintenance、backfill、compatibility 或 reference。设置和复查说明见 [documents/supabase-setup.zh-CN.md](documents/supabase-setup.zh-CN.md)；两类 snapshot/reference 区域都不是独立的 migration history。
@@ -75,7 +78,7 @@ npm run check:medley-foundation:wasm
 
 ```text
 hhwx/
-|-- crates/         # 全新的 Bandori 组曲模型、参考计分器与精确搜索边界
+|-- crates/         # Bandori 组曲模型、参考计分器、精确搜索与浏览器绑定
 |-- documents/      # 产品/设置说明及维护、回填、兼容、参考 SQL
 |-- public/         # 由 Next.js 直接提供的静态资源
 |-- src/
@@ -85,7 +88,7 @@ hhwx/
 |   |-- lib/        # 服务端和共享业务逻辑
 |   `-- store/      # 客户端状态
 |-- supabase/       # canonical migrations 与 legacy/reference schema snapshots
-|-- Cargo.toml      # 全新组曲实现的 Rust workspace 边界
+|-- Cargo.toml      # Bandori 组曲实现的 Rust workspace 定义
 `-- package.json    # 脚本和依赖入口
 ```
 

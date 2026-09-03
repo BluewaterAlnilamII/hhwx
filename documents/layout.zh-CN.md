@@ -15,7 +15,7 @@ English version: [layout.md](layout.md)
 ```text
 hhwx/
 |-- .claude/          # 项目规则和协作约束
-|-- crates/           # 全新的 Bandori 组曲 Rust workspace members
+|-- crates/           # Bandori 组曲 Rust workspace members
 |-- documents/        # 产品说明、设置说明和功能 SQL
 |-- messages/         # UI 翻译使用的语言消息目录
 |-- public/           # 由 Next.js 直接提供的静态资源
@@ -28,7 +28,7 @@ hhwx/
 |   |-- lib/          # 服务端逻辑、业务服务、校验和工具函数
 |   `-- store/        # 共享客户端状态
 |-- supabase/         # Supabase CLI 配置、迁移、旧 schema SQL 和维护 SQL
-|-- Cargo.toml        # 全新组曲实现的 Rust workspace 定义
+|-- Cargo.toml        # Bandori 组曲实现的 Rust workspace 定义
 `-- package.json      # 前端依赖和脚本入口
 ```
 
@@ -36,8 +36,8 @@ hhwx/
 
 - `bandori-medley-model/`：版本化的规范计分输入与严格校验；不包含搜索控制或 UI／网络契约。
 - `bandori-medley-reference/`：透明计算显式给定的五卡队伍与固定三队组曲；不包含候选生成、剪枝、枚举或优化逻辑。
-- `bandori-medley-search/`：规范搜索输入／输出、资源控制，以及按检查点审查的精确搜索实现；运行时使用 model，reference 只作为开发期 oracle。
-- Rust workspace 是独立的全新边界，不依赖现有 `src/lib/bandori/team-builder/` 下的搜索或计分实现。
+- `bandori-medley-search/`：规范搜索输入／输出、资源控制、精确计分、穷尽搜索、诊断统计和保留结果补算；运行时使用 model，reference 只用于开发期核对。
+- `bandori-medley-wasm/`：运行搜索、报告最好方案改进并补算保留结果的浏览器绑定。Rust crate 不依赖 TypeScript 单曲计分器或搜索器。
 
 ## src/app
 
@@ -91,9 +91,9 @@ hhwx/
 - `bandori/events/`：活动目录、API 契约与服务、路由/区服/状态辅助逻辑、横幅代理和活动评论目标校验。
 - `bandori/event-tracker/`：Event Tracker 的档线、TOP10、实时序列、投影、历史与预测契约/服务，由活动、歌曲和月度追踪模式共同使用。
 - `bandori/chart-simulator/`：无损谱面编译、带版本的 Worker 传输、定位状态重建、原生演出／效果／音频运行时，以及 CDN manifest 解析；谱面模拟器实体资源不进入 Web 仓库，而是通过逻辑路径解析，同时这里不包含区服选择。
-- `bandori/medley-foundation/`：全新的固定队来源校验，以及向 bit-exact Rust 组曲计分契约的投影；不依赖现有 team-builder 或任何搜索表示。
-- `bandori/medley-wasm/pkg/`：全新 Rust 组曲搜索生成的浏览器包，仅由组队计算器 Worker 加载。
-- `bandori/team-builder/`：现有单曲计算器。`core/` 包含其计算基础设施，`single/` 包含精确搜索编排；全新组曲实现不导入这两个目录。
+- `bandori/medley-foundation/`：校验 HHWX 档案／主数据，并投影到带版本的 Rust 组曲计分与搜索契约。
+- `bandori/medley-wasm/pkg/`：Rust 组曲搜索与结果补算生成的浏览器包，由组队计算器 Worker 加载。
+- `bandori/team-builder/`：TypeScript 单曲计算器。`core/` 包含计算基础设施和共享领域常量，`single/` 包含单曲精确搜索编排；组曲计分与穷尽搜索在 Rust 中运行。
 - `comments/`：与目标类型无关的评论契约、表情/贴纸目录、内容解析和特权持久化服务；各目标类型的存在性与可见性校验留在各自领域中。
 - `api-*.ts`：API 响应约定和缓存策略。
 - `bestdori-profile-codec.ts` 和 `user-game-*-server.ts`：游戏档案兼容、同步和服务端持久化逻辑。

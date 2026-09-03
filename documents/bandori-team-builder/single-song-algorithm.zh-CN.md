@@ -2,18 +2,18 @@
 
 本文档说明 HHWX Bandori 单曲组队计算器的游戏模型、计分模型、精确搜索契约、性能设计、正确性论证、验证门禁和实现归属。
 
-组曲搜索是独立的全新实现，见 `../bandori-medley-foundation.zh-CN.md` 和 `../bandori-medley-search.zh-CN.md`。
+组曲搜索是独立的 Rust/WebAssembly 实现，见 `medley-foundation.zh-CN.md` 和 `medley-search.zh-CN.md`。
 
 ## 问题定义
 
 给定：
 
 - 玩家持有卡；
-- 卡牌等级、训练状态、剧情解锁、Master Rank 和技能等级；
-- 区域道具、角色潜能和角色任务加成；
+- 卡牌等级、特训状态、故事完成状态、星光等级和技能等级；
+- 区域道具、潜能解放和角色任务加成；
 - 歌曲谱面和难度；
 - 可选活动加成数据；
-- LIVE 类型、准率模型和优化目标；
+- 演出类型、PERFECT 率模型和优化目标；
 
 目标是找到最优合法五卡队伍。
 
@@ -32,8 +32,8 @@
 当前单曲搜索支持三类目标：
 
 - `score`：最大化歌曲分数。
-- `eventPoint`：最大化活动 PT。
-- `mission_live + eventPoint`：最大化任务 LIVE 活动 PT，包含支援队伍贡献。
+- `eventPoint`：最大化活动Pt。
+- `mission_live + eventPoint`：最大化任务活动的活动Pt，包含支援队伍贡献。
 
 当前模型不处理控分路线、协力玩家真实队伍搜索或组曲三队联动。`perfectRate < 1` 时只模拟 PERFECT/GREAT，非 PERFECT 统一按 GREAT 处理；不模拟 GOOD、BAD、MISS 和断 combo 概率。
 
@@ -41,10 +41,10 @@
 
 搜索依赖：
 
-- 用户档案：持有卡牌、等级、技能等级、Master Rank、训练状态、剧情解锁、排除标记、区域道具、角色潜能和角色任务加成；
-- Master 数据：卡牌、角色、乐团、属性、技能、区域道具、歌曲和谱面；
+- 用户档案：持有卡牌、等级、技能等级、星光等级、特训状态、故事完成状态、排除标记、区域道具、潜能解放和角色任务加成；
+- 主数据：卡牌、角色、乐团、属性、技能、区域道具、歌曲和谱面；
 - 活动加成：来自共享 Events master API 记录，也可以与手动 `bonusOverride` 合并；
-- 请求参数：歌曲、难度、活动、LIVE 类型、目标、准率、房间综合力、协力外部技能，以及 Live Boost/CP 的默认显示档位。
+- 请求参数：歌曲、难度、活动、演出类型、目标、PERFECT 率、房间综合力、协力外部技能，以及 Live Boost/CP 的默认显示档位。
 
 ## 分数和活动模型
 
@@ -53,8 +53,8 @@
 搜索前，每张候选卡会先转换为静态卡牌状态：
 
 1. 按稀有度成长曲线计算当前等级三维基础值，非满级不使用线性插值。
-2. 加上训练、剧情和 Master Rank 加成。
-3. 加上角色潜能和角色任务加成。
+2. 加上特训、故事和星光等级加成。
+3. 加上潜能解放和角色任务加成。
 4. 过滤 `isExcluded` 卡。
 5. 当活动类型影响歌曲分数时，加上活动参数加成。
 6. 在每一种全局区域道具配置下计算有效综合力。
@@ -86,7 +86,7 @@ noteScore = floor(inner * skill)
 
 歌曲总分是所有 `noteScore` 的和。
 
-协力 LIVE 中，HHWX 跟随保存下来的 Bestdori 兼容计分口径：房间分使用未取整的自身平均分，并且只在加上其他玩家分数估计后统一向下取整：
+协力演出中，HHWX 跟随保存下来的 Bestdori 兼容计分口径：房间分使用未取整的自身平均分，并且只在加上其他玩家分数估计后统一向下取整：
 
 ```text
 roomScore = floor(rawAverageScore + otherTeamScore)
@@ -96,7 +96,7 @@ roomScore = floor(rawAverageScore + otherTeamScore)
 
 `otherTeamScore` 来自房间分比例和其他玩家综合力，因此它也可能是小数。如果先对自身平均分取整，当 `frac(rawAverageScore) + frac(otherTeamScore) >= 1` 时，就会比 Bestdori 兼容的未取整平均分公式少 1 分；这类队伍会稳定出现 1 分差。
 
-这条规则对验证很重要：展示用自身分数和房间分有意使用不同的取整位置。展示分可以显示取整后的自身分数，但房间分和活动 PT 计算要先使用未取整平均分，再在房间分层统一取整。
+这条规则对验证很重要：展示用自身分数和房间分有意使用不同的取整位置。展示分可以显示取整后的自身分数，但房间分和活动Pt计算要先使用未取整平均分，再在房间分层统一取整。
 
 ### 技能解析
 
@@ -124,30 +124,30 @@ roomScore = floor(rawAverageScore + otherTeamScore)
 1. 重新计算同团和同属性上下文；
 2. 解析每张卡的真实技能行为；
 3. 枚举五个队长选择；
-4. 自由 LIVE 中，把六个触发窗口分配给五张主队技能，第六次触发按队长技能处理；
-5. 协力 LIVE 中，使用四个固定外部玩家技能加选定队长技能，再按 encore 来源处理第六次触发；
+4. 自由演出中，把六个触发窗口分配给五张主队技能，第六次触发按队长技能处理；
+5. 协力演出中，使用四个固定外部玩家技能加选定队长技能，再按 encore 来源处理第六次触发；
 6. 计算平均分、最高分、最低分、代表性最高分技能顺序和展示字段。
 
 由于技能窗口互不重叠，最高/最低分配可以用位掩码 DP 精确求解。DP 的可达状态是已使用技能集合，也就是 `2^5` 个状态掩码；转移次数约为 `5 * 2^5`。在当前模型下，它与枚举全部 `5!` 个完整排列等价，但会复用部分分配状态，也更容易同时维护最高分、最低分和方案数。
 
 例如 `00101` 表示第 1 和第 3 个技能已经被分配，下一步只需要尝试未出现在这个掩码里的技能。
 
-### 活动 PT
+### 活动Pt
 
-参数加成活动会把加成直接加到卡牌综合力上。这类活动中，活动 PT 最大化等价于歌曲分数最大化，因为活动加成影响产分综合力。
+参数加成活动会把加成直接加到卡牌综合力上。这类活动中，活动Pt最大化等价于歌曲分数最大化，因为活动加成影响产分综合力。
 
-PT 加成活动会先计算歌曲分数或房间分，再计算基础 PT 和主队 PT 加成：
+提供活动Pt加成的活动会先计算歌曲分数或房间分，再计算基础活动Pt和主队活动Pt加成：
 
 ```text
 eventPointBase = floor(basePt(score, roomScore) * (1 + mainPointBonusRate))
 eventPoint = floor(eventPointBase * liveBoostMultiplier)
 ```
 
-`basePt(score, roomScore)` 由活动类型和活动数据选择。搜索算法只依赖分数、房间分和基础 PT 之间的单调关系。
+`basePt(score, roomScore)` 由活动类型和活动数据选择。搜索算法只依赖分数、房间分和基础活动Pt之间的单调关系。
 
-Challenge Live、Versus Live、Team Festival、Live Boost、CP、排名和胜负标记可能影响结果展示，但除非它们改变当前目标使用的分数或 PT 公式，否则不改变队伍优劣顺序。结果会携带 `eventPointOptions`，前端切换展示值时不需要重新搜索。
+挑战演出、竞演演出、团队演出、Live Boost、CP、排名和胜负标记可能影响结果展示，但除非它们改变当前目标使用的分数或活动Pt公式，否则不改变队伍优劣顺序。结果会携带 `eventPointOptions`，前端切换展示值时不需要重新搜索。
 
-### 任务 LIVE 支援队伍
+### 任务活动支援队伍
 
 `mission_live + eventPoint` 启用支援队伍评分。
 
@@ -157,11 +157,11 @@ Challenge Live、Versus Live、Team Festival、Live Boost、CP、排名和胜负
 - 支援卡不能复用主队 `cardId`；
 - 支援队伍内部不能重复角色；
 - 主队同角色的另一张卡可以进入支援；
-- 支援综合力按卡牌自身加任务 LIVE 活动加成计算；
+- 支援综合力按卡牌自身加任务活动加成计算；
 - 支援不吃区域道具；
-- 支援只影响活动 PT，不影响歌曲分数、主队综合力、技能上下文或区域道具配置。
+- 支援只影响活动Pt，不影响歌曲分数、主队综合力、技能上下文或区域道具配置。
 
-任务 LIVE 搜索必须建模支援机会成本。一张强卡可能既适合进主队，又是最强支援候选之一；把它放进主队可能会让剩余支援池损失支援综合力。因此 HHWX 会把 `supportPower` 纳入候选压缩和上界，而不是把支援只当作展示后的后处理。
+任务活动搜索必须建模支援机会成本。一张强卡可能既适合进主队，又是最强支援候选之一；把它放进主队可能会让剩余支援池损失支援综合力。因此 HHWX 会把 `supportPower` 纳入候选压缩和上界，而不是把支援只当作展示后的后处理。
 
 主队固定后，支援问题变成：
 
@@ -171,7 +171,7 @@ Challenge Live、Versus Live、Team Festival、Live Boost、CP、排名和胜负
 
 对每个角色，只有该角色可用卡中 `supportPower` 最高的一张可能有意义。取剩余角色代表中的前五名就是最优解。
 
-任务 LIVE 活动 PT 顺序为：
+任务活动的活动Pt计算顺序为：
 
 ```text
 eventPoint =
@@ -179,7 +179,7 @@ eventPoint =
   + floor(supportBandPower / 3000)
 ```
 
-PT 加成目标通常比单纯总分目标更耗时。总分目标主要按产分综合力和技能贡献比较候选队伍；活动 PT 目标还要跟踪主队 PT 加成，把歌曲分数或房间分代入活动公式，并维护目标专用上界。当前最重的路径是 `mission_live + multi + eventPoint`，因为它还包含房间分、支援机会成本、支援上界和真实支援选择。
+活动Pt加成目标通常比单纯总分目标更耗时。总分目标主要按产分综合力和技能贡献比较候选队伍；活动Pt目标还要跟踪主队活动加成，把歌曲分数或房间分代入活动公式，并维护目标专用上界。当前最重的路径是 `mission_live + multi + eventPoint`，因为它还包含房间分、支援机会成本、支援上界和真实支援选择。
 
 ## 搜索算法
 
@@ -194,22 +194,22 @@ PT 加成目标通常比单纯总分目标更耗时。总分目标主要按产�
 7. 对通过上界检查的完整队伍，解析真实技能上下文并精确评分。
 8. 按目标值排序，再用分数或综合力同分规则、队长技能强度和稳定卡牌 ID 排序。
 
-DFS 状态包含已选卡、已用角色位集合、当前综合力、当前 PT 加成、支援机会成本、队伍上下文状态和当前上界数据。
+DFS 状态包含已选卡、已用角色位集合、当前综合力、当前活动Pt加成、支援机会成本、队伍上下文状态和当前上界数据。
 
 HHWX 在精确模式中不使用会丢失最优解的固定 Top-K 候选裁剪。启发式只能用于排序、建立更高阈值或生成有界兜底结果；除非有安全证明，否则不能从精确搜索空间中删除候选。
 
 ### 性能收益来自哪里
 
-主要性能收益不是显著降低单次分数公式计算成本，而是避免弱分支进入高成本路径。高成本路径包括真实技能上下文解析、队长比较、技能窗口评分、活动 PT 换算、支援队伍选择和结果对象构造。
+主要性能收益不是显著降低单次分数公式计算成本，而是避免弱分支进入高成本路径。高成本路径包括真实技能上下文解析、队长比较、技能窗口评分、活动Pt换算、支援队伍选择和结果对象构造。
 
 关键机制如下：
 
 - 候选压缩在五卡枚举前减少 DFS 宽度。队伍有五个卡位，所以每个角色下的适度缩减会在组合空间中复合放大。
 - 种子队伍尽早填满 top-N 结果列表，让分支定界更早得到可用阈值。
 - 后缀上界索引让“这个分支是否还可能进入 top-N”的高频检查成本足够低，可以贯穿 DFS 使用。
-- 目标专用上界按当前目标使用分数、PT 加成和支援队伍维度，而不是只用一个泛化的综合力代理指标。
+- 目标专用上界按当前目标使用分数、活动Pt加成和支援队伍维度，而不是只用一个泛化的综合力代理指标。
 - 可选的相关性上界用于排除接近阈值、但无法由任何剩余卡集合实现的乐观组合。
-- 任务 LIVE 的支援机会成本会在真实支援选择前进入压缩和上界，因此受支援机会成本影响的弱分支可以更早被拒绝。
+- 任务活动的支援机会成本会在真实支援选择前进入压缩和上界，因此受支援机会成本影响的弱分支可以更早被拒绝。
 - 轻量目标评估会延迟最高/最低技能顺序、支援卡详情和展示元数据。只有队伍可能进入当前 top-N 时，才构造这些详细结果。
 
 简言之，HHWX 用低成本检查证明大量分支不会影响结果列表，并把高成本精确评分留给仍有机会进入结果列表的队伍。
@@ -224,12 +224,12 @@ score:
 
 eventPoint:
   分数上界
-  主队 PT 加成上界
+  主队活动Pt加成上界
 
 mission_live + eventPoint:
   分数上界
-  主队 PT 加成上界
-  支援队伍 PT 上界
+  主队活动Pt加成上界
+  支援队伍活动Pt上界
 ```
 
 这样可以共享计分、区域配置枚举、卡牌准备、谱面准备和上界基础设施，同时保留目标专用剪枝规则。
@@ -246,9 +246,9 @@ mission_live + eventPoint:
 - 同属性；
 - 在当前配置下有效综合力不低于被删除卡。
 
-`eventPoint` 还要求 PT 加成不低于被删除卡。
+`eventPoint` 还要求活动Pt加成不低于被删除卡。
 
-若要让卡 A 在 `mission_live + eventPoint` 目标下支配卡 B，A 还必须满足 `supportPower` 不高于 B。这表示把 B 替换成 A 进入主队时，A 对剩余支援池的损害不能比 B 更大。没有这个条件，任务 LIVE 支援最优性可能被压缩改变。
+若要让卡 A 在 `mission_live + eventPoint` 目标下支配卡 B，A 还必须满足 `supportPower` 不高于 B。这表示把 B 替换成 A 进入主队时，A 对剩余支援池的损害不能比 B 更大。没有这个条件，任务活动支援最优性可能被压缩改变。
 
 这个条件看起来和“数值越高越好”相反，是因为这里讨论的是主队替换。高支援综合力可能是一种机会成本：如果 A 是更强主队卡，但同时也是该角色最强支援卡，用 A 替换 B 可能会让支援池损失更多综合力。
 
@@ -262,15 +262,15 @@ mission_live + eventPoint:
 
 - 剩余角色最大综合力；
 - 剩余角色技能贡献；
-- 剩余 PT 加成；
+- 剩余活动Pt加成；
 - `both`、`same-band`、`same-attribute` 和 `mixed` 上下文专用上界；
 - 区域配置根上界；
-- 任务 LIVE 的全局支援 PT 上界；
+- 任务活动的全局支援活动Pt上界；
 - 完整结果构造前的最终乐观目标值。
 
 剪枝阈值是当前排序结果中的第 N 名，其中 N 是 `resultLimit`。在结果列表还没有 `resultLimit` 个条目前，不能使用分数或目标值阈值剪枝，因为还没有完整 top-N 边界。
 
-第一层上界成本低，递归中频繁调用。第二层上界只在接近当前阈值时尝试，用小型 Pareto/DP 联合估计剩余综合力、技能贡献和 PT 加成，避免把不同卡上的独立最大值错误组合。如果更紧上界无法证明安全或成本过高，搜索回退第一层上界。
+第一层上界成本低，递归中频繁调用。第二层上界只在接近当前阈值时尝试，用小型 Pareto/DP 联合估计剩余综合力、技能贡献和活动Pt加成，避免把不同卡上的独立最大值错误组合。如果更紧上界无法证明安全或成本过高，搜索回退第一层上界。
 
 调整尝试相关上界的阈值窗口只影响速度，不应影响精确性。
 
@@ -279,7 +279,7 @@ mission_live + eventPoint:
 种子队伍只用于尽早提高 top-N 阈值：
 
 - `score`：优先高综合力和高技能潜力；
-- `eventPoint`：混合综合力和 PT 加成；
+- `eventPoint`：混合综合力和活动Pt加成；
 - `mission_live + eventPoint`：还会惩罚主队卡的高支援机会成本。
 
 种子队伍选得不好只会让搜索变慢，不会影响正确性，因为 DFS 仍覆盖完整精确搜索空间。
@@ -289,11 +289,11 @@ mission_live + eventPoint:
 当前缓存层包括：
 
 - 按 `chartCacheKey + fever` 缓存谱面时间线；
-- 按谱面、准率和 combo 设置缓存内层分数比例；
-- 按技能、技能等级、上下文和准率缓存技能窗口贡献；
+- 按谱面、PERFECT 率和 combo 设置缓存内层分数比例；
+- 按技能、技能等级、上下文和 PERFECT 率缓存技能窗口贡献；
 - 按谱面、server、技能和上下文缓存技能比例画像；
 - 请求级区域配置有效综合力矩阵；
-- worker 生命周期内的 Master、谱面和活动加成请求缓存，失败时失效。
+- worker 生命周期内的主数据、谱面和活动加成请求缓存，失败时失效。
 
 这些缓存只减少重复计算，不能改变搜索空间或最终分数公式。
 
@@ -301,7 +301,7 @@ mission_live + eventPoint:
 
 完整结果对象构造成本较高。搜索因此拆成两层：
 
-- 目标轻量评估：只计算排序所需的分数、房间分、活动 PT、队长和目标字段；
+- 目标轻量评估：只计算排序所需的分数、房间分、活动Pt、队长和目标字段；
 - 详细结果构造：只有队伍可能进入当前 top-N 时，才构造技能顺序、最高/最低分、支援卡和展示元数据。
 
 这不改变计分，只延迟结果对象构造。
@@ -332,11 +332,11 @@ UI 不能把有界结果展示为已证明最优。
 + 可选支援队伍
 ```
 
-算法枚举所有区域道具配置，并在每个配置下枚举所有合法五卡队伍。对完整队伍，算法评估每个队长选择并精确计算技能窗口分配。任务 LIVE 中，主队固定后支援队伍被最优求解。因此，所有未被剪枝的合法队伍都会被精确评分。
+算法枚举所有区域道具配置，并在每个配置下枚举所有合法五卡队伍。对完整队伍，算法评估每个队长选择并精确计算技能窗口分配。任务活动中，主队固定后支援队伍被最优求解。因此，所有未被剪枝的合法队伍都会被精确评分。
 
 ### 压缩安全
 
-如果卡 A 支配卡 B，则二者同角色，不能同时出现在主队。对任何包含 B 的合法队伍，把 B 替换为 A 后，角色集合和技能相关身份不变，综合力不降低，PT 加成不降低，并且在任务 LIVE 中不会增加支援机会成本。因此替换后的目标值不差，删除 B 不会删除唯一最优解。
+如果卡 A 支配卡 B，则二者同角色，不能同时出现在主队。对任何包含 B 的合法队伍，把 B 替换为 A 后，角色集合和技能相关身份不变，综合力不降低，活动Pt加成不降低，并且在任务活动中不会增加支援机会成本。因此替换后的目标值不差，删除 B 不会删除唯一最优解。
 
 ### 剪枝安全
 
@@ -362,7 +362,7 @@ HHWX 的差异：
 
 - 枚举合法搜索空间，并只用安全上界剪枝；
 - 完整五卡确定后解析技能上下文；
-- 将任务 LIVE 支援纳入精确目标和上界；
+- 将任务活动支援纳入精确目标和上界；
 - 枚举全局区域道具配置，而不是逐组独立最大化；
 - 协力 `roomScore` 使用未取整平均分；
 - 明确返回 `exact` 或 `bounded`。
@@ -371,93 +371,29 @@ HHWX 的差异：
 
 ## 实现归属
 
-当前实现分为以下层：
+公开入口 [`bandori-team-search.ts`](../../src/lib/bandori-team-search.ts) 重新导出 `searchBandoriBestTeams`。主要调用路径如下：
 
-- `src/lib/bandori/team-builder/core/`：共享游戏规则和计分基础设施。负责卡牌准备、谱面准备、活动处理、分数计算、五卡队伍评估、通用上界和共享数据契约。
-- `src/lib/bandori/team-builder/single/`：单曲搜索编排。负责单曲搜索范围、目标适配器、种子队伍、结果排序、统计收尾和精确 DFS。
-- `src/lib/bandori-team-search.ts`：公开兼容入口，重新导出单曲搜索 API。
+| 职责 | 主要实现 | 在计算中的作用 |
+| --- | --- | --- |
+| 搜索入口与结果组装 | [`single/search.ts`](../../src/lib/bandori/team-builder/single/search.ts) 的 `searchBandoriBestTeams` | 规范请求级选项，运行每套未被排除的全局区域道具配置，并组装公开响应。 |
+| 共用预处理 | [`single/search-prep.ts`](../../src/lib/bandori/team-builder/single/search-prep.ts) 的 `buildSearchPrecomputedData` | 每个请求只准备一次卡牌、谱面计分数据、活动设置和可复用目标状态。 |
+| 配置规划与完整 DFS | [`single/search-execution.ts`](../../src/lib/bandori/team-builder/single/search-execution.ts) 的 `buildConfigurationSearches`、`runExactDfsSearch` | 构造各配置的搜索范围，访问合法的五角色组合，并且只应用已经配置的安全剪枝。 |
+| 完整队伍评估 | [`core/team-evaluation.ts`](../../src/lib/bandori/team-builder/core/team-evaluation.ts) 的 `evaluateTeam` | 解析最终五卡条件，选择最佳合法队长，并生成结果对象。 |
+| 技能窗口计分 | [`core/scoring.ts`](../../src/lib/bandori/team-builder/core/scoring.ts) 的 `calculateBestScoreForNonOverlappingSkillWindows` | 使用预处理谱面和已解析技能计算分数目标。 |
+| 搜索上界 | [`core/character-bounds.ts`](../../src/lib/bandori/team-builder/core/character-bounds.ts) 的 `estimateSearchScopeTargetUpperBoundFromScore`、`estimateCorrelatedSearchScopeTargetUpperBound` | 限定部分角色选择仍可达到的最高目标值。 |
+| 任务活动支援队伍 | [`core/cards.ts`](../../src/lib/bandori/team-builder/core/cards.ts) 的 `resolveSupportBandForTeam` | 在完整主队确定后选择支援队伍。 |
 
 `core` 层不能导入 `single`。
 
-## 验证门禁
+## 验证
 
-### 开源仓库可运行检查
+仓库提供区域技能专项检查和常规应用检查：
 
-可移植的项目门禁为：
-
-```powershell
-npx.cmd tsc --noEmit
-npm.cmd run lint
-npm.cmd run build
+```bash
+npm run test:team-builder
+npm run typecheck
+npm run lint
+npm run build
 ```
 
-### 本地历史验证材料
-
-历史 Bestdori 兼容验证脚本位于本地工作副本的 `temp/bandori-team-builder/` 下，不属于 Git 跟踪源码。若本地验证脚本和固定样本数据可用，运行：
-
-```powershell
-node temp\bandori-team-builder\validate-bestdori-hhwx-scoring.cjs
-```
-
-### 发布前推荐验证
-
-发布前，如果本地验证脚本、凭据和网络可用，还应跑一次 Supabase 主矩阵：
-
-```powershell
-$env:HHWX_VALIDATE_INCLUDE_SUPABASE='1'
-$env:HHWX_VALIDATE_SUPABASE_PROFILE_LIMIT='12'
-node temp\bandori-team-builder\validate-bestdori-hhwx-scoring.cjs
-```
-
-Bestdori 兼容验证报告的阻断条件：
-
-- `assetGate.ok !== true`；
-- `strictFailureCount > 0`；
-- `fixedScoringFailureCount > 0`；
-- `searchWorseThanBaselineCount > 0`；
-- `boundedCount > 0`；
-- `eventPointOptionsFailureCount > 0`；
-- `uiDisplaySwitchFailureCount > 0`；
-- `performanceGateFailureCount > 0`；
-- `productionReady !== true`。
-
-最近一次保留的单曲验证摘要为：
-
-| 指标 | 值 |
-| --- | ---: |
-| caseCount | 46 |
-| supabaseProfileCount | 10 |
-| failureCount | 0 |
-| strictFailureCount | 0 |
-| fixedScoringFailureCount | 0 |
-| searchWorseThanBaselineCount | 0 |
-| boundedCount | 0 |
-| eventPointOptionsFailureCount | 0 |
-| uiDisplaySwitchFailureCount | 0 |
-| performanceGateFailureCount | 0 |
-| productionReady | true |
-
-来自 `fix-pass2-supabase-main-report.json` 的近期基准测试最大值：
-
-| 场景 | HHWX 最大耗时 ms | 兼容基线最大耗时 ms | 约提升 |
-| --- | ---: | ---: | ---: |
-| 1329 卡池，595 expert，无活动 | 1613 | 9638 | 6.0x |
-| 1889 卡池，686 expert，无活动 | 2061 | 11753 | 5.7x |
-| 1889 卡池，306 challenge | 1857 | 8238 | 4.4x |
-| 1889 卡池，307 mission multi | 7922 | 89377 | 11.3x |
-| 1889 卡池，versus 展示 | 1915 | 12251 | 6.4x |
-| 1889 卡池，festival 展示 | 2356 | 12936 | 5.5x |
-| Supabase 抽样 free perfect | 2440 | 24640 | 10.1x |
-| Supabase 抽样 free perfect 95% | 2291 | 19707 | 8.6x |
-| Supabase 抽样 challenge 306 | 1901 | 10903 | 5.7x |
-| Supabase 抽样 mission 307 multi | 8106 | 90351 | 11.1x |
-
-这些数字来自本地验证环境，是设计证据，不是对所有 Bestdori 版本或运行环境的普遍基准测试声明。
-
-## 剩余风险和后续工作
-
-- Supabase 长矩阵验证曾因网络 `fetch failed / ECONNABORTED` 中断。这是验证环境稳定性问题，不是算法失败，但发布验证应包含一次完整长跑。
-- 2000+ 模拟卡池应定期压力测试，确认精确搜索不会退化成有界结果。
-- 更强的 skyline（同角色非支配集合）压缩可以在同一角色内只保留未被支配的卡，并比较技能窗口贡献向量，而不只比较综合力和标量技能上界。
-- 更专门的乐团/属性后缀索引可以为 `same-band`、`same-attribute`、`both` 和 `mixed` 分支分别保存剩余最佳值，让分支上界更紧。
-- top1-first（先证明第一名）UI 路径可以先证明第一名，再填充 top-N。API 需要按阶段标注精确状态，避免界面暗示尚未完成的后续名次也已证明。
+公式或搜索发生变化时，需要增加一个能在错误实现下失败的针对性回归用例。私有档案和特定机器的基准报告可以补充这些公开检查，但它们不是公开算法契约的一部分，也不能被描述为整个项目都可复现的性能结论。

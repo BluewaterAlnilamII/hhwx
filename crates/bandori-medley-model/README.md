@@ -1,26 +1,19 @@
 # Bandori medley normalized model
 
-This crate defines the first executable boundary of the greenfield medley foundation. It accepts only a fully resolved, fixed evaluation:
+`bandori-medley-model` defines and validates the normalized input for scoring three already selected teams. It is the shared fixed-team data contract used by the reference and production scorers; it does not search a roster.
+
+The input contains:
 
 - exactly three ordered songs;
 - exactly three explicitly supplied five-card teams;
-- one unique physical card instance per medley position;
-- one unique character per team;
-- exact decimal PERFECT probability;
-- one finite Bestdori-compatible deck-total parameter per already selected team;
-- finite Bestdori master skill-rate values;
-- Bestdori-compatible second timestamps with exactly six skill triggers per song.
+- one unique physical card instance per medley position and five unique characters per team;
+- an exact decimal PERFECT probability;
+- one finite, already calculated `deckTotalParameter` per team;
+- resolved score skills; and
+- finite Bestdori-compatible note timestamps with exactly six skill triggers per song.
 
-`isRateUpWithPerfect` enables Bestdori's fixed note-count formula. Callers do not supply stack amounts or maximum percentages. The scoring rule identifier is `hhwx-medley-bestdori-v3`: BPM-anchored chart times, Bestdori's base operation order and exact window endpoints, independently rounded window extras, and a floor of each song mean before summing the medley. The input shape is unchanged; older normalized inputs must be regenerated from their raw sources.
+The scoring rule identifier is `hhwx-medley-bestdori-v3`. Older normalized inputs must be rebuilt from their raw sources when the rule version changes. Unknown JSON fields and unsupported schema or rule versions fail validation.
 
-It is not a search request. There are no candidate limits, result counts, time budgets, memory budgets, pruning switches, or solver modes in the schema. Unknown JSON fields and unsupported schema/rules versions fail closed.
+The model deliberately excludes raw UI state, profiles, master records, search limits, pruning settings and network behavior. The TypeScript adapter under `src/lib/bandori/medley-foundation/` owns profile/master decoding and produces this fixed contract.
 
-## Input ownership boundary
-
-The input pipeline decodes the existing HHWX profile and constructs this model from raw card, character, skill, area-item, event, song and chart records. The profile's `bestdoriProfile` field contains compressed card/item data; HHWX's top-level `characterPotentials` and `characterMissionBonuses` supply character bonuses. The pipeline resolves parameters, the selected area configuration, full-team skill conditions and charts before this boundary.
-
-The fixed-evaluation boundary carries the final JavaScript-number deck parameter produced by the Bestdori-compatible input pipeline. Native-client floating-point and random-order differences are documentation-only and do not alter this calculator contract.
-
-The model intentionally does not accept raw UI state or upstream API payloads. Keeping those concerns outside the scorer prevents network timing and profile encoding details from changing score semantics.
-
-The retained JSON fixture under `tests/fixtures/` is deliberately tiny: fifteen already selected cards and seven normalized notes per song. It proves the complete fixed-input boundary without exercising any search space.
+See [Bandori Medley Team Builder: Rules and Scoring](../../documents/bandori-team-builder/medley-foundation.md) for the formulas and source-data rules. The tiny fixture under `tests/fixtures/` verifies the complete JSON boundary without requiring roster search.

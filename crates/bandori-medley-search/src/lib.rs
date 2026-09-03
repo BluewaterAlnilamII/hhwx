@@ -1,7 +1,7 @@
-//! Greenfield Bandori medley search.
+//! Exact Bandori medley search and retained-result hydration.
 //!
 //! The crate owns its normalized contract and an independent implementation
-//! of the approved Bestdori-compatible scoring and search design.
+//! of the documented Bestdori-compatible scoring and search design.
 
 #![forbid(unsafe_code)]
 

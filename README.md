@@ -25,7 +25,8 @@ The repository is suitable for local development and self-hosted deployment, but
 
 - Node.js 20.9 or newer
 - npm
-- rustup (the repository pins the Rust toolchain used by the medley foundation)
+- rustup (the repository pins the Rust toolchain used by the medley scorer and search)
+- `wasm-bindgen-cli` matching the workspace's locked `wasm-bindgen` crate when rebuilding the browser package (currently `cargo install wasm-bindgen-cli --version 0.2.127 --locked`)
 - A Supabase project for account-backed features
 - Optional: Cloudflare Turnstile site and secret keys
 - Optional/private: a compatible HHWX user fetcher endpoint for game-account binding and manual sync. This repository does not include that service.
@@ -67,6 +68,8 @@ npm run test:medley-foundation
 npm run check:medley-foundation:wasm
 ```
 
+The Bandori single-song and medley calculator contracts, algorithms and verification entry points are documented in [documents/bandori-team-builder](documents/bandori-team-builder/README.md).
+
 ## Supabase Setup
 
 New schema changes have one source of truth: [supabase/migrations](supabase/migrations). Files under [supabase/schema](supabase/schema) are legacy/reference snapshots, while `documents/**/*.sql` contains maintenance, backfill, compatibility, or reference SQL. See [documents/supabase-setup.md](documents/supabase-setup.md) for setup and review notes; neither snapshot/reference area is an independent migration history.
@@ -75,7 +78,7 @@ New schema changes have one source of truth: [supabase/migrations](supabase/migr
 
 ```text
 hhwx/
-|-- crates/         # greenfield Bandori medley model, reference scorer, and exact-search boundary
+|-- crates/         # Bandori medley model, reference scorer, exact search, and browser binding
 |-- documents/      # product/setup notes and maintenance/backfill/reference SQL
 |-- public/         # static assets served directly by Next.js
 |-- src/
@@ -85,7 +88,7 @@ hhwx/
 |   |-- lib/        # server and shared business logic
 |   `-- store/      # client state
 |-- supabase/       # canonical migrations and legacy/reference schema snapshots
-|-- Cargo.toml      # Rust workspace boundary for the greenfield medley implementation
+|-- Cargo.toml      # Rust workspace definition for the Bandori medley implementation
 `-- package.json    # scripts and dependencies
 ```
 

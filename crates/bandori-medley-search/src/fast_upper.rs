@@ -5,7 +5,8 @@
 //! coefficient plus five real card contributions and exactly one leader bonus.
 //! For any positive t, P*K <= (t*P + K/t)^2/4. Maximizing that additive quantity
 //! over distinct characters retains the parameter/skill trade-off on each card.
-//! All arithmetic on the proof path is directed upward; failure is never a cut.
+//! Upper terms are directed upward; interval lower endpoints and subtracted
+//! offsets are directed downward. Failure is never a cut.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -48,6 +49,48 @@ pub(crate) fn div_up(numerator: f64, denominator: f64) -> Result<f64, UpperBound
         return Ok(0.0);
     }
     checked_finite(checked_finite(numerator / denominator)?.next_up())
+}
+
+fn add_down(left: f64, right: f64) -> Result<f64, UpperBoundFailure> {
+    if left == 0.0 {
+        return checked_finite(right);
+    }
+    if right == 0.0 {
+        return checked_finite(left);
+    }
+    Ok(checked_finite(left + right)?.next_down().max(0.0))
+}
+
+fn mul_down(left: f64, right: f64) -> Result<f64, UpperBoundFailure> {
+    if left == 0.0 || right == 0.0 {
+        return Ok(0.0);
+    }
+    Ok(checked_finite(left * right)?.next_down().max(0.0))
+}
+
+fn div_down(numerator: f64, denominator: f64) -> Result<f64, UpperBoundFailure> {
+    if !denominator.is_finite() || denominator <= 0.0 {
+        return Err(UpperBoundFailure::Unknown);
+    }
+    if numerator == 0.0 {
+        return Ok(0.0);
+    }
+    Ok(checked_finite(numerator / denominator)?
+        .next_down()
+        .max(0.0))
+}
+
+pub(crate) fn sub_up(left: f64, right: f64) -> Result<f64, UpperBoundFailure> {
+    if right == 0.0 {
+        return checked_finite(left);
+    }
+    if !left.is_finite() || !right.is_finite() || left < right {
+        return Err(UpperBoundFailure::Unknown);
+    }
+    if left == right {
+        return Ok(0.0);
+    }
+    checked_finite((left - right).next_up())
 }
 
 pub(crate) fn rounding_factor(operations: u128) -> Result<f64, UpperBoundFailure> {
@@ -334,6 +377,7 @@ impl<'a> FastUpperBoundEngine<'a> {
         let mut result = crate::joint_upper::JointWeights {
             cards: vec![[[0.0; 2]; 3]; owners.len()],
             constant: 0.0,
+            offset: 0.0,
             fixed_members: std::array::from_fn(|slot| {
                 owners
                     .iter()
@@ -439,6 +483,20 @@ impl<'a> FastUpperBoundEngine<'a> {
             let remaining_parameter = parameter_maxima[..needed]
                 .iter()
                 .try_fold(0.0, |sum, &p| add_up(sum, p))?;
+            let mut parameter_minima = remaining_groups
+                .iter()
+                .filter_map(|group| {
+                    group
+                        .iter()
+                        .filter(|&&id| owners[id as usize] & bit != 0)
+                        .map(|&id| self.parameters[id as usize])
+                        .min_by(f64::total_cmp)
+                })
+                .collect::<Vec<_>>();
+            parameter_minima.sort_unstable_by(f64::total_cmp);
+            let minimum_remaining_parameter = parameter_minima[..needed]
+                .iter()
+                .try_fold(0.0, |sum, &p| add_down(sum, p))?;
             self.check_parameter_range(add_up(fixed_parameter, remaining_parameter)?, slot)?;
             if needed == 0 {
                 result.constant = add_up(
@@ -505,7 +563,7 @@ impl<'a> FastUpperBoundEngine<'a> {
             }
             // A fixed member may supply the leader without consuming a remaining
             // member slot. Otherwise exactly one of the remaining cards does.
-            let support = |weights: &[[f64; 2]], fixed_leader: Option<f64>| {
+            let maximum_support = |weights: &[[f64; 2]], fixed_leader: Option<f64>| {
                 let mut states = [[f64::NEG_INFINITY; 2]; 6];
                 states[0][0] = 0.0;
                 if let Some(leader) = fixed_leader {
@@ -540,16 +598,54 @@ impl<'a> FastUpperBoundEngine<'a> {
                     (states[needed][1] != f64::NEG_INFINITY).then_some(states[needed][1]),
                 )
             };
+            let minimum_support = |weights: &[[f64; 2]], fixed_leader: Option<f64>| {
+                let mut states = [[f64::INFINITY; 2]; 6];
+                states[0][0] = 0.0;
+                if let Some(leader) = fixed_leader {
+                    states[0][1] = leader;
+                }
+                for group in &remaining_groups {
+                    let mut choices = [f64::INFINITY; 2];
+                    for &id in *group {
+                        if owners[id as usize] & bit != 0 {
+                            for role in 0..2 {
+                                choices[role] = choices[role].min(weights[id as usize][role]);
+                            }
+                        }
+                    }
+                    let previous = states;
+                    for count in 0..needed {
+                        for used_leader in 0..2 {
+                            if previous[count][used_leader] == f64::INFINITY {
+                                continue;
+                            }
+                            for role in 0..(2 - used_leader) {
+                                if choices[role] != f64::INFINITY {
+                                    states[count + 1][used_leader + role] =
+                                        states[count + 1][used_leader + role].min(add_down(
+                                            previous[count][used_leader],
+                                            choices[role],
+                                        )?);
+                                }
+                            }
+                        }
+                    }
+                }
+                Ok::<_, UpperBoundFailure>(
+                    (states[needed][1] != f64::INFINITY).then_some(states[needed][1]),
+                )
+            };
             let scale = (remaining_coefficient / remaining_parameter).sqrt();
             let scale = if scale.is_finite() && scale > 0.0 {
                 scale
             } else {
                 1.0
             };
-            let mut best = None::<(f64, Option<f64>, Vec<[f64; 2]>)>;
+            let mut best = None::<(f64, f64, Option<f64>, Vec<[f64; 2]>)>;
             for factor in WEIGHT_FACTORS {
                 let t = scale * factor;
                 let mut weights = vec![[0.0; 2]; owners.len()];
+                let mut lower_weights = vec![[0.0; 2]; owners.len()];
                 for &id in &remaining_ids {
                     let id = id as usize;
                     let regular = add_up(
@@ -557,16 +653,32 @@ impl<'a> FastUpperBoundEngine<'a> {
                         div_up(coefficients[id][0], t)?,
                     )?;
                     weights[id] = [regular, add_up(regular, div_up(coefficients[id][1], t)?)?];
+                    let lower_regular = add_down(
+                        mul_down(t, self.parameters[id])?,
+                        div_down(coefficients[id][0], t)?,
+                    )?;
+                    lower_weights[id] = [
+                        lower_regular,
+                        add_down(lower_regular, div_down(coefficients[id][1], t)?)?,
+                    ];
                 }
                 let fixed_leader_weight =
                     fixed_leader.map(|leader| div_up(leader, t)).transpose()?;
-                let Some(maximum) = support(&weights, fixed_leader_weight)? else {
+                let Some(maximum) = maximum_support(&weights, fixed_leader_weight)? else {
                     return Ok(None);
                 };
-                // For A=t*Pr+Kr/t and 0<=A<=M, Pr*Kr<=A²/4<=M*A/4.
-                // Directed weights/sums bound A and M; all final coefficients
-                // remain nonnegative, so the joint DP can sum them upward.
-                let slope = div_up(maximum, 4.0)?;
+                let fixed_leader_lower =
+                    fixed_leader.map(|leader| div_down(leader, t)).transpose()?;
+                let Some(minimum) = minimum_support(&lower_weights, fixed_leader_lower)? else {
+                    return Ok(None);
+                };
+                let minimum = mul_down(t, minimum_remaining_parameter)?.max(minimum);
+                // For L<=A=t*Pr+Kr/t<=M, the interval secant gives
+                // Pr*Kr<=A²/4<=((L+M)A-LM)/4. Directed endpoints keep the
+                // joint weights nonnegative; the constant offset is subtracted
+                // only after the maximizing allocation has been found.
+                let slope = div_up(add_up(maximum, minimum)?, 4.0)?;
+                let offset = mul_down(mul_down(maximum, minimum)?, 0.25)?;
                 for &id in &remaining_ids {
                     let id = id as usize;
                     for (weight, &linear) in weights[id].iter_mut().zip(&result.cards[id][slot]) {
@@ -577,17 +689,18 @@ impl<'a> FastUpperBoundEngine<'a> {
                     .zip(fixed_leader_weight)
                     .map(|(linear, weight)| add_up(linear, mul_up(slope, weight)?))
                     .transpose()?;
-                let Some(linear_maximum) = support(&weights, leader)? else {
+                let Some(linear_maximum) = maximum_support(&weights, leader)? else {
                     return Ok(None);
                 };
-                let upper = add_up(constant, linear_maximum)?;
+                let upper = sub_up(add_up(constant, linear_maximum)?, offset)?;
                 // M alone omits the known/linear terms and cannot rank these
                 // different envelopes. Compare their final single-team bounds.
                 if best.as_ref().is_none_or(|previous| upper < previous.0) {
-                    best = Some((upper, leader, weights));
+                    best = Some((upper, offset, leader, weights));
                 }
             }
-            let (_, leader, weights) = best.unwrap();
+            let (_, offset, leader, weights) = best.unwrap();
+            result.offset = add_down(result.offset, offset)?;
             result.fixed_leaders[slot] = leader;
             for &id in &remaining_ids {
                 result.cards[id as usize][slot] = weights[id as usize];
@@ -1190,6 +1303,22 @@ mod tests {
     const FIXED_FIXTURE: &str =
         include_str!("../../bandori-medley-model/tests/fixtures/valid-fixed-medley-v1.json");
 
+    #[test]
+    fn minimum_support_uses_downward_card_atoms() {
+        let upper_atom = add_up(mul_up(1.0, 1.0).unwrap(), div_up(1.0, 1.0).unwrap()).unwrap();
+        let lower_atom =
+            add_down(mul_down(1.0, 1.0).unwrap(), div_down(1.0, 1.0).unwrap()).unwrap();
+        let upper_sum = (0..2)
+            .try_fold(0.0, |sum, _| add_down(sum, upper_atom))
+            .unwrap();
+        let lower_sum = (0..2)
+            .try_fold(0.0, |sum, _| add_down(sum, lower_atom))
+            .unwrap();
+
+        assert!(upper_sum > 4.0);
+        assert!(lower_sum <= 4.0);
+    }
+
     fn fixture() -> MedleySearchInputV1 {
         let fixed: FixedMedleyEvaluationInputV1 = serde_json::from_str(FIXED_FIXTURE).unwrap();
         let cards = (0_u32..8)
@@ -1317,11 +1446,8 @@ mod tests {
         std::array::from_fn(|slot| trace.songs[slot].average_score())
     }
 
-    #[test]
-    fn every_tiny_completion_and_leader_replays_below_partial_and_complete_uppers() {
+    fn three_pool_fixture() -> (MedleySearchInputV1, u32) {
         let mut input = fixture();
-        // Reuse the same card states/charts for three disjoint physical pools,
-        // so every existing completion can also exercise fixed joint members.
         let cards = input.cards.clone();
         let pool_size = cards.len() as u32;
         for copy in 1..3 {
@@ -1332,6 +1458,14 @@ mod tests {
             }));
         }
         input.validate().unwrap();
+        (input, pool_size)
+    }
+
+    #[test]
+    fn every_tiny_completion_and_leader_replays_below_partial_and_complete_uppers() {
+        // Three disjoint physical pools exercise fixed joint members without
+        // introducing cross-team card conflicts.
+        let (input, pool_size) = three_pool_fixture();
         let model = FastScoreModel::new(&input).unwrap();
         let engine = FastUpperBoundEngine::new(&model, &input.area_configurations[0]).unwrap();
         let mut groups = vec![Vec::new(); model.character_count];
@@ -1393,7 +1527,11 @@ mod tests {
                                         add_up(upper, joint.fixed_leaders[slot].unwrap()).unwrap();
                                 }
                             }
-                            let upper = mul_up(upper, rounding_factor(4).unwrap()).unwrap();
+                            let upper = mul_up(
+                                sub_up(upper, joint.offset).unwrap(),
+                                rounding_factor(4).unwrap(),
+                            )
+                            .unwrap();
                             assert!((exact[0] + exact[1]) + exact[2] <= upper);
                         }
                         if fixed_count == 5 {
@@ -1435,6 +1573,128 @@ mod tests {
             assert!(next.contains(&0));
             assert!(engine.estimate_team(best, 0) >= engine.estimate_team(next, 0));
             rank += 1;
+        }
+    }
+
+    #[test]
+    fn real_interval_offset_remains_safe_after_incremental_owner_removal() {
+        use crate::SearchControl;
+        use crate::candidate::evaluate_candidate;
+        use crate::exact_score::PreparedSong;
+        use crate::joint_upper::{JointLayoutCache, UNUSED};
+
+        let (input, pool_size) = three_pool_fixture();
+        let model = FastScoreModel::new(&input).unwrap();
+        let engine = FastUpperBoundEngine::new(&model, &input.area_configurations[0]).unwrap();
+        let mut groups = vec![Vec::new(); model.character_count];
+        for card in &input.cards {
+            groups[model.character_indexes[card.instance_id as usize]].push(card.instance_id);
+        }
+        let mut owners = input
+            .cards
+            .iter()
+            .map(|card| UNUSED | (1 << (card.instance_id / pool_size)))
+            .collect::<Vec<_>>();
+        assert!(
+            engine
+                .joint_weights(&owners, &groups, [None; 3])
+                .unwrap()
+                .unwrap()
+                .offset
+                > 0.0
+        );
+
+        let mut never_stop = || None;
+        let mut control = SearchControl::new(1024 * 1024, &mut never_stop);
+        let mut layouts = JointLayoutCache::new();
+        let required_teams = vec![0; groups.len()];
+        let parent = layouts
+            .calculate(
+                &engine,
+                &groups,
+                (&owners, &required_teams, [None; 3]),
+                None,
+                None,
+                &mut control,
+            )
+            .unwrap()
+            .unwrap();
+        owners[0] &= !1;
+        let updated = layouts
+            .calculate(
+                &engine,
+                &groups,
+                (&owners, &required_teams, [None; 3]),
+                Some(&parent),
+                None,
+                &mut control,
+            )
+            .unwrap()
+            .unwrap();
+
+        let perfect_rate = exact_probability_to_f64(input.perfect_rate);
+        let starts = [
+            0,
+            input.songs[0].notes.len() as u32,
+            (input.songs[0].notes.len() + input.songs[1].notes.len()) as u32,
+        ];
+        let songs = std::array::from_fn(|slot| {
+            PreparedSong::new(&input.songs[slot], starts[slot], perfect_rate).unwrap()
+        });
+        let candidates: [Vec<_>; 3] = std::array::from_fn(|slot| {
+            (0_u32..8)
+                .filter_map(|choices| {
+                    let base = slot as u32 * pool_size;
+                    let members = [
+                        base + if choices & 1 == 0 { 0 } else { 5 },
+                        base + if choices & 2 == 0 { 1 } else { 6 },
+                        base + if choices & 4 == 0 { 2 } else { 7 },
+                        base + 3,
+                        base + 4,
+                    ];
+                    members
+                        .iter()
+                        .all(|&id| owners[id as usize] & (1 << slot) != 0)
+                        .then(|| {
+                            evaluate_candidate(
+                                &input,
+                                &input.area_configurations[0],
+                                members,
+                                &songs,
+                            )
+                            .unwrap()
+                        })
+                })
+                .collect()
+        });
+        let mut whole = f64::NEG_INFINITY;
+        let mut conditional = vec![[f64::NEG_INFINITY; 4]; input.cards.len()];
+        for zero in &candidates[0] {
+            for one in &candidates[1] {
+                for two in &candidates[2] {
+                    let rows = [zero, one, two];
+                    let total = (zero.song_scores[0] + one.song_scores[1]) + two.song_scores[2];
+                    whole = whole.max(total);
+                    for (id, values) in conditional.iter_mut().enumerate() {
+                        let owner = rows
+                            .iter()
+                            .position(|row| row.member_instance_ids.contains(&(id as u32)))
+                            .unwrap_or(3);
+                        values[owner] = values[owner].max(total);
+                    }
+                }
+            }
+        }
+        assert!(whole <= updated.score);
+        for (id, values) in conditional.iter().enumerate() {
+            for (owner, &exact) in values.iter().enumerate() {
+                if exact.is_finite() && owners[id] & (1 << owner) != 0 {
+                    assert!(
+                        exact <= updated.destinations[id][owner],
+                        "id={id}, owner={owner}"
+                    );
+                }
+            }
         }
     }
 
@@ -1541,7 +1801,14 @@ mod tests {
                             add_up(sum, joint.cards[id][slot][usize::from(id == 2)])
                         })
                         .unwrap();
-                    assert!(score <= mul_up(upper, rounding_factor(4).unwrap()).unwrap());
+                    assert!(
+                        score
+                            <= mul_up(
+                                sub_up(upper, joint.offset).unwrap(),
+                                rounding_factor(4).unwrap(),
+                            )
+                            .unwrap()
+                    );
                     if parameter == f64::from_bits(1) {
                         assert_eq!(score, 0.0);
                     }

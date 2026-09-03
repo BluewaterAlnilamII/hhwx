@@ -262,7 +262,7 @@ type TeamSearchWorkerSearchRequest = TeamSearchWorkerMessageEnvelope & {
     songId: number;
     difficulty: BandoriTeamSearchDifficulty;
     perfectRate: number;
-    /** Raw frontend percentage text; required by the greenfield medley adapter. */
+    /** Raw frontend percentage text required by the medley source adapter. */
     perfectRatePercentText?: string;
   };
   songs?: Array<{
@@ -747,7 +747,7 @@ function mapMedleyProgress(
   };
 }
 
-async function runGreenfieldMedleySearch({
+async function runMedleySearch({
   request,
   input,
   effectiveCards,
@@ -1029,7 +1029,7 @@ async function runSearchAttempt(
       perfectRatePercentText,
       songs: medleySongInputs,
     });
-    return runGreenfieldMedleySearch({
+    return runMedleySearch({
       request,
       input: medleyInput,
       effectiveCards,

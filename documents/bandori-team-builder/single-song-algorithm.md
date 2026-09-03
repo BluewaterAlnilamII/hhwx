@@ -4,8 +4,8 @@ This document describes the HHWX Bandori single-song team builder: the game
 model, scoring model, exact search contract, performance design, correctness
 argument, validation gates, and implementation ownership.
 
-Medley search is a separate greenfield implementation documented in
-`../bandori-medley-foundation.md` and `../bandori-medley-search.md`.
+Medley search is a separate Rust/WebAssembly implementation documented in
+`medley-foundation.md` and `medley-search.md`.
 
 ## Problem Definition
 
@@ -530,117 +530,33 @@ HHWX differs by:
 - explicitly returning `exact` or `bounded`.
 
 The Bestdori-compatible baseline is therefore a formula and performance
-reference, not an exact-search correctness oracle.
+reference, not proof that the exact search is correct.
 
 ## Implementation Ownership
 
-The current implementation is split into these layers:
+The public entry point [`bandori-team-search.ts`](../../src/lib/bandori-team-search.ts) re-exports `searchBandoriBestTeams`. The main call path is:
 
-- `src/lib/bandori/team-builder/core/`: shared game-rule and scoring primitives.
-  It owns card preparation, chart preparation, event handling, score
-  calculation, five-card team evaluation, common upper bounds, and shared data
-  contracts.
-- `src/lib/bandori/team-builder/single/`: single-song search orchestration. It
-  owns single-song scopes, objective adapters, seed teams, result ordering,
-  stats finalization, and exact DFS.
-- `src/lib/bandori-team-search.ts`: public compatibility entrypoint that
-  re-exports the single-song search API.
+| Responsibility | Main implementation | Role in the calculation |
+| --- | --- | --- |
+| Search entry and result assembly | [`single/search.ts`](../../src/lib/bandori/team-builder/single/search.ts) `searchBandoriBestTeams` | Normalizes request-level options, runs every surviving global area configuration and assembles the public response. |
+| Shared preparation | [`single/search-prep.ts`](../../src/lib/bandori/team-builder/single/search-prep.ts) `buildSearchPrecomputedData` | Prepares cards, chart scoring data, event settings and reusable objective state once per request. |
+| Configuration planning and exhaustive DFS | [`single/search-execution.ts`](../../src/lib/bandori/team-builder/single/search-execution.ts) `buildConfigurationSearches` and `runExactDfsSearch` | Builds each configuration's search scope, visits legal five-character combinations and applies only the configured safe cuts. |
+| Complete-team evaluation | [`core/team-evaluation.ts`](../../src/lib/bandori/team-builder/core/team-evaluation.ts) `evaluateTeam` | Resolves the final five-card context, chooses the best legal leader and calculates the result object. |
+| Skill-window scoring | [`core/scoring.ts`](../../src/lib/bandori/team-builder/core/scoring.ts) `calculateBestScoreForNonOverlappingSkillWindows` | Calculates the score target from the prepared chart and resolved skills. |
+| Search upper bounds | [`core/character-bounds.ts`](../../src/lib/bandori/team-builder/core/character-bounds.ts) `estimateSearchScopeTargetUpperBoundFromScore` and `estimateCorrelatedSearchScopeTargetUpperBound` | Bounds the best completion still reachable from a partial character selection. |
+| Mission-live support band | [`core/cards.ts`](../../src/lib/bandori/team-builder/core/cards.ts) `resolveSupportBandForTeam` | Selects the support band after the complete main team is known. |
 
 The core layer must not import `single`.
 
-## Validation Gates
+## Verification
 
-### Portable Project Checks
+The repository provides a focused regional-skill check and the ordinary application checks:
 
-The portable project gates are:
-
-```powershell
-npx.cmd tsc --noEmit
-npm.cmd run lint
-npm.cmd run build
+```bash
+npm run test:team-builder
+npm run typecheck
+npm run lint
+npm run build
 ```
 
-### Local Historical Validation
-
-The historical Bestdori-compatible validation runner lives under
-`temp/bandori-team-builder/` in local working copies and is not part of the
-tracked source tree. When that local runner and fixture data are available, run:
-
-```powershell
-node temp\bandori-team-builder\validate-bestdori-hhwx-scoring.cjs
-```
-
-### Release Validation
-
-Before release, also run the Supabase-backed main matrix when the local runner,
-credentials, and network are available:
-
-```powershell
-$env:HHWX_VALIDATE_INCLUDE_SUPABASE='1'
-$env:HHWX_VALIDATE_SUPABASE_PROFILE_LIMIT='12'
-node temp\bandori-team-builder\validate-bestdori-hhwx-scoring.cjs
-```
-
-Blocking conditions for the Bestdori-compatible validation report:
-
-- `assetGate.ok !== true`;
-- `strictFailureCount > 0`;
-- `fixedScoringFailureCount > 0`;
-- `searchWorseThanBaselineCount > 0`;
-- `boundedCount > 0`;
-- `eventPointOptionsFailureCount > 0`;
-- `uiDisplaySwitchFailureCount > 0`;
-- `performanceGateFailureCount > 0`;
-- `productionReady !== true`.
-
-The latest retained single-song validation summary is:
-
-| Metric | Value |
-| --- | ---: |
-| caseCount | 46 |
-| supabaseProfileCount | 10 |
-| failureCount | 0 |
-| strictFailureCount | 0 |
-| fixedScoringFailureCount | 0 |
-| searchWorseThanBaselineCount | 0 |
-| boundedCount | 0 |
-| eventPointOptionsFailureCount | 0 |
-| uiDisplaySwitchFailureCount | 0 |
-| performanceGateFailureCount | 0 |
-| productionReady | true |
-
-Recent benchmark maxima from `fix-pass2-supabase-main-report.json`:
-
-| Scenario | HHWX max ms | Compatible baseline max ms | Approx speedup |
-| --- | ---: | ---: | ---: |
-| 1329-card pool, song 595 expert, no event | 1613 | 9638 | 6.0x |
-| 1889-card pool, song 686 expert, no event | 2061 | 11753 | 5.7x |
-| 1889-card pool, song 306 challenge | 1857 | 8238 | 4.4x |
-| 1889-card pool, song 307 mission multi | 7922 | 89377 | 11.3x |
-| 1889-card pool, versus display | 1915 | 12251 | 6.4x |
-| 1889-card pool, festival display | 2356 | 12936 | 5.5x |
-| Supabase sample free perfect | 2440 | 24640 | 10.1x |
-| Supabase sample free perfect 95% | 2291 | 19707 | 8.6x |
-| Supabase sample challenge 306 | 1901 | 10903 | 5.7x |
-| Supabase sample mission 307 multi | 8106 | 90351 | 11.1x |
-
-These numbers are design evidence from a local validation environment. They are
-not a universal benchmark claim against every Bestdori version or runtime.
-
-## Remaining Risks And Future Work
-
-- Supabase long-matrix validation has previously been interrupted by network
-  `fetch failed / ECONNABORTED`. That is a validation-environment stability
-  issue, not an algorithm failure, but release validation should include one
-  complete long run.
-- 2000+ simulated pools should be stress-tested periodically to confirm exact
-  search does not regress into bounded mode.
-- Stronger per-character skyline compression, meaning a non-dominated set within
-  each character, could compare skill-window contribution vectors rather than
-  only power and scalar skill bounds.
-- More specialized band/attribute suffix indexes could keep separate remaining
-  best-value tables for `same-band`, `same-attribute`, `both`, and `mixed`
-  branches, making branch upper bounds tighter.
-- A top1-first UI path, meaning proving the first result before filling the rest
-  of top-N, would need the API to mark exactness by stage so the UI does not
-  imply that unfinished lower ranks are also proven.
+Formula or search changes need a focused regression case that would fail under the incorrect behavior. Private profiles and machine-specific benchmark reports may supplement these portable checks, but they are not part of the public algorithm contract and must not be treated as reproducible project-wide performance claims.

@@ -167,7 +167,7 @@ test("profile decoder does not coerce missing numeric fields to zero", () => {
   );
 });
 
-test("greenfield foundation does not import an existing team solver", () => {
+test("medley source adapter does not import the single-song solver", () => {
   const root = fileURLToPath(new URL("../src/lib/bandori/medley-foundation/", import.meta.url));
   const pending = [root];
   while (pending.length > 0) {
