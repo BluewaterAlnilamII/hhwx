@@ -2952,29 +2952,6 @@ mod tests {
         assert!(!domain.available[15]);
         domain.restore(0);
 
-        let mut projected_families = [TeamFamily::default(); 3];
-        projected_families[0] = projected_families[0].with_required_group(5).unwrap();
-        projected_families[1] = projected_families[1].with_required(16, 5);
-        domain.remove(16);
-        domain.restrict_owners(15, 0b011);
-        let mut projected_owners = domain.owners.clone();
-        projected_owners[15] = projected_families
-            .iter()
-            .enumerate()
-            .fold(domain.owners[15] & UNUSED, |mask, (slot, family)| {
-                mask | (u8::from(family.can_include(&domain, 15, slot)) << slot)
-            });
-        assert_eq!(domain.owners[15], 0b011);
-        assert_eq!(projected_owners[15], 0b001);
-        assert_eq!(
-            materialize_forced_owners(&mut domain, &mut projected_families, &projected_owners,),
-            Some(true)
-        );
-        assert_eq!(projected_families[0].selected(), &[15]);
-        assert_eq!(projected_families[0].required_group_count, 0);
-        assert!(!domain.available[15]);
-        domain.restore(0);
-
         let card = 15;
         let eligible = std::array::from_fn(|slot| {
             slot == 3 || parent.families[slot].can_include(&domain, card, slot)
@@ -3034,6 +3011,106 @@ mod tests {
         assert_eq!(domain.counts, vec![[3; 3]; 6]);
         assert_eq!(domain.owners, vec![ALL_OWNERS; 18]);
         assert_eq!(parent.families[0].completion_count(&domain, 0), total);
+    }
+
+    #[test]
+    fn joint_step_materializes_projected_singleton_before_building_bound() {
+        use bandori_medley_model::{DifficultyV1, ExactProbabilityV1, MedleySongV1, ScoringNoteV1};
+
+        // The evaluator is inert: singleton closure must restart the node
+        // before any bound or exact score is requested.
+        let song = MedleySongV1 {
+            slot: 0,
+            song_id: 1,
+            difficulty: DifficultyV1::Expert,
+            play_level: 20,
+            notes: (0_u32..6)
+                .map(|note_id| ScoringNoteV1 {
+                    note_id,
+                    time_seconds: f64::from(note_id),
+                    is_skill_trigger: true,
+                })
+                .collect(),
+        };
+        let configuration = AreaItemConfigurationV1 {
+            selected_area_item_ids: vec![],
+        };
+        let input = MedleySearchInputV1 {
+            schema_version: String::new(),
+            scoring_rules_version: String::new(),
+            perfect_rate: ExactProbabilityV1 {
+                numerator: 1,
+                decimal_scale: 0,
+            },
+            cards: vec![],
+            area_items: vec![],
+            area_configurations: vec![configuration.clone()],
+            songs: [song.clone(), song.clone(), song],
+        };
+        let songs = std::array::from_fn(|slot| {
+            PreparedSong::new(&input.songs[slot], slot as u32 * 6, 1.0).unwrap()
+        });
+        let groups = (0_usize..6)
+            .map(|group| {
+                (0_usize..3)
+                    .map(|variant| (group * 3 + variant) as u32)
+                    .collect::<CharacterGroup>()
+            })
+            .collect::<Vec<_>>();
+        let mut domain = SearchDomain {
+            engine: None,
+            available: vec![true; 18],
+            character_indexes: (0_usize..18).map(|id| id / 3).collect(),
+            counts: vec![[3; 3]; 6],
+            owners: vec![ALL_OWNERS; 18],
+            removed: Vec::new(),
+        };
+        let mut families = [TeamFamily::default(); 3];
+        families[0] = families[0].with_required_group(5).unwrap();
+        families[1] = families[1].with_required(16, 5);
+        domain.remove(16);
+        domain.restrict_owners(15, 0b011);
+        let mut node = SearchNode {
+            families,
+            bounds: [TeamUpper::default(); 3],
+            refresh_bounds: [false; 3],
+            whole_upper: f64::INFINITY,
+            joint: None,
+        };
+
+        let mut never_stop = || None;
+        let mut control = SearchControl::new(1024 * 1024, &mut never_stop);
+        let mut state = RunState {
+            control: &mut control,
+            diagnostics: MedleySearchDiagnosticsV1::default(),
+            best: None,
+            discovered: Vec::new(),
+        };
+        let mut cache = ScoreCache::new(&mut state).unwrap();
+        let mut layouts = JointLayoutCache::new();
+        let mut search = JointSearch {
+            evaluation: EvaluationContext {
+                input: &input,
+                configuration: &configuration,
+                songs: &songs,
+                cache: &mut cache,
+                state: &mut state,
+            },
+            groups: &groups,
+            domain,
+            joint_storage: Rc::new(Cell::new(0)),
+            layouts: &mut layouts,
+        };
+
+        assert!(matches!(
+            search.joint_step(&mut node).unwrap(),
+            JointStep::Restart
+        ));
+        assert_eq!(node.families[0].selected(), &[15]);
+        assert_eq!(node.families[0].required_group_count, 0);
+        assert!(!search.domain.available[15]);
+        assert_eq!(search.domain.owners[15], 0b001);
+        assert_eq!(node.refresh_bounds, [true; 3]);
     }
 
     #[test]

@@ -5,7 +5,8 @@
 //! coefficient plus five real card contributions and exactly one leader bonus.
 //! For any positive t, P*K <= (t*P + K/t)^2/4. Maximizing that additive quantity
 //! over distinct characters retains the parameter/skill trade-off on each card.
-//! All arithmetic on the proof path is directed upward; failure is never a cut.
+//! Upper terms are directed upward; interval lower endpoints and subtracted
+//! offsets are directed downward. Failure is never a cut.
 
 use std::collections::{BTreeMap, BTreeSet};
 
