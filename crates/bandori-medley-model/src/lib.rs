@@ -1,4 +1,4 @@
-//! Versioned, search-independent inputs for the greenfield Bandori medley scorer.
+//! Versioned, search-independent inputs for the Bandori medley scorer.
 //!
 //! The model uses JSON-safe integers and finite JavaScript-compatible numbers.
 //! It does not accept UI state, network responses, or search controls.

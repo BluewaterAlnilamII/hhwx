@@ -1,83 +1,150 @@
-# Medley Regression Testing
+# Bandori Medley Testing and Verification
 
 Chinese version: [medley-testing.zh-CN.md](medley-testing.zh-CN.md)
 
-## Purpose and boundary
+## 1. What the tests establish
 
-The private fixture archive checks the independent medley calculator against previously recorded real HHWX inputs and scores. It is evidence against search regressions, not architectural authority: the runner does not execute the old solver, replay an old winning team, or seed the new search from historical results.
+The medley calculator has three separate correctness questions:
 
-Profiles, source containers, cached masters and charts, historical reports, generated inputs, outputs, and indexes remain under the Git-ignored `temp/medley-regression-fixtures/`. They may contain private account data and must not be committed or published. Git stores only the collection/comparison utilities and this stable testing procedure; run-specific reports remain with their private artifacts.
+1. **Input and scoring:** does an HHWX profile plus current master/chart data become the intended card parameters, skills, notes and exact team score?
+2. **Search completeness:** does the optimized search return the same optimum as exhaustive enumeration, and can every pruning decision be justified by a safe upper bound?
+3. **Browser delivery:** does the Web Worker run the current WebAssembly artifact and preserve progress, timeout, incomplete-result and hydration behavior?
 
-The retained suite includes one early 119-card profile and 20 complete rosters from 961 through 1,889 cards. Even the 119-card profile is not treated as a trivial exhaustive input.
+No single benchmark answers all three. A high score does not prove scoring correctness because an overcounting bug can also raise a result. Matching a historical score does not prove optimality because the historical search may itself have been incomplete. Finishing quickly does not prove that a bound was safe.
 
-## Evidence model
+## 2. Portable repository checks
 
-The local `manifest.json` is the index. It records file hashes, profile payload hashes, dated aliases, data snapshots, historical report locations, saved settings, scores, and whether teams, area items, and leaders were retained. Account identity and a displayed card count are labels, not proof that two payloads are identical.
+These checks use only tracked files and are available to every contributor after installing the repository dependencies and Rust toolchain.
 
-For each source/profile/song/settings combination, collection retains the highest primary reported score and the strongest available supporting object. Byte-identical evidence is stored once. Verification checks archive hashes, profile decoding, and index references.
+### TypeScript source normalization
 
-Historical evidence has explicit limits:
-
-- old reports generally omit the exact source commit and per-run data hashes;
-- the early 119-card reports omit their configurable PERFECT rate;
-- a later version of the same account is a different input when its payload hash differs;
-- a report using different event parameters, songs, order, difficulty, PERFECT rate, or data is not a same-input comparison; and
-- a directory name such as `main` or `dev` identifies where evidence was found, not necessarily the commit that produced it.
-
-The runner records its own source commit and dirty diff, runtime, limits, profile and normalized-input hashes, used-file hashes, complete output, elapsed time, sampled working set, and budget-accounted search storage. These fields make the new run reproducible without upgrading incomplete historical provenance into certainty.
-
-## Collection and verification
-
-Use the existing private package as the seed and list each retained report directory independently:
-
-```sh
-node --import tsx scripts/archive-bandori-medley-fixtures.mjs --seed <private-fixture-package> --source main=<report-directory> --source dev=<report-directory>
-node --import tsx scripts/archive-bandori-medley-fixtures.mjs --verify
+```bash
+npm run test:medley-foundation:source
 ```
 
-Collection preserves existing raw files and scans only known HHWX report formats. It does not collect binaries, logs, or solver source. Repeating the command updates the index without deleting previously retained evidence.
+The focused Node test suite covers profile decoding, character bonuses, card parameters, area items, event parameters, skill normalization, chart conversion, fixed-team evaluation, search-input construction and the frontend-facing source contract. Its fixtures are deliberately small so a failed rule can be isolated without running a large search.
 
-## Comparison contract
+### Rust formatting, linting and tests
 
-A historical comparison is admitted only when the archived profile and every setting recorded by the old report agree: song IDs and order, difficulties, PERFECT rate, and event settings. Old reports generally did not retain a per-run data hash or source commit, so matching the historical master-data snapshot cannot be proved after the fact. Such a reference is a regression target adopted under the explicit assumption that the retained `main` snapshot represents the data used by the old report; by itself it proves neither feasibility under the current input nor byte-identical source data. The new search itself is always run on a normalized input rebuilt from the archived profile and retained raw data.
-
-Two separate gates apply:
-
-1. **Score regression:** for a reference matching all recorded inputs, the new result must be at least as high as the recorded primary average score.
-2. **Proof completion:** the new outcome must be `exact`. Reaching a reference and timing out is not an exactness pass.
-
-A higher score does not by itself prove the scorer correct because overcounting could also raise a result. Scoring correctness is covered by the focused Bestdori/reference checks in [the foundation document](medley-foundation.md); real-profile acceptance chiefly checks the retained regression targets under the stated snapshot assumption and whether the search can finish its proof.
-
-Keep historical `score`, `averageScore`, and completion flags under their original names. An auxiliary candidate is not substituted for a report's primary result. A fifteen-card projection and its full source roster are different search inputs.
-
-## Runner
-
-The full 80-scene acceptance command is:
-
-```sh
-node --import tsx scripts/compare-bandori-medley-search.mjs --all-profiles
+```bash
+npm run format:medley-foundation
+npm run lint:medley-foundation
+npm run test:medley-foundation
+npm run check:medley-foundation:wasm
 ```
 
-It runs no event, event 244, event 260, and event 323 for each complete roster:
+`test:medley-foundation` runs the locked Rust workspace tests. The important evidence includes:
+
+- fixed-input JSON validation;
+- production scorer agreement with the direct 120-order reference scorer;
+- tiny exact searches compared with an independent exhaustive oracle;
+- individual and joint upper bounds checked against every legal tiny completion;
+- forward/backward conditional values checked against exhaustive residual assignment;
+- physical-card conflicts, character uniqueness, required characters and stable ties;
+- exact local-join parity across scan and indexed implementations;
+- strict cuts that retain equality;
+- timeout, cancellation, memory exhaustion and internal inconsistencies returning `incomplete` rather than false `exact`.
+
+### WebAssembly artifact
+
+After changing Rust code that ships to the browser, regenerate the committed package:
+
+```bash
+npm run build:medley-foundation:wasm
+```
+
+The command requires a `wasm-bindgen-cli` version matching the workspace's locked `wasm-bindgen` crate. Then rerun the Rust and TypeScript checks. The ordinary Next.js build consumes `src/lib/bandori/medley-wasm/pkg/` but does not regenerate or execute it, so testing only native Rust code can leave the browser on an older solver.
+
+For a release-oriented application check, also run:
+
+```bash
+npm run typecheck
+npm run lint
+npm run build
+```
+
+No tracked automated command currently executes the generated JavaScript/WebAssembly binding end to end. Before release, manually start the application, run a retained medley case through the Team Builder page, and confirm that search progress, terminal status and hydrated results appear. Record this as a manual check rather than claiming it was covered by `cargo check` or `next build`.
+
+## 3. What a scoring test should compare
+
+The fixed-team path separates score verification from search. A useful scoring case records:
+
+- the source profile and its gameplay server;
+- the exact card, character, skill, area-item, event, song and chart records used;
+- the three ordered song IDs and difficulties;
+- PERFECT rate;
+- selected cards, leader positions and area-item IDs;
+- calculated card, area-item and event parameters;
+- normalized notes and skill triggers;
+- per-song and medley scores;
+- scoring schema and rules versions.
+
+The direct reference implementation evaluates all 120 first-five skill orders note by note. Production scoring uses the algebraic reduction documented in [Medley Rules and Scoring](medley-foundation.md). Their agreement checks the optimized score path without assuming that two copies of the same optimization are correct.
+
+The two Rust scorers intentionally share one normalized note input, so their agreement cannot independently detect a TypeScript chart-normalization error. Cover that boundary with a retained raw-chart fixture whose expected scoring notes, triggers and anchored times are asserted directly; scorer parity then checks the calculation performed on that normalized input.
+
+## 4. What an exact-search test should compare
+
+On a tiny roster, exhaustive enumeration is the clearest oracle: enumerate every legal area configuration, every legal assignment of physical cards to three teams and every leader, then compare the complete optimum and tie representative with optimized search.
+
+Bound-specific tests make failures easier to diagnose. For a partial state, enumerate every legal completion and verify:
 
 ```text
-961, 962, 972, 1036, 1039, 1051, 1127, 1161, 1211, 1229,
-1252, 1318, 1329, 1425, 1433, 1513, 1522, 1703, 1747, 1889
+reported upper bound >= maximum exact completion score
 ```
 
-All use expert songs `385 -> 193 -> 619`, full PERFECT, no fever, and every generated owned-area configuration; retained full-ownership inputs have 108 configurations. The run is sequential. Each scene has 300 seconds, 256 MiB of budgeted search storage, a 1 GiB sampled native-process stop, and a 315-second outer deadline. Windows samples working set once per second, so a short final peak may be missed; this is neither an OS allocation cap nor browser/WASM incremental memory.
+The check must include equality cases because the production search prunes only when an upper bound is strictly below the incumbent. Conditional destination and occupancy bounds require the same comparison after applying the stated condition.
 
-The runner continues after a failed scene so the final report remains complete and exits nonzero if any selected scene fails. Useful smaller selections remain:
+Changing memory limits, cache capacity, branch order or heuristic proposals must not change an `exact` score or its deterministic tie representative. Those settings may change runtime, diagnostics and whether a time-limited run finishes.
 
-```sh
+## 5. Optional real-profile regression
+
+HHWX maintainers may also use an ignored archive under `temp/medley-regression-fixtures/`. It contains private profiles, cached master/chart records, historical reports, normalized inputs and run outputs. These files may contain account data and must not be committed or published.
+
+The small opt-in acceptance entry is:
+
+```powershell
+$env:HHWX_MEDLEY_ACCEPTANCE_ROOT='<private fixture package>'
+npm run accept:medley-search:real
+```
+
+Without `HHWX_MEDLEY_ACCEPTANCE_ROOT`, the script reports that the private check was skipped. A skipped private check is not a failure of the portable test suite, but it is also not evidence that the real-profile case ran.
+
+The larger local comparison runner reads `temp/medley-regression-fixtures/manifest.json`:
+
+```bash
 node --import tsx scripts/compare-bandori-medley-search.mjs --case 119-no-event
 node --import tsx scripts/compare-bandori-medley-search.mjs --remaining
 node --import tsx scripts/compare-bandori-medley-search.mjs --completed-profiles
 node --import tsx scripts/compare-bandori-medley-search.mjs --high-pressure
+node --import tsx scripts/compare-bandori-medley-search.mjs --all-profiles
 ```
 
-`--diagnose` enables time-limited profiling and the explicit threshold overrides accepted by the script. Those controls are for A/B measurement only; they are rejected in normal acceptance mode and do not alter production constants.
+These commands are maintainer tools, not portable project checks. Diagnostic overrides are accepted only with `--diagnose`; they measure alternative thresholds and do not change production defaults.
 
-## Run artifacts
+## 6. Historical comparison rules
 
-Each run writes `run.json`, `summary.json`, and per-scene inputs, outputs, and results under `temp/medley-regression-fixtures/runs/<timestamp>/`. Human-readable tables and notes, when retained, belong in that same ignored run directory. They are measurements tied to private inputs, one source commit, and one machine—not stable project documentation.
+A historical score may be compared only when the archived profile and all recorded request settings agree: song IDs and order, difficulties, PERFECT rate and event settings. A profile label is not a payload version, and a directory name such as `main` or `dev` is not proof of the commit that produced a report.
+
+Many older reports did not preserve their source commit or hashes of the master and chart data used. Such a score is a regression target under the explicitly recorded snapshot assumption; it does not prove that the old and new runs used byte-identical input. Reports must distinguish:
+
+- **proved:** supported by retained payloads, settings, hashes and current output;
+- **assumed:** required because older provenance is incomplete;
+- **unrecoverable:** cannot be reconstructed from retained evidence.
+
+For a same-input regression target, the current search passes the score check when it finds a score no lower than the retained reference. It passes the exactness check only when it returns `exact`. Those are separate statements: reaching a reference score during an incomplete run does not prove the global optimum.
+
+## 7. Run artifacts
+
+Private runs write `run.json`, `summary.json` and per-scene inputs, outputs and results below `temp/medley-regression-fixtures/runs/<timestamp>/`. A useful run record includes:
+
+- source commit and dirty diff;
+- runtime and search limits;
+- profile payload and normalized-input hashes;
+- hashes of every master/chart file actually used;
+- full result and terminal status;
+- elapsed time, time to best score and hydration time;
+- sampled process working set when collection is enabled;
+- budget-accounted peak search storage.
+
+Run-specific tables and interpretations belong beside those ignored artifacts. Stable public documentation records the method and meaning of the fields, not the latest machine-specific measurements.

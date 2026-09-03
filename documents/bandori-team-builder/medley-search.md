@@ -1,16 +1,26 @@
-# Greenfield Bandori Medley Search
+# Bandori Medley Exact Search
 
 Chinese version: [medley-search.zh-CN.md](medley-search.zh-CN.md)
 
 ## Abstract
 
-This document specifies the current exact search, states the invariants on which pruning depends, and proves why a completed run cannot omit a better legal medley. It describes the implementation at the current checkpoint rather than preserving a chronology of experiments; Git and the private benchmark reports retain that history.
+This document specifies the exact search, states the invariants on which pruning depends, and proves why a completed run cannot omit a better legal medley. Read [the scoring and product contract](medley-foundation.md) first; it defines the cards, songs, area configurations, score function and terminal result states used here.
 
-The search considers every legal shared area-item configuration and every legal assignment of fifteen physical cards to three fixed song slots. Its practical core is a branch-and-bound search with two safe score relaxations: an individual-team bound and a stronger joint three-team allocation bound. Small residual products are closed by exact enumeration. Heuristics affect only traversal order and the quality of the incumbent. They never remove a candidate.
+The search considers every legal shared area-item configuration and every legal assignment of fifteen physical cards to three fixed song slots. Its practical core is a branch-and-bound search with two safe score relaxations: an individual-team bound and a joint three-team allocation bound that additionally models competition for physical cards. The engine keeps the smaller valid whole-range bound. Small residual products are closed by exact enumeration. Heuristics affect only traversal order and the quality of the incumbent. They never remove a candidate.
 
-The input and exact scoring contract is defined by [the foundation document](medley-foundation.md). If this document and the scorer disagree, the foundation contract and executable scorer control; the bound must be weakened or rejected, never the scorer.
+The input and exact scoring contract is defined by [the foundation document](medley-foundation.md). Every finite pruning value must be an upper bound on that scorer. A mismatch between a claimed bound and exact scoring is an error: the optimization must fail open or be corrected rather than changing score semantics to fit it.
 
 The corresponding implementation is intentionally split by responsibility: `exact_score.rs` and `candidate.rs` settle complete teams; `fast_upper.rs` and `upper_bound.rs` construct single-team numeric bounds; `joint_upper.rs` solves the relaxed three-team allocation; `search.rs` owns the exhaustive partition, reversible state, local joins, and terminal status. These files are under `crates/bandori-medley-search/src/`.
+
+## How the search works
+
+The search is branch and bound. When a legal medley exists and the run reaches its warm start, it scores one as the **incumbent**, then divides the remaining legal assignments into smaller ranges. If complete feasibility enumeration finds no assignment, the run can instead prove that no legal medley exists. For each searchable range the engine calculates an optimistic score that is guaranteed not to be lower than the best real completion in that range.
+
+If the incumbent is 9,100,000 and a range has a proved upper bound of 9,099,999, that whole range can be discarded. If the bound is 9,100,000, the range remains searchable because an equal score might contain the deterministic tie winner. An unknown or numerically unsafe bound also remains searchable.
+
+A single-team bound asks how strong one unfinished team could become while temporarily ignoring some competition from the other teams. The joint bound additionally allocates the remaining character groups across all three teams at once, so one physical card cannot optimistically supply several teams. Because the two relaxations differ in other ways, neither is assumed to be numerically tighter in every node; the engine combines them with inherited whole-range bounds by taking the minimum. When only a small residual combination remains, the engine stops estimating and enumerates that block exactly. Heuristics choose which branch to visit first and can improve the incumbent earlier, but they never delete a candidate.
+
+The rest of this document defines the represented search space, derives both bounds, describes exact residual enumeration, and then combines those facts into the final correctness proof.
 
 ## 1. Problem definition
 
@@ -23,7 +33,7 @@ A legal medley `(q, T0, T1, T2)` satisfies all of the following:
 3. No physical card instance occurs in two teams.
 4. Each song remains in its input slot; repeated songs are allowed and slots are never reordered.
 
-For the exact integer score `score(q, Ts, s)` defined by `hhwx-medley-bestdori-v3`, the objective is
+For the exact integer-valued binary64 score `score(q, Ts, s)` defined by `hhwx-medley-bestdori-v3` and its fixed operation order, the objective is
 
 ```text
 S(q, T0, T1, T2) = (score(q, T0, 0) + score(q, T1, 1))
@@ -58,7 +68,7 @@ A team family records:
 - the next ordinary character-group index; and
 - an exact song score once all five physical cards are fixed.
 
-Ordinary characters are selected in strictly increasing group order. Required groups are resolved before the ordinary prefix advances and therefore do not advance it themselves. When a new requirement is inferred, `can_include` has already removed every not-yet-required group before that team's `next_group`; while any requirement remains, fallback branching resolves one before advancing the prefix. By induction, every unresolved required group is unique within its team, is not already selected there, and is at or after `next_group`. Consequently an individual-team bound may omit reservations and maximize over the ordinary suffix; that suffix is a superset of every real completion. This representation gives one ordinary order for each unordered team without eliminating another team's use of a different physical card of the same character.
+Ordinary characters are selected in strictly increasing group order. Required groups are resolved before the ordinary prefix advances and therefore do not advance it themselves. When a new requirement is inferred, `can_include` has already rejected every not-yet-required group before that team's `next_group`, and the effective owner masks omit that team destination; while any requirement remains, fallback branching resolves one before advancing the prefix. By induction, every unresolved required group is unique within its team, is not already selected there, and is at or after `next_group`. Consequently an individual-team bound may omit reservations and maximize over the ordinary suffix; that suffix is a superset of every real completion. This representation gives one ordinary order for each unordered team without eliminating another team's use of a different physical card of the same character.
 
 For every currently available physical card, the domain stores four possible destinations: song 0, song 1, song 2, and unused. Every restriction is intersected with the existing mask and recorded on an undo trail. `counts[g][s]` equals the number of available physical cards in character group `g` whose stored mask still contains song `s`. A selected card is removed from availability; a card assigned to `unused` is also removed. Restoring a DFS checkpoint restores availability, masks, and counts together. Completion counts multiply the alternatives for distinct required groups and use a combination dynamic program for the ordinary suffix; saturated counts can only keep a node out of an exact local block, not delete a completion.
 
@@ -142,7 +152,7 @@ The right side is linear in the residual ordinary/leader card weights. For each 
 
 The slope `s = (L+M)/4` is rounded upward. The offset `o = L*M/4`, which is subtracted only after the maximizing allocation has been found, is rounded downward. Each card receives `add_up(linearUpper, mul_up(s,upperEndpointAtom))`; the three offsets are combined downward before `sub_up` subtracts them from the upward allocation maximum. All resulting weights therefore dominate the intended model expression. Three `t` values are tried, and the completed single-team upper—not merely `M`—selects the tightest safe envelope. The special cases of zero residual parameter/coefficient and one remaining card use direct linear or complete-product bounds.
 
-For a team whose exact song score is already known, that score contributes directly as a nonnegative constant. Replacing a negative settled score by zero is again only a relaxation. The remaining model terms bound unrounded song means. Converting each real mean numerator from `i128` to binary64, dividing by five, flooring, and adding the three settled scores in fixed order cannot exceed the nonnegative joint ideal-sum upper multiplied upward by `R(4)`: one rounding allowance covers conversion/division on a contributing path and the other steps cover the two medley additions. This is the final joint score envelope applied after constants and offsets.
+For a team whose exact song score is already known, that score contributes directly as a nonnegative constant. Replacing a negative settled score by zero is again only a relaxation. The remaining model terms bound unrounded song means. Each nonnegative song-contribution path has at most four binary64 rounding points: conversion of the `i128` numerator, division by five, and the two fixed-order medley additions. The intervening `floor` is handled by monotonicity rather than counted as another rounding step. The exact medley score therefore cannot exceed the nonnegative joint ideal-sum upper multiplied upward by `R(4)`. This is the final joint score envelope applied after constants and offsets.
 
 ### 5.2 Character-local choices
 
@@ -203,7 +213,7 @@ The explicit stack avoids call-stack depth proportional to the roster. Branch or
 
 ### Lemma 1: leaf scores are exact
 
-Every reported solution is legal-checked and evaluated by the canonical scorer. Bounds and heuristic estimates cannot enter the result directly.
+Every reported solution is produced by enumeration that maintains the team and physical-card constraints, then evaluated by the canonical scorer. Legality of the area configuration is a validated input premise supplied by the source adapter. Bounds and heuristic estimates cannot enter the result directly.
 
 ### Lemma 2: the unpruned traversal is complete
 
@@ -211,7 +221,7 @@ The source adapter lists every legal `q` in `Q`. Within one configuration, incre
 
 ### Lemma 3: each pruning value is an upper bound
 
-The scorer-to-product bridge in Section 4 makes `reference_ceiling(ceil(P*K))` an individual settled-song upper, and AM-GM safely bounds its `P*K` input. The joint bound retains the relaxed model's constant and linear algebraic terms through directed upper representations and replaces only `Pr*Kr` by a valid interval-secant upper; its final `R(4)` factor covers settlement and medley addition. It then maximizes over a relaxation containing every legal residual allocation. A forward/backward conditional maximizes the corresponding conditioned relaxation; a local pattern is recorded as unavailable only after its safe upper is strictly below an exact feasible cutoff. Upward operations enlarge positive terms and downward operations reduce subtracted offsets. If a finite proof value cannot be established, the individual bound becomes infinity or the joint optimization is disabled. Thus no bound is below the best exact completion it represents.
+The scorer-to-product bridge in Section 4 makes `reference_ceiling(ceil(P*K))` an individual settled-song upper, and AM-GM safely bounds its `P*K` input. The joint bound retains the relaxed model's constant and linear algebraic terms through directed upper representations and replaces only `Pr*Kr` by a valid interval-secant upper; its final `R(4)` factor covers settlement and medley addition. It then maximizes over a relaxation containing every legal residual allocation. A forward/backward conditional maximizes the corresponding conditioned relaxation; a local pattern is recorded as unavailable only if no conditioned completion exists or its safe upper is strictly below an exact feasible cutoff. Upward operations enlarge positive terms and downward operations reduce subtracted offsets. If a finite proof value cannot be established, the individual bound becomes infinity or the joint optimization is disabled. Thus no bound is below the best exact completion it represents.
 
 ### Lemma 4: every structural deduction preserves completions
 
@@ -225,7 +235,7 @@ If no legal leaf exists, the same exhaustion proves `best = null`. The theorem d
 
 ## 9. Numeric and failure safety
 
-Proof arithmetic uses explicit upward/downward binary64 helpers. Positive upper terms, slopes, and rounding envelopes are directed upward; lower endpoints and subtracted offsets are directed downward. Fallible scalar conversions and arithmetic are checked. Signed-`i128` score accumulations are statically bounded by validated `u32` note counts and per-note scores; count and index operations are either checked or bounded by fixed-size state and validated input invariants. An exact row exceeding its claimed local upper produces `scorer_disagreement` rather than continuing with a false proof.
+Proof arithmetic uses explicit upward/downward binary64 helpers. Positive upper terms, slopes, and rounding envelopes are directed upward; lower endpoints and subtracted offsets are directed downward. If proof-bound construction cannot produce a safe finite value, that optimization is disabled or treated as unknown instead of pruning. Controlled allocation, count, and index failures return `incomplete`. Signed-`i128` exact-score accumulations rely on statically proved bounds from the validated `u32` inputs rather than per-add checked arithmetic. An exact row exceeding its claimed local upper produces `scorer_disagreement` rather than continuing with a false proof.
 
 Every score cut is strict against an exact feasible cutoff: normally the global incumbent, and inside a local join possibly the best candidate already scored for that fixed pair. Equality remains because the deterministic tie representative may improve. An unavailable finite proof bound becomes infinity or disables that optimization, so exhaustive search may still finish `exact`. Detectable exact-scoring/input arithmetic failures, controlled allocation failures, timeout, cancellation, counter overflow, and internal inconsistency fail closed as `incomplete`, optionally with diagnostic `bestSoFar` and discovered solutions. If the process, worker, or browser is terminated outright, no final outcome can be promised, but it cannot be reported as `exact`. There is no score-gap success state.
 
@@ -250,14 +260,12 @@ Every change to enumeration, bounds, or deductions must pass the narrowest appli
 - scan/indexed-join parity with more than one bitset word and deliberately different upper/exact ordering;
 - projected effective-owner singleton materialization and reservation fulfilment;
 - exact scorer agreement with the independent 120-order implementation; and
-- stop-reason propagation, search-budget exhaustion as `incomplete`, strict input validation, hydration score disagreement, and the complete projected-singleton `joint_step -> Restart` order.
+- stop-control reason preservation, search-budget exhaustion as `incomplete`, strict input validation, hydration score disagreement, and the complete projected-singleton `joint_step -> Restart` order.
 
-After Rust search code changes, rebuild the committed browser artifact with `npm run build:medley-foundation:wasm`; the ordinary Next.js build does not regenerate it. Exercise the generated JavaScript/WASM binding on a retained counterexample before release so source-only success cannot leave an older browser solver deployed.
+After Rust search code changes, rebuild the committed browser artifact with `npm run build:medley-foundation:wasm`; the ordinary Next.js build does not regenerate or execute it. The repository currently has no automated end-to-end binding check, so release verification must exercise a retained case through the Team Builder page and record that manual result.
 
-Real-profile acceptance rebuilds normalized input from archived profiles and retained raw data, never from saved winning teams. A historical score is compared only when the archived profile and every recorded song, difficulty, PERFECT-rate, and event setting match. Most old reports do not carry per-run data hashes, so exact historical master/chart identity remains unproved and is stated as such. A run passes the exactness gate only if it finishes `exact`; merely reaching a reference score is not proof.
+Runnable commands, browser-artifact requirements and the separate provenance rules for optional private real-profile comparisons are documented in [Medley Testing and Verification](medley-testing.md). Historical score comparisons supplement the portable proof tests; they do not replace exhaustive tiny cases or upper-bound coverage.
 
-The complete private procedure and provenance rules are in [the testing document](medley-testing.md). Diagnostic environment overrides are measurement tools only and do not change the production thresholds. Historical experiment ledgers and rejected prototypes are intentionally absent here: they are not part of the proof and belong in Git history or private reports.
+## 12. Scope and non-goals
 
-## 12. Current scope boundary
-
-This design proves top-1 under the fixed foundation rules. It does not prove a global top ten, model native judgment histories, use life state, choose song order, or optimize event points. It adds no dominance assumption, score quantization, approximate retention, external storage, or alternate server computation. Any future optimization must identify the represented completion set and the inequality or exact partition that preserves it before performance evidence is relevant.
+This design proves top-1 under the scoring and product rules in the foundation document. It does not prove a global top ten, model native judgment histories, use life state, choose song order, or optimize event points. It uses no score quantization, approximate candidate removal, external storage or server-side search. Any optimization that removes work must identify the represented completion set and the inequality or exact partition that preserves it before a performance result can count as safe.

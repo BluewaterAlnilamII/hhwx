@@ -28,6 +28,8 @@ npm run test:medley-foundation
 npm run check:medley-foundation:wasm
 ```
 
+如果改动的 Rust 代码会由浏览器绑定使用，还要运行 `npm run build:medley-foundation:wasm`，并提交 `src/lib/bandori/medley-wasm/pkg/` 中更新后的包。
+
 ## 基本准则
 
 - 不要提交密钥和私有部署细节。
@@ -42,7 +44,7 @@ npm run check:medley-foundation:wasm
 - 每个 PR 聚焦一个 bug fix、功能或文档更新。
 - 说明用户可见行为变化，以及需要的迁移或部署步骤。
 - 有明显 UI 变化时，附截图或短录屏。
-- 不要包含生成的构建产物、本地缓存、真实环境文件或私有部署脚本。
+- 不要包含生成的构建产物、本地缓存、真实环境文件或私有部署脚本。`src/lib/bandori/medley-wasm/pkg/` 下的版本化 WebAssembly 包是明确例外，因为应用会直接导入它。
 - 修改命令、环境变量、数据库对象、API 契约或外部服务假设时，同步更新 README、设置文档或 schema 文档。
 
 ## 文档语言

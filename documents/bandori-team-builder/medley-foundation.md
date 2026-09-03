@@ -1,90 +1,159 @@
-# Greenfield Bandori Medley Foundation
+# Bandori Medley Team Builder: Rules and Scoring
 
-中文说明见 [medley-foundation.zh-CN.md](medley-foundation.zh-CN.md).
+Chinese version: [medley-foundation.zh-CN.md](medley-foundation.zh-CN.md)
 
-## Authority and scope
+## 1. Purpose
 
-This is the shared input and scoring contract for the greenfield calculator line. The implementation is written independently: it does not import, wrap or refactor the existing team-builder scorer or search. Existing HHWX input and product rules remain authoritative; old solver and experiment architectures do not. The source guard enforces the TypeScript import boundary.
+The medley team builder chooses three five-card teams for three ordered songs. All three teams share one area-item configuration, no physical card may be reused across teams, and every team must contain five different characters. The optimization target is the sum of the three teams' average song scores.
 
-The scoring method uses Bestdori's average judgment and skill multipliers, together with the explicitly agreed HHWX medley rules below. It is not a simulation of native gameplay, nor a byte-for-byte copy of Bestdori's single-song calculator. Native findings remain documentation-only unless the product rules are explicitly reconsidered.
+The difficult part is not only finding a high score. A successful result must prove that no legal assignment scores higher. The exact-search proof is described separately in [Medley Exact Search](medley-search.md); this document defines the legal inputs and the scorer that the proof must preserve.
 
-Keep each completed, reviewable module in a traceable commit. Rewrite obsolete documentation in place; implementation history belongs in Git, not accumulating correction sections. Reviewers must read this contract and the current greenfield code, and the primary agent must independently verify their conclusions.
+The calculator intentionally follows HHWX's documented, Bestdori-compatible expectation model. It is not a frame-by-frame simulation of the native game client. Known differences are listed in Section 8 so that “compatible” is not mistaken for “identical”.
 
-## Inputs and ownership
+## 2. User input and result
 
-The caller supplies the existing HHWX profile, raw masters, three ordered songs/charts, event settings and PERFECT percentage text. It does not calculate card parameters, bonuses or team totals.
+The user chooses:
 
-- The HHWX profile's field named `bestdoriProfile` stores compression-v2 card ownership/levels, master and skill levels, episodes, training/art/exclusion flags, and area-item levels. This is a field of HHWX's own profile, not an alternative Bestdori import/export input.
-- Character potential and mission bonuses come from the HHWX profile's top-level `characterPotentials` and `characterMissionBonuses`.
-- Raw card, character, skill, area-item, song and event records remain the sources of parameters. Cards server extensions are resolved for the profile server, with the existing JP-presence fallback.
-- Song IDs are parsed as positive u32 values. PERFECT percentage text becomes a canonical decimal probability before scoring.
+- one HHWX game profile;
+- optional temporary cards;
+- exactly three songs and difficulties in their intended order;
+- one medley event, a PERFECT percentage and any card exclusions or owned-card parameter overrides. The current page enters medley mode only for a selected event of that type; the lower-level fixed-team contract can still represent `eventBonus = null` for isolated scoring tests;
+- a search time limit. The browser integration currently accepts 1 through 3,600 seconds.
 
-`hhwx-medley-search-source-v1` prepares the whole owned roster and legal owned-item configurations. A temporary card is keyed by master card ID: selecting the same ID edits that temporary record, and the temporary record replaces any profile-owned card with the same ID for the calculation. Exclusion controls apply only to profile-owned cards and do not exclude the temporary replacement. Teams, leaders and the final shared area selection are search outputs, never required frontend inputs.
+The browser adapter loads the profile's owned cards, progression, area items and character bonuses, then obtains the required Bandori card, character, skill, area-item, song, event and chart records. These source records, rather than caller-precomputed card power or team totals, enter normalization.
 
-`hhwx-medley-foundation-source-v1` is the small fixed-team verification entry: it additionally takes 15 selected owned cards, three explicit teams and one area configuration. Its normalized Rust input, `hhwx-medley-scoring-input-v1`, contains dense instance IDs, resolved skills, final team parameters and charts. It is a reference-scoring tool, not the search request.
+The frontend does **not** supply the three teams, their leaders or the final area configuration. Those are search outputs.
 
-Malformed profile compression, missing selected master rows, invalid references, unsupported envelope fields or versions fail with an error code and field path. Unused raw-master fields are tolerated. Input errors are not “no solution.” A fixed team can be scored regardless of its exclusion flags; search hard-excludes flagged cards before candidate construction.
+Each returned candidate identifies the shared area items and, for every song slot, its five cards, leader, calculated team power and score details. The candidate also carries medley totals. The formal result maximizes total average score.
 
-## Locked product rules
+While searching, the engine also retains at most ten distinct, fully scored solutions that it encountered naturally. After search stops, those retained solutions are expanded with minimum, average and maximum scores and best-order information. This supports the result page, but it does not turn the retained list into a proved global top ten.
 
-- Exactly three ordered song slots; repeats are allowed, reordering is not.
-- Five distinct characters per team; no physical card repeats across the three teams. The leader occupies member index two in output.
-- All teams share one algorithm-selected owned-item configuration: one band group, one attribute group and one owned parameter item. A category is empty only when no item in it is owned; do not add an unequipped parameter choice alongside owned ones. Full ownership gives 9 band groups × 4 attributes × 3 parameter items = 108 configurations. CN metadata-only IDs 59, 68 and 72 remain outside the calculator.
-- The formal objective is a proven top-1 total average score, with a deterministic representative on ties. Maximum possible score is not a second objective.
-- Medley event points are display-only and do not affect search. All three songs use the same selected live boost: the UI shows 0/3/6/9 total boosts with multipliers 3/15/30/45, defaulting to 9. The displayed value is `(floor(totalAverageScore / 18500) + 100) * multiplier`.
-- Search passively retains at most the ten highest-total-average solutions, including the winner, among complete solutions it already scored and confirmed feasible. Retention does not enter pruned branches or turn this set into a proven global top-10.
-- After search terminates, only those retained solutions receive result hydration: minimum, average and maximum score for each song and for the medley total, plus each song's best order and occurrence count. The highest hydrated total maximum score selects the maximum-score candidate. Search elapsed time ends before this hydration.
-- Best-result progress is first eligible after ten seconds and is published at most once per five seconds thereafter. Improvements inside that interval are coalesced; the pending newest best result must be published at the next eligible update even if no later improvement occurs. A graceful incomplete outcome returns any retained candidates with the same hydration, but they remain diagnostic rather than exact.
-- Official success requires exhausting or safely pruning the whole space. Cancellation, timeout, memory, data or runtime failure is incomplete; `bestSoFar` is diagnostic only. There is no gap-based success.
-- Preserve member, area-item and floating-point operation order when calculating scores.
+Hydration keeps the leader already chosen by the average-score search and enumerates only the 120 orders of the first five skill windows. Among the retained candidates, the UI may separately show the one with the largest hydrated maximum score, but only when its maximum is strictly greater than the average-score winner's maximum. This is a comparison within the retained set, not a search for or proof of the global maximum-score team.
 
-Around 2,000 cards is a difficult future acceptance case, not the early/default test size. Its targets remain 300 seconds, competitive incremental memory of 200–300 MiB, and a hard incremental peak below 1 GiB. Tiny inputs establish correctness first; timeout never counts as success.
+For example, suppose the engine has completely scored solutions worth 9,000,000, 9,100,000 and 9,050,000 points. All three may be retained. A later upper bound may prove that a whole unexplored branch cannot exceed 9,100,000, so that branch is not entered and cannot contribute extra members to the retained list. The winning 9,100,000 result can still be exact even though ranks two through ten were never globally proved.
 
-The provisional search direction is joint three-team allocation bounds, forward/backward reuse to prune card destinations including non-use, bounded complete-solution construction and one-sweep improvements, and short-lived exhaustive blocks with budgeted caches. Useful memory reuse takes priority over minimum RSS. These are revisable engineering decisions, not game rules. Details belong in [the search design](medley-search.md).
+### Exact and incomplete outcomes
 
-## Parameters, skills and charts
+- `exact` means every legal assignment was evaluated or eliminated by a safe upper bound. If `best` is absent in an exact result, exhaustive search proved that no legal medley exists.
+- `incomplete` means search started but timeout, cancellation, search-storage exhaustion, arithmetic or counter/index failure, scorer disagreement, inconsistent data discovered inside search, or another controlled internal failure stopped the proof. `bestSoFar` and retained candidates remain diagnostic results, not certified optima. The engine supports a cancellation reason, although the current page exposes a time limit rather than a user-cancel control.
+- Profile decoding, source normalization and normalized-input decoding happen before search; hydration happens after it. Failures at those boundaries are request errors rather than `incomplete` search results and do not promise retained candidates.
+- If the Worker, process or page is terminated outright, no final result can be produced. Such termination can never be reported as `exact`.
 
-The source adapter derives parameters in this order:
+The Worker reports a newly improved best result no earlier than ten seconds after search begins and at most once every five seconds afterwards. Improvements inside the interval are coalesced, and the latest pending improvement is sent at the next eligible progress check even when no newer improvement appears.
 
-1. Reconstruct the selected card level from the Cards minimum/maximum P/T/V rows using Bestdori's rarity curve and JavaScript `Math.round`.
-2. Add `50 * rarity * masterRank` to each parameter, then training and completed episode bonuses.
-3. Convert compact mission units from tenths of a percentage point. Combine collection and training mission rates, add the potential rate, then calculate each P/T/V bonus as `floor(baseParameter * (potentialRate + missionRate))`. This is the chosen HHWX calculator rule, not an independently verified native-game rounding claim. Equal P/T/V values do not select a different rule.
-4. Apply owned area items using profile levels, regional P/T/V rates, target band and attribute.
-5. Apply event attribute, character, canonical member `situationId`, master-rank, matching-parameter and room percentages.
-6. Add card, area and event power as JavaScript-number-compatible values to obtain `deckTotalParameter`; area/event contributions are not independently rounded here.
+`timeToBestScoreMs` records when the last strict average-score improvement was found. Search elapsed time ends before result hydration; hydration time is reported separately. The result page displays the difference between search elapsed time and time to best as the subsequent proof time. This is how long the engine continued searching or attempting proof after finding its last best result, not the later detail-hydration work. Only an `exact` result establishes that this was the final winning score and that the remaining time completed its proof.
 
-Skill values use the profile region and fall back to JP only for a missing slot; explicit zero stays zero. Area-item rates stay on the exact region and use the nearest available level not above the owned level.
+## 3. Profile and source-data rules
 
-Skill normalization takes the first recognized score row, including zero, resolves whole-team same-band/same-attribute conditions, and retains the later ordinary score as the continued skill's fallback. Behaviors are `neutral`, `score`, `score_on_perfect`, `perfect_only`, `continued_perfect` and `great_or_worse_half`. The boolean `isRateUpWithPerfect` is allowed on ordinary score; its fixed constants belong to the scorer, not caller-supplied stack/cap fields.
+The HHWX profile is the only profile format accepted by this pipeline. Its historical field named `bestdoriProfile` contains compression-v2 card and area-item state; it is not a second Bestdori import format. Character bonuses come from the profile's top-level `characterPotentials` and `characterMissionBonuses` fields.
 
-There is no life input or state. Raw `score_over_life` and `score_under_life` rows are ordinary score rows in source order, without threshold checks or assumed life.
+A temporary card is identified by master card ID. Selecting the same ID again edits the existing temporary card instead of adding another copy. A newly selected card starts with its maximum legal progression values, which the editor may then change. During calculation, the temporary card replaces a profile-owned card with the same master ID. Profile exclusion flags apply only to the profile card and therefore do not exclude its temporary replacement. Temporary cards are session input: they are written neither into the saved game profile nor into local card preferences, and reloading the page or switching profiles clears them.
 
-Chart normalization keeps Single/Directional notes, Long endpoints, and Slide endpoints plus middle connections without a `hidden` property. Each note's time is `bpmTime + (beat - bpmBeat) * timePerBeat`, anchored at the latest BPM change, with `timePerBeat = 60 / bpm` as in Bestdori. Do not accumulate time between notes: rounding drift can exclude a note exactly at a skill endpoint. Other entities, including System, do not score. Presence of `skill` marks a trigger even if its value is false. Notes sort by beat with triggers first on ties. Every song has exactly six triggers, finite nonnegative seconds and a master-supplied play level (including level 5).
+Card records are resolved for the profile's gameplay server. When that server has no card slot but the JP slot exists, the existing JP-presence fallback is used. Score-effect and unification percentages prefer the profile server and fall back to JP only when that exact server slot is absent; an explicit zero remains zero. Skill duration uses the same regional fallback but must resolve to a positive number. Area-item rates use only the profile server and search downward for the nearest defined level not above the owned level.
 
-## Scoring formulas
+Malformed profile compression, missing required master rows, broken references, unsupported envelope fields or unsupported schema/rules versions fail with a stable error code and field path. Input errors are not treated as “no legal team”. Unused fields may remain in raw master records because the adapter reads only the fields required by the scoring contract.
 
-The rule identifier is `hhwx-medley-bestdori-v3`. Let `p` be PERFECT probability and `n` the covered-note count within one activation, including the current note and starting at one:
+### Versioned boundaries
+
+The pipeline uses four versioned shapes defined in [`contracts.ts`](../../src/lib/bandori/medley-foundation/contracts.ts). The two `source` shapes are TypeScript adapter inputs; the corresponding normalized `input` shapes cross into Rust:
+
+- `hhwx-medley-search-source-v1` accepts the whole roster and raw source records used by the product search;
+- `hhwx-medley-search-input-v1` contains normalized cards, resolved skill contexts, legal owned area configurations and normalized songs for Rust search;
+- `hhwx-medley-foundation-source-v1` accepts three explicitly selected teams and one area configuration for small fixed-team verification;
+- `hhwx-medley-scoring-input-v1` is the normalized fixed-team Rust scoring input produced by that verification adapter.
+
+The fixed-team verification entry point is not a second product search API. It exists so the scorer can be checked without also exercising roster enumeration and pruning. Because its teams are explicitly selected, a profile exclusion flag does not change their score; exclusion is enforced only when product search constructs candidates.
+
+## 4. Legal medleys and area items
+
+A legal result obeys all of the following:
+
+1. Song slots 0, 1 and 2 remain in the order supplied by the user. A song may appear more than once.
+2. Each team contains exactly five physical card instances and five distinct character IDs.
+3. A profile card marked as excluded is not a legal search candidate. As described above, that flag does not exclude a temporary replacement.
+4. One physical card instance appears in at most one team. Different card instances of the same character may be used in different teams.
+5. Member index two is the leader. The engine chooses the leader; it is not a frontend input.
+6. All three teams use the same engine-selected area configuration.
+
+The source adapter enumerates legal configurations from owned items: one band-item group, one attribute-item group and one parameter item. A category is empty only if the profile owns no usable item in that category. When a usable parameter item exists, an additional “equip nothing” choice is not enumerated. With all supported groups owned, this produces `9 band groups * 4 attributes * 3 parameter items = 108` configurations. CN metadata-only area-item IDs 59, 68 and 72 are outside this calculator contract.
+
+## 5. Card and team parameters
+
+Every card has three parameters: performance (`P`), technique (`T`) and visual (`V`). The source adapter calculates them in this order:
+
+1. Reconstruct the selected level from the level-one and maximum master rows with the Bestdori rarity growth curve and JavaScript `Math.round`.
+2. Add `50 * rarity * masterRank` to each parameter.
+3. Add training values when trained, then add each completed episode row.
+4. For each parameter separately, combine the character potential rate with the collection-plus-training mission rate, multiply that sum by the parameter obtained above, and floor once.
+5. Add the resulting character bonus to obtain the card's `characterParameter`.
+6. Calculate matching area-item and event contributions from that value.
+
+For one parameter value of 10,000, a 2% potential and combined 1.5% mission bonus produce:
 
 ```text
-judge = 1.1 * p + 0.8 * (1 - p)
-coefficient = (3 + 0.03 * (playLevel - 5)) / noteCount
-base = deckTotalParameter * coefficient
-innerScore = floor((base * comboRate) * judge)
-windowExtra = floor(innerScore * skillMultiplier) - innerScore
-songScore = sum(innerScore) + sum(windowExtra)
+character bonus = floor(10,000 * (0.02 + 0.015)) = 350
+character parameter = 10,000 + 350 = 10,350
 ```
 
-Probabilities enter the multipliers before the two floors. There is no P/G branch tree, history distribution or per-branch flooring.
+Potential and mission rates are deliberately added before this single floor. Equal P/T/V values do not select another rule.
 
-For a score-up percentage `C`, the ordinary multiplier is `1 + C / 100`. Rate-up first changes `C` to `C + 0.5 * min(n, 100) * p`. Continued uses `fallback + p^n * (active - fallback)`, where active/fallback are multipliers. Conditional skills use:
+Event contribution is calculated independently for each card and parameter. The adapter takes the first matching percentage, in source order, from each of the event's attribute, character, member-card (`situationId`, the master card ID) and rarity-plus-master-rank lists, then adds those four rates. The event-wide `parameterPercent` and its separate performance, technique and visual room rates are added only when both the matched attribute percentage and matched character percentage are greater than zero. The resulting rate multiplies the card's `characterParameter`; this contribution is not separately floored.
+
+For a complete team:
 
 ```text
-(1.1 * perfectMultiplier * p + 0.8 * greatMultiplier * (1 - p)) / judge
+deckTotalParameter = sum(card character parameters)
+                   + matching area-item contributions
+                   + matching event contributions
 ```
 
-Equal PERFECT/GREAT multipliers are returned directly. GREAT's multiplier is 1 for `score_on_perfect`, 0 for `perfect_only`, and 0.5 for `great_or_worse_half`; their PERFECT multiplier is `1 + C / 100`.
+Area-item and event contributions preserve JavaScript number operation order and are not separately floored before this sum.
 
-Combo carries across all three songs:
+## 6. Skills and chart normalization
+
+Skills are resolved only after the five team members are known because a team-wide unification value may depend on them. The primary effect is the first recognized score row, in source order, whose regional value can be resolved; an explicit zero remains valid. When the source defines a unification value, it replaces that primary percentage if either its configured band condition or its configured attribute condition matches the complete team. For a continued-PERFECT primary effect, the fallback is the first later recognized, non-continued score row. Supported normalized behaviors are:
+
+- `neutral`;
+- ordinary `score`;
+- `score_on_perfect`;
+- `perfect_only`;
+- `continued_perfect`, with active and fallback rates;
+- `great_or_worse_half`.
+
+An ordinary score skill may also use `isRateUpWithPerfect`; its increase and cap are fixed by the scoring rule rather than supplied by the caller. There is no life input or life state. Source rows named `score_over_life` or `score_under_life` are read in source order as ordinary score rows without checking a life threshold.
+
+The chart normalizer keeps:
+
+- Single and Directional notes;
+- both endpoints of Long notes;
+- both endpoints and every Slide middle node that has no `hidden` property. A middle node carrying that property is omitted even when its value is `false`.
+
+Other entities, including System entries, do not score. A `skill` property marks a trigger whenever the property exists, even if its value is `false`. Each song must contain exactly six triggers.
+
+Notes are ordered by beat, with a trigger note before another note on the same beat. Time is calculated from the nearest preceding BPM change:
+
+```text
+note time = BPM-point time + (note beat - BPM-point beat) * (60 / BPM)
+```
+
+This anchored conversion avoids cumulative drift at skill-window endpoints.
+
+## 7. Score calculation
+
+Let `p` be the PERFECT probability from 0 through 1. HHWX models every non-PERFECT result as GREAT; it does not model GOOD, BAD, MISS or combo breaks.
+
+### Base note score
+
+For a chart with `noteCount` scoring notes and master play level `level`:
+
+```text
+judgment = 1.1 * p + 0.8 * (1 - p)
+chart coefficient = (3 + 0.03 * (level - 5)) / noteCount
+base = deckTotalParameter * chart coefficient
+base note score = floor((base * combo multiplier) * judgment)
+```
+
+Combo continues across the three songs:
 
 ```text
 combo <= 20    : 1.00
@@ -95,22 +164,92 @@ combo <= 3000  : 1.04 + floor((combo - 1) / 100) * 0.01
 otherwise      : 1.34
 ```
 
-The first five triggers use all 120 member orders equally; the sixth repeats the leader. Each window starts at the note immediately after its trigger in the existing sorted array, including following notes at the same timestamp, and ends at `time <= triggerTime + duration` with no epsilon. Overlapping windows keep separate covered-note counts and add their independently rounded extras. No replacement, joint multiplier floor or additional clamp is applied.
+### Skill multiplier
 
-Let `B` be the integer base-song total and `E[slot][member]` each integer window extra. Calculate a song score as `floor((5 * (B + E[5][leader]) + sum(E[0..5][all members])) / 5)`: accumulate the numerator in signed i128, convert it once to binary64, divide by five, then floor immediately. This is the 120-order expectation with the common factor 24 cancelled, followed by the required per-song settlement. Both candidate comparisons and `(song0 + song1) + song2` use these integer song scores; fractional parts never carry between songs.
+An ordinary `C` percent score-up uses multiplier `1 + C / 100`. For `isRateUpWithPerfect`, covered note number `n` starts at one and includes the current note:
 
-Multiplier arithmetic uses binary64 without reassociating the defined operations. Each base or independently skill-scored note must fit u32; window extras may be negative. Signed i128 safely holds every total and mean numerator for u32 note counts. Invalid or overflowing scalar arithmetic fails rather than wrapping. GOOD/BAD/MISS, combo breaks and life behavior are absent.
+```text
+C(n) = C + 0.5 * min(n, 100) * p
+```
 
-## Source evidence and deliberate boundaries
+A continued-PERFECT skill with normal multiplier `active` and fallback multiplier `fallback` uses:
 
-The pinned [Bestdori app bundle](https://bestdori.com/js/app.d390adb1.js), module `c0f0`, has SHA-256 `ac84605d7889e53c0144ab7c41e379c174b94b8dc31edae07f3483b8a0610778` (verified 2026-08-31). Its `st → lt → ct` path is called for final results by [ToolTeamBuilder](https://bestdori.com/js/ToolTeamBuilder.6367a448.js), not merely a preview. It supports the average-multiplier method, two note floors and the continued/rate-up formulas. ToolTeamBuilder's `songNotes` getter supplies the BPM-anchored time conversion; its bundle SHA-256 is `060930307c802accbd754ac2a6b87eb6294e66cb44646e4cfdff9784670e659b`. Upstream `ct` returns a raw mean; HHWX floors each song before adding the medley total.
+```text
+fallback + p^n * (active - fallback)
+```
 
-That upstream path is a single-song calculator with ordinary combo, a different leader position and one active window. HHWX keeps the medley combo, leader index two and independently rounded additive overlap defined here, and preserves first-recognized-row/explicit-zero normalization rather than upstream's truthy fallback. By explicit product decision, HHWX also retains `score_only_perfect` (`perfect_only`, GREAT multiplier zero) so future cards using that existing master definition remain supported, although upstream `st` does not recognize it. Independent window rounding deliberately gives up the tiny joint-floor difference to keep complete-team scoring cheap during search. These are deliberate compatibility boundaries; “aligned” does not mean identical implementations. The rule version distinguishes this scorer from old normalized inputs and results; input field shapes are unchanged.
+For skills that distinguish PERFECT and GREAT, the multiplier is:
 
-The earlier native audit used JP client 10.1.3, master `20260805110509`, and skill-effect SHA-256 `d98e76c0198a6a714be1d38e4696a044242c8384b905426a311c8c2b0961aebc`. Its findings stay unimplemented: biased 1,024-path skill ordering with 96 reachable permutations, single-precision scoring and a combo master table, life-conditioned triggers, and frame/runtime window conflicts. They are provenance notes, not TODOs.
+```text
+(1.1 * perfectMultiplier * p + 0.8 * greatMultiplier * (1 - p)) / judgment
+```
 
-## Verification checkpoint
+`score_on_perfect` uses GREAT multiplier 1, `perfect_only` uses 0, and `great_or_worse_half` uses 0.5. When both multipliers are equal, that common multiplier is used directly.
 
-The retained 15-card/seven-note fixture checks raw HHWX input through TypeScript normalization into Rust. Focused existing cases cover parameters and bonus rounding, charts, skill formulas, window boundaries and direct-add overlap. Six small golden vectors from the pinned upstream function check average judgment, conditional skills, continued, capped rate-up and two-floor results.
+The skill contribution for one covered note is calculated with a second floor:
 
-The reference deliberately scores each of 120 orders note by note. Its trace contains one integer base score per note, per-order scores, combo offsets and binary64 result words; it has no judgment-state trace. Production groups constant multipliers by combo segment and reuses independent window contributions; it is checked against this reference on tiny inputs, including per-song flooring. The real-chart check also compares raw-chart normalization with Bestdori's original getter, not just formulas fed the same preprocessed timestamps. Older normalized rule versions must be regenerated from raw inputs. Formula changes use these focused checks and tiny exhaustive search, not automatic re-runs of long real-profile benchmarks. Frontend adaptation and result hydration are verified separately without changing scorer or proof semantics.
+```text
+skill note score = floor(base note score * skill multiplier)
+window extra = skill note score - base note score
+```
+
+The window starts at the note after its trigger in normalized order. A later note at the same timestamp is therefore covered. The endpoint is inclusive:
+
+```text
+note time <= trigger time + skill duration
+```
+
+No epsilon is added. When windows overlap, each window computes and floors its own extra independently; the extras are then added. Multipliers are not merged before flooring.
+
+### Expected skill order and leader
+
+The first five triggers use the five team skills in every one of the `5! = 120` orders with equal probability. The sixth trigger repeats the leader skill. Each member therefore occupies each of the first five windows in exactly `4! = 24` orders.
+
+Let:
+
+- `B` be the song's integer base score with no skill extras;
+- `E[w][m]` be the integer extra produced when member `m` occupies window `w`;
+- `leader` be the chosen member used again in window 5.
+
+The 120-order average simplifies exactly to:
+
+```text
+song score = floor(
+  (5 * (B + E[5][leader]) + sum(E[w][m] for w=0..4, m=0..4)) / 5
+)
+```
+
+This is why production scoring does not need to enumerate 120 orders for every candidate. The numerator is accumulated exactly in signed `i128`, converted to binary64 once, divided by five and immediately floored. Each song is settled independently; the medley total is then calculated as `(song0 + song1) + song2`.
+
+The scorer evaluates all five leaders for a complete five-card set. Equal best song scores retain the leader with the smallest physical instance ID.
+
+### Display-only medley event points
+
+Event points do not affect search order. Because the product always calculates all three songs, the medley completion bonus is fixed at 100:
+
+```text
+event points = (floor(total average score / 18,500) + 100) * boost multiplier
+```
+
+The UI displays total boost choices 0/3/6/9, corresponding to multipliers 3/15/30/45, and defaults to 9. For example, a total average score of 9,250,000 gives `floor(9,250,000 / 18,500) = 500`; at 9 boost the display is `(500 + 100) * 45 = 27,000` event points.
+
+## 8. Compatibility and deliberate differences
+
+The score formulas and chart-time conversion were checked against the pinned [Bestdori application bundle](https://bestdori.com/js/app.d390adb1.js), module `c0f0`, SHA-256 `ac84605d7889e53c0144ab7c41e379c174b94b8dc31edae07f3483b8a0610778`, and [ToolTeamBuilder bundle](https://bestdori.com/js/ToolTeamBuilder.6367a448.js), SHA-256 `060930307c802accbd754ac2a6b87eb6294e66cb44646e4cfdff9784670e659b`, verified on 2026-08-31. That path establishes the average judgment multiplier, two note-score floors, continued-skill formula, rate-up formula and BPM-anchored note times.
+
+HHWX differs from that single-song path where the medley product requires different behavior:
+
+- combo continues across three songs;
+- member index two is the leader;
+- overlapping skill windows add their independently rounded extras;
+- each song average is floored before the three song scores are added;
+- the first recognized score row and an explicit zero are preserved;
+- `score_only_perfect` is represented as `perfect_only`, with zero GREAT multiplier, even though the pinned upstream function does not recognize it.
+
+An audit of native JP client 10.1.3 using master version `20260805110509` and skill-effect SHA-256 `d98e76c0198a6a714be1d38e4696a044242c8384b905426a311c8c2b0961aebc` found behavior outside this calculator model: biased random skill-order sampling, single-precision scoring, a combo master table, life-conditioned triggers, and frame/runtime handling of skill-window conflicts. HHWX does not model those behaviors. Changing that boundary would require a new scoring rule version and corresponding reference cases.
+
+## 9. Implementation and verification
+
+The TypeScript source adapter lives under `src/lib/bandori/medley-foundation/`. The fixed-team model and reference scorer live in `crates/bandori-medley-model/` and `crates/bandori-medley-reference/`; production scoring and exact search live in `crates/bandori-medley-search/`; the browser binding lives in `crates/bandori-medley-wasm/`.
+
+The reference scorer deliberately evaluates all 120 orders note by note and returns detailed numeric traces. Production scoring uses the algebraic reduction above and groups reusable note/window work. Tiny fixtures compare both paths, while separate search tests compare exact search with exhaustive enumeration. See [Medley Testing and Verification](medley-testing.md) for runnable commands and evidence limits.

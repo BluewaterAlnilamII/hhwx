@@ -2,7 +2,7 @@
 
 本文档说明 HHWX Bandori 单曲组队计算器的游戏模型、计分模型、精确搜索契约、性能设计、正确性论证、验证门禁和实现归属。
 
-组曲搜索是独立的全新实现，见 `medley-foundation.zh-CN.md` 和 `medley-search.zh-CN.md`。
+组曲搜索是独立的 Rust/WebAssembly 实现，见 `medley-foundation.zh-CN.md` 和 `medley-search.zh-CN.md`。
 
 ## 问题定义
 
@@ -379,85 +379,15 @@ HHWX 的差异：
 
 `core` 层不能导入 `single`。
 
-## 验证门禁
+## 验证
 
-### 开源仓库可运行检查
+仓库提供区域技能专项检查和常规应用检查：
 
-可移植的项目门禁为：
-
-```powershell
-npx.cmd tsc --noEmit
-npm.cmd run lint
-npm.cmd run build
+```bash
+npm run test:team-builder
+npm run typecheck
+npm run lint
+npm run build
 ```
 
-### 本地历史验证材料
-
-历史 Bestdori 兼容验证脚本位于本地工作副本的 `temp/bandori-team-builder/` 下，不属于 Git 跟踪源码。若本地验证脚本和固定样本数据可用，运行：
-
-```powershell
-node temp\bandori-team-builder\validate-bestdori-hhwx-scoring.cjs
-```
-
-### 发布前推荐验证
-
-发布前，如果本地验证脚本、凭据和网络可用，还应跑一次 Supabase 主矩阵：
-
-```powershell
-$env:HHWX_VALIDATE_INCLUDE_SUPABASE='1'
-$env:HHWX_VALIDATE_SUPABASE_PROFILE_LIMIT='12'
-node temp\bandori-team-builder\validate-bestdori-hhwx-scoring.cjs
-```
-
-Bestdori 兼容验证报告的阻断条件：
-
-- `assetGate.ok !== true`；
-- `strictFailureCount > 0`；
-- `fixedScoringFailureCount > 0`；
-- `searchWorseThanBaselineCount > 0`；
-- `boundedCount > 0`；
-- `eventPointOptionsFailureCount > 0`；
-- `uiDisplaySwitchFailureCount > 0`；
-- `performanceGateFailureCount > 0`；
-- `productionReady !== true`。
-
-最近一次保留的单曲验证摘要为：
-
-| 指标 | 值 |
-| --- | ---: |
-| caseCount | 46 |
-| supabaseProfileCount | 10 |
-| failureCount | 0 |
-| strictFailureCount | 0 |
-| fixedScoringFailureCount | 0 |
-| searchWorseThanBaselineCount | 0 |
-| boundedCount | 0 |
-| eventPointOptionsFailureCount | 0 |
-| uiDisplaySwitchFailureCount | 0 |
-| performanceGateFailureCount | 0 |
-| productionReady | true |
-
-来自 `fix-pass2-supabase-main-report.json` 的近期基准测试最大值：
-
-| 场景 | HHWX 最大耗时 ms | 兼容基线最大耗时 ms | 约提升 |
-| --- | ---: | ---: | ---: |
-| 1329 卡池，595 expert，无活动 | 1613 | 9638 | 6.0x |
-| 1889 卡池，686 expert，无活动 | 2061 | 11753 | 5.7x |
-| 1889 卡池，306 challenge | 1857 | 8238 | 4.4x |
-| 1889 卡池，307 mission multi | 7922 | 89377 | 11.3x |
-| 1889 卡池，versus 展示 | 1915 | 12251 | 6.4x |
-| 1889 卡池，festival 展示 | 2356 | 12936 | 5.5x |
-| Supabase 抽样 free perfect | 2440 | 24640 | 10.1x |
-| Supabase 抽样 free perfect 95% | 2291 | 19707 | 8.6x |
-| Supabase 抽样 challenge 306 | 1901 | 10903 | 5.7x |
-| Supabase 抽样 mission 307 multi | 8106 | 90351 | 11.1x |
-
-这些数字来自本地验证环境，是设计证据，不是对所有 Bestdori 版本或运行环境的普遍基准测试声明。
-
-## 剩余风险和后续工作
-
-- Supabase 长矩阵验证曾因网络 `fetch failed / ECONNABORTED` 中断。这是验证环境稳定性问题，不是算法失败，但发布验证应包含一次完整长跑。
-- 2000+ 模拟卡池应定期压力测试，确认精确搜索不会退化成有界结果。
-- 更强的 skyline（同角色非支配集合）压缩可以在同一角色内只保留未被支配的卡，并比较技能窗口贡献向量，而不只比较综合力和标量技能上界。
-- 更专门的乐团/属性后缀索引可以为 `same-band`、`same-attribute`、`both` 和 `mixed` 分支分别保存剩余最佳值，让分支上界更紧。
-- top1-first（先证明第一名）UI 路径可以先证明第一名，再填充 top-N。API 需要按阶段标注精确状态，避免界面暗示尚未完成的后续名次也已证明。
+公式或搜索发生变化时，需要增加一个能在错误实现下失败的针对性回归用例。私有档案和特定机器的基准报告可以补充这些公开检查，但它们不是公开算法契约的一部分，也不能被描述为整个项目都可复现的性能结论。
