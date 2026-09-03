@@ -41,6 +41,26 @@ test("chart normalization follows Bestdori entity and property-presence semantic
   assert.equal(notes.at(-1).timeSeconds, 7);
 });
 
+test("chart normalization rejects scoring notes without a preceding BPM", () => {
+  const skillNotes = Array.from({ length: 6 }, (_, index) => ({
+    type: "Single",
+    beat: index + 1,
+    skill: true,
+  }));
+
+  assert.throws(
+    () => normalizeBestdoriScoringChart(skillNotes),
+    /INVALID_CHART.*preceding BPM/u,
+  );
+  assert.throws(
+    () => normalizeBestdoriScoringChart([
+      ...skillNotes,
+      { type: "BPM", beat: 2, bpm: 120 },
+    ]),
+    /INVALID_CHART.*preceding BPM/u,
+  );
+});
+
 test("plain decimal UI values normalize to exact scorer inputs", () => {
   assert.deepEqual(parsePerfectRatePercent("99.5"), { numerator: 995, decimalScale: 3 });
   assert.deepEqual(parsePerfectRatePercent("100.000"), { numerator: 1, decimalScale: 0 });

@@ -111,7 +111,7 @@ Area-item and event contributions preserve JavaScript number operation order and
 
 ## 6. Skills and chart normalization
 
-Skills are resolved only after the five team members are known because a team-wide unification value may depend on them. The primary effect is the first recognized score row, in source order, whose regional value can be resolved; an explicit zero remains valid. When the source defines a unification value, it replaces that primary percentage if either its configured band condition or its configured attribute condition matches the complete team. For a continued-PERFECT primary effect, the fallback is the first later recognized, non-continued score row. Supported normalized behaviors are:
+Skills are resolved only after the five team members are known because a team-wide unification value may depend on them. The primary effect is the first recognized score row, in source order, whose regional value can be resolved; an explicit zero remains valid. Resolved primary and unification percentages must be nonnegative. When the source defines a valid unification value, it replaces that primary percentage if either its configured band condition or its configured attribute condition matches the complete team. For a continued-PERFECT primary effect, the fallback is the first later recognized, non-continued score row. Supported normalized behaviors are:
 
 - `neutral`;
 - ordinary `score`;
@@ -135,6 +135,8 @@ Notes are ordered by beat, with a trigger note before another note on the same b
 ```text
 note time = BPM-point time + (note beat - BPM-point beat) * (60 / BPM)
 ```
+
+Every scoring note must have a valid BPM change at or before its beat. A missing preceding BPM is invalid chart data; the normalizer does not invent an implicit tempo or place pre-BPM notes at time zero.
 
 This anchored conversion avoids cumulative drift at skill-window endpoints.
 

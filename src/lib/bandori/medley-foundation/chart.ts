@@ -82,6 +82,9 @@ export function normalizeBestdoriScoringChart(
       timePerBeat = 60 / bpm.bpm;
       bpmIndex += 1;
     }
+    if (bpmIndex === 0) {
+      failInput("INVALID_CHART", `${path}[${noteId}]`, "scoring notes require a preceding BPM change");
+    }
     // Bestdori anchors time at BPM changes; per-note accumulation drifts at skill endpoints.
     const timeSeconds = bpmTime + (note.beat - bpmBeat) * timePerBeat;
     if (!Number.isFinite(timeSeconds) || timeSeconds < 0 || Object.is(timeSeconds, -0)) {

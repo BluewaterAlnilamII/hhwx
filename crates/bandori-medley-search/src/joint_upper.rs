@@ -1371,7 +1371,7 @@ mod tests {
             vec![1, 2, 4, 1, 2, 4, 1, 2, 4, 1, 2, 4, 1, 2, 4],
         ] {
             // Fold the same original linear objective into constants and a
-            // fixed-leader option. The exhaustive oracle below stays unchanged.
+            // fixed-leader option. The exhaustive reference below stays unchanged.
             let mut remaining_weights = weights.clone();
             for slot in 0..3 {
                 let fixed = &mut remaining_weights.fixed_members[slot];

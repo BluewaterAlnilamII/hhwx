@@ -52,7 +52,7 @@ npm run check:medley-foundation:wasm
 | 档案、参数、技能、谱面和来源请求规范化 | [`tests/bandori-medley-*.test.mjs`](../../tests) | 从 HHWX 形状的来源数据调用公开 TypeScript 构造器，直到生成规范的固定队与搜索请求。 |
 | 带版本的 Rust 输入契约 | [`json_contract.rs`](../../crates/bandori-medley-model/tests/json_contract.rs) | 接受仓库中的合法样本，并拒绝未知计分规则版本。 |
 | 优化计分与直接枚举 120 种顺序一致 | [`exact_score.rs`](../../crates/bandori-medley-search/src/exact_score.rs) | `production_song_scores_match_reference_bits`、`score_range_matches_all_120_reference_orders` 及重叠／概率用例比较两条实现。 |
-| 完整搜索不会漏掉合法最优解 | [`tiny_exact_search.rs`](../../crates/bandori-medley-search/tests/tiny_exact_search.rs) | `tiny_search_matches_the_complete_reference_oracle_across_memory_budgets` 把优化求解器与独立完整穷举比较。 |
+| 搜索在保留的有限空间上与完整枚举一致 | [`tiny_exact_search.rs`](../../crates/bandori-medley-search/tests/tiny_exact_search.rs) | `tiny_search_matches_the_independent_exhaustive_reference_across_memory_budgets` 覆盖对称的五角色用例；`tiny_search_matches_the_reference_when_characters_and_cards_can_be_unused` 覆盖六个合格角色、一张未使用的合格卡、各队省略不同角色，以及一张数值很高但被排除的卡。两者都比较精确分数和稳定同分代表。 |
 | 上界和结构推论保持安全 | [`fast_upper.rs`](../../crates/bandori-medley-search/src/fast_upper.rs)、[`joint_upper.rs`](../../crates/bandori-medley-search/src/joint_upper.rs)、[`search.rs`](../../crates/bandori-medley-search/src/search.rs) | 用极小完成穷举检查单队上界、联合前后表和角色占用模式；专项用例检查实际去向单例闭包及索引／扫描连接一致。 |
 | 各类失败保留各自结果 | [`control.rs`](../../crates/bandori-medley-search/src/control.rs)、[`validation.rs`](../../crates/bandori-medley-search/src/validation.rs)、[`hydration.rs`](../../crates/bandori-medley-search/src/hydration.rs)、[`tiny_exact_search.rs`](../../crates/bandori-medley-search/tests/tiny_exact_search.rs) | 存储预算为零时搜索返回 `incomplete`；控制器保留 `TimedOut`；非法请求和补算分数不一致返回错误，不会成为虚假的 `exact`。 |
 
@@ -96,7 +96,9 @@ npm run build
 
 ## 4. 精确搜索测试应比较什么
 
-对极小卡池，独立完整穷举是最清楚的比较基准：枚举每套合法道具、物理卡到三队的每种合法分配和每种队长，再把完整最优解及同分代表与优化搜索比较。
+对极小卡池，独立完整穷举是最清楚的参考结果：枚举每套合法道具、由未排除物理卡组成的每支合法五角色队伍、三支队伍之间每种无卡牌冲突的分配，以及每种队长，再把完整最优解及同分代表与优化搜索比较。参考代码不得调用优化搜索的候选生成、上界、结构推论或局部连接。
+
+保留的五角色用例要求使用所有卡牌，重点检查三队争用。六角色用例还明确要求两条路径都留下一张合格卡不用、让不同队伍省略不同角色，并忽略一张若未被排除就会获胜的高数值卡。两个用例都在不同内存预算下运行，以覆盖不同搜索形态；但任何有限样本本身都不应被表述为对任意卡池的单独证明。
 
 针对上界的测试更容易定位错误。对一个部分搜索状态，完整枚举它的每个合法完成，并验证：
 

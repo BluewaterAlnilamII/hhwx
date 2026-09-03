@@ -19,7 +19,7 @@ The discovered list contains at most ten complete solutions encountered during s
 
 Production scoring prepares chart boundaries once, reuses independently rounded skill-window extras and reduces the 120-order average algebraically. It floors each song before comparison and before summing the medley, and is checked bit-for-bit against the direct reference scorer.
 
-Search combines single-team upper bounds, a joint three-team allocation bound, forward/backward conditional tables, reversible card destinations and exact enumeration of small residual blocks. Numeric uncertainty or insufficient optimization memory disables the affected pruning work rather than removing a candidate. Tiny searches are checked against an independent exhaustive oracle.
+Search combines single-team upper bounds, a joint three-team allocation bound, forward/backward conditional tables, reversible card destinations and exact enumeration of small residual blocks. Numeric uncertainty or insufficient optimization memory disables the affected pruning work rather than removing a candidate. Tiny searches are checked against an independent exhaustive reference calculation.
 
 The configured storage budget covers local rows and indexes, score-cache capacity, joint workspace reservations and live conditional tables. Input/model data, ranked single-team indexes, traversal state and chart-sized scorer scratch are accounted separately. Exhaustive correctness does not depend on any cache entry surviving.
 

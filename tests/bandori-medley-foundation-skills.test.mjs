@@ -172,4 +172,14 @@ test("malformed selected skill rows fail closed", () => {
     context: { sameBandId: null, sameAttribute: null },
     server: 0,
   }), /unsigned 32-bit/u);
+
+  assert.throws(() => resolveBestdoriScoreSkill({
+    skillId: 3,
+    skillLevel: 1,
+    skillMaster: skillWithEffects({}, {
+      unificationActivateEffectValue: regional(-1),
+    }),
+    context: { sameBandId: null, sameAttribute: null },
+    server: 0,
+  }), /INVALID_SKILL.*unificationActivateEffectValue.*non-negative/u);
 });

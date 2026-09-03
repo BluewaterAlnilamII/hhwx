@@ -530,7 +530,7 @@ HHWX differs by:
 - explicitly returning `exact` or `bounded`.
 
 The Bestdori-compatible baseline is therefore a formula and performance
-reference, not an exact-search correctness oracle.
+reference, not proof that the exact search is correct.
 
 ## Implementation Ownership
 

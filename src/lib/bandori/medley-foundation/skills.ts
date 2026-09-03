@@ -178,11 +178,17 @@ export function resolveBestdoriScoreSkill(options: {
     ? scoreEffects.slice(1).find((effect) => effect.type !== "score_continued_note_judge") ?? null
     : null;
 
+  const unifiedValue = regionalNumber(activationEffect.unificationActivateEffectValue, options.server);
+  if (unifiedValue !== null && unifiedValue < 0) {
+    failInput(
+      "INVALID_SKILL",
+      `${path}.activationEffect.unificationActivateEffectValue`,
+      "must be non-negative",
+    );
+  }
   let behavior: SkillBehaviorV1 = { kind: "neutral" };
   if (primary !== null) {
-    const unifiedValue = regionalNumber(activationEffect.unificationActivateEffectValue, options.server);
     const resolvedPrimary = unifiedValue !== null
-      && unifiedValue >= 0
       && resolvesUnifiedValue(activationEffect, options.context)
       ? { ...primary, valuePercent: unifiedValue }
       : primary;

@@ -37,7 +37,7 @@ npm run check:medley-foundation:wasm
 
 - fixed-input JSON validation;
 - production scorer agreement with the direct 120-order reference scorer;
-- tiny exact searches compared with an independent exhaustive oracle;
+- tiny exact searches compared with an independent exhaustive reference calculation;
 - individual and joint upper bounds checked against every legal tiny completion;
 - forward/backward conditional values checked against exhaustive residual assignment;
 - physical-card conflicts, character uniqueness, required characters and stable ties;
@@ -52,7 +52,7 @@ The portable evidence is organized as follows:
 | Profile, parameter, skill, chart and source-request normalization | [`tests/bandori-medley-*.test.mjs`](../../tests) | Exercises the public TypeScript builders from HHWX-shaped source data through normalized fixed-team and search requests. |
 | Versioned Rust input contract | [`json_contract.rs`](../../crates/bandori-medley-model/tests/json_contract.rs) | Accepts the committed valid fixture and rejects unknown scoring-rule versions. |
 | Optimized scoring equals the direct 120-order calculation | [`exact_score.rs`](../../crates/bandori-medley-search/src/exact_score.rs) | `production_song_scores_match_reference_bits`, `score_range_matches_all_120_reference_orders` and the overlap/probability case compare both implementations. |
-| Complete search does not omit a legal optimum | [`tiny_exact_search.rs`](../../crates/bandori-medley-search/tests/tiny_exact_search.rs) | `tiny_search_matches_the_complete_reference_oracle_across_memory_budgets` compares the optimized solver with an independent exhaustive oracle. |
+| Search matches complete enumeration on the retained finite spaces | [`tiny_exact_search.rs`](../../crates/bandori-medley-search/tests/tiny_exact_search.rs) | `tiny_search_matches_the_independent_exhaustive_reference_across_memory_budgets` covers the symmetric five-character case. `tiny_search_matches_the_reference_when_characters_and_cards_can_be_unused` covers six eligible characters, an unused eligible card, different omitted characters by team, and an excluded high-value card. Both compare the exact score and deterministic tie representative. |
 | Bounds and deductions remain safe | [`fast_upper.rs`](../../crates/bandori-medley-search/src/fast_upper.rs), [`joint_upper.rs`](../../crates/bandori-medley-search/src/joint_upper.rs), [`search.rs`](../../crates/bandori-medley-search/src/search.rs) | Exhaustive tiny completions cover individual bounds, forward/backward joint bounds and occupancy modes; focused cases cover projected singleton closure and indexed/scan join parity. |
 | Failure paths preserve distinct outcomes | [`control.rs`](../../crates/bandori-medley-search/src/control.rs), [`validation.rs`](../../crates/bandori-medley-search/src/validation.rs), [`hydration.rs`](../../crates/bandori-medley-search/src/hydration.rs), [`tiny_exact_search.rs`](../../crates/bandori-medley-search/tests/tiny_exact_search.rs) | A zero storage budget returns `incomplete`; control preserves `TimedOut`; invalid requests and hydration score disagreements return errors rather than a false `exact`. |
 
@@ -96,7 +96,9 @@ The two Rust scorers intentionally share one normalized note input, so their agr
 
 ## 4. What an exact-search test should compare
 
-On a tiny roster, exhaustive enumeration is the clearest oracle: enumerate every legal area configuration, every legal assignment of physical cards to three teams and every leader, then compare the complete optimum and tie representative with optimized search.
+On a tiny roster, an independent exhaustive calculation is the clearest reference: enumerate every legal area configuration, every legal five-character team from the non-excluded physical cards, every conflict-free assignment of three such teams, and every leader. Then compare its complete optimum and tie representative with optimized search. The reference code must not call the optimized search's candidate generator, upper bounds, deductions, or local joins.
+
+The retained five-character case makes every card necessary and stresses cross-team competition. The six-character case additionally forces the reference and optimized search to leave one eligible card unused, omit different characters from different teams, and ignore an excluded card whose deliberately high value would otherwise win. Running both cases under different memory budgets checks distinct search shapes without treating either finite fixture as proof by itself for every possible roster.
 
 Bound-specific tests make failures easier to diagnose. For a partial state, enumerate every legal completion and verify:
 

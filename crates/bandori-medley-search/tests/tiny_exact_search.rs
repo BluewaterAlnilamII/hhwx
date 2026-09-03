@@ -14,13 +14,10 @@ use bandori_medley_search::{
     SearchIncompleteReasonV1, search_medley,
 };
 
-const CHARACTER_COUNT: usize = 5;
+const BASE_CHARACTER_COUNT: usize = 5;
 const CARD_VARIANTS_PER_CHARACTER: usize = 3;
-const TEAM_COUNT: usize = 3_usize.pow(CHARACTER_COUNT as u32);
 const LARGE_MEMORY_BUDGET: usize = 1024 * 1024;
 const SMALL_MEMORY_BUDGET: usize = 16 * 1024;
-
-type TeamScoreTable = Vec<[[f64; 3]; 5]>;
 
 fn score_skill(master_skill_id: u32, score_up_percent: f64) -> ResolvedScoreSkillV1 {
     ResolvedScoreSkillV1 {
@@ -33,7 +30,9 @@ fn score_skill(master_skill_id: u32, score_up_percent: f64) -> ResolvedScoreSkil
 }
 
 fn fixture() -> MedleySearchInputV1 {
-    let cards = (0_u32..15)
+    let cards = (0_u32
+        ..u32::try_from(BASE_CHARACTER_COUNT * CARD_VARIANTS_PER_CHARACTER)
+            .expect("tiny card count fits u32"))
         .map(|instance_id| {
             let character_index = instance_id / 3;
             let variant = instance_id % 3;
@@ -143,30 +142,37 @@ fn conflicting_contexts_fixture() -> MedleySearchInputV1 {
     input
 }
 
-fn choices_from_index(mut index: usize) -> [u32; CHARACTER_COUNT] {
-    std::array::from_fn(|_| {
-        let choice = index % CARD_VARIANTS_PER_CHARACTER;
-        index /= CARD_VARIANTS_PER_CHARACTER;
-        u32::try_from(choice).expect("three variants fit u32")
-    })
-}
-
-fn index_from_choices(choices: [u32; CHARACTER_COUNT]) -> usize {
-    choices.into_iter().rev().fold(0_usize, |index, choice| {
-        index * CARD_VARIANTS_PER_CHARACTER + choice as usize
-    })
-}
-
-fn team_from_choices(choices: [u32; CHARACTER_COUNT]) -> [u32; 5] {
-    std::array::from_fn(|character_index| {
-        u32::try_from(character_index * CARD_VARIANTS_PER_CHARACTER)
-            .expect("tiny instance base fits u32")
-            + choices[character_index]
-    })
-}
-
-fn team_from_index(index: usize) -> [u32; 5] {
-    team_from_choices(choices_from_index(index))
+fn optional_character_fixture() -> MedleySearchInputV1 {
+    let mut input = conflicting_contexts_fixture();
+    let skill_contexts = |master_skill_id, base_percent| SearchCardSkillContextsV1 {
+        mixed: score_skill(master_skill_id, base_percent),
+        same_band: score_skill(master_skill_id, base_percent + 5.0),
+        same_attribute: score_skill(master_skill_id, base_percent + 10.0),
+        same_band_and_attribute: score_skill(master_skill_id, base_percent + 15.0),
+    };
+    input.cards.push(SearchCardV1 {
+        instance_id: 15,
+        master_card_id: 16,
+        character_id: 6,
+        band_id: 2,
+        attribute: CardAttributeV1::Cool,
+        is_excluded: false,
+        character_parameter: [20_000.0, 18_000.0, 16_000.0],
+        event_parameter: [500.0, 400.0, 300.0],
+        skill_contexts: skill_contexts(16, 180.0),
+    });
+    input.cards.push(SearchCardV1 {
+        instance_id: 16,
+        master_card_id: 17,
+        character_id: 7,
+        band_id: 1,
+        attribute: CardAttributeV1::Powerful,
+        is_excluded: true,
+        character_parameter: [500_000.0, 500_000.0, 500_000.0],
+        event_parameter: [50_000.0, 50_000.0, 50_000.0],
+        skill_contexts: skill_contexts(17, 500.0),
+    });
+    input
 }
 
 fn members_with_leader(team: [u32; 5], leader_position: usize) -> [u32; 5] {
@@ -244,28 +250,49 @@ fn fixed_input(
     input: &MedleySearchInputV1,
     configuration: &AreaItemConfigurationV1,
     teams: [[u32; 5]; 3],
-    leader_position: usize,
+    leader_positions: [usize; 3],
 ) -> FixedMedleyEvaluationInputV1 {
-    let ordered_teams = teams.map(|team| members_with_leader(team, leader_position));
-    let mut cards = input
-        .cards
+    let ordered_source_teams: [[u32; 5]; 3] =
+        std::array::from_fn(|slot| members_with_leader(teams[slot], leader_positions[slot]));
+    let mut source_instance_ids = teams.into_iter().flatten().collect::<Vec<_>>();
+    source_instance_ids.sort_unstable();
+    source_instance_ids.dedup();
+    assert_eq!(
+        source_instance_ids.len(),
+        15,
+        "reference teams must be disjoint"
+    );
+    let local_id = |source_id: u32| {
+        u32::try_from(
+            source_instance_ids
+                .binary_search(&source_id)
+                .expect("selected source card has a local reference ID"),
+        )
+        .expect("15 local card IDs fit u32")
+    };
+    let mut cards = source_instance_ids
         .iter()
-        .map(|card| CardScoringInputV1 {
-            instance_id: card.instance_id,
-            master_card_id: card.master_card_id,
-            character_id: card.character_id,
-            skill: card.skill_contexts.mixed,
+        .enumerate()
+        .map(|(local_index, source_id)| {
+            let card = &input.cards[*source_id as usize];
+            CardScoringInputV1 {
+                instance_id: u32::try_from(local_index).expect("15 local card IDs fit u32"),
+                master_card_id: card.master_card_id,
+                character_id: card.character_id,
+                skill: card.skill_contexts.mixed,
+            }
         })
         .collect::<Vec<_>>();
     for team in teams {
-        for instance_id in team {
-            cards[instance_id as usize].skill = resolved_team_skill(input, team, instance_id);
+        for source_id in team {
+            cards[local_id(source_id) as usize].skill = resolved_team_skill(input, team, source_id);
         }
     }
+    let ordered_local_teams = ordered_source_teams.map(|team| team.map(local_id));
     let fixed_teams = std::array::from_fn(|slot| FixedTeamV1 {
         slot: u8::try_from(slot).expect("three team slots fit u8"),
-        member_instance_ids: ordered_teams[slot],
-        deck_total_parameter: team_deck_parameter(input, configuration, ordered_teams[slot]),
+        member_instance_ids: ordered_local_teams[slot],
+        deck_total_parameter: team_deck_parameter(input, configuration, ordered_source_teams[slot]),
     });
     FixedMedleyEvaluationInputV1 {
         schema_version: SCORING_INPUT_SCHEMA_VERSION.to_owned(),
@@ -277,88 +304,128 @@ fn fixed_input(
     }
 }
 
-fn reference_team_scores(
-    input: &MedleySearchInputV1,
-    configuration: &AreaItemConfigurationV1,
-) -> TeamScoreTable {
-    let mut scores = vec![[[f64::NAN; 3]; 5]; TEAM_COUNT];
-
-    // Fix the first character's choice at zero, then add 0/1/2 modulo three.
-    // Each orbit contains three disjoint teams and the 81 orbits cover all 243 teams.
-    for suffix_index in 0..3_usize.pow((CHARACTER_COUNT - 1) as u32) {
-        let mut base_choices = [0_u32; CHARACTER_COUNT];
-        let suffix_choices = choices_from_index(suffix_index);
-        base_choices[1..].copy_from_slice(&suffix_choices[..CHARACTER_COUNT - 1]);
-        let orbit_choices = std::array::from_fn::<_, 3, _>(|shift| {
-            base_choices.map(|choice| {
-                (choice + u32::try_from(shift).expect("three shifts fit u32"))
-                    % CARD_VARIANTS_PER_CHARACTER as u32
-            })
-        });
-        let orbit_indices = orbit_choices.map(index_from_choices);
-        let orbit_teams = orbit_choices.map(team_from_choices);
-
-        for rotation in 0..3 {
-            let slot_indices: [usize; 3] =
-                std::array::from_fn(|slot| orbit_indices[(slot + rotation) % 3]);
-            let slot_teams = std::array::from_fn(|slot| orbit_teams[(slot + rotation) % 3]);
-            for (leader_position, _) in [(); 5].iter().enumerate() {
-                let trace = evaluate_fixed_medley(&fixed_input(
-                    input,
-                    configuration,
-                    slot_teams,
-                    leader_position,
-                ))
-                .expect("tiny fixed medley must score in the reference oracle");
-                for slot in 0..3 {
-                    let entry = &mut scores[slot_indices[slot]][leader_position][slot];
-                    assert!(entry.is_nan(), "each cached score is filled exactly once");
-                    *entry = trace.songs[slot].average_score();
-                }
+fn legal_team_member_sets(input: &MedleySearchInputV1) -> Vec<[u32; 5]> {
+    fn visit(
+        input: &MedleySearchInputV1,
+        eligible: &[u32],
+        start: usize,
+        members: &mut [u32; 5],
+        member_count: usize,
+        teams: &mut Vec<[u32; 5]>,
+    ) {
+        if member_count == 5 {
+            teams.push(*members);
+            return;
+        }
+        let needed = 5 - member_count;
+        if eligible.len().saturating_sub(start) < needed {
+            return;
+        }
+        for index in start..=eligible.len() - needed {
+            let instance_id = eligible[index];
+            let character_id = input.cards[instance_id as usize].character_id;
+            if members[..member_count]
+                .iter()
+                .any(|member| input.cards[*member as usize].character_id == character_id)
+            {
+                continue;
             }
+            members[member_count] = instance_id;
+            visit(input, eligible, index + 1, members, member_count + 1, teams);
         }
     }
 
-    assert!(
-        scores
-            .iter()
-            .flatten()
-            .flatten()
-            .all(|score| score.is_finite())
-    );
-    scores
+    let eligible = input
+        .cards
+        .iter()
+        .filter(|card| !card.is_excluded)
+        .map(|card| card.instance_id)
+        .collect::<Vec<_>>();
+    let mut teams = Vec::new();
+    visit(input, &eligible, 0, &mut [0; 5], 0, &mut teams);
+    teams
 }
 
 #[derive(Clone, Copy)]
-struct OracleTeam {
+struct ReferenceTeam {
     member_set: [u32; 5],
+    member_mask: u128,
     song_scores: [f64; 3],
     leaders: [u32; 3],
 }
 
-fn oracle_teams(scores: &TeamScoreTable) -> Vec<OracleTeam> {
-    scores
+fn member_mask(members: [u32; 5]) -> u128 {
+    members.into_iter().fold(0_u128, |mask, instance_id| {
+        mask | 1_u128
+            .checked_shl(instance_id)
+            .expect("tiny reference fixture uses at most 128 cards")
+    })
+}
+
+fn disjoint_fillers(target: [u32; 5], teams: &[[u32; 5]]) -> [[u32; 5]; 2] {
+    let target_mask = member_mask(target);
+    for &first in teams {
+        let first_mask = member_mask(first);
+        if target_mask & first_mask != 0 {
+            continue;
+        }
+        for &second in teams {
+            let second_mask = member_mask(second);
+            if (target_mask | first_mask) & second_mask == 0 {
+                return [first, second];
+            }
+        }
+    }
+    panic!("every team in the tiny reference fixture must extend to three disjoint teams");
+}
+
+fn reference_teams(
+    input: &MedleySearchInputV1,
+    configuration: &AreaItemConfigurationV1,
+) -> Vec<ReferenceTeam> {
+    let member_sets = legal_team_member_sets(input);
+    member_sets
         .iter()
-        .enumerate()
-        .map(|(team_index, leader_scores)| {
-            let member_set = team_from_index(team_index);
+        .copied()
+        .map(|member_set| {
+            // The fixed reference scorer requires exactly three disjoint teams.
+            // Filler-team membership cannot affect the target song's team score.
+            let fillers = disjoint_fillers(member_set, &member_sets);
+            let mut leader_scores = [[f64::NAN; 3]; 5];
+            for song_slot in 0..3 {
+                let mut teams = [fillers[0], fillers[1], member_set];
+                teams.swap(song_slot, 2);
+                for (leader_position, scores) in leader_scores.iter_mut().enumerate() {
+                    let mut leader_positions = [0; 3];
+                    leader_positions[song_slot] = leader_position;
+                    let trace = evaluate_fixed_medley(&fixed_input(
+                        input,
+                        configuration,
+                        teams,
+                        leader_positions,
+                    ))
+                    .expect("tiny fixed medley must score in the independent reference");
+                    scores[song_slot] = trace.songs[song_slot].average_score();
+                }
+            }
+
             let mut song_scores = [0.0_f64; 3];
             let mut leaders = [0_u32; 3];
             for song_slot in 0..3 {
-                let mut best_score = leader_scores[0][song_slot];
-                let mut best_leader = member_set[0];
+                let mut best_leader = 0;
                 for leader_position in 1..5 {
-                    let score = leader_scores[leader_position][song_slot];
-                    if score > best_score {
-                        best_score = score;
-                        best_leader = member_set[leader_position];
+                    if leader_scores[leader_position][song_slot]
+                        > leader_scores[best_leader][song_slot]
+                    {
+                        best_leader = leader_position;
                     }
                 }
-                song_scores[song_slot] = best_score;
-                leaders[song_slot] = best_leader;
+                song_scores[song_slot] = leader_scores[best_leader][song_slot];
+                leaders[song_slot] = member_set[best_leader];
             }
-            OracleTeam {
+            ReferenceTeam {
                 member_set,
+                member_mask: member_mask(member_set),
                 song_scores,
                 leaders,
             }
@@ -386,11 +453,11 @@ fn is_better(candidate: &MedleySearchSolutionV1, incumbent: &MedleySearchSolutio
             && solution_identity_cmp(candidate, incumbent) == Ordering::Less)
 }
 
-fn exhaustive_oracle(input: &MedleySearchInputV1) -> MedleySearchSolutionV1 {
+fn exhaustive_reference(input: &MedleySearchInputV1) -> MedleySearchSolutionV1 {
     let mut best = None::<MedleySearchSolutionV1>;
     let mut independent_song_maximum = 0.0_f64;
     for configuration in &input.area_configurations {
-        let teams = oracle_teams(&reference_team_scores(input, configuration));
+        let teams = reference_teams(input, configuration);
         let standalone: [f64; 3] = std::array::from_fn(|slot| {
             teams
                 .iter()
@@ -401,51 +468,47 @@ fn exhaustive_oracle(input: &MedleySearchInputV1) -> MedleySearchSolutionV1 {
             independent_song_maximum.max((standalone[0] + standalone[1]) + standalone[2]);
         for first in &teams {
             for second in &teams {
-                if first
-                    .member_set
-                    .iter()
-                    .any(|instance_id| second.member_set.contains(instance_id))
-                {
+                if first.member_mask & second.member_mask != 0 {
                     continue;
                 }
-                let third_choices = std::array::from_fn(|character_index| {
-                    let first_choice = first.member_set[character_index] % 3;
-                    let second_choice = second.member_set[character_index] % 3;
-                    (0_u32..3)
-                        .find(|choice| *choice != first_choice && *choice != second_choice)
-                        .expect("two distinct choices leave one third choice")
-                });
-                let third = &teams[index_from_choices(third_choices)];
-                let selected = [first, second, third];
-                let output_teams = std::array::from_fn(|slot| MedleySearchTeamV1 {
-                    slot: u8::try_from(slot).expect("three team slots fit u8"),
-                    member_instance_ids: members_with_leader(
-                        selected[slot].member_set,
-                        selected[slot]
-                            .member_set
-                            .iter()
-                            .position(|instance_id| *instance_id == selected[slot].leaders[slot])
-                            .expect("oracle leader belongs to its team"),
-                    ),
-                    average_score: selected[slot].song_scores[slot],
-                });
-                let solution = MedleySearchSolutionV1 {
-                    selected_area_item_ids: configuration.selected_area_item_ids.clone(),
-                    teams: output_teams,
-                    total_average_score: (output_teams[0].average_score
-                        + output_teams[1].average_score)
-                        + output_teams[2].average_score,
-                };
-                if best
-                    .as_ref()
-                    .is_none_or(|incumbent| is_better(&solution, incumbent))
-                {
-                    best = Some(solution);
+                let used_mask = first.member_mask | second.member_mask;
+                for third in &teams {
+                    if used_mask & third.member_mask != 0 {
+                        continue;
+                    }
+                    let selected = [first, second, third];
+                    let output_teams = std::array::from_fn(|slot| MedleySearchTeamV1 {
+                        slot: u8::try_from(slot).expect("three team slots fit u8"),
+                        member_instance_ids: members_with_leader(
+                            selected[slot].member_set,
+                            selected[slot]
+                                .member_set
+                                .iter()
+                                .position(|instance_id| {
+                                    *instance_id == selected[slot].leaders[slot]
+                                })
+                                .expect("reference leader belongs to its team"),
+                        ),
+                        average_score: selected[slot].song_scores[slot],
+                    });
+                    let solution = MedleySearchSolutionV1 {
+                        selected_area_item_ids: configuration.selected_area_item_ids.clone(),
+                        teams: output_teams,
+                        total_average_score: (output_teams[0].average_score
+                            + output_teams[1].average_score)
+                            + output_teams[2].average_score,
+                    };
+                    if best
+                        .as_ref()
+                        .is_none_or(|incumbent| is_better(&solution, incumbent))
+                    {
+                        best = Some(solution);
+                    }
                 }
             }
         }
     }
-    let best = best.expect("15 cards across five characters have a complete assignment");
+    let best = best.expect("the tiny fixture has a complete assignment");
     assert!(
         best.total_average_score < independent_song_maximum,
         "the fixture must require a joint compromise over shared physical cards"
@@ -563,10 +626,10 @@ fn assert_budget_independent_result(
 }
 
 #[test]
-fn tiny_search_matches_the_complete_reference_oracle_across_memory_budgets() {
+fn tiny_search_matches_the_independent_exhaustive_reference_across_memory_budgets() {
     let input = fixture();
     input.validate().expect("tiny search fixture must validate");
-    let expected = exhaustive_oracle(&input);
+    let expected = exhaustive_reference(&input);
     assert_budget_independent_result(&input, &expected);
 }
 
@@ -574,7 +637,7 @@ fn tiny_search_matches_the_complete_reference_oracle_across_memory_budgets() {
 fn tiny_search_keeps_cross_block_combinations_with_contexts_and_card_conflicts() {
     let input = conflicting_contexts_fixture();
     input.validate().expect("context fixture must validate");
-    let expected = exhaustive_oracle(&input);
+    let expected = exhaustive_reference(&input);
     let same_attribute_teams = expected
         .teams
         .iter()
@@ -590,6 +653,69 @@ fn tiny_search_keeps_cross_block_combinations_with_contexts_and_card_conflicts()
         "the winning fixture must use both uniform and mixed attribute contexts: {expected:?}"
     );
     assert_budget_independent_result(&input, &expected);
+}
+
+#[test]
+fn tiny_search_matches_the_reference_when_characters_and_cards_can_be_unused() {
+    let input = optional_character_fixture();
+    input
+        .validate()
+        .expect("optional-character fixture must validate");
+    let expected = exhaustive_reference(&input);
+    let selected = expected
+        .teams
+        .iter()
+        .flat_map(|team| team.member_instance_ids)
+        .collect::<HashSet<_>>();
+    let unused = input
+        .cards
+        .iter()
+        .filter(|card| !card.is_excluded && !selected.contains(&card.instance_id))
+        .map(|card| card.instance_id)
+        .collect::<Vec<_>>();
+    let eligible_characters = input
+        .cards
+        .iter()
+        .filter(|card| !card.is_excluded)
+        .map(|card| card.character_id)
+        .collect::<HashSet<_>>();
+    let omitted_characters = expected
+        .teams
+        .iter()
+        .flat_map(|team| {
+            let selected_characters = team
+                .member_instance_ids
+                .map(|id| input.cards[id as usize].character_id)
+                .into_iter()
+                .collect::<HashSet<_>>();
+            eligible_characters
+                .difference(&selected_characters)
+                .copied()
+                .collect::<Vec<_>>()
+        })
+        .collect::<HashSet<_>>();
+
+    assert_eq!(input.area_configurations.len(), 2);
+    assert_eq!(eligible_characters.len(), 6);
+    assert_eq!(
+        unused.len(),
+        1,
+        "one eligible physical card must remain unused"
+    );
+    assert!(
+        selected.contains(&15),
+        "the sixth character must improve one team"
+    );
+    assert!(
+        !selected.contains(&16),
+        "the excluded high-value card must stay out"
+    );
+    assert!(
+        omitted_characters.len() >= 2,
+        "different teams must omit different characters"
+    );
+    assert_exact_search(&input, &expected, LARGE_MEMORY_BUDGET);
+    assert_exact_search(&input, &expected, SMALL_MEMORY_BUDGET);
 }
 
 #[test]
