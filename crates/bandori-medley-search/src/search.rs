@@ -774,6 +774,25 @@ fn materialize_singleton(
     Some(fixed_member)
 }
 
+fn materialize_forced_owners(
+    domain: &mut SearchDomain<'_>,
+    families: &mut [TeamFamily; 3],
+    owners: &[u8],
+) -> Option<bool> {
+    let mut materialized = false;
+    for (id, &mask) in owners.iter().enumerate() {
+        if !domain.available[id] || mask == UNUSED || mask.count_ones() != 1 {
+            continue;
+        }
+        // The family projection can force a physical card before the stored
+        // owner mask does. Resolve it before a required group is counted too.
+        domain.restrict_owners(id as u32, mask);
+        materialize_singleton(domain, families, id as u32)?;
+        materialized = true;
+    }
+    Some(materialized)
+}
+
 fn team_upper(
     domain: &SearchDomain<'_>,
     family: TeamFamily,
@@ -1559,6 +1578,7 @@ struct JointSearch<'input, 'state, 'control, 'callback> {
 enum JointStep {
     Unavailable,
     Finished,
+    Restart,
     Split(OwnershipSplit),
     CharacterModes(Vec<(usize, u8, u8, f64)>),
 }
@@ -1667,6 +1687,14 @@ impl JointSearch<'_, '_, '_, '_> {
         };
         if owners.contains(&0) {
             return Ok(JointStep::Finished);
+        }
+        match materialize_forced_owners(&mut self.domain, &mut node.families, &owners) {
+            None => return Ok(JointStep::Finished),
+            Some(true) => {
+                node.refresh_bounds = [true; 3];
+                return Ok(JointStep::Restart);
+            }
+            Some(false) => {}
         }
         let required_teams = self.required_teams(node);
         debug_assert!(required_teams.iter().enumerate().all(|(group, &required)| {
@@ -2520,6 +2548,7 @@ impl JointSearch<'_, '_, '_, '_> {
             }
             match self.joint_step(&mut node)? {
                 JointStep::Finished => return Ok(None),
+                JointStep::Restart => continue,
                 JointStep::CharacterModes(modes) => {
                     if !self.apply_character_modes(&mut node, &modes) {
                         return Ok(None);
@@ -2913,6 +2942,29 @@ mod tests {
         );
         assert_eq!(singleton_families[0].selected(), &[15]);
         assert_eq!(singleton_families[0].required_group_count, 0);
+        assert!(!domain.available[15]);
+        domain.restore(0);
+
+        let mut projected_families = [TeamFamily::default(); 3];
+        projected_families[0] = projected_families[0].with_required_group(5).unwrap();
+        projected_families[1] = projected_families[1].with_required(16, 5);
+        domain.remove(16);
+        domain.restrict_owners(15, 0b011);
+        let mut projected_owners = domain.owners.clone();
+        projected_owners[15] = projected_families
+            .iter()
+            .enumerate()
+            .fold(domain.owners[15] & UNUSED, |mask, (slot, family)| {
+                mask | (u8::from(family.can_include(&domain, 15, slot)) << slot)
+            });
+        assert_eq!(domain.owners[15], 0b011);
+        assert_eq!(projected_owners[15], 0b001);
+        assert_eq!(
+            materialize_forced_owners(&mut domain, &mut projected_families, &projected_owners,),
+            Some(true)
+        );
+        assert_eq!(projected_families[0].selected(), &[15]);
+        assert_eq!(projected_families[0].required_group_count, 0);
         assert!(!domain.available[15]);
         domain.restore(0);
 
