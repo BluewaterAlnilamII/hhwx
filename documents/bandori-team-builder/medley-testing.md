@@ -43,7 +43,18 @@ npm run check:medley-foundation:wasm
 - physical-card conflicts, character uniqueness, required characters and stable ties;
 - exact local-join parity across scan and indexed implementations;
 - strict cuts that retain equality;
-- timeout, cancellation, memory exhaustion and internal inconsistencies returning `incomplete` rather than false `exact`.
+- zero search-storage budget returning `incomplete`, stop-control reason preservation, strict input validation and hydration score-disagreement handling.
+
+The portable evidence is organized as follows:
+
+| Claim under test | Test source | Concrete check |
+| --- | --- | --- |
+| Profile, parameter, skill, chart and source-request normalization | [`tests/bandori-medley-*.test.mjs`](../../tests) | Exercises the public TypeScript builders from HHWX-shaped source data through normalized fixed-team and search requests. |
+| Versioned Rust input contract | [`json_contract.rs`](../../crates/bandori-medley-model/tests/json_contract.rs) | Accepts the committed valid fixture and rejects unknown scoring-rule versions. |
+| Optimized scoring equals the direct 120-order calculation | [`exact_score.rs`](../../crates/bandori-medley-search/src/exact_score.rs) | `production_song_scores_match_reference_bits`, `score_range_matches_all_120_reference_orders` and the overlap/probability case compare both implementations. |
+| Complete search does not omit a legal optimum | [`tiny_exact_search.rs`](../../crates/bandori-medley-search/tests/tiny_exact_search.rs) | `tiny_search_matches_the_complete_reference_oracle_across_memory_budgets` compares the optimized solver with an independent exhaustive oracle. |
+| Bounds and deductions remain safe | [`fast_upper.rs`](../../crates/bandori-medley-search/src/fast_upper.rs), [`joint_upper.rs`](../../crates/bandori-medley-search/src/joint_upper.rs), [`search.rs`](../../crates/bandori-medley-search/src/search.rs) | Exhaustive tiny completions cover individual bounds, forward/backward joint bounds and occupancy modes; focused cases cover projected singleton closure and indexed/scan join parity. |
+| Failure paths preserve distinct outcomes | [`control.rs`](../../crates/bandori-medley-search/src/control.rs), [`validation.rs`](../../crates/bandori-medley-search/src/validation.rs), [`hydration.rs`](../../crates/bandori-medley-search/src/hydration.rs), [`tiny_exact_search.rs`](../../crates/bandori-medley-search/tests/tiny_exact_search.rs) | A zero storage budget returns `incomplete`; control preserves `TimedOut`; invalid requests and hydration score disagreements return errors rather than a false `exact`. |
 
 ### WebAssembly artifact
 

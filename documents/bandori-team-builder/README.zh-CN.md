@@ -4,7 +4,7 @@ English version: [README.md](README.md)
 
 HHWX 提供两种 Bandori 组队计算器：
 
-- **单曲组队计算器**为一首歌选择一支五人队伍，可以优化歌曲分数或已支持的活动 PT 目标；
+- **单曲组队计算器**为一首歌选择一支五人队伍，可以优化歌曲分数或已支持的活动Pt目标；
 - **组曲组队计算器**为三首顺序固定的歌曲分别选择一支五人队伍，三队共用一套区域道具；搜索正常完成时，它会证明所得方案的平均分总和最优。
 
 两种计算器都从 HHWX 游戏档案以及 Bandori 主数据、谱面数据开始。它们共享一部分产品概念，但计分和搜索实现相互独立；不能因为其中一边发生变化，就假定另一边也会随之变化。
@@ -52,13 +52,13 @@ HHWX 档案 + Bandori 主数据 + 三张谱面 + 活动设置
 
 ## 源码位置
 
-- `src/lib/bandori/team-builder/core/` 和 `single/` 实现单曲计算器。
-- `src/lib/bandori/medley-foundation/` 把 HHWX 档案和主数据转换成规范的组曲契约。
-- `crates/bandori-medley-model/` 校验固定队计分输入。
-- `crates/bandori-medley-reference/` 提供直接枚举 120 种顺序的参考计算，用于核对计分。
-- `crates/bandori-medley-search/` 实现生产计分、精确搜索、诊断统计和结果补算。
-- `crates/bandori-medley-wasm/` 把搜索和补算能力暴露给浏览器。
-- `src/app/[locale]/bandori/teambuilder/team-search-worker.ts` 加载 WebAssembly，并把结果转换为前端契约。
+- [`src/lib/bandori/team-builder/`](../../src/lib/bandori/team-builder) 实现单曲计算器。
+- [`src/lib/bandori/medley-foundation/`](../../src/lib/bandori/medley-foundation) 把 HHWX 档案和主数据转换成规范的组曲契约。
+- [`crates/bandori-medley-model/`](../../crates/bandori-medley-model) 校验固定队计分输入。
+- [`crates/bandori-medley-reference/`](../../crates/bandori-medley-reference) 提供直接枚举 120 种顺序的参考计算，用于核对计分。
+- [`crates/bandori-medley-search/`](../../crates/bandori-medley-search) 实现生产计分、精确搜索、诊断统计和结果补算。
+- [`crates/bandori-medley-wasm/`](../../crates/bandori-medley-wasm) 把搜索和补算能力暴露给浏览器。
+- [`team-search-worker.ts`](../../src/app/%5Blocale%5D/bandori/teambuilder/team-search-worker.ts) 加载 WebAssembly，并把结果转换为前端契约。
 
 ## 最小验证入口
 

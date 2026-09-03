@@ -534,17 +534,17 @@ reference, not an exact-search correctness oracle.
 
 ## Implementation Ownership
 
-The current implementation is split into these layers:
+The public entry point [`bandori-team-search.ts`](../../src/lib/bandori-team-search.ts) re-exports `searchBandoriBestTeams`. The main call path is:
 
-- `src/lib/bandori/team-builder/core/`: shared game-rule and scoring primitives.
-  It owns card preparation, chart preparation, event handling, score
-  calculation, five-card team evaluation, common upper bounds, and shared data
-  contracts.
-- `src/lib/bandori/team-builder/single/`: single-song search orchestration. It
-  owns single-song scopes, objective adapters, seed teams, result ordering,
-  stats finalization, and exact DFS.
-- `src/lib/bandori-team-search.ts`: public compatibility entrypoint that
-  re-exports the single-song search API.
+| Responsibility | Main implementation | Role in the calculation |
+| --- | --- | --- |
+| Search entry and result assembly | [`single/search.ts`](../../src/lib/bandori/team-builder/single/search.ts) `searchBandoriBestTeams` | Normalizes request-level options, runs every surviving global area configuration and assembles the public response. |
+| Shared preparation | [`single/search-prep.ts`](../../src/lib/bandori/team-builder/single/search-prep.ts) `buildSearchPrecomputedData` | Prepares cards, chart scoring data, event settings and reusable objective state once per request. |
+| Configuration planning and exhaustive DFS | [`single/search-execution.ts`](../../src/lib/bandori/team-builder/single/search-execution.ts) `buildConfigurationSearches` and `runExactDfsSearch` | Builds each configuration's search scope, visits legal five-character combinations and applies only the configured safe cuts. |
+| Complete-team evaluation | [`core/team-evaluation.ts`](../../src/lib/bandori/team-builder/core/team-evaluation.ts) `evaluateTeam` | Resolves the final five-card context, chooses the best legal leader and calculates the result object. |
+| Skill-window scoring | [`core/scoring.ts`](../../src/lib/bandori/team-builder/core/scoring.ts) `calculateBestScoreForNonOverlappingSkillWindows` | Calculates the score target from the prepared chart and resolved skills. |
+| Search upper bounds | [`core/character-bounds.ts`](../../src/lib/bandori/team-builder/core/character-bounds.ts) `estimateSearchScopeTargetUpperBoundFromScore` and `estimateCorrelatedSearchScopeTargetUpperBound` | Bounds the best completion still reachable from a partial character selection. |
+| Mission-live support band | [`core/cards.ts`](../../src/lib/bandori/team-builder/core/cards.ts) `resolveSupportBandForTeam` | Selects the support band after the complete main team is known. |
 
 The core layer must not import `single`.
 

@@ -22,6 +22,20 @@ A single-team bound asks how strong one unfinished team could become while tempo
 
 The rest of this document defines the represented search space, derives both bounds, describes exact residual enumeration, and then combines those facts into the final correctness proof.
 
+## Implementation map
+
+The table links each part of the argument to the code that carries it out.
+
+| Responsibility | Main implementation | How it realizes the design |
+| --- | --- | --- |
+| Normalized search request | [`search-source.ts`](../../src/lib/bandori/medley-foundation/search-source.ts) `buildMedleySearchInput`; [`validation.rs`](../../crates/bandori-medley-search/src/validation.rs) | TypeScript constructs the finite roster, songs and area configurations; Rust validates the versioned request before search. |
+| Exact complete-candidate score | [`exact_score.rs`](../../crates/bandori-medley-search/src/exact_score.rs) `PreparedSong::score_range` and `score_leaders`; [`candidate.rs`](../../crates/bandori-medley-search/src/candidate.rs) `evaluate_candidate` | Reuses prepared song work, evaluates every leader for a complete five-card set, and produces the only scores allowed into results. |
+| Reversible state and forced closure | [`search.rs`](../../crates/bandori-medley-search/src/search.rs) `SearchDomain`, `TeamFamily`, `SearchNode`, `effective_owners`, `required_teams`, `materialize_forced_owners`, `joint_step` | Represents the remaining destinations, restores them after each DFS child, and materializes choices that every remaining completion must share. |
+| Individual-team upper bound | [`fast_upper.rs`](../../crates/bandori-medley-search/src/fast_upper.rs) `FastScoreModel` and `FastUpperBoundEngine::team_upper`; [`upper_bound.rs`](../../crates/bandori-medley-search/src/upper_bound.rs) | Builds the product relaxation, maintains reversible ranked support and applies the upward rounding envelope. |
+| Joint three-team upper bound | [`joint_upper.rs`](../../crates/bandori-medley-search/src/joint_upper.rs) `JointLayoutCache::calculate`; [`search.rs`](../../crates/bandori-medley-search/src/search.rs) `family_bound` and `joint_step` | Runs the character-local matching and count-state dynamic program, then uses its whole-range and conditional bounds for safe pruning and deductions. |
+| Exact residual closure and full traversal | [`search.rs`](../../crates/bandori-medley-search/src/search.rs) `generate_rows`, `finish_block`, `join_block`, `join_indexed_block`, `expand`, `visit` | Enumerates small residual products exactly; otherwise partitions every feasible card destination with an explicit DFS stack. |
+| Result ordering and browser output | [`search.rs`](../../crates/bandori-medley-search/src/search.rs) `record_solution` and `solution_is_better`; [`output.rs`](../../crates/bandori-medley-search/src/output.rs); [`hydration.rs`](../../crates/bandori-medley-search/src/hydration.rs) `hydrate_medley_search_solutions`; [`lib.rs`](../../crates/bandori-medley-wasm/src/lib.rs) `run_medley_search_json` | Applies the deterministic complete-medley comparator, preserves `exact`/`incomplete` status, recomputes detailed retained results, and exposes the versioned operation to the Web Worker. |
+
 ## 1. Problem definition
 
 Let `C` be the normalized set of non-excluded physical card instances, partitioned into character groups. Let `Q` be the finite list of legal owned area-item configurations constructed by the source adapter. For song slot `s in {0,1,2}`, a team consists of five physical cards and one of those cards as leader.
@@ -158,7 +172,7 @@ For a team whose exact song score is already known, that score contributes direc
 
 For each character group and each team, the character has three roles: absent, ordinary member, or leader. Across three teams there are `3^3 = 27` role patterns. For each pattern, a local exact matching chooses distinct physical cards for the occupied roles, respects destination masks, and contains every physical card that cannot be unused.
 
-Only four ranked non-required cards per team/role are needed inside this local matching. At most three role positions consume physical cards from one character, and a conditional query may additionally forbid or force one card. If a candidate lies below the first four for a role, at least one of those four remains available whenever that lower candidate could be used. Required and forced cards are added explicitly, so this lemma is not a global roster truncation.
+Only four ranked non-required cards per team/role are needed inside this local matching. At most three role positions consume physical cards from one character, and a conditional query may additionally forbid or force one card. If a candidate lies below the first four for a role, at least one of those four remains available whenever that lower candidate could be used. Required and forced cards are added explicitly, so this argument is not a global roster truncation.
 
 ### 5.3 Count-state dynamic program
 
@@ -209,29 +223,29 @@ The search proceeds as follows:
 
 The explicit stack avoids call-stack depth proportional to the roster. Branch order favors maximizing proposals and large conditional gaps, but all feasible children remain present. Completion probes run periodically and can improve the incumbent; they cannot certify or remove a branch.
 
-## 8. Exactness argument
+## 8. Why an `exact` result is globally optimal
 
-### Lemma 1: leaf scores are exact
+### 8.1 Complete candidates use the exact scorer
 
 Every reported solution is produced by enumeration that maintains the team and physical-card constraints, then evaluated by the canonical scorer. Legality of the area configuration is a validated input premise supplied by the source adapter. Bounds and heuristic estimates cannot enter the result directly.
 
-### Lemma 2: the unpruned traversal is complete
+### 8.2 Unpruned enumeration covers every legal medley
 
 The source adapter lists every legal `q` in `Q`. Within one configuration, increasing character prefixes enumerate every unordered five-character team once. Ownership splits partition a card's remaining completions by its three team destinations and `unused`. Required-character resolution enumerates every eligible physical card of that character. Local closure enumerates every row and every conflict-free triple. The exact scorer evaluates every leader for each reached five-card set and retains its best deterministic representative. Therefore, with pruning disabled, every legal triple of card sets—and the best score obtainable from every leader choice for that triple—is represented.
 
-### Lemma 3: each pruning value is an upper bound
+### 8.3 Every pruning score is a safe upper bound
 
 The scorer-to-product bridge in Section 4 makes `reference_ceiling(ceil(P*K))` an individual settled-song upper, and AM-GM safely bounds its `P*K` input. The joint bound retains the relaxed model's constant and linear algebraic terms through directed upper representations and replaces only `Pr*Kr` by a valid interval-secant upper; its final `R(4)` factor covers settlement and medley addition. It then maximizes over a relaxation containing every legal residual allocation. A forward/backward conditional maximizes the corresponding conditioned relaxation; a local pattern is recorded as unavailable only if no conditioned completion exists or its safe upper is strictly below an exact feasible cutoff. Upward operations enlarge positive terms and downward operations reduce subtracted offsets. If a finite proof value cannot be established, the individual bound becomes infinity or the joint optimization is disabled. Thus no bound is below the best exact completion it represents.
 
-### Lemma 4: every structural deduction preserves completions
+### 8.4 Structural deductions preserve competitive completions
 
 An owner or occupancy option is removed only if infeasible or strictly unable to tie the incumbent under a safe conditional upper. Required-character consensus records a property shared by every competitive occupancy mode. Projected singleton closure records the only destination present in every completion. None of these operations removes a completion that could equal or beat the incumbent.
 
-### Theorem: an `exact` outcome contains the global optimum
+### 8.5 Combining the four guarantees
 
-By Lemma 2, every legal medley belongs to a visited or pruned range. By Lemmas 3 and 4, a pruned range has no solution strictly better than the incumbent; equal ranges are retained for deterministic tie selection. By Lemma 1, the incumbent is a legal exact score. When traversal exhausts all configurations and ranges, no better legal score exists; the per-team leader rule and complete-medley comparator select the specified deterministic representative among ties.
+These four facts form one chain. Every legal medley is either reached by exact enumeration or lies in a range removed only after proving that it cannot tie the exact feasible incumbent at the time of the cut. Incumbent scores never decrease and equality is never removed, so a discarded range can contain neither a higher final score nor the preferred representative of an equal score.
 
-If no legal leaf exists, the same exhaustion proves `best = null`. The theorem does not apply to an `incomplete` outcome.
+`search_medley` returns `exact` only when `run_search` returns normally: either complete feasibility search has proved that no legal assignment exists, or every configuration and DFS range has been exhausted or safely removed. Every controlled early exit returns `incomplete`. Therefore, `exact` with `best` contains the global maximum and its specified tie representative; `exact` with `best = null` proves that no legal medley exists; `incomplete` makes neither claim.
 
 ## 9. Numeric and failure safety
 

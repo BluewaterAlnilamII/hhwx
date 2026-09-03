@@ -17,10 +17,10 @@ English version: [medley-foundation.md](medley-foundation.md)
 - 一份 HHWX 游戏档案；
 - 可选的临时卡牌；
 - 严格按照预定顺序排列的三首歌曲及难度；
-- 一个组曲活动、PERFECT 百分比，以及卡牌排除或持有卡参数覆盖设置。当前页面只有选中组曲类型活动时才进入组曲模式；底层固定队契约仍允许 `eventBonus = null`，供独立计分测试使用；
+- 一个组曲活动、PERFECT 率，以及卡牌排除或持有卡参数覆盖设置。当前页面只有选中组曲类型活动时才进入组曲模式；底层固定队契约仍允许 `eventBonus = null`，供独立计分测试使用；
 - 搜索时间限制。当前浏览器界面接受 1 至 3,600 秒。
 
-浏览器适配器读取档案中的持有卡、培养状态、区域道具和角色加成，再取得所需的 Bandori 卡牌、角色、技能、区域道具、歌曲、活动和谱面记录。规范化从这些原始记录开始，不接受调用方预先计算的卡牌综合力或队伍总值。
+浏览器适配器读取档案中的持有卡、卡牌成长状态、区域道具和角色加成，再取得所需的 Bandori 卡牌、角色、技能、区域道具、歌曲、活动和谱面记录。规范化从这些原始记录开始，不接受调用方预先计算的卡牌综合力或队伍总值。
 
 前端**不提供**三支队伍、队长或最终道具配置；这些都是搜索输出。
 
@@ -47,9 +47,9 @@ Worker 在搜索开始十秒后才允许首次发送更好的结果，之后最�
 
 这条输入链只接受 HHWX 自己的档案格式。档案中历史遗留的 `bestdoriProfile` 字段保存 compression-v2 卡牌和区域道具状态，它不是第二种 Bestdori 导入格式。角色加成只读档案顶层的 `characterPotentials` 和 `characterMissionBonuses`。
 
-临时卡牌以卡牌主数据 ID 标识。再次选择相同 ID 时会编辑已有临时卡，而不是增加一张重复卡。首次选中时，界面会填入该卡允许的最高培养参数，用户随后可以修改。计算时，临时卡覆盖档案中相同主数据 ID 的卡牌。档案卡的排除标记只作用于该档案卡，因此不会排除覆盖它的临时卡。临时卡只属于当前会话输入：既不写入已保存的游戏档案，也不写入本地卡牌偏好；刷新页面或切换档案都会将其清除。
+临时卡牌以卡牌主数据 ID 标识。再次选择相同 ID 时会编辑已有临时卡，而不是增加一张重复卡。首次选中时，界面会填入该卡允许的最高可选参数，用户随后可以修改。计算时，临时卡覆盖档案中相同主数据 ID 的卡牌。档案卡的排除标记只作用于该档案卡，因此不会排除覆盖它的临时卡。临时卡只属于当前会话输入：既不写入已保存的游戏档案，也不写入本地卡牌偏好；刷新页面或切换档案都会将其清除。
 
-卡牌记录按档案所在游戏区服解析；如果该区服没有卡牌槽而 JP 槽存在，则沿用现有的 JP 存在性回退。计分效果和统一加成百分比优先读取档案区服，只有该槽位不存在时才回退 JP，显式零仍然是零；技能时长使用同一区服回退，但最终必须是正数。区域道具倍率只读取档案区服，并向下寻找不高于持有等级的最近有效等级。
+卡牌记录按档案所在游戏服务器解析；如果该服务器没有卡牌槽而 JP 槽存在，则沿用现有的 JP 存在性回退。计分效果和统一加成百分比优先读取档案所在服务器，只有该槽位不存在时才回退 JP，显式零仍然是零；技能时长使用同一服务器回退，但最终必须是正数。区域道具倍率只读取档案所在服务器，并向下寻找不高于持有等级的最近有效等级。
 
 档案压缩损坏、必需主数据缺失、引用错误、不支持的外层字段或 schema／规则版本，都会返回稳定的错误码和字段位置。输入错误不等于“没有合法队伍”。原始主数据可以包含计算器未使用的字段，因为适配器只读取计分契约需要的部分。
 
@@ -82,22 +82,22 @@ Worker 在搜索开始十秒后才允许首次发送更好的结果，之后最�
 每张卡包含演出（`P`）、技巧（`T`）和形象（`V`）三项参数。来源适配器按以下顺序计算：
 
 1. 使用主数据中的一级和最高级参数、Bestdori 稀有度成长曲线以及 JavaScript `Math.round`，还原所选等级的参数。
-2. 每项加上 `50 * 稀有度 * 突破等级`。
-3. 已训练时加入训练参数，再加入每个已完成剧情的参数。
-4. 对每项参数分别把角色潜能倍率与“收集任务加成 + 培养任务加成”倍率相加，乘以上一步所得参数后统一向下取整一次。
+2. 每项加上 `50 * 稀有度 * 星光等级`。
+3. 已特训时加入特训参数，再加入每篇已完成故事的参数。
+4. 对每项参数分别把潜能解放倍率与“收集任务加成 + 培养任务加成”倍率相加，乘以上一步所得参数后统一向下取整一次。
 5. 把所得角色加成加入卡牌，得到 `characterParameter`。
 6. 再以此计算匹配的区域道具和活动贡献。
 
-例如，某项参数为 10,000，潜能为 2%，收集与培养任务合计为 1.5%，则：
+例如，某项参数为 10,000，潜能解放为 2%，收集与培养任务合计为 1.5%，则：
 
 ```text
 角色加成 = floor(10,000 * (0.02 + 0.015)) = 350
 角色参数 = 10,000 + 350 = 10,350
 ```
 
-潜能和任务倍率先相加，再统一取整一次。即使 P/T/V 三项恰好相同，也不会切换到另一种规则。
+潜能解放和任务倍率先相加，再统一取整一次。即使 P/T/V 三项恰好相同，也不会切换到另一种规则。
 
-活动贡献对每张卡的每项参数分别计算。适配器按来源顺序，从活动的属性、角色、指定卡牌（`situationId`，即卡牌主数据 ID）、以及“稀有度 + 突破等级”列表中各取第一项匹配百分比，再把四项倍率相加。只有匹配到的属性百分比和角色百分比都大于零时，才继续加入活动统一的 `parameterPercent`，以及演出／技巧／形象各自的房间倍率。最终倍率乘以卡牌的 `characterParameter`；这部分贡献不单独取整。
+活动贡献对每张卡的每项参数分别计算。适配器按来源顺序，从活动的属性、角色、指定卡牌（`situationId`，即卡牌主数据 ID）、以及“稀有度 + 星光等级”列表中各取第一项匹配百分比，再把四项倍率相加。只有匹配到的属性百分比和角色百分比都大于零时，才继续加入活动统一的 `parameterPercent`，以及演出／技巧／形象各自的房间倍率。最终倍率乘以卡牌的 `characterParameter`；这部分贡献不单独取整。
 
 完整队伍的综合力为：
 
@@ -111,7 +111,7 @@ deckTotalParameter = 卡牌角色参数之和
 
 ## 6. 技能与谱面规范化
 
-全队统一加成值可能取决于五名成员，因此技能要在完整队伍确定后解析。主要效果是来源顺序中第一个“已识别、且能解析该区服数值”的计分行，显式零仍然有效。来源若定义统一加成值，只要配置的乐团条件或属性条件中任一项与完整队伍匹配，就用该值覆盖主要效果的百分比。若主要效果是持续 PERFECT，降档倍率取其后第一个已识别、且不是持续 PERFECT 的计分行。规范行为包括：
+全队统一加成值可能取决于五名成员，因此技能要在完整队伍确定后解析。主要效果是来源顺序中第一个“已识别、且能解析该游戏服务器数值”的计分行，显式零仍然有效。来源若定义统一加成值，只要配置的乐团条件或属性条件中任一项与完整队伍匹配，就用该值覆盖主要效果的百分比。若主要效果是持续 PERFECT，降档倍率取其后第一个已识别、且不是持续 PERFECT 的计分行。规范行为包括：
 
 - `neutral`；
 - 普通 `score`；
@@ -223,15 +223,15 @@ fallback + p^n * (active - fallback)
 
 对一个完整五卡集合，计分器会计算五种队长选择。歌曲最高分相同时，保留物理实例 ID 最小的队长。
 
-### 只用于显示的组曲活动 PT
+### 只用于显示的组曲活动Pt
 
-活动 PT 不参与搜索排序。产品固定计算完整三首歌，因此组曲结算加分固定为 100：
+活动Pt不参与搜索排序。产品固定计算完整三首歌，因此组曲结算加分固定为 100：
 
 ```text
-活动 PT = (floor(平均分总和 / 18,500) + 100) * 火罐倍率
+活动Pt = (floor(平均分总和 / 18,500) + 100) * Live Boost 倍率
 ```
 
-界面显示 0/3/6/9 总火，对应倍率 3/15/30/45，默认选择 9 火。例如平均分总和为 9,250,000，则 `floor(9,250,000 / 18,500) = 500`；9 火显示 `(500 + 100) * 45 = 27,000` PT。
+界面显示 0/3/6/9 总火，对应倍率 3/15/30/45，默认选择 9 火。例如平均分总和为 9,250,000，则 `floor(9,250,000 / 18,500) = 500`；9 火显示 `(500 + 100) * 45 = 27,000` 活动Pt。
 
 ## 8. 兼容依据与明确差异
 
@@ -250,6 +250,18 @@ Bestdori 的上述路径是单曲计算器。HHWX 为满足组曲产品规则，
 
 ## 9. 实现与验证
 
-TypeScript 来源适配器位于 `src/lib/bandori/medley-foundation/`。固定队模型和参考计分器位于 `crates/bandori-medley-model/` 与 `crates/bandori-medley-reference/`；生产计分与精确搜索位于 `crates/bandori-medley-search/`；浏览器绑定位于 `crates/bandori-medley-wasm/`。
+固定队验证路径和卡池搜索路径共用相同的档案、参数、技能与谱面基础规则，随后分别构造不同的规范输入：前者接收已经选好的三支队伍，后者构造有限卡池和区域道具配置搜索空间。
+
+| 阶段 | 主要实现 | 代码实际完成的工作 |
+| --- | --- | --- |
+| 带版本的契约 | [`contracts.ts`](../../src/lib/bandori/medley-foundation/contracts.ts) 和 [`bandori-medley-model`](../../crates/bandori-medley-model/src/lib.rs) | 定义 TypeScript 来源请求，以及规范化后的 Rust 计分／搜索数据。 |
+| HHWX 档案 | [`profile.ts`](../../src/lib/bandori/medley-foundation/profile.ts) 的 `decodeMedleyProfile` | 从 HHWX 档案读取所选游戏服务器、持有卡牌、排除标记、持有区域道具、潜能解放和角色任务加成。 |
+| 游戏服务器来源解析 | [`source-masters.ts`](../../src/lib/bandori/medley-foundation/source-masters.ts) 的 `resolveSourceCardMaster`；[`skills.ts`](../../src/lib/bandori/medley-foundation/skills.ts) 的 `regionalNumber`、`readDuration`；[`parameters.ts`](../../src/lib/bandori/medley-foundation/parameters.ts) 的 `calculateProfileAreaItem` | 按本文规则处理卡牌存在性和技能字段的 JP 回退，同时让区域道具等级严格使用档案所在游戏服务器的数据。 |
+| 临时卡牌与持有卡覆盖 | [`game-profile-card.ts`](../../src/lib/bandori/cards/game-profile-card.ts) 的 `createMaxGameProfileCard`；[`page.tsx`](../../src/app/%5Blocale%5D/bandori/teambuilder/page.tsx) 的 `selectTemporaryCard`；[`card-preferences.ts`](../../src/app/%5Blocale%5D/bandori/teambuilder/card-preferences.ts) 的 `readCardPreferences`、`writeCardPreferences`；[`team-search-worker.ts`](../../src/app/%5Blocale%5D/bandori/teambuilder/team-search-worker.ts) 的 `applyOwnedCardParameterPreferences`、`runSearchAttempt` | 新选临时卡默认使用最高可选参数，再次选择同 ID 时进入编辑；本地偏好读写都会排除临时卡。持有卡参数和排除设置只作用于未被覆盖的档案卡；同 ID 临时卡替代档案卡，并且不受这两项设置影响。 |
+| 卡牌与队伍参数 | [`parameters.ts`](../../src/lib/bandori/medley-foundation/parameters.ts) 的 `calculateProfileCard`、`calculateCardEventParameter`、`calculateFixedTeamParameters`；[`parameters.rs`](../../crates/bandori-medley-search/src/parameters.rs) 的 `calculate_team_parameters` | 两条路径共用卡牌级规则，随后分别在 TypeScript 中结算固定队，或在生产 Rust 计分器中合并搜索卡牌、活动与区域道具数值。 |
+| 技能、谱面与仅展示的活动Pt | [`skills.ts`](../../src/lib/bandori/medley-foundation/skills.ts) 的 `resolveBestdoriScoreSkill`；[`chart.ts`](../../src/lib/bandori/medley-foundation/chart.ts) 的 `normalizeBestdoriScoringChart`；[`event-point.ts`](../../src/lib/bandori/medley-foundation/event-point.ts) 的 `calculateMedleyEventPoint` | 解析依赖完整队伍条件的分数技能，把原始谱面转换成计分音符与触发点，并独立换算用于展示的活动Pt。 |
+| 固定队输入 | [`evaluation.ts`](../../src/lib/bandori/medley-foundation/evaluation.ts) 的 `buildFixedMedleyEvaluationInput`；[`scoring.rs`](../../crates/bandori-medley-reference/src/scoring.rs) 的 `evaluate_fixed_medley` | 校验调用方给出的三支队伍，执行直接枚举 120 种顺序的参考计分，并生成用于核对公式的追踪数据。 |
+| 搜索输入与生产计分 | [`search-source.ts`](../../src/lib/bandori/medley-foundation/search-source.ts) 的 `buildMedleySearchInput`；[`exact_score.rs`](../../crates/bandori-medley-search/src/exact_score.rs) 的 `PreparedSong`；[`candidate.rs`](../../crates/bandori-medley-search/src/candidate.rs) 的 `evaluate_candidate` | 构造每套合法且已拥有的区域道具配置，解析所有可搜索卡牌的技能条件，并用优化后的精确计分器计算完整候选。 |
+| 浏览器交付 | [`lib.rs`](../../crates/bandori-medley-wasm/src/lib.rs) 的 `run_medley_search_json`；[`team-search-worker.ts`](../../src/app/%5Blocale%5D/bandori/teambuilder/team-search-worker.ts) 的 `runMedleySearch`；[`hydration.rs`](../../crates/bandori-medley-search/src/hydration.rs) 的 `hydrate_medley_search_solutions` | Worker 在主线程之外启动 Rust。Rust 在搜索期间发送进度，记录搜索结束时间，再补算保留方案并返回；Worker 最后发布最终状态。 |
 
 参考计分器刻意逐音符计算全部 120 种顺序，并返回详细数值轨迹。生产计分使用上面的代数化简，并合并可复用的音符和窗口工作。极小固定样本核对这两条路径，另有搜索测试把精确搜索与完整穷举比较。可运行命令和证据边界见[组曲测试与验证](medley-testing.zh-CN.md)。

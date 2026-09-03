@@ -52,13 +52,13 @@ The frontend supplies the selected profile, temporary-card and card-preference s
 
 ## Source map
 
-- `src/lib/bandori/team-builder/core/` and `single/` implement the single-song calculator.
-- `src/lib/bandori/medley-foundation/` converts HHWX profile/master data into the normalized medley contracts.
-- `crates/bandori-medley-model/` validates fixed-team scoring inputs.
-- `crates/bandori-medley-reference/` provides the direct 120-order reference calculation used for scoring checks.
-- `crates/bandori-medley-search/` implements production scoring, exact search, diagnostics and result hydration.
-- `crates/bandori-medley-wasm/` exposes search and hydration to the browser.
-- `src/app/[locale]/bandori/teambuilder/team-search-worker.ts` loads the WebAssembly package and maps results into the frontend contract.
+- [`src/lib/bandori/team-builder/`](../../src/lib/bandori/team-builder) implements the single-song calculator.
+- [`src/lib/bandori/medley-foundation/`](../../src/lib/bandori/medley-foundation) converts HHWX profile and master data into the normalized medley contracts.
+- [`crates/bandori-medley-model/`](../../crates/bandori-medley-model) validates fixed-team scoring inputs.
+- [`crates/bandori-medley-reference/`](../../crates/bandori-medley-reference) provides the direct 120-order reference calculation used for scoring checks.
+- [`crates/bandori-medley-search/`](../../crates/bandori-medley-search) implements production scoring, exact search, diagnostics and result hydration.
+- [`crates/bandori-medley-wasm/`](../../crates/bandori-medley-wasm) exposes search and hydration to the browser.
+- [`team-search-worker.ts`](../../src/app/%5Blocale%5D/bandori/teambuilder/team-search-worker.ts) loads the WebAssembly package and maps results into the frontend contract.
 
 ## Verification quick start
 

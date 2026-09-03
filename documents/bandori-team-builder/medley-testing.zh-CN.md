@@ -43,7 +43,18 @@ npm run check:medley-foundation:wasm
 - 物理卡冲突、角色唯一性、必选角色和稳定同分；
 - 扫描与索引两种精确局部连接一致；
 - 严格剪枝会保留等分候选；
-- 超时、取消、内存不足和内部不一致返回 `incomplete`，而不是错误的 `exact`。
+- 搜索存储预算为零时返回 `incomplete`，并分别检查停止原因保留、严格输入校验和补算分数不一致处理。
+
+这些公开证据在源码中的分布如下：
+
+| 被检查的结论 | 测试源码 | 具体检查方式 |
+| --- | --- | --- |
+| 档案、参数、技能、谱面和来源请求规范化 | [`tests/bandori-medley-*.test.mjs`](../../tests) | 从 HHWX 形状的来源数据调用公开 TypeScript 构造器，直到生成规范的固定队与搜索请求。 |
+| 带版本的 Rust 输入契约 | [`json_contract.rs`](../../crates/bandori-medley-model/tests/json_contract.rs) | 接受仓库中的合法样本，并拒绝未知计分规则版本。 |
+| 优化计分与直接枚举 120 种顺序一致 | [`exact_score.rs`](../../crates/bandori-medley-search/src/exact_score.rs) | `production_song_scores_match_reference_bits`、`score_range_matches_all_120_reference_orders` 及重叠／概率用例比较两条实现。 |
+| 完整搜索不会漏掉合法最优解 | [`tiny_exact_search.rs`](../../crates/bandori-medley-search/tests/tiny_exact_search.rs) | `tiny_search_matches_the_complete_reference_oracle_across_memory_budgets` 把优化求解器与独立完整穷举比较。 |
+| 上界和结构推论保持安全 | [`fast_upper.rs`](../../crates/bandori-medley-search/src/fast_upper.rs)、[`joint_upper.rs`](../../crates/bandori-medley-search/src/joint_upper.rs)、[`search.rs`](../../crates/bandori-medley-search/src/search.rs) | 用极小完成穷举检查单队上界、联合前后表和角色占用模式；专项用例检查实际去向单例闭包及索引／扫描连接一致。 |
+| 各类失败保留各自结果 | [`control.rs`](../../crates/bandori-medley-search/src/control.rs)、[`validation.rs`](../../crates/bandori-medley-search/src/validation.rs)、[`hydration.rs`](../../crates/bandori-medley-search/src/hydration.rs)、[`tiny_exact_search.rs`](../../crates/bandori-medley-search/tests/tiny_exact_search.rs) | 存储预算为零时搜索返回 `incomplete`；控制器保留 `TimedOut`；非法请求和补算分数不一致返回错误，不会成为虚假的 `exact`。 |
 
 ### WebAssembly 产物
 
@@ -69,7 +80,7 @@ npm run build
 
 固定队路径把计分验证与搜索分开。有效的计分用例应记录：
 
-- 来源档案及其游戏区服；
+- 来源档案及其游戏服务器；
 - 实际使用的卡牌、角色、技能、区域道具、活动、歌曲和谱面记录；
 - 三首有序歌曲的 ID 和难度；
 - PERFECT 率；
@@ -85,7 +96,7 @@ npm run build
 
 ## 4. 精确搜索测试应比较什么
 
-对极小卡池，完整穷举是最清楚的 oracle：枚举每套合法道具、物理卡到三队的每种合法分配和每种队长，再把完整最优解及同分代表与优化搜索比较。
+对极小卡池，独立完整穷举是最清楚的比较基准：枚举每套合法道具、物理卡到三队的每种合法分配和每种队长，再把完整最优解及同分代表与优化搜索比较。
 
 针对上界的测试更容易定位错误。对一个部分搜索状态，完整枚举它的每个合法完成，并验证：
 
