@@ -67,6 +67,18 @@ fn mul_down(left: f64, right: f64) -> Result<f64, UpperBoundFailure> {
     Ok(checked_finite(left * right)?.next_down().max(0.0))
 }
 
+fn div_down(numerator: f64, denominator: f64) -> Result<f64, UpperBoundFailure> {
+    if !denominator.is_finite() || denominator <= 0.0 {
+        return Err(UpperBoundFailure::Unknown);
+    }
+    if numerator == 0.0 {
+        return Ok(0.0);
+    }
+    Ok(checked_finite(numerator / denominator)?
+        .next_down()
+        .max(0.0))
+}
+
 pub(crate) fn sub_up(left: f64, right: f64) -> Result<f64, UpperBoundFailure> {
     if right == 0.0 {
         return checked_finite(left);
@@ -632,6 +644,7 @@ impl<'a> FastUpperBoundEngine<'a> {
             for factor in WEIGHT_FACTORS {
                 let t = scale * factor;
                 let mut weights = vec![[0.0; 2]; owners.len()];
+                let mut lower_weights = vec![[0.0; 2]; owners.len()];
                 for &id in &remaining_ids {
                     let id = id as usize;
                     let regular = add_up(
@@ -639,13 +652,23 @@ impl<'a> FastUpperBoundEngine<'a> {
                         div_up(coefficients[id][0], t)?,
                     )?;
                     weights[id] = [regular, add_up(regular, div_up(coefficients[id][1], t)?)?];
+                    let lower_regular = add_down(
+                        mul_down(t, self.parameters[id])?,
+                        div_down(coefficients[id][0], t)?,
+                    )?;
+                    lower_weights[id] = [
+                        lower_regular,
+                        add_down(lower_regular, div_down(coefficients[id][1], t)?)?,
+                    ];
                 }
                 let fixed_leader_weight =
                     fixed_leader.map(|leader| div_up(leader, t)).transpose()?;
                 let Some(maximum) = maximum_support(&weights, fixed_leader_weight)? else {
                     return Ok(None);
                 };
-                let Some(minimum) = minimum_support(&weights, fixed_leader_weight)? else {
+                let fixed_leader_lower =
+                    fixed_leader.map(|leader| div_down(leader, t)).transpose()?;
+                let Some(minimum) = minimum_support(&lower_weights, fixed_leader_lower)? else {
                     return Ok(None);
                 };
                 let minimum = mul_down(t, minimum_remaining_parameter)?.max(minimum);
@@ -1278,6 +1301,22 @@ mod tests {
 
     const FIXED_FIXTURE: &str =
         include_str!("../../bandori-medley-model/tests/fixtures/valid-fixed-medley-v1.json");
+
+    #[test]
+    fn minimum_support_uses_downward_card_atoms() {
+        let upper_atom = add_up(mul_up(1.0, 1.0).unwrap(), div_up(1.0, 1.0).unwrap()).unwrap();
+        let lower_atom =
+            add_down(mul_down(1.0, 1.0).unwrap(), div_down(1.0, 1.0).unwrap()).unwrap();
+        let upper_sum = (0..2)
+            .try_fold(0.0, |sum, _| add_down(sum, upper_atom))
+            .unwrap();
+        let lower_sum = (0..2)
+            .try_fold(0.0, |sum, _| add_down(sum, lower_atom))
+            .unwrap();
+
+        assert!(upper_sum > 4.0);
+        assert!(lower_sum <= 4.0);
+    }
 
     fn fixture() -> MedleySearchInputV1 {
         let fixed: FixedMedleyEvaluationInputV1 = serde_json::from_str(FIXED_FIXTURE).unwrap();
