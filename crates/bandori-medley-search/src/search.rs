@@ -1697,14 +1697,21 @@ impl JointSearch<'_, '_, '_, '_> {
             Some(false) => {}
         }
         let required_teams = self.required_teams(node);
-        debug_assert!(required_teams.iter().enumerate().all(|(group, &required)| {
-            (0..3).all(|slot| {
-                required & (1 << slot) == 0
-                    || self.groups[group]
-                        .iter()
-                        .all(|&id| owners[id as usize] != 1 << slot)
-            })
-        }));
+        // Counting one team-character as both a fixed card and an unresolved
+        // requirement can understate the joint bound. Keep this exactness gate
+        // in release/WASM builds instead of relying on a debug assertion.
+        let requirements_consistent =
+            required_teams.iter().enumerate().all(|(group, &required)| {
+                (0..3).all(|slot| {
+                    required & (1 << slot) == 0
+                        || self.groups[group]
+                            .iter()
+                            .all(|&id| owners[id as usize] != 1 << slot)
+                })
+            });
+        if !requirements_consistent {
+            return Err(abort(SearchIncompleteReasonV1::InternalFailure));
+        }
         let proposal_fits = node
             .joint
             .as_ref()
