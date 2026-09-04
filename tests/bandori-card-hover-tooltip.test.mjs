@@ -100,8 +100,11 @@ test("card tooltip positioning reacts to real layout and preserves logical tab o
   assert.doesNotMatch(tooltip, /createPortal|TOOLTIP_ESTIMATED_HEIGHT/u);
   assert.match(hook, /document\.addEventListener\("pointerdown"/u);
   assert.match(hook, /event\.key === "Escape"/u);
+  assert.doesNotMatch(hook, /setTimeout|CLOSE_DELAY_MS|closeTimerRef/u);
+  assert.match(hook, /closeIfInactive/u);
+  assert.match(hook, /anchorRef\.current\?\.contains\(event\.relatedTarget/u);
   assert.match(hook, /isPointerInsideRef\.current \|\| isFocusInsideRef\.current/u);
-  assert.match(hook, /!isPointerInsideRef\.current && !isFocusInsideRef\.current/u);
+  assert.match(tooltip, /placement === "below" \? "-top-1" : "-bottom-1"/u);
 });
 
 test("card tiles declare information, action, and presentation semantics explicitly", async () => {
