@@ -41,13 +41,16 @@ function getBandoriPublicAssetR2Config(): R2S3ReaderConfig {
   };
 }
 
-export async function fetchBandoriPublicAssetIndexJson(objectKey: string): Promise<unknown> {
+export async function fetchBandoriPublicAssetIndexJson(
+  objectKey: string,
+  maxBytes = MAX_PUBLIC_ASSET_JSON_BYTES,
+): Promise<unknown> {
   const response = await fetchR2Object(
     getBandoriPublicAssetR2Config(),
     objectKey,
     undefined,
     {
-      maxBytes: MAX_PUBLIC_ASSET_JSON_BYTES,
+      maxBytes,
       timeoutMs: PUBLIC_ASSET_JSON_TIMEOUT_MS,
     },
   );

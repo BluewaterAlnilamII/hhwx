@@ -61,7 +61,11 @@ test("song meta route is a thin signed-R2-backed endpoint", async () => {
 
   assert.match(route, /rejectUnsupportedBandoriMasterQuery/u);
   assert.match(route, /jsonSuccess\(await readBandoriSongMetaDataset\(\)/u);
-  assert.match(reader, /fetchBandoriPublicAssetIndexJson\(BANDORI_SONG_META_KEY\)/u);
+  assert.match(reader, /MAX_BANDORI_SONG_META_BYTES = 8 \* 1024 \* 1024/u);
+  assert.match(
+    reader,
+    /fetchBandoriPublicAssetIndexJson\(\s*BANDORI_SONG_META_KEY,\s*MAX_BANDORI_SONG_META_BYTES/u,
+  );
   assert.match(reader, /fetchBandoriPublicAssetJson\(/u);
   assert.match(reader, /artifact\.musicIndexSha256/u);
   assert.doesNotMatch(reader, /cdn\.hhwx\.org/u);

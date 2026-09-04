@@ -11,6 +11,7 @@ import {
 
 export const BANDORI_SONG_META_KEY = BANDORI_MUSIC_META_INDEX_KEY;
 export const BANDORI_SONG_META_SCHEMA_VERSION = 1;
+const MAX_BANDORI_SONG_META_BYTES = 8 * 1024 * 1024;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 
 type ScoreCoefficients = [number, number, number, number];
@@ -111,7 +112,10 @@ export function parseBandoriSongMetaArtifact(raw: unknown): BandoriSongMetaArtif
 
 async function fetchBandoriSongMeta(): Promise<BandoriSongMetaDataset> {
   const artifact = parseBandoriSongMetaArtifact(
-    await fetchBandoriPublicAssetIndexJson(BANDORI_SONG_META_KEY),
+    await fetchBandoriPublicAssetIndexJson(
+      BANDORI_SONG_META_KEY,
+      MAX_BANDORI_SONG_META_BYTES,
+    ),
   );
   await fetchBandoriPublicAssetJson(
     BANDORI_MUSIC_INDEX_KEY,
