@@ -38,7 +38,7 @@ HHWX 应用响应使用 `Cache-Control` 控制浏览器及下游缓存 TTL，并
 
 Cloudflare Cache Rule 可以只把目标公开 `GET`/`HEAD` 路径标记为符合缓存条件，同时继续接受源站响应头。由 R2 或资源 CDN 直接提供的对象（包括 Cards、Degrees、Events、Music 和 Stamps 的 `index.json`）不会经过 Next.js policy；其对象 metadata 使用 snapshot 浏览器档位。若需要仅把 Cloudflare 副本延长到 snapshot 边缘档位，应使用 Cache Response Rule 配置 `cloudflare_only` 的 `max-age=1800` 和 `stale-while-revalidate=86400`；Cache Response Rule 的结果优先于源站 `Cloudflare-CDN-Cache-Control`。
 
-谱面 API 始终通过带签名的 R2 请求，从 `BANDORI_PUBLIC_R2_BUCKET` 读取 `bandori/music/index.json` 及其内容寻址谱面对象。数据源和对象根路径属于固定应用契约；谱面缺失或不可读时会失败关闭，绝不会回退 Bestdori。浏览器侧 Music 资源使用 `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL`，不再提供单独的 Music CDN 配置。
+谱面 API 始终通过带签名的 R2 请求，从 `BANDORI_PUBLIC_R2_BUCKET` 读取 `bandori/music/index.json` 及其内容寻址谱面对象；Music 计分 meta API 使用同一签名 reader 读取 `bandori/music/meta.json`，再校验 `musicIndexSha256` 指定的精确 `bandori/music/index.json` bytes。这些数据源和对象根路径属于固定应用契约；缺失、不可读或 hash 不匹配时会失败关闭，绝不会回退 Bestdori。浏览器侧 Music 资源使用 `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL`，不再提供单独的 Music CDN 配置。
 
 Events、Cards、Degrees、Music 与 Stamps master API 会通过 `BANDORI_PRIVATE_R2_BUCKET` 配置的私有桶，直接读取各自的内容寻址 snapshot。其余 master 数据集始终从 `BANDORI_PUBLIC_R2_BUCKET` 的 `bandori/master` 路径合并固定 JP、EN、TW、CN 四服 artifact。pointer、manifest、dataset 或 pack 缺失、无权限、格式错误、损坏或超限时都会失败关闭，且不会回退到 Bestdori、公开 asset index、公开 CDN 读取或 Supabase pointer。`BANDORI_EVENT_API_LOCAL_STORE_ROOT`、`BANDORI_CARDS_API_LOCAL_STORE_ROOT`、`BANDORI_DEGREES_API_LOCAL_STORE_ROOT`、`BANDORI_MUSIC_API_LOCAL_STORE_ROOT` 与 `BANDORI_STAMPS_API_LOCAL_STORE_ROOT` 可在本地开发时指向 tracker 生成的 content store，生产环境会拒绝这些设置。
 
@@ -46,7 +46,7 @@ Events、Cards、Degrees、Music 与 Stamps master API 会通过 `BANDORI_PRIVAT
 
 浏览器同样只从 `GET /api/bandori/master/events` 读取一次完整 Events map，并在 SPA 会话内供 Event Tracker、Calendar 和组队计算器共享。活动记录包含原始四服 master 字段，以及 `band`、四槽服务器本地 `stampRewardId`、标量 `stampCharacterId`；仅在官方 CN 时间范围不完整时按需包含顶层 `cnSchedule`。组队计算器直接使用这些记录内的 bonus 字段。旧 Events 列表和 bonus API 已删除；`/api/bandori/events/{eventId}/comments` 下的评论路由保持独立。
 
-浏览器只从 `GET /api/bandori/master/music` 读取一次完整 Music map，并在整个 SPA 会话内复用；`GET /api/bandori/master/music/{musicId}` 提供对应详情。`difficulty`、`notes` 与 `bpm` 下的数字键 `0` 至 `4` 表示谱面难度而非服务器，服务器本地发布时间仍使用固定四槽数组。组队计算器从该 map 读取 `difficulty.playLevel`，并从自有谱面 API 读取计分所需的 note 时序。旧 `/api/bandori/master/songs`、`/api/bandori/master/songs/{songId}` 与 `/api/bandori/songs?ids=...` 路由已经删除。
+浏览器只从 `GET /api/bandori/master/music` 读取一次完整 Music map，并在整个 SPA 会话内复用；`GET /api/bandori/master/music/{musicId}` 提供对应详情。`difficulty`、`notes` 与 `bpm` 下的数字键 `0` 至 `4` 表示谱面难度而非服务器，服务器本地发布时间仍使用固定四槽数组。组队计算器从该 map 读取 `difficulty.playLevel`，并从自有谱面 API 读取计分所需的 note 时序。独立的 `GET /api/bandori/master/music/meta` 只返回供前端实时计算分数与排名的 `{durations,songs}`；每个时长叶子是 `[普通区间外,普通区间内,FEVER区间外,FEVER区间内]`，不暴露歌曲展示字段、已计算分数、排名或 Bestdori 回退数据。旧 `/api/bandori/master/songs`、`/api/bandori/master/songs/{songId}` 与 `/api/bandori/songs?ids=...` 路由已经删除。
 
 ## 榜线历史 API
 
@@ -169,12 +169,14 @@ bandori/res/icon/master.svg
 
 ```text
 {CDN_BASE}/bandori/music/index.json
+{CDN_BASE}/bandori/music/meta.json
 {CDN_BASE}/bandori/music/jackets/{sha256}.png
 {CDN_BASE}/bandori/music/thumbs/{sha256}.png
 {CDN_BASE}/bandori/music/audio/{sha256}.mp3
 {CDN_BASE}/bandori/music/charts/{sha256}.json
 
 bandori/music/index.json
+bandori/music/meta.json
 bandori/music/manifests/{musicId}.json
 bandori/music/jackets/{sha256}.png
 bandori/music/thumbs/{sha256}.png
@@ -205,6 +207,8 @@ bandori/music/charts/{sha256}.json
 ```
 
 歌曲 ID 与难度 index 都使用按数值升序排列的数字字符串 key。难度 index `"0"` 到 `"4"` 依次表示 `easy`、`normal`、`hard`、`expert`、`special`。每个文件值都是完整的小写 SHA-256；客户端按上面的内容寻址路径推导对象 key，也可以校验收到的内容，不再需要查询参数版本。`notes`、`bpm` 与 `files.charts` 必须覆盖完全相同的难度。刻意不含音频的本地构建可以省略 `audio`，但生产就绪校验要求它存在。`bandori/music/manifests` 下的单曲提取 manifest 保留来源服务器及 bundle 溯源信息供 builder 使用，但不属于公开 index 契约。
+
+`bandori/music/meta.json` 是独立的 schema 1 可变 root，包含 `schemaVersion`、`updatedAt`、`musicIndexSha256`、排序后的 `durations` 与 `songs`。其歌曲/难度覆盖必须与 `music/index.json` 一致；每个难度都完整覆盖所有已发布时长，并映射到四项精确计分系数。Music 发布先提交 `index.json`，再写入并回读绑定其精确 bytes 的 `meta.json`。服务端 API 通过签名 R2 读取两个 root，拒绝 hash 不匹配，并只投影 `{durations,songs}`；两个 root 之间发生中断时会失败关闭，直到发布重试补齐 `meta.json`。
 
 谱面模拟器演出资源：
 

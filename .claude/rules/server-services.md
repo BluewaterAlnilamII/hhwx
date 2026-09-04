@@ -13,6 +13,7 @@ paths:
   - "src/lib/bandori/events/comment-target-server.ts"
   - "src/lib/bandori/events/catalog-server.ts"
   - "src/lib/bandori-music-api-server.ts"
+  - "src/lib/bandori-song-meta-server.ts"
   - "src/lib/bandori-public-asset-index-server.ts"
   - "src/lib/bandori-schedule-server.ts"
   - "src/lib/bandori-snapshot-api-server.ts"

@@ -38,7 +38,7 @@ HHWX application responses use `Cache-Control` for browser and downstream-cache 
 
 A Cloudflare Cache Rule may mark the intended public `GET`/`HEAD` paths as eligible while continuing to honor origin headers. Objects served directly by R2 or the asset CDN, including the Cards, Degrees, Events, Music, and Stamps `index.json` files, do not pass through the Next.js policies. Their object metadata uses the snapshot browser policy. To extend only Cloudflare's copy to the snapshot edge policy, use a Cache Response Rule with `cloudflare_only` `max-age=1800` and `stale-while-revalidate=86400`; a Cache Response Rule takes precedence over origin `Cloudflare-CDN-Cache-Control`.
 
-The chart API always reads `bandori/music/index.json` and its content-addressed chart objects from `BANDORI_PUBLIC_R2_BUCKET` through signed R2 requests. The source and object root are fixed application contracts: a missing or unreadable chart fails closed and never falls back to Bestdori. Browser-facing Music assets use `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL`; there is no separate Music CDN setting.
+The chart API always reads `bandori/music/index.json` and its content-addressed chart objects from `BANDORI_PUBLIC_R2_BUCKET` through signed R2 requests. The Music score-meta API uses the same signed reader for `bandori/music/meta.json`, then verifies the exact `bandori/music/index.json` bytes named by `musicIndexSha256`. These source and object roots are fixed application contracts: missing, unreadable, or mismatched data fails closed and never falls back to Bestdori. Browser-facing Music assets use `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL`; there is no separate Music CDN setting.
 
 The Events, Cards, Degrees, Music, and Stamps master APIs read their content-addressed snapshots directly from the private bucket configured by `BANDORI_PRIVATE_R2_BUCKET`. The remaining master datasets always merge the fixed JP, EN, TW, and CN artifacts under `bandori/master` from `BANDORI_PUBLIC_R2_BUCKET`. All readers fail closed when a pointer, manifest, dataset, or pack is missing, unauthorized, malformed, corrupt, or oversized; none falls back to Bestdori, public asset indexes, public CDN reads, or Supabase pointers. `BANDORI_EVENT_API_LOCAL_STORE_ROOT`, `BANDORI_CARDS_API_LOCAL_STORE_ROOT`, `BANDORI_DEGREES_API_LOCAL_STORE_ROOT`, `BANDORI_MUSIC_API_LOCAL_STORE_ROOT`, and `BANDORI_STAMPS_API_LOCAL_STORE_ROOT` can point to tracker-generated content stores during local development, but production rejects them.
 
@@ -46,7 +46,7 @@ The browser reads the complete canonical Cards map once from `GET /api/bandori/m
 
 The browser likewise reads the complete Events map once from `GET /api/bandori/master/events` and reuses it across Event Tracker, Calendar, and Team Builder during the SPA session. Event records contain the original four-region master fields plus `band`, four-slot server-local `stampRewardId`, scalar `stampCharacterId`, and an optional top-level `cnSchedule` only when the official CN time range is incomplete. Team Builder consumes bonus fields directly from these records. The former Events list and bonus endpoints have been removed; event comment routes under `/api/bandori/events/{eventId}/comments` remain independent.
 
-The browser reads the complete Music map once from `GET /api/bandori/master/music` and reuses it for the SPA session. `GET /api/bandori/master/music/{musicId}` exposes the corresponding detail record. Numeric keys `0` through `4` under `difficulty`, `notes`, and `bpm` identify chart difficulties, not servers; server-local publication timestamps remain fixed four-slot arrays. Team Builder reads `difficulty.playLevel` from this map and reads score-note timing from the owned chart API. The former `/api/bandori/master/songs`, `/api/bandori/master/songs/{songId}`, and `/api/bandori/songs?ids=...` routes have been removed.
+The browser reads the complete Music map once from `GET /api/bandori/master/music` and reuses it for the SPA session. `GET /api/bandori/master/music/{musicId}` exposes the corresponding detail record. Numeric keys `0` through `4` under `difficulty`, `notes`, and `bpm` identify chart difficulties, not servers; server-local publication timestamps remain fixed four-slot arrays. Team Builder reads `difficulty.playLevel` from this map and reads score-note timing from the owned chart API. `GET /api/bandori/master/music/meta` separately returns only `{durations,songs}` for client-side score/rank calculation; each duration leaf is `[normalOutside,normalCovered,feverOutside,feverCovered]`. It does not expose song display fields, stored scores, ranks, or Bestdori fallback data. The former `/api/bandori/master/songs`, `/api/bandori/master/songs/{songId}`, and `/api/bandori/songs?ids=...` routes have been removed.
 
 ## Tracker History API
 
@@ -169,12 +169,14 @@ Music assets and chart JSON:
 
 ```text
 {CDN_BASE}/bandori/music/index.json
+{CDN_BASE}/bandori/music/meta.json
 {CDN_BASE}/bandori/music/jackets/{sha256}.png
 {CDN_BASE}/bandori/music/thumbs/{sha256}.png
 {CDN_BASE}/bandori/music/audio/{sha256}.mp3
 {CDN_BASE}/bandori/music/charts/{sha256}.json
 
 bandori/music/index.json
+bandori/music/meta.json
 bandori/music/manifests/{musicId}.json
 bandori/music/jackets/{sha256}.png
 bandori/music/thumbs/{sha256}.png
@@ -205,6 +207,8 @@ bandori/music/charts/{sha256}.json
 ```
 
 Song IDs and difficulty indexes are numeric-string keys in ascending numeric order. Difficulty indexes `"0"` through `"4"` mean `easy`, `normal`, `hard`, `expert`, and `special`. Each file value is its complete lowercase SHA-256; clients derive the content-addressed paths listed above and may verify the received content. No query-string version token is needed. `notes`, `bpm`, and `files.charts` must have identical difficulty coverage. `audio` is optional for an intentionally audio-free local build, but production readiness verification requires it. Per-song extraction manifests under `bandori/music/manifests` retain source servers and bundle provenance for the builder, but are not part of the public index contract.
+
+`bandori/music/meta.json` is a separate schema-1 mutable root with `schemaVersion`, `updatedAt`, `musicIndexSha256`, sorted `durations`, and `songs`. Its song/difficulty coverage matches `music/index.json`; every difficulty contains every published duration and maps it to four exact scoring coefficients. Music publication commits `index.json` first, then writes and verifies a `meta.json` that names the exact index bytes. The server API reads both roots through signed R2 access, rejects a hash mismatch, and projects only `{durations,songs}`. An interruption between the two root writes therefore fails closed until the publisher retry repairs `meta.json`.
 
 Chart-simulator presentation resources:
 

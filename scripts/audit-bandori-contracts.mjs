@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { setDefaultAutoSelectFamily } from "node:net";
 
 setDefaultAutoSelectFamily(true);
@@ -17,6 +18,7 @@ async function readJson(url) {
   assert.equal(response.ok, true, `${url} returned ${response.status}: ${body.slice(0, 200)}`);
   return {
     body: JSON.parse(body),
+    rawBody: body,
     cacheControl: response.headers.get("cache-control"),
   };
 }
@@ -39,6 +41,7 @@ const indexesPromise = Promise.all([
   readJson(`${assetBaseUrl}/bandori/cards/index.json`),
   readJson(`${assetBaseUrl}/bandori/degrees/index.json`),
   readJson(`${assetBaseUrl}/bandori/music/index.json`),
+  readJson(`${assetBaseUrl}/bandori/music/meta.json`),
   readJson(`${assetBaseUrl}/bandori/stamps/index.json`),
 ]);
 // Read private snapshot APIs serially so a release audit does not create an
@@ -48,12 +51,14 @@ const cardsApi = await readJson(`${apiBaseUrl}/api/bandori/master/cards`);
 const degreesApi = await readJson(`${apiBaseUrl}/api/bandori/master/degrees`);
 const musicApi = await readJson(`${apiBaseUrl}/api/bandori/master/music`);
 const musicDetailApi = await readJson(`${apiBaseUrl}/api/bandori/master/music/181`);
+const musicMetaApi = await readJson(`${apiBaseUrl}/api/bandori/master/music/meta`);
 const stampsApi = await readJson(`${apiBaseUrl}/api/bandori/master/stamps`);
 const [
   eventsIndexResponse,
   cardsIndexResponse,
   degreesIndexResponse,
   musicIndexResponse,
+  musicMetaIndexResponse,
   stampsIndexResponse,
 ] = await indexesPromise;
 
@@ -62,11 +67,13 @@ const cards = readApiData(cardsApi.body, "Cards API");
 const degrees = readApiData(degreesApi.body, "Degrees API");
 const music = readApiData(musicApi.body, "Music API");
 const musicDetail = readApiData(musicDetailApi.body, "Music detail API");
+const musicMeta = readApiData(musicMetaApi.body, "Music meta API");
 const stamps = readApiData(stampsApi.body, "Stamps API");
 const eventsIndex = eventsIndexResponse.body;
 const cardsIndex = cardsIndexResponse.body;
 const degreesIndex = degreesIndexResponse.body;
 const musicIndex = musicIndexResponse.body;
+const musicMetaIndex = musicMetaIndexResponse.body;
 const stampsIndex = stampsIndexResponse.body;
 
 assert.deepEqual(Object.keys(eventsIndex), ["schemaVersion", "updatedAt", "events"]);
@@ -78,6 +85,20 @@ assert.equal(
   "Degrees index must use schema 1 or 2 during rollout",
 );
 assert.deepEqual(Object.keys(musicIndex), ["schemaVersion", "updatedAt", "songs"]);
+assert.deepEqual(
+  Object.keys(musicMetaIndex),
+  ["schemaVersion", "updatedAt", "musicIndexSha256", "durations", "songs"],
+);
+assert.equal(
+  musicMetaIndex.musicIndexSha256,
+  createHash("sha256").update(musicIndexResponse.rawBody).digest("hex"),
+  "Music meta must reference the exact current music index bytes",
+);
+assert.deepEqual(
+  musicMeta,
+  { durations: musicMetaIndex.durations, songs: musicMetaIndex.songs },
+  "Music meta API and asset root diverged",
+);
 assert.deepEqual(Object.keys(stampsIndex), ["schemaVersion", "updatedAt", "stamps", "changedStampGroups"]);
 assert.deepEqual(Object.keys(stampsIndex.changedStampGroups), serverOrder);
 
@@ -352,6 +373,7 @@ console.log(JSON.stringify({
     cards: Object.keys(cards).length,
     degrees: Object.keys(degrees).length,
     music: Object.keys(music).length,
+    musicMeta: Object.keys(musicMeta.songs).length,
     stamps: Object.keys(stamps).length,
   },
   assetRecords: {
@@ -359,6 +381,7 @@ console.log(JSON.stringify({
     cardResources: Object.keys(cardsIndex.resources).length,
     degreeResources: Object.keys(degreesIndex.resources).length,
     music: Object.keys(musicIndex.songs).length,
+    musicMeta: Object.keys(musicMetaIndex.songs).length,
     stamps: Object.keys(stampsIndex.stamps).length,
   },
   cacheControl: {
@@ -367,11 +390,13 @@ console.log(JSON.stringify({
     degreesApi: degreesApi.cacheControl,
     musicApi: musicApi.cacheControl,
     musicDetailApi: musicDetailApi.cacheControl,
+    musicMetaApi: musicMetaApi.cacheControl,
     stampsApi: stampsApi.cacheControl,
     eventsIndex: eventsIndexResponse.cacheControl,
     cardsIndex: cardsIndexResponse.cacheControl,
     degreesIndex: degreesIndexResponse.cacheControl,
     musicIndex: musicIndexResponse.cacheControl,
+    musicMetaIndex: musicMetaIndexResponse.cacheControl,
     stampsIndex: stampsIndexResponse.cacheControl,
   },
 }, null, 2));

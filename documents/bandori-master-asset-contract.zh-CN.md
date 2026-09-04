@@ -9,7 +9,7 @@ English version: [bandori-master-asset-contract.md](bandori-master-asset-contrac
 - 公开 Master API 成功响应为 `{ "success": true, "data": { id: record } }`；错误响应为 `{ "success": false, "error": { "code", "message" } }` 并使用非 2xx 状态码。
 - 区服数组固定为 `jp`、`en`、`tw`、`cn` 四槽。API 与 index 的具名区服 map 使用这些名称；数字 `0`、`1`、`2`、`3` 只用于 Cards 的 `server` 查询参数及用户/档案设置。
 - 缺失的区服字符串使用 `""`；Degree 数字槽缺失时使用 `0`；业务上允许“未知”的标量（例如 Stamp `characterId`）使用 `null`；缺失的可选结构直接省略。
-- Master API 只承载游戏语义数据；公开 asset index 只承载构造 CDN URL 所需的内容 hash。API 不公开 pointer、pack key、generation、来源 hash 或私有对象路径。
+- Master API 只承载游戏语义数据；公开 asset discovery index 只承载构造 CDN URL 所需的内容 hash，独立的 Music meta root 承载派生计分系数和精确的配对 index 身份。API 不公开 pointer、pack key、generation、来源 hash 或私有对象路径。
 - 可变 API 与 index 使用 snapshot 缓存；所有被 index 引用的媒体对象（包括 Music 媒体和谱面 JSON）都以 SHA-256 命名并使用一年 immutable 缓存。读取失败时关闭，不回退 Bestdori 或旧公开 artifact。
 - 未支持的查询参数统一返回 `400 BANDORI_MASTER_QUERY_INVALID`，不重定向，也不静默忽略。
 
@@ -22,8 +22,9 @@ English version: [bandori-master-asset-contract.md](bandori-master-asset-contrac
 | Degrees | `/api/bandori/master/degrees` | 无 | `/bandori/degrees/index.json` | 元数据使用数字 degree ID；资源使用派生资源名 | 八个固定四槽 Master 字段及可选四槽 `serverExtensions`，缺服 `null`、有服无扩展 `{}`、仅 CN 可含 `degreeEffect`；独立选择 base、rank、icon 与 effect 资源 | snapshot API 与 schema 2 index |
 | Stamps | `/api/bandori/master/stamps` | 无 | `/bandori/stamps/index.json` | 数字 stamp ID | 四槽 `imageName`、`characterId`、图片、语音与 Changed variant | snapshot API 与 index |
 | Music | `/api/bandori/master/music` | `/api/bandori/master/music/{musicId}` | `/bandori/music/index.json` | 数字 music ID | 四槽区服元数据与共享的谱面/音频派生字段；使用 `0` 到 `4` 的数字难度 key | snapshot API 与 index |
+| Music 计分 meta | `/api/bandori/master/music/meta` | 无 | `/bandori/music/meta.json` | music ID、难度、技能时长 | 无区服槽；叶子固定为 `[普通区间外, 普通区间内, FEVER区间外, FEVER区间内]` | snapshot API 与 index |
 
-Cards 与 Music 列表都采用一次下载、整个 SPA 会话复用的完整 map；只有 Cards 支持可选的 `server=0|1|2|3` 物化查询。Event 的 `cnSchedule` 保持为可选 overlay，因为它可能独立于 immutable event snapshot 变化。Music 的 `difficulty`、`notes` 与 `bpm` 键表示谱面难度，而不是服务器槽位。
+Cards 与 Music 列表都采用一次下载、整个 SPA 会话复用的完整 map；只有 Cards 支持可选的 `server=0|1|2|3` 物化查询。Event 的 `cnSchedule` 保持为可选 overlay，因为它可能独立于 immutable event snapshot 变化。Music 的 `difficulty`、`notes` 与 `bpm` 键表示谱面难度，而不是服务器槽位。Music 计分 meta 是供前端实时计算分数与排名使用的独立最小数据集，不含歌曲展示字段、预计算分数、排名或内部发布元数据。
 
 Event `stampRewardId` 固定为 `[jp, en, tw, cn]` 四槽，因为它是服务器本地外键；该服不存在活动时保留 `null`，不得用其他服 ID 补位。历史来源中的十进制字符串 ID 会规范化为整数。`stampCharacterId` 使用单个标量，因为所有已存在区服的奖励必须通过 Stamps API 解析成相同的语义图片和角色；出现分歧时拒绝发布 snapshot。
 
@@ -40,6 +41,7 @@ Degree 动画 manifest 固定使用 `hhwx-bandori-degree-animation-v1`，显式�
 - Degrees 先排列普通资源名，再排列 `ani_degree` 名称；单个资源先写 `images`，再写 `animations`；
 - Stamps 根字段为 `schemaVersion`、`updatedAt`、`stamps`、`changedStampGroups`；
 - Music 单曲字段为 `files`、`notes`、`bpm`、`length`；文件字段依次为 `jacket`、`thumb`、可选 `audio`、`charts`；
+- Music 计分 meta 根字段为 `schemaVersion`、`updatedAt`、`musicIndexSha256`、`durations`、`songs`；服务端校验其绑定的精确 Music index bytes，API 只投影 `durations` 与 `songs`；
 - 具名区服 map 固定按 `jp`、`en`、`tw`、`cn`；
 - 数字 ID 按数值升序。
 
