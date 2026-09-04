@@ -310,12 +310,14 @@ test("profile-bound card displays receive profile server context without changin
     preferencesPanel,
     profileEntries,
     pickerDialog,
+    picker,
   ] = await Promise.all([
     readSource("src/app/[locale]/bandori/game-profiles/[profileId]/cards/page.tsx"),
     readSource("src/app/[locale]/bandori/teambuilder/page.tsx"),
     readSource("src/app/[locale]/bandori/teambuilder/CardPreferencesPanel.tsx"),
     readSource("src/hooks/useBandoriProfileCardEntries.ts"),
     readSource("src/components/bandori/card-picker/BandoriCardPickerDialog.tsx"),
+    readSource("src/components/bandori/card-picker/BandoriCardPicker.tsx"),
   ]);
 
   assert.match(profileCardsPage, /displayServer=\{profileServer\}/u);
@@ -329,6 +331,9 @@ test("profile-bound card displays receive profile server context without changin
   assert.match(profileEntries, /displayServer: BandoriServer/u);
   assert.match(pickerDialog, /missingCardFallback=\{missingCardFallback\}/u);
   assert.match(pickerDialog, /canonicalCardMetadata=\{canonicalCardMetadata\}/u);
+  assert.match(picker, /missingCardFallback === "jp"/u);
+  assert.match(picker, /availabilityScope: availableServers/u);
+  assert.match(picker, /pickAvailableBandoriServer\(card\.availableServers, server \?\? preferredServer\)/u);
   assert.match(profileCardsPage, /missingCardFallback="none"/u);
   assert.match(teamBuilderPage, /missingCardFallback="jp"/u);
   assert.match(profileCardsPage, /cardMetadata=\{cardMetadata\}/u);
@@ -493,7 +498,7 @@ test("avatar picker expands every registered collision into distinct EN and CN r
   }
 });
 
-test("server-scoped picker filters canonical availability without dropping JP fallback metadata", () => {
+test("server-scoped picker exposes JP fallback alongside the profile server", () => {
   const canonicalCards = {
     "1": {
       characterId: 1,
@@ -511,6 +516,14 @@ test("server-scoped picker filters canonical availability without dropping JP fa
       resourceSetName: "res001002",
       serverExtensions: [{}, null, null, {}],
     },
+    "3": {
+      characterId: 1,
+      rarity: 4,
+      attribute: "cool",
+      levelLimit: 50,
+      resourceSetName: "res001003",
+      serverExtensions: [null, {}, null, null],
+    },
   };
   const displayCards = materializeBandoriCardMapForServerWithJpFallback(
     canonicalCards,
@@ -523,11 +536,11 @@ test("server-scoped picker filters canonical availability without dropping JP fa
     false,
     3,
     undefined,
-    { canonicalCards },
+    { canonicalCards, availabilityScope: [3, 0] },
   );
   const filter = {
     query: "",
-    servers: [3],
+    servers: [3, 0],
     bandIds: [1],
     attributes: ["cool"],
     rarities: [4],
@@ -537,11 +550,19 @@ test("server-scoped picker filters canonical availability without dropping JP fa
   };
 
   assert.deepEqual(Object.keys(displayCards), ["1", "2"]);
-  assert.deepEqual(catalog.find((card) => card.cardId === 1).availableServers, []);
-  assert.deepEqual(catalog.find((card) => card.cardId === 2).availableServers, [3]);
+  assert.deepEqual(catalog.find((card) => card.cardId === 1).availableServers, [0]);
+  assert.deepEqual(catalog.find((card) => card.cardId === 2).availableServers, [0, 3]);
   assert.deepEqual(
     filterBandoriCardCatalog(catalog, filter).map((card) => card.cardId),
+    [1, 2],
+  );
+  assert.deepEqual(
+    filterBandoriCardCatalog(catalog, { ...filter, servers: [3] }).map((card) => card.cardId),
     [2],
+  );
+  assert.deepEqual(
+    filterBandoriCardCatalog(catalog, { ...filter, servers: [0] }).map((card) => card.cardId),
+    [1, 2],
   );
 });
 

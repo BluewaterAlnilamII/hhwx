@@ -189,7 +189,12 @@ export default function BandoriCardPicker({
     }),
     [server],
   );
-  const availableServers = useMemo(() => getBandoriCardFilterServers(server), [server]);
+  const availableServers = useMemo<BandoriCardServer[]>(
+    () => missingCardFallback === "jp" && server !== undefined && server !== 0
+      ? [server, 0]
+      : getBandoriCardFilterServers(server),
+    [missingCardFallback, server],
+  );
   const cardsAssetIndex = useBandoriCardsAssetIndex();
   const cardsMaster = useBandoriCardsMaster(
     server,
@@ -233,6 +238,7 @@ export default function BandoriCardPicker({
         {
           canonicalCards: canonicalCardMetadata ?? {},
           assetIndex: cardsAssetIndex.value,
+          availabilityScope: availableServers,
         },
       );
       return cards;
@@ -241,6 +247,7 @@ export default function BandoriCardPicker({
       cardMetadata,
       canonicalCardMetadata,
       cardsAssetIndex.value,
+      availableServers,
       characterMetadata,
       filterT,
       preferredServer,
@@ -424,8 +431,8 @@ export default function BandoriCardPicker({
                   termsT("unknownSkill"),
                 );
                 const detailServer = card.entityServer
+                  ?? pickAvailableBandoriServer(card.availableServers, server ?? preferredServer)
                   ?? server
-                  ?? pickAvailableBandoriServer(card.availableServers, preferredServer)
                   ?? preferredServer;
                 return (
                   <CardGridItem

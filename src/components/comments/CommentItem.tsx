@@ -158,7 +158,7 @@ function ReactionChip({ reaction, disabled, onToggle, onViewAll }: ReactionChipP
   return (
     <span
       ref={containerRef}
-      className="relative inline-flex"
+      className="relative inline-flex select-none [-webkit-touch-callout:none]"
       onPointerEnter={(event) => {
         if (event.pointerType !== "touch") showTooltip();
       }}

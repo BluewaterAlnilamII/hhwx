@@ -558,7 +558,7 @@ test("profile cards and team builder use one shared collection implementation", 
     assert.match(tile, /onFocus=\{onFocus\}/u);
     assert.match(tile, /onBlur=\{onBlur\}/u);
   }
-  assert.match(hoverTooltipHook, /event\.currentTarget\.contains\(event\.relatedTarget/u);
+  assert.match(hoverTooltipHook, /anchorRef\.current\?\.contains\(event\.relatedTarget/u);
   assert.match(hoverTooltip, /lang=\{detailLanguageTag\}/u);
   assert.match(hoverTooltipHook, /tooltipInteractionProps/u);
   assert.match(hoverTooltip, /t\("cardDetails"\)/u);

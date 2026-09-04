@@ -23,6 +23,7 @@ export type BandoriCardHoverTooltipProps = {
   characterName: string;
   detailLanguageTag?: BandoriServerLanguageTag;
   detailHref?: string;
+  placement?: TooltipPosition["placement"];
   children?: ReactNode;
   className?: string;
   style?: CSSProperties;
@@ -106,6 +107,7 @@ const BandoriCardHoverTooltip = forwardRef<HTMLDivElement, BandoriCardHoverToolt
   characterName,
   detailLanguageTag,
   detailHref,
+  placement,
   children,
   className,
   style,
@@ -124,7 +126,7 @@ const BandoriCardHoverTooltip = forwardRef<HTMLDivElement, BandoriCardHoverToolt
       role="dialog"
       aria-label={cardName}
       className={cn(
-        "pointer-events-auto m-0 max-h-[calc(100vh-24px)] w-64 max-w-[calc(100vw-24px)] overflow-y-auto rounded-[18px] border border-white/90 bg-white p-3 text-center shadow-[0_18px_48px_rgba(15,23,42,0.22)] ring-1 ring-slate-950/5",
+        "pointer-events-auto m-0 w-64 max-w-[calc(100vw-24px)] overflow-visible border-0 bg-transparent p-0",
         !open && "hidden",
         className,
       )}
@@ -134,25 +136,36 @@ const BandoriCardHoverTooltip = forwardRef<HTMLDivElement, BandoriCardHoverToolt
       onFocus={onFocus}
       onBlur={onBlur}
     >
-      <div className="whitespace-normal wrap-break-word text-sm font-black leading-snug text-slate-900">{cardName}</div>
-      <div className="mt-1 whitespace-normal wrap-break-word text-xs font-semibold leading-snug text-slate-500">
-        {characterName}
-      </div>
-      {children ? (
-        <div lang={detailLanguageTag} className="mt-2 flex flex-wrap justify-center gap-2 text-[11px] font-black">
-          {children}
+      {placement ? (
+        <span
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-auto absolute left-0 h-1 w-full",
+            placement === "below" ? "-top-1" : "-bottom-1",
+          )}
+        />
+      ) : null}
+      <div className="max-h-[calc(100vh-24px)] overflow-y-auto rounded-[18px] border border-white/90 bg-white p-3 text-center shadow-[0_18px_48px_rgba(15,23,42,0.22)] ring-1 ring-slate-950/5">
+        <div className="whitespace-normal wrap-break-word text-sm font-black leading-snug text-slate-900">{cardName}</div>
+        <div className="mt-1 whitespace-normal wrap-break-word text-xs font-semibold leading-snug text-slate-500">
+          {characterName}
         </div>
-      ) : null}
-      {detailHref ? (
-        <Link
-          href={detailHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-2 inline-flex rounded-sm text-xs font-black text-sky-700 underline decoration-sky-300 underline-offset-4 transition hover:text-sky-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
-        >
-          {t("cardDetails")}
-        </Link>
-      ) : null}
+        {children ? (
+          <div lang={detailLanguageTag} className="mt-2 flex flex-wrap justify-center gap-2 text-[11px] font-black">
+            {children}
+          </div>
+        ) : null}
+        {detailHref ? (
+          <Link
+            href={detailHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 inline-flex rounded-sm text-xs font-black text-sky-700 underline decoration-sky-300 underline-offset-4 transition hover:text-sky-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
+          >
+            {t("cardDetails")}
+          </Link>
+        ) : null}
+      </div>
     </div>
   );
 });
@@ -266,6 +279,7 @@ export function BandoriCardHoverPopover({
       characterName={characterName}
       detailLanguageTag={detailLanguageTag}
       detailHref={detailHref}
+      placement={position?.placement}
       className={cn(
         "fixed inset-auto z-1000",
         !position && "invisible",
