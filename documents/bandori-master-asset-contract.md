@@ -9,7 +9,7 @@ This document is the cross-dataset contract for the Events, Cards, Degrees, Stam
 - Public master APIs use `{ "success": true, "data": { id: record } }`. Errors use `{ "success": false, "error": { "code", "message" } }` and a non-2xx status.
 - Regional arrays always have four slots in `jp`, `en`, `tw`, `cn` order. API and index JSON use these names for keyed regional maps; numeric `0`, `1`, `2`, `3` values are only accepted by the Cards `server` query and user/profile settings.
 - Missing regional strings use `""`. Degree numeric slots use `0` when absent. Fields whose domain explicitly permits an unknown scalar, such as Stamp `characterId`, use `null`. Missing optional structures are omitted.
-- Master APIs contain gameplay metadata. Public asset indexes contain content hashes needed to construct CDN URLs. Storage pointers, pack keys, generations, source hashes, and private object layouts are never exposed by the APIs.
+- Master APIs contain gameplay metadata. Public asset-discovery indexes contain content hashes needed to construct CDN URLs; the separate Music meta root contains derived score coefficients plus the exact paired-index identity. Storage pointers, pack keys, generations, source hashes, and private object layouts are never exposed by the APIs.
 - Mutable APIs and indexes use cached snapshots. Every indexed media object, including Music media and chart JSON, is named by its SHA-256 and immutable for one year. Readers fail closed instead of falling back to Bestdori or legacy public artifacts.
 - Unsupported query parameters return `400 BANDORI_MASTER_QUERY_INVALID`; they are never redirected or silently ignored.
 
@@ -22,8 +22,9 @@ This document is the cross-dataset contract for the Events, Cards, Degrees, Stam
 | Degrees | `/api/bandori/master/degrees` | none | `/bandori/degrees/index.json` | numeric degree ID for metadata; derived resource names for assets | eight fixed four-slot master fields plus optional four-slot `serverExtensions` using absent `null`, present `{}`, and CN-only `degreeEffect`; base, rank, icon, and effect resources selected independently | snapshot API and schema 2 index |
 | Stamps | `/api/bandori/master/stamps` | none | `/bandori/stamps/index.json` | numeric stamp ID | four-slot `imageName`, `characterId`, images, voices, and Changed variants | snapshot API and index |
 | Music | `/api/bandori/master/music` | `/api/bandori/master/music/{musicId}` | `/bandori/music/index.json` | numeric music ID | four-slot regional metadata plus shared derived chart/audio fields; numeric difficulty keys `0` through `4` | snapshot API and index |
+| Music score meta | `/api/bandori/master/music/meta` | none | `/bandori/music/meta.json` | music ID, difficulty, then skill duration | no regional slots; each leaf is `[normalOutside, normalCovered, feverOutside, feverCovered]` | snapshot API and index |
 
-The Cards and Music lists are intentionally downloaded as reusable SPA-session maps. The optional Cards `server=0|1|2|3` materialization is the only supported master query. Event `cnSchedule` remains an optional overlay because it can change independently of the immutable event snapshot. Music `difficulty`, `notes`, and `bpm` keys identify chart difficulty rather than server slots.
+The Cards and Music lists are intentionally downloaded as reusable SPA-session maps. The optional Cards `server=0|1|2|3` materialization is the only supported master query. Event `cnSchedule` remains an optional overlay because it can change independently of the immutable event snapshot. Music `difficulty`, `notes`, and `bpm` keys identify chart difficulty rather than server slots. Music score meta is a separate minimal dataset for client-side score/rank calculation; it omits song display fields, precomputed scores, ranks, and internal publication metadata.
 
 Event `stampRewardId` is a fixed `[jp, en, tw, cn]` array because it is a server-local foreign key; unavailable events keep `null`, and another server's ID is never copied into that slot. Decimal string IDs in historical input are normalized to integers. `stampCharacterId` is one scalar because all available regional rewards must resolve through the Stamps API to the same semantic image and character; disagreement fails snapshot publication.
 
@@ -40,6 +41,7 @@ Public indexes are serialized for deterministic hashing and human review:
 - Degrees resources: ordinary names first, then `ani_degree` names; each resource writes `images` before `animations`;
 - Stamps root: `schemaVersion`, `updatedAt`, `stamps`, `changedStampGroups`;
 - Music songs: `files`, `notes`, `bpm`, `length`; file fields are `jacket`, `thumb`, optional `audio`, then `charts`;
+- Music score meta root: `schemaVersion`, `updatedAt`, `musicIndexSha256`, `durations`, `songs`; the server verifies the exact paired Music index bytes and the API projects only `durations` and `songs`;
 - keyed server maps: `jp`, `en`, `tw`, `cn`;
 - numeric IDs: ascending numeric order.
 

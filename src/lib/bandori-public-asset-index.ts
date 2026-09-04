@@ -9,6 +9,7 @@ export const BANDORI_CHART_SIMULATOR_INDEX_KEY = "bandori/chart-simulator/index.
 export const BANDORI_DEGREES_INDEX_KEY = "bandori/degrees/index.json";
 export const BANDORI_EVENTS_INDEX_KEY = "bandori/events/index.json";
 export const BANDORI_MUSIC_INDEX_KEY = "bandori/music/index.json";
+export const BANDORI_MUSIC_META_INDEX_KEY = "bandori/music/meta.json";
 export const BANDORI_STAMPS_INDEX_KEY = "bandori/stamps/index.json";
 export const BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION = 2;
 export const BANDORI_DEGREES_ASSET_INDEX_SCHEMA_VERSION = 2;
