@@ -23,7 +23,7 @@ The repository is suitable for local development and self-hosted deployment, but
 
 ## Requirements
 
-- Node.js 20.9 or newer
+- Node.js 22 or newer
 - npm
 - rustup (the repository pins the Rust toolchain used by the medley scorer and search)
 - `wasm-bindgen-cli` matching the workspace's locked `wasm-bindgen` crate when rebuilding the browser package (currently `cargo install wasm-bindgen-cli --version 0.2.127 --locked`)
