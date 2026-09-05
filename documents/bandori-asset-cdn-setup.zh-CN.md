@@ -46,7 +46,7 @@ Events、Cards、Degrees、Music 与 Stamps master API 会通过 `BANDORI_PRIVAT
 
 浏览器同样只从 `GET /api/bandori/master/events` 读取一次完整 Events map，并在 SPA 会话内供 Event Tracker、Calendar 和组队计算器共享。活动记录包含原始四服 master 字段，以及 `band`、四槽服务器本地 `stampRewardId`、标量 `stampCharacterId`；仅在官方 CN 时间范围不完整时按需包含顶层 `cnSchedule`。组队计算器直接使用这些记录内的 bonus 字段。旧 Events 列表和 bonus API 已删除；`/api/bandori/events/{eventId}/comments` 下的评论路由保持独立。
 
-浏览器只从 `GET /api/bandori/master/music` 读取一次完整 Music map，并在整个 SPA 会话内复用；`GET /api/bandori/master/music/{musicId}` 提供对应详情。`difficulty`、`notes` 与 `bpm` 下的数字键 `0` 至 `4` 表示谱面难度而非服务器，服务器本地发布时间仍使用固定四槽数组。组队计算器从该 map 读取 `difficulty.playLevel`，并从自有谱面 API 读取计分所需的 note 时序。独立的 `GET /api/bandori/master/music/meta` 只返回供前端实时计算分数与排名的 `{durations,songs}`；每个时长叶子是 `[普通区间外,普通区间内,FEVER区间外,FEVER区间内]`，不暴露歌曲展示字段、已计算分数、排名或 Bestdori 回退数据。旧 `/api/bandori/master/songs`、`/api/bandori/master/songs/{songId}` 与 `/api/bandori/songs?ids=...` 路由已经删除。
+浏览器只从 `GET /api/bandori/master/music` 读取一次完整 Music map，并在整个 SPA 会话内复用；`GET /api/bandori/master/music/{musicId}` 提供对应详情。`difficulty`、`notes` 与 `bpm` 下的数字键 `0` 至 `4` 表示谱面难度而非服务器，服务器本地发布时间仍使用固定四槽数组。组队计算器从该 map 读取 `difficulty.playLevel`，并从自有谱面 API 读取计分所需的 note 时序。独立的 `GET /api/bandori/master/music/meta` 只返回供前端实时计算分数与排名的 `{durations,songs}`。每个难度为 `{total,covered}`：`total` 是全谱面的 `[普通,FEVER]`，每个 `covered[时长]` 是六个技能窗口内的 `[普通,FEVER]`。API 不暴露歌曲展示字段、已计算分数、排名或 Bestdori 回退数据。旧 `/api/bandori/master/songs`、`/api/bandori/master/songs/{songId}` 与 `/api/bandori/songs?ids=...` 路由已经删除。
 
 ## 榜线历史 API
 
@@ -208,7 +208,22 @@ bandori/music/charts/{sha256}.json
 
 歌曲 ID 与难度 index 都使用按数值升序排列的数字字符串 key。难度 index `"0"` 到 `"4"` 依次表示 `easy`、`normal`、`hard`、`expert`、`special`。每个文件值都是完整的小写 SHA-256；客户端按上面的内容寻址路径推导对象 key，也可以校验收到的内容，不再需要查询参数版本。`notes`、`bpm` 与 `files.charts` 必须覆盖完全相同的难度。刻意不含音频的本地构建可以省略 `audio`，但生产就绪校验要求它存在。`bandori/music/manifests` 下的单曲提取 manifest 保留来源服务器及 bundle 溯源信息供 builder 使用，但不属于公开 index 契约。
 
-`bandori/music/meta.json` 是独立的 schema 1 可变 root，包含 `schemaVersion`、`updatedAt`、`musicIndexSha256`、排序后的 `durations` 与 `songs`。其歌曲/难度覆盖必须与 `music/index.json` 一致；每个难度都完整覆盖所有已发布时长，并映射到四项精确计分系数。Music 发布先提交 `index.json`，再写入并回读绑定其精确 bytes 的 `meta.json`。服务端 API 通过签名 R2 读取两个 root，拒绝 hash 不匹配，并只投影 `{durations,songs}`；两个 root 之间发生中断时会失败关闭，直到发布重试补齐 `meta.json`。
+`bandori/music/meta.json` 是独立的 schema 2 可变 root，包含 `schemaVersion`、`updatedAt`、`musicIndexSha256`、排序后的 `durations` 与 `songs`。其歌曲/难度覆盖必须与 `music/index.json` 一致；每个难度包含一组全谱面的 `[普通,FEVER]` total，以及完整覆盖所有已发布时长的 `[普通,FEVER]` covered 系数。每个公开值都使用 binary64 未舍入 note 权重，按谱面顺序独立逐项累加，再按 `floor(value * 10000 + 0.5) / 10000` 舍入。
+
+技能覆盖同时要求 `noteIndex > triggerIndex` 与 `noteTime <= triggerTime + duration`，不添加时间 epsilon。触发 note 不受自身新技能加成；同时刻的其他 note 在规范化序列中排在触发 note 后，因此受到覆盖。谱面时间、note 顺序和技能窗口边界以当前组曲计算器为准。系数仍使用普通单曲 combo 与可选 FEVER 权重，重叠窗口只计一次；它们是排名输入，不是完整的组曲计分结果。
+
+Music 发布先提交 `index.json`，再写入并回读绑定其精确 bytes 的 `meta.json`。签名 R2 读取的上限分别为 **Meta 8 MiB**、**配对 Music index 使用共享默认 4 MiB**。API 拒绝 hash 不匹配，并只投影 `{durations,songs}`。全量 Music 同步负责从 schema 1 迁移到 schema 2，局部 root 更新不能执行迁移。两个 root 写入之间的新读取会失败关闭，直到发布重试补齐 `meta.json`；已缓存的成功响应仍可能按 snapshot 策略继续提供。
+
+### Music Meta schema 切换
+
+旧 reader 只接受 schema 1，当前 reader 只接受 schema 2。任何单纯的部署先后顺序都不能保证连续可用；不提供旧格式转换或 Bestdori fallback。不引入兼容 reader 的切换需要明确批准的维护窗口；窗口、写入者控制和配对回滚准备完成前不得发布。
+
+1. 修改 builder 代码或 root 前，暂停自动 Music 写入者并等待在途工作完成。保留旧 `index.json`、`meta.json` 的精确 bytes、hash 和匹配的 Web/builder 版本，保留 runtime checkpoint 与恢复状态。
+2. 在已批准的窗口内，阻止流量进入不匹配的 reader/root 组合。部署 builder，从冻结输入执行一次受控的全量 Music 重建，验证 schema 2、配对 index hash 和完整歌曲/难度覆盖。重新提交已成功的 frozen job 不等于重建。
+3. 恢复流量前部署 schema 2 Web reader。逐个应用实例验证签名存储读取，清除受影响的边缘缓存，并全量核对公开 API 与已验证 artifact。新的服务端 cache key 隔离 schema 2，但不会清除旧边缘或浏览器响应；持有旧响应的客户端必须刷新，所需浏览器缓存到期时间也须纳入窗口。
+4. 验收后再恢复自动写入。切换失败时保持流量隔离与写入暂停，恢复匹配的代码版本和**两个旧 root 的精确 bytes**；确认 hash 配对、刷新受影响缓存后再开放。禁止只回滚 Web 或 Meta、覆盖不可变资源，或重置 job ledger 强迫重试。
+
+私有操作命令和窗口时长记录在部署专属 runbook。以上是协调维护切换要求，不是零停机保证。
 
 谱面模拟器演出资源：
 

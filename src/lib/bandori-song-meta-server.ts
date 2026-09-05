@@ -10,15 +10,20 @@ import {
 } from "@/lib/bandori-public-asset-index-server";
 
 export const BANDORI_SONG_META_KEY = BANDORI_MUSIC_META_INDEX_KEY;
-export const BANDORI_SONG_META_SCHEMA_VERSION = 1;
+export const BANDORI_SONG_META_SCHEMA_VERSION = 2;
 const MAX_BANDORI_SONG_META_BYTES = 8 * 1024 * 1024;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 
-type ScoreCoefficients = [number, number, number, number];
+type ScoreCoefficientPair = [number, number];
+
+type SongDifficultyMeta = {
+  total: ScoreCoefficientPair;
+  covered: Record<string, ScoreCoefficientPair>;
+};
 
 export type BandoriSongMetaDataset = {
   durations: number[];
-  songs: Record<string, Record<string, Record<string, ScoreCoefficients>>>;
+  songs: Record<string, Record<string, SongDifficultyMeta>>;
 };
 
 export type BandoriSongMetaArtifact = BandoriSongMetaDataset & {
@@ -34,15 +39,15 @@ function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): 
     && keys.every((key) => Object.hasOwn(value, key));
 }
 
-function parseCoefficients(value: unknown, label: string): ScoreCoefficients {
+function parseCoefficientPair(value: unknown, label: string): ScoreCoefficientPair {
   if (
     !Array.isArray(value)
-    || value.length !== 4
+    || value.length !== 2
     || value.some((item) => typeof item !== "number" || !Number.isFinite(item) || item < 0)
   ) {
     throw new Error(`${label} is invalid`);
   }
-  return [value[0], value[1], value[2], value[3]];
+  return [value[0], value[1]];
 }
 
 function durationKey(value: number): string {
@@ -90,17 +95,27 @@ export function parseBandoriSongMetaArtifact(raw: unknown): BandoriSongMetaArtif
     const difficulties: BandoriSongMetaDataset["songs"][string] = {};
     for (const [difficulty, rawEntry] of Object.entries(rawDifficulties)) {
       if (!/^[0-4]$/u.test(difficulty) || !isRecord(rawEntry)
-        || !hasExactKeys(rawEntry, durationKeys)) {
+        || !hasExactKeys(rawEntry, ["total", "covered"])
+        || !isRecord(rawEntry.covered)
+        || !hasExactKeys(rawEntry.covered, durationKeys)) {
         throw new Error(`Bandori song meta difficulty is invalid: ${songId}:${difficulty}`);
       }
-      const coefficients: Record<string, ScoreCoefficients> = {};
+      const total = parseCoefficientPair(
+        rawEntry.total,
+        `Bandori song meta total ${songId}:${difficulty}`,
+      );
+      const covered: Record<string, ScoreCoefficientPair> = {};
       for (const key of durationKeys) {
-        coefficients[key] = parseCoefficients(
-          rawEntry[key],
-          `Bandori song meta coefficients ${songId}:${difficulty}:${key}`,
+        const pair = parseCoefficientPair(
+          rawEntry.covered[key],
+          `Bandori song meta covered coefficients ${songId}:${difficulty}:${key}`,
         );
+        if (pair.some((value, index) => value > total[index])) {
+          throw new Error(`Bandori song meta covered coefficients exceed total: ${songId}:${difficulty}:${key}`);
+        }
+        covered[key] = pair;
       }
-      difficulties[difficulty] = coefficients;
+      difficulties[difficulty] = { total, covered };
     }
     if (Object.keys(difficulties).length === 0) {
       throw new Error(`Bandori song meta record is empty: ${songId}`);
@@ -126,6 +141,6 @@ async function fetchBandoriSongMeta(): Promise<BandoriSongMetaDataset> {
 
 export const readBandoriSongMetaDataset = unstable_cache(
   fetchBandoriSongMeta,
-  ["bandori-public-song-meta:v2"],
+  ["bandori-public-song-meta:v3"],
   { revalidate: SNAPSHOT_HTTP_CACHE_POLICY.nextRevalidateSeconds ?? 1800 },
 );

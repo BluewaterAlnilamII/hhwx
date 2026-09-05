@@ -14,7 +14,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "audit:bandori-contracts": "node scripts/audit-bandori-contracts.mjs",
+    "audit:bandori-contracts": "node --import tsx scripts/audit-bandori-contracts.mjs",
     "audit:bandori-music-chart-candidate": "node --import tsx scripts/audit-bandori-music-chart-candidate.mjs",
     "compare:bandori-tracker-history": "tsx scripts/compare-bandori-tracker-history.mjs",
     "start": "next start",

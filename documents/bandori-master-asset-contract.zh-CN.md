@@ -22,7 +22,7 @@ English version: [bandori-master-asset-contract.md](bandori-master-asset-contrac
 | Degrees | `/api/bandori/master/degrees` | 无 | `/bandori/degrees/index.json` | 元数据使用数字 degree ID；资源使用派生资源名 | 八个固定四槽 Master 字段及可选四槽 `serverExtensions`，缺服 `null`、有服无扩展 `{}`、仅 CN 可含 `degreeEffect`；独立选择 base、rank、icon 与 effect 资源 | snapshot API 与 schema 2 index |
 | Stamps | `/api/bandori/master/stamps` | 无 | `/bandori/stamps/index.json` | 数字 stamp ID | 四槽 `imageName`、`characterId`、图片、语音与 Changed variant | snapshot API 与 index |
 | Music | `/api/bandori/master/music` | `/api/bandori/master/music/{musicId}` | `/bandori/music/index.json` | 数字 music ID | 四槽区服元数据与共享的谱面/音频派生字段；使用 `0` 到 `4` 的数字难度 key | snapshot API 与 index |
-| Music 计分 meta | `/api/bandori/master/music/meta` | 无 | `/bandori/music/meta.json` | music ID、难度、技能时长 | 无区服槽；叶子固定为 `[普通区间外, 普通区间内, FEVER区间外, FEVER区间内]` | snapshot API 与 index |
+| Music 计分 meta | `/api/bandori/master/music/meta` | 无 | `/bandori/music/meta.json` | music ID、难度、技能时长 | 无区服槽；每个难度为 `{total: [普通, FEVER], covered: {时长: [普通, FEVER]}}` | snapshot API 与 index |
 
 Cards 与 Music 列表都采用一次下载、整个 SPA 会话复用的完整 map；只有 Cards 支持可选的 `server=0|1|2|3` 物化查询。Event 的 `cnSchedule` 保持为可选 overlay，因为它可能独立于 immutable event snapshot 变化。Music 的 `difficulty`、`notes` 与 `bpm` 键表示谱面难度，而不是服务器槽位。Music 计分 meta 是供前端实时计算分数与排名使用的独立最小数据集，不含歌曲展示字段、预计算分数、排名或内部发布元数据。
 
@@ -60,7 +60,7 @@ Changed Stamp 的语义与媒体刻意分开：
 
 ## 验证
 
-修改后运行对应单元测试；部署后运行只读线上审计：
+修改后运行对应单元测试；部署后运行只读线上审计。审计复用生产 schema 2 Music Meta parser，并检查歌曲/难度覆盖，旧 API/index 即使彼此相等也不能通过。reader/root 不兼容迁移发布前必须满足 [Music Meta 切换要求](bandori-asset-cdn-setup.zh-CN.md#music-meta-schema-切换)：
 
 ```bash
 npm run test:bandori-events

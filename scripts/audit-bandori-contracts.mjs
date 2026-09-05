@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { setDefaultAutoSelectFamily } from "node:net";
+import { parseBandoriSongMetaArtifact } from "../src/lib/bandori-song-meta-server.ts";
 
 setDefaultAutoSelectFamily(true);
 
@@ -75,6 +76,8 @@ const degreesIndex = degreesIndexResponse.body;
 const musicIndex = musicIndexResponse.body;
 const musicMetaIndex = musicMetaIndexResponse.body;
 const stampsIndex = stampsIndexResponse.body;
+// Use the production parser so two matching legacy roots cannot pass the release gate.
+parseBandoriSongMetaArtifact(musicMetaIndex);
 
 assert.deepEqual(Object.keys(eventsIndex), ["schemaVersion", "updatedAt", "events"]);
 assert.deepEqual(Object.keys(cardsIndex), ["schemaVersion", "updatedAt", "resources"]);
@@ -293,6 +296,11 @@ assert.deepEqual(
   Object.keys(musicIndex.songs).sort((left, right) => Number(left) - Number(right)),
   "Music API and asset index ID sets diverged",
 );
+assert.deepEqual(
+  Object.keys(musicMeta.songs).sort(),
+  Object.keys(musicIndex.songs).sort(),
+  "Music meta and asset index ID sets diverged",
+);
 for (const [musicId, record] of Object.entries(music)) {
   assert.equal(isRecord(record), true, `music ${musicId} must be an object`);
   requireFourSlots(record.bandName, `music ${musicId} bandName`);
@@ -304,6 +312,11 @@ for (const [musicId, record] of Object.entries(music)) {
   assert.equal(isRecord(record.bpm), true, `music ${musicId} bpm is invalid`);
   const indexed = musicIndex.songs[musicId];
   assert.equal(isRecord(indexed), true, `music ${musicId} is missing from the asset index`);
+  assert.deepEqual(
+    Object.keys(musicMeta.songs[musicId]).sort(),
+    Object.keys(indexed.files.charts).sort(),
+    `music ${musicId} meta difficulty coverage diverged`,
+  );
   assert.deepEqual(record.notes, indexed.notes, `music ${musicId} notes diverged from the asset index`);
   assert.deepEqual(record.bpm, indexed.bpm, `music ${musicId} bpm diverged from the asset index`);
   assert.equal(record.length, indexed.length, `music ${musicId} length diverged from the asset index`);

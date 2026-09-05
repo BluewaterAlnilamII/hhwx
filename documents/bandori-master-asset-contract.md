@@ -22,7 +22,7 @@ This document is the cross-dataset contract for the Events, Cards, Degrees, Stam
 | Degrees | `/api/bandori/master/degrees` | none | `/bandori/degrees/index.json` | numeric degree ID for metadata; derived resource names for assets | eight fixed four-slot master fields plus optional four-slot `serverExtensions` using absent `null`, present `{}`, and CN-only `degreeEffect`; base, rank, icon, and effect resources selected independently | snapshot API and schema 2 index |
 | Stamps | `/api/bandori/master/stamps` | none | `/bandori/stamps/index.json` | numeric stamp ID | four-slot `imageName`, `characterId`, images, voices, and Changed variants | snapshot API and index |
 | Music | `/api/bandori/master/music` | `/api/bandori/master/music/{musicId}` | `/bandori/music/index.json` | numeric music ID | four-slot regional metadata plus shared derived chart/audio fields; numeric difficulty keys `0` through `4` | snapshot API and index |
-| Music score meta | `/api/bandori/master/music/meta` | none | `/bandori/music/meta.json` | music ID, difficulty, then skill duration | no regional slots; each leaf is `[normalOutside, normalCovered, feverOutside, feverCovered]` | snapshot API and index |
+| Music score meta | `/api/bandori/master/music/meta` | none | `/bandori/music/meta.json` | music ID, difficulty, then skill duration | no regional slots; each difficulty is `{total: [normal, fever], covered: {duration: [normal, fever]}}` | snapshot API and index |
 
 The Cards and Music lists are intentionally downloaded as reusable SPA-session maps. The optional Cards `server=0|1|2|3` materialization is the only supported master query. Event `cnSchedule` remains an optional overlay because it can change independently of the immutable event snapshot. Music `difficulty`, `notes`, and `bpm` keys identify chart difficulty rather than server slots. Music score meta is a separate minimal dataset for client-side score/rank calculation; it omits song display fields, precomputed scores, ranks, and internal publication metadata.
 
@@ -60,7 +60,7 @@ This compact positional identity avoids duplicating rule IDs or names in the pub
 
 ## Verification
 
-Run the unit suites for the changed dataset, then run the read-only production audit after deployment:
+Run the unit suites for the changed dataset, then run the read-only production audit after deployment. The audit uses the production schema-2 Music Meta parser and checks song/difficulty coverage, so matching legacy API/index responses cannot pass. For the incompatible reader/root transition, follow the [Music Meta cutover requirements](bandori-asset-cdn-setup.md#music-meta-schema-cutover) before publishing:
 
 ```bash
 npm run test:bandori-events
