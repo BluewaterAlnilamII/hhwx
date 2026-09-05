@@ -95,7 +95,7 @@ export default function BandoriEventSwitcher({
   const showSkeleton = loading || (!allowNoEvent && events.length === 0);
 
   return (
-    <div className="relative z-20 grid grid-cols-1 gap-6 rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-8 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] xl:items-center xl:gap-10 dark:border-gray-800 dark:bg-[#131A2B]">
+    <div className="hhwx-panel relative z-20 grid grid-cols-1 gap-6 rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-8 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] xl:items-center xl:gap-10 dark:border-gray-800 dark:bg-[#131A2B]">
       <div className={cn(
         "flex min-w-0 flex-1 flex-col gap-4",
         server !== undefined && "sm:grid sm:grid-cols-[auto_minmax(280px,1fr)] sm:items-end sm:gap-x-4",
@@ -325,7 +325,7 @@ export default function BandoriEventSwitcher({
       </div>
 
       <div className="w-full max-w-[420px] xl:w-[420px] xl:justify-self-end">
-        <div className="relative aspect-3/1 w-full overflow-hidden rounded-2xl shadow-lg ring-1 ring-black/5">
+        <div className="hhwx-panel-media relative aspect-3/1 w-full overflow-hidden rounded-2xl shadow-lg ring-1 ring-black/5">
           {bannerUrl && bannerUrl !== failedBannerUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img

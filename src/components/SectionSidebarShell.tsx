@@ -47,7 +47,7 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
     const active = isItemActive(pathname, item);
     const shouldPrefetch = !active && prefetchIntents[item.href];
     const itemClassName = cn(
-      "block rounded-[14px] px-4 py-2.5 text-[15px] font-medium transition duration-200",
+      "hhwx-navigation-item block rounded-[14px] px-4 py-2.5 text-[15px] font-medium transition duration-200",
       active
         ? "bg-[var(--theme-color-shell-navigation-item-background-current)] text-[var(--theme-color-shell-navigation-item-foreground-current)] shadow-[var(--theme-shadow-navigation-current)]"
         : "text-[var(--theme-color-shell-navigation-item-foreground)] hover:bg-[var(--theme-color-shell-navigation-item-background-hover)] hover:text-[var(--theme-color-shell-navigation-item-foreground-hover)] hover:shadow-[var(--theme-shadow-navigation-hover)]",
@@ -84,7 +84,7 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
 
   return (
     <div className="relative flex flex-1">
-      <aside className="sticky top-[58px] hidden h-[calc(100svh-58px)] w-[270px] shrink-0 border-r border-[var(--theme-color-shell-sidebar-border)] bg-transparent shadow-[var(--theme-shadow-shell-sidebar)] lg:flex lg:flex-col">
+      <aside className="hhwx-desktop-sidebar sticky top-[58px] hidden h-[calc(100svh-58px)] w-[270px] shrink-0 border-r border-[var(--theme-color-shell-sidebar-border)] bg-transparent shadow-[var(--theme-shadow-shell-sidebar)] lg:flex lg:flex-col">
         {sidebarContent}
       </aside>
 

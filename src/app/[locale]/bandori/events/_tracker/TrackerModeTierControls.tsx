@@ -48,7 +48,7 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
 
   return (
     <div className="flex flex-col gap-3.5 items-stretch xl:flex-row xl:items-start xl:gap-4">
-      <Tabs.List className="relative flex w-full flex-row justify-center gap-1 overflow-x-auto rounded-[20px] border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-1 shadow-[var(--theme-shadow-control-inset-highlight)] xl:w-[7.1rem] xl:flex-none xl:flex-col xl:self-start xl:overflow-visible dark:border-slate-700/80 dark:bg-slate-950/70 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+      <Tabs.List className="relative flex w-full flex-row justify-center gap-1 overflow-x-auto rounded-[20px] border border-[var(--theme-color-border-default)] bg-[var(--theme-color-panel-background)] p-1 shadow-[var(--theme-shadow-control-inset-highlight)] xl:w-[7.1rem] xl:flex-none xl:flex-col xl:self-start xl:overflow-visible dark:border-slate-700/80 dark:bg-slate-950/70 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
         {TRACKING_MODE_OPTIONS.map((mode) => {
           const disabled = mode === "song" && isSongModeDisabled;
           const toneClassName = disabled
@@ -88,7 +88,7 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
                     title={t("songFallback", { songId })}
                     className={`group relative flex min-h-[2.75rem] w-full items-center justify-center overflow-hidden rounded-[17px] border px-3 py-1.5 text-center outline-hidden transition-all duration-300 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)] sm:min-h-[3.35rem] sm:px-3.5 sm:py-2 ${
                       resolvedSelectedSongId === songId
-                        ? "border-transparent bg-[var(--theme-color-selection-strong-background)] text-[var(--theme-color-selection-strong-foreground)] shadow-sm ring-2 ring-[var(--theme-color-selection-strong-ring)] ring-offset-1 ring-offset-[var(--theme-color-surface-background)]"
+                        ? "border-transparent bg-[var(--theme-color-selection-strong-background)] text-[var(--theme-color-selection-strong-foreground)] shadow-sm ring-2 ring-[var(--theme-color-selection-strong-ring)] ring-offset-1 ring-offset-[var(--theme-color-panel-background)]"
                         : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] shadow-sm hover:border-[var(--theme-color-action-secondary-border)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] hover:shadow-md dark:border-slate-600/80 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400/60 dark:hover:bg-slate-700 dark:hover:text-sky-100"
                     }`}
                   >
@@ -133,7 +133,7 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
                 aria-pressed={isTop10Selected}
                 className={`h-8 min-w-[3.7rem] rounded-[12px] border px-2 text-[11px] font-semibold tracking-[0.01em] outline-hidden transition-all duration-300 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)] sm:h-9 sm:min-w-[4.1rem] sm:rounded-[14px] sm:px-2.5 sm:text-[12px] ${
                   isTop10Selected
-                    ? "border-transparent bg-[var(--theme-color-selection-strong-background)] text-[var(--theme-color-selection-strong-foreground)] shadow-sm ring-2 ring-[var(--theme-color-selection-strong-ring)] ring-offset-1 ring-offset-[var(--theme-color-surface-background)]"
+                    ? "border-transparent bg-[var(--theme-color-selection-strong-background)] text-[var(--theme-color-selection-strong-foreground)] shadow-sm ring-2 ring-[var(--theme-color-selection-strong-ring)] ring-offset-1 ring-offset-[var(--theme-color-panel-background)]"
                     : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] shadow-sm hover:border-[var(--theme-color-action-secondary-border)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] hover:shadow-md dark:border-slate-600/80 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400/60 dark:hover:bg-slate-700 dark:hover:text-sky-100"
                 }`}
               >
@@ -148,7 +148,7 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
                 aria-pressed={!isTop10Selected && selectedTier === tier}
                 className={`h-8 min-w-[2.9rem] rounded-[12px] border px-2 text-[11px] font-semibold tracking-[0.01em] outline-hidden transition-all duration-300 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)] sm:h-9 sm:min-w-[3.15rem] sm:rounded-[14px] sm:px-2.5 sm:text-[12px] ${
                   !isTop10Selected && selectedTier === tier
-                    ? "border-transparent bg-[var(--theme-color-selection-strong-background)] text-[var(--theme-color-selection-strong-foreground)] shadow-sm ring-2 ring-[var(--theme-color-selection-strong-ring)] ring-offset-1 ring-offset-[var(--theme-color-surface-background)]"
+                    ? "border-transparent bg-[var(--theme-color-selection-strong-background)] text-[var(--theme-color-selection-strong-foreground)] shadow-sm ring-2 ring-[var(--theme-color-selection-strong-ring)] ring-offset-1 ring-offset-[var(--theme-color-panel-background)]"
                     : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] shadow-sm hover:border-[var(--theme-color-action-secondary-border)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] hover:shadow-md dark:border-slate-600/80 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-sky-400/60 dark:hover:bg-slate-700 dark:hover:text-sky-100"
                 }`}
               >

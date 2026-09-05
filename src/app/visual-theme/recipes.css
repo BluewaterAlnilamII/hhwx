@@ -11,12 +11,17 @@
   --theme-color-shell-navigation-item-background-hover: var(--theme-seed-surface);
   --theme-color-shell-navigation-item-foreground-hover: var(--theme-color-text-default);
   --theme-color-shell-navigation-item-background-current: var(--theme-seed-brand-primary);
+  --theme-color-shell-navigation-item-border-current: var(--theme-seed-brand-primary);
   --theme-color-shell-navigation-item-foreground-current: var(--theme-color-text-default);
   --theme-color-shell-scrollbar-track: color-mix(in srgb, var(--theme-seed-neutral) 18%, var(--theme-seed-surface) 82%);
   --theme-color-shell-scrollbar-thumb: var(--theme-seed-shell-scrollbar);
   --theme-color-shell-scrollbar-thumb-hover: var(--theme-seed-shell-scrollbar);
 
   --theme-color-surface-background: var(--theme-seed-surface);
+  /* Page panels and nested content containers share a fill, independent of chart ink and controls. */
+  --theme-color-panel-background: var(--theme-color-surface-background);
+  --theme-color-panel-border: var(--theme-color-border-default);
+  --theme-shadow-panel: var(--theme-shadow-surface-raised);
   --theme-color-text-default: var(--theme-seed-text-primary);
   --theme-color-text-muted: var(--theme-seed-text-secondary);
   --theme-color-text-default-on-dark: var(--theme-color-surface-background);
