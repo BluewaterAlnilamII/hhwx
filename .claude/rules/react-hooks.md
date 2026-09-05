@@ -8,9 +8,7 @@ paths:
 
 # Hooks and State Management Rules
 
-- Organize hooks around a single responsibility, such as data fetching and caching, interaction flow orchestration, or a domain state machine. Do not bundle unrelated responsibilities into one hook.
-- Shared state orchestration across components should move into hooks or a Zustand store. Do not copy the same `useEffect` / `useState` logic across pages.
-- When caching, subscription merging, concurrency races, or visibility refresh behavior is involved, comments must explain the key design reason, especially why the approach avoids state rollback or duplicate requests.
-- Network requests, subscriptions, timers, and async callbacks inside hooks must include cleanup or race protection so parameter changes, identity changes, or component unmounts do not write stale state.
-- Zustand stores may group state and actions by responsibility, but do not put unrelated business domains into the same store.
-- Hook boundaries should stay clear. If logic no longer depends on React lifecycle or state, move it further down into a pure `lib` function or service module.
+- Keep state with its owner. Share orchestration through a focused hook or store when multiple consumers need it; avoid duplicate effects and unrelated domains in one store.
+- Reuse suitable request/cache infrastructure. Review deduplication, cache identity, invalidation, and user-session isolation before adding another fetching layer; apply the relevant React performance guidance.
+- Requests, subscriptions, timers, and async callbacks need cleanup or race protection so parameter changes, identity changes, and unmounts cannot commit stale state. Explain non-obvious concurrency or refresh decisions.
+- Keep small pure helpers local when cohesive. Extract them for actual reuse, independent verification, or clearer boundaries; lack of a React lifecycle dependency alone does not require relocation.
