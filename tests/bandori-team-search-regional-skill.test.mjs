@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
+import { searchBandoriBestTeams } from "../src/lib/bandori/team-builder/single/search.ts";
 
 import { resolveBandoriSkill } from "../src/lib/bandori/team-builder/core/calculator.ts";
 import { buildSkillSearchSignature } from "../src/lib/bandori/team-builder/core/cards.ts";
@@ -61,6 +63,44 @@ const skill160 = createSkill({
   score_under_life: 110,
 });
 const skill170 = createSkill({ score: 170 });
+
+test("single-song search retains scores, event points, and ranking across live modes", () => {
+  const fixture = JSON.parse(readFileSync(
+    new URL("./fixtures/bandori-medley-foundation-source-v1.json", import.meta.url), "utf8",
+  ));
+  // Fixed synthetic six-card input; expected values were captured before dead-code removal.
+  const cases = [
+    ["none", "free", "score", 132153, 132153, null, 132153],
+    ["story", "multi", "eventPoint", 98452, 98469, 915, 61],
+    ["challenge", "challenge", "eventPoint", 132153, 132153, 11520, 1440],
+    ["versus", "versus", "eventPoint", 132153, 132153, 1260, 132153],
+    ["festival", "multi", "eventPoint", 98452, 98469, 2055, 98452],
+    ["mission_live", "multi", "eventPoint", 98452, 98469, 780, 52],
+  ];
+  for (const [eventType, liveType, target, score, maxScore, eventPoint, targetValue] of cases) {
+    const result = searchBandoriBestTeams({
+      cardsById: fixture.cardsById, charactersById: fixture.charactersById,
+      skillsById: fixture.skillsById, areaItemsById: fixture.areaItemsById,
+      userAreaItems: [], characterBonuses: [],
+      userCards: Array.from({ length: 6 }, (_, index) => ({
+        cardId: index + 1, level: 1, masterRank: 0, skillLevel: 1, episodeCount: 0, isTrained: false,
+      })),
+      chart: [{ type: "BPM", beat: 0, bpm: 120 }, ...Array.from({ length: 24 }, (_, beat) => ({
+        type: "Single", beat, ...(beat % 4 === 0 ? { skill: true } : {}),
+      }))],
+      song: { difficulty: { 3: { playLevel: 25 } } }, difficulty: "expert",
+      server: 3, perfectRate: 0.95, resultLimit: 3, eventType, liveType, target,
+      eventBonus: { attributes: ["powerful"], pointPercent: 20, parameterPercent: 20 },
+      otherPlayerSkills: liveType === "multi" ? [{ skillId: 1, skillLevel: 1 }] : [],
+      otherPlayersAveragePower: 10000,
+    });
+    assert.equal(result.stats.isExhaustive, true, eventType);
+    assert.equal(result.stats.timedOut, false, eventType);
+    assert.deepEqual(result.results.map((team) => [
+      team.score, team.maxScore, team.totalPower, team.eventPoint, team.targetValue, team.leaderCardId,
+    ]), [2, 1, 1].map((leader) => [score, maxScore, 17250, eventPoint, targetValue, leader]), eventType);
+  }
+});
 
 test("CN skill resolution falls back from null regional slots to current JP-only values", () => {
   const resolved160 = resolveBandoriSkill(82, skill160, 5, MIXED_TEAM_CONTEXT, CN_SERVER);

@@ -1370,61 +1370,6 @@ export function calculateSkillUpperRatesPerPower(
   };
 }
 
-export type SkillScoreUpperBounds = {
-  averageScore: number;
-  leaderScore: number;
-};
-
-export function calculateSkillScoreUpperBoundsForPower(
-  chart: PreparedChart,
-  skill: BestdoriSkillMaster | undefined,
-  skillLevel: number,
-  server: number,
-  bandPowerUpper: number,
-  comboOptions?: ScoreComboOptions,
-): SkillScoreUpperBounds {
-  // Mirrors calculateSkillUpperRatesPerPower, but keeps the note-level score floors.
-  const valuePercent = getSkillMaxValuePercent(skill, server);
-  const durationSeconds = getSkillDurationSeconds(skill, skillLevel, server);
-  const bandPower = Math.floor(Math.max(0, bandPowerUpper));
-  if (valuePercent <= 0 || durationSeconds <= 0 || chart.notesCount === 0 || bandPower <= 0) {
-    return {
-      averageScore: 0,
-      leaderScore: 0,
-    };
-  }
-
-  const baseScorePerPower = 3 * (1 + (chart.playLevel - 5) / 100) / chart.notesCount;
-  let triggerWindowScoreSum = 0;
-  let leaderScore = 0;
-  for (let slotIndex = 0; slotIndex < 6; slotIndex += 1) {
-    const start = chart.skillStartNotes[slotIndex] ?? chart.notesCount;
-    const end = getSkillEndNote(chart, slotIndex, durationSeconds);
-    let windowScore = 0;
-    for (let noteIndex = start; noteIndex < end; noteIndex += 1) {
-      const note = chart.notes[noteIndex];
-      const innerScore = Math.floor(
-        bandPower
-        * baseScorePerPower
-        * JUDGE_PERCENT.perfect
-        * getScoreComboMultiplier(noteIndex, comboOptions)
-        * (note.fever ? 2 : 1),
-      );
-      windowScore += Math.floor(innerScore * (1 + valuePercent / 100)) - innerScore;
-    }
-    if (slotIndex < 5) {
-      triggerWindowScoreSum += windowScore;
-    } else {
-      leaderScore = windowScore;
-    }
-  }
-
-  return {
-    averageScore: triggerWindowScoreSum / 5,
-    leaderScore,
-  };
-}
-
 export function getResolvedSkillMaxScoreUpPercent(skill: ResolvedBandoriSkill | null): number {
   if (!skill) {
     return 0;

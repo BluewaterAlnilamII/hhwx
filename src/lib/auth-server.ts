@@ -51,6 +51,16 @@ export async function requireAuthenticatedUser(request: Request): Promise<Authen
   return toAuthenticatedRequestUser(user, emailVerified);
 }
 
+// Public comment reads tolerate missing or expired sessions; writes require verification.
+export async function readViewerUserId(request: Request): Promise<string | null> {
+  if (!request.headers.get("authorization")) return null;
+  try {
+    return (await requireAuthenticatedUser(request)).id;
+  } catch {
+    return null;
+  }
+}
+
 function ensureVerifiedEmail(user: AuthenticatedRequestUser): void {
   if (!user.emailVerified) {
     throw new ApiRouteError(403, "EMAIL_VERIFICATION_REQUIRED", "请先完成邮箱验证");

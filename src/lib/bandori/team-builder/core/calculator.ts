@@ -12,11 +12,6 @@ export type BandoriJudge = "perfect" | "great" | "good" | "bad" | "miss";
 
 export type BandoriParamVector = readonly [number, number, number];
 
-export type BandoriTeamCardContext = {
-  characterId: number;
-  attribute: BandoriCardAttribute;
-};
-
 export type BandoriCharacterMaster = {
   bandId?: number | null;
 };
@@ -143,26 +138,6 @@ export type BandoriSupportCardEventBonus = {
   supportPower: number;
 };
 
-export type CalculatedBandoriTeam = {
-  cards: CalculatedBandoriCard[];
-  context: BandoriTeamContext;
-  cardPower: number;
-  areaItemPower: number;
-  eventPower: number;
-  eventPowerWithRoom: number;
-  totalPower: number;
-  totalPowerWithRoom: number;
-  pointBonusRate: number;
-  selectedAreaItemIds: number[];
-  skills: Array<{
-    cardId: number;
-    cardInstanceKey?: string;
-    skillId: number;
-    skillLevel: number;
-    resolvedSkill: ResolvedBandoriSkill | null;
-  }>;
-};
-
 type BandoriParamKey = "performance" | "technique" | "visual";
 
 const PARAM_KEYS = ["performance", "technique", "visual"] as const satisfies readonly BandoriParamKey[];
@@ -185,14 +160,6 @@ export const BANDORI_CARD_LEVEL_GROWTH_CURVES: readonly (readonly number[])[] = 
   [0, 0.0052137940761305835, 0.010626772033633004, 0.01625140619739073, 0.02208300765878985, 0.028130123879720123, 0.03438591969492338, 0.040845165089679725, 0.04751431401768039, 0.05438920952360014, 0.06146926738626297, 0.06876102000541633, 0.07625624123106317, 0.08396613839157453, 0.09187956441780568, 0.1000002838288349, 0.1083369509623417, 0.11687849700242568, 0.12562643419463135, 0.13458349890179105, 0.14375149230097023, 0.1531220343111895, 0.1627012369922088, 0.1724891364692424, 0.18248307296777722, 0.19268953004894984, 0.2031038118277759, 0.2137266946705706, 0.22455873405686588, 0.23560016086505522, 0.246845117069297, 0.2583022752066268, 0.26996585295356473, 0.2818368100569856, 0.29391689352667993, 0.3062034732003648, 0.31870850250918314, 0.3314136656714306, 0.34432706913752, 0.35744699511750455, 0.37077464809342076, 0.3843126970348029, 0.39805844303293897, 0.41201000405281624, 0.4261726805173379, 0.440542342723313, 0.4551202726012628, 0.46990761662317243, 0.48490456025578976, 0.5001066997170803, 0.5277872974717714, 0.5604260864848988, 0.5980193982337021, 0.640573453684307, 0.6880874211513187, 0.7405574835992293, 0.7979798883017865, 0.8603639584557542, 0.927706300412736, 1],
   [0, 0.0052137940761305835, 0.010626772033633004, 0.01625140619739073, 0.02208300765878985, 0.028130123879720123, 0.03438591969492338, 0.040845165089679725, 0.04751431401768039, 0.05438920952360014, 0.06146926738626297, 0.06876102000541633, 0.07625624123106317, 0.08396613839157453, 0.09187956441780568, 0.1000002838288349, 0.1083369509623417, 0.11687849700242568, 0.12562643419463135, 0.13458349890179105, 0.14375149230097023, 0.1531220343111895, 0.1627012369922088, 0.1724891364692424, 0.18248307296777722, 0.19268953004894984, 0.2031038118277759, 0.2137266946705706, 0.22455873405686588, 0.23560016086505522, 0.246845117069297, 0.2583022752066268, 0.26996585295356473, 0.2818368100569856, 0.29391689352667993, 0.3062034732003648, 0.31870850250918314, 0.3314136656714306, 0.34432706913752, 0.35744699511750455, 0.37077464809342076, 0.3843126970348029, 0.39805844303293897, 0.41201000405281624, 0.4261726805173379, 0.440542342723313, 0.4551202726012628, 0.46990761662317243, 0.48490456025578976, 0.5001066997170803, 0.5277872974717714, 0.5604260864848988, 0.5980193982337021, 0.640573453684307, 0.6880874211513187, 0.7405574835992293, 0.7979798883017865, 0.8603639584557542, 0.927706300412736, 1],
 ];
-
-const JUDGE_RANK: Record<BandoriJudge, number> = {
-  perfect: 0,
-  great: 1,
-  good: 2,
-  bad: 3,
-  miss: 4,
-};
 
 function toFiniteNumber(value: unknown): number | null {
   const numberValue = typeof value === "number" ? value : Number(value);
@@ -392,41 +359,6 @@ function getEventRoomParameterPercentVector(eventBonus: BandoriEventBonus | null
   ];
 }
 
-export function getBandoriTeamContext(
-  cards: BandoriTeamCardContext[],
-  charactersById: Record<string, BandoriCharacterMaster | undefined>,
-): BandoriTeamContext {
-  let sameBandId: number | null | undefined;
-  let sameAttribute: BandoriCardAttribute | null | undefined;
-
-  for (const card of cards) {
-    const bandId = toFiniteNumber(charactersById[String(card.characterId)]?.bandId);
-    if (bandId === null) {
-      sameBandId = null;
-      break;
-    } else if (sameBandId === undefined) {
-      sameBandId = bandId;
-    } else if (sameBandId !== bandId) {
-      sameBandId = null;
-      break;
-    }
-  }
-
-  for (const card of cards) {
-    if (sameAttribute === undefined) {
-      sameAttribute = card.attribute;
-    } else if (sameAttribute !== card.attribute) {
-      sameAttribute = null;
-      break;
-    }
-  }
-
-  return {
-    sameBandId: cards.length > 0 ? sameBandId ?? null : null,
-    sameAttribute: cards.length > 0 ? sameAttribute ?? null : null,
-  };
-}
-
 export function calculateBandoriCard(
   state: BandoriUserCardState,
   card: BestdoriCardMaster,
@@ -496,60 +428,6 @@ export function calculateBandoriCard(
     baseParam,
     characterParam,
     totalPower: sumParamVector(characterParam),
-  };
-}
-
-export function calculateBandoriAreaItemPower(
-  cards: CalculatedBandoriCard[],
-  areaItemsById: Record<string, BestdoriAreaItemMaster | undefined>,
-  userAreaItemsById: Record<string, BandoriUserAreaItemState | undefined>,
-  areaItemGroups: number[][],
-  server = 3,
-): { power: number; selectedAreaItemIds: number[] } {
-  let power = 0;
-  const selectedAreaItemIds: number[] = [];
-
-  for (const group of areaItemGroups) {
-    let bestGroupPower = 0;
-    let bestAreaItemId: number | null = null;
-
-    for (const areaItemId of group) {
-      const areaItem = areaItemsById[String(areaItemId)];
-      const level = Math.max(0, toInteger(userAreaItemsById[String(areaItemId)]?.level));
-      if (!areaItem || level <= 0) {
-        continue;
-      }
-
-      const targetAttributes = Array.isArray(areaItem.targetAttributes) ? areaItem.targetAttributes : [];
-      const targetBandIds = Array.isArray(areaItem.targetBandIds) ? areaItem.targetBandIds.map((item) => toInteger(item)) : [];
-      const rates: BandoriParamVector = [
-        getRegionalLevelNumber(areaItem.performance, level, server) / 100,
-        getRegionalLevelNumber(areaItem.technique, level, server) / 100,
-        getRegionalLevelNumber(areaItem.visual, level, server) / 100,
-      ];
-      const groupPower = cards.reduce((sum, card) => {
-        if (!targetAttributes.includes(card.attribute) || card.bandId === null || !targetBandIds.includes(card.bandId)) {
-          return sum;
-        }
-
-        return sum + calculateBandoriRoundedParamBonusPower(card.characterParam, rates);
-      }, 0);
-
-      if (groupPower > bestGroupPower) {
-        bestGroupPower = groupPower;
-        bestAreaItemId = areaItemId;
-      }
-    }
-
-    if (bestAreaItemId !== null) {
-      selectedAreaItemIds.push(bestAreaItemId);
-    }
-    power += bestGroupPower;
-  }
-
-  return {
-    power,
-    selectedAreaItemIds,
   };
 }
 
@@ -632,56 +510,6 @@ export function calculateBandoriSupportCardEventBonus(
   };
 }
 
-export function calculateBandoriTeamPower(options: {
-  cards: CalculatedBandoriCard[];
-  skillsById?: Record<string, BestdoriSkillMaster | undefined>;
-  eventBonus?: BandoriEventBonus | null;
-  areaItemsById?: Record<string, BestdoriAreaItemMaster | undefined>;
-  userAreaItemsById?: Record<string, BandoriUserAreaItemState | undefined>;
-  areaItemGroups?: number[][];
-  leaderIndex?: number;
-  server?: number;
-}): CalculatedBandoriTeam {
-  const server = options.server ?? 3;
-  const context = getBandoriTeamContext(options.cards, Object.fromEntries(
-    options.cards.map((card) => [String(card.characterId), { bandId: card.bandId }]),
-  ));
-  const cardPower = options.cards.reduce((sum, card) => sum + card.totalPower, 0);
-  const areaItemResult = options.areaItemsById && options.userAreaItemsById && options.areaItemGroups
-    ? calculateBandoriAreaItemPower(options.cards, options.areaItemsById, options.userAreaItemsById, options.areaItemGroups, server)
-    : { power: 0, selectedAreaItemIds: [] };
-  const eventBonuses = options.cards.map((card) => calculateBandoriCardEventBonus(card, options.eventBonus));
-  const eventPower = Math.floor(eventBonuses.reduce((sum, bonus) => sum + sumParamVector(bonus.parameterBonus), 0));
-  const eventPowerWithRoom = Math.floor(eventBonuses.reduce((sum, bonus) => sum + sumParamVector(bonus.parameterBonusWithRoom), 0));
-  const pointBonusRate = Math.round(eventBonuses.reduce((sum, bonus) => sum + bonus.pointBonusRate, 0) * 100) / 100;
-  const leaderIndex = Math.min(Math.max(0, toInteger(options.leaderIndex)), Math.max(0, options.cards.length - 1));
-  const skillCards = options.cards.length === 0
-    ? []
-    : [options.cards[leaderIndex], ...options.cards.filter((_, index) => index !== leaderIndex)];
-
-  return {
-    cards: options.cards,
-    context,
-    cardPower,
-    areaItemPower: areaItemResult.power,
-    eventPower,
-    eventPowerWithRoom,
-    totalPower: cardPower + areaItemResult.power + eventPower,
-    totalPowerWithRoom: cardPower + areaItemResult.power + eventPowerWithRoom,
-    pointBonusRate,
-    selectedAreaItemIds: areaItemResult.selectedAreaItemIds,
-    skills: skillCards.map((card) => {
-      const skill = options.skillsById?.[String(card.skillId)];
-      return {
-        cardId: card.cardId,
-        skillId: card.skillId,
-        skillLevel: card.skillLevel,
-        resolvedSkill: skill ? resolveBandoriSkill(card.skillId, skill, card.skillLevel, context, server) : null,
-      };
-    }),
-  };
-}
-
 // 技能解析必须包含队伍上下文：同团/同属性条件技能在队伍确定前不能复用同一个缓存值。
 export function buildBandoriSkillCacheKey(
   skillId: number,
@@ -749,28 +577,4 @@ export function resolveBandoriSkill(
     hasRateUpWithPerfect,
     cacheKey: buildBandoriSkillCacheKey(skillId, normalizedSkillLevel, context, server),
   };
-}
-
-export function getBandoriScoreSkillMultiplier(
-  effect: ResolvedBandoriScoreSkillEffect,
-  judge: BandoriJudge,
-): number {
-  // 当前搜索准率模型只区分 PERFECT/GREAT；GOOD/BAD/MISS 打断由调用侧决定是否生成。
-  if (effect.condition === "none") {
-    return 1 + effect.valuePercent / 100;
-  }
-
-  if (JUDGE_RANK[judge] <= JUDGE_RANK[effect.condition]) {
-    return 1 + effect.valuePercent / 100;
-  }
-
-  if (effect.type === "score_under_great_half") {
-    return 0.5;
-  }
-
-  if (effect.type === "score_only_perfect") {
-    return 0;
-  }
-
-  return 1;
 }

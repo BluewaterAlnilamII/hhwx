@@ -1,6 +1,6 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
-import { requireAuthenticatedUser } from "@/lib/auth-server";
+import { readViewerUserId } from "@/lib/auth-server";
 import { parseCommentId } from "@/lib/comments/comment-contract";
 import { listThreadReplies } from "@/lib/comments/comments-server";
 import {
@@ -13,18 +13,6 @@ import {
 type RouteContext = {
   params: Promise<{ eventId: string; commentId: string }>;
 };
-
-async function readViewerUserId(request: Request): Promise<string | null> {
-  if (!request.headers.get("authorization")) {
-    return null;
-  }
-
-  try {
-    return (await requireAuthenticatedUser(request)).id;
-  } catch {
-    return null;
-  }
-}
 
 export async function GET(request: Request, context: RouteContext) {
   try {
