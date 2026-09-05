@@ -1,6 +1,6 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
-import { requireAuthenticatedUser, requireVerifiedAccount } from "@/lib/auth-server";
+import { readViewerUserId, requireVerifiedAccount } from "@/lib/auth-server";
 import {
   parseCommentContent,
   parseCommentPage,
@@ -23,18 +23,6 @@ type CreateCommentRequest = {
   content?: unknown;
   parentId?: unknown;
 };
-
-async function readViewerUserId(request: Request): Promise<string | null> {
-  if (!request.headers.get("authorization")) {
-    return null;
-  }
-
-  try {
-    return (await requireAuthenticatedUser(request)).id;
-  } catch {
-    return null;
-  }
-}
 
 export async function GET(request: Request, context: RouteContext) {
   try {

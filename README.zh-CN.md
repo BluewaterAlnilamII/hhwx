@@ -60,6 +60,9 @@ npm run dev
 ```bash
 npm run dev
 npm run lint
+npm run test:othello
+npm run test:comments
+npm run test:team-builder
 npm run build
 npm run start
 npm run format:medley-foundation
@@ -69,6 +72,8 @@ npm run check:medley-foundation:wasm
 ```
 
 Bandori 单曲与组曲计算器的契约、算法及验证入口见 [documents/bandori-team-builder](documents/bandori-team-builder/README.zh-CN.md)。
+
+Kaoru AI 通过打包后的模块 Worker 运行，与同步兜底共用同一份实现。页面与生成的 Worker 文件需要一起部署；页面不再请求 `/kaoru.worker.js`。`test:othello` 检查保留落子结果和 Worker 消息协议；`test:comments` 在不使用真实凭据的情况下检查可选读取身份及写入认证要求。
 
 ## Supabase 设置
 

@@ -60,6 +60,9 @@ Important rules:
 ```bash
 npm run dev
 npm run lint
+npm run test:othello
+npm run test:comments
+npm run test:team-builder
 npm run build
 npm run start
 npm run format:medley-foundation
@@ -69,6 +72,8 @@ npm run check:medley-foundation:wasm
 ```
 
 The Bandori single-song and medley calculator contracts, algorithms and verification entry points are documented in [documents/bandori-team-builder](documents/bandori-team-builder/README.md).
+
+Kaoru's AI runs in a bundled module Worker that imports the same implementation as the synchronous fallback. Deploy the page and generated Worker chunks together; the page no longer requests `/kaoru.worker.js`. `test:othello` checks retained moves and the Worker message protocol, while `test:comments` checks optional reader identity and required write authorization without live credentials.
 
 ## Supabase Setup
 

@@ -6,7 +6,7 @@
  */
 import type { CalculatedBandoriCard } from "@/lib/bandori-team-calculator";
 import { getSortedCardInstanceKey } from "../core/card-identity";
-import type { BandoriAreaItemConfiguration, BandoriTeamSearchEventMode, BandoriTeamSearchResponse, BandoriTeamSearchResult, BandoriTeamSearchResultCard, BandoriTeamSearchStats, BandoriTeamSearchSupportCard, SearchCard, SupportBandCandidate, SupportBandContext } from "../core/types";
+import type { BandoriAreaItemConfiguration, BandoriTeamSearchEventMode, BandoriTeamSearchResponse, BandoriTeamSearchResult, BandoriTeamSearchStats, SearchCard, SupportBandContext } from "../core/types";
 
 function getResultCardIdsKey(result: BandoriTeamSearchResult): string {
   return getSortedCardInstanceKey(result.cards);
@@ -36,41 +36,6 @@ export function sortResults(results: BandoriTeamSearchResult[]): void {
   results.forEach((result, index) => {
     result.rank = index + 1;
   });
-}
-
-export function toResultCards(cards: CalculatedBandoriCard[]): BandoriTeamSearchResultCard[] {
-  return cards.map((card) => ({
-    cardId: card.cardId,
-    cardInstanceKey: card.cardInstanceKey,
-    characterId: card.characterId,
-    bandId: card.bandId,
-    attribute: card.attribute,
-    rarity: card.rarity,
-    skillId: card.skillId,
-    skillLevel: card.skillLevel,
-    level: card.level,
-    masterRank: card.masterRank,
-    isTrained: card.isTrained,
-    totalPower: card.totalPower,
-  }));
-}
-
-export function toSupportResultCards(cards: SupportBandCandidate[]): BandoriTeamSearchSupportCard[] {
-  return cards.map((candidate) => ({
-    cardId: candidate.card.cardId,
-    cardInstanceKey: candidate.card.cardInstanceKey,
-    characterId: candidate.card.characterId,
-    bandId: candidate.card.bandId,
-    attribute: candidate.card.attribute,
-    rarity: candidate.card.rarity,
-    skillId: candidate.card.skillId,
-    skillLevel: candidate.card.skillLevel,
-    level: candidate.card.level,
-    masterRank: candidate.card.masterRank,
-    isTrained: candidate.card.isTrained,
-    totalPower: candidate.card.totalPower,
-    supportPower: candidate.supportPower,
-  }));
 }
 
 export function getBaseCardPower(card: CalculatedBandoriCard): number {

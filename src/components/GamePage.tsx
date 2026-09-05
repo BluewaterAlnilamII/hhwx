@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useCallback, useRef, useState } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useGameStore } from "@/store/useGameStore";
-import { useOthelloGame, GamePhase } from "@/hooks/useOthelloGame";
+import { useOthelloGame } from "@/hooks/useOthelloGame";
 import {
     PlayerColor,
     getValidMoves,
@@ -47,7 +47,7 @@ function getAIMove(
                 case "kaoru": {
                     // Kaoru 使用 Web Worker 异步执行，防止 Minimax 算法阻塞主线程
                     if (typeof window !== "undefined" && window.Worker) {
-                        const worker = new Worker("/kaoru.worker.js");
+                        const worker = new Worker(new URL("../lib/ai/kaoru.worker.ts", import.meta.url), { type: "module" });
                         worker.postMessage({ board, aiColor });
                         worker.onmessage = (e) => {
                             worker.terminate();
@@ -128,8 +128,6 @@ export default function GamePage() {
 
     const [playerBubble, setPlayerBubble] = useState({ text: "", visible: false });
     const [aiBubble, setAIBubble] = useState({ text: "", visible: false });
-    const [aiEmotion, setAIEmotion] = useState<"idle" | "think" | "attack">("idle");
-    const [playerEmotion, setPlayerEmotion] = useState<"idle" | "attack">("idle");
     const processingRef = useRef(false);
 
     // 追踪已落子次数，用于语音互斥逻辑
@@ -205,7 +203,6 @@ export default function GamePage() {
 
             // 阶段 1：AI 思考期
             setPhase("aiThinking");
-            setAIEmotion("think");
 
             if (shouldSpeakThink) {
                 // 延迟 0.5 秒后再显示气泡，让过渡更自然
@@ -234,11 +231,8 @@ export default function GamePage() {
             }
 
             placePiece(aiMove.row, aiMove.col, aiColor);
-            setAIEmotion("attack");
 
             // 阶段 3：AI 攻击台词 —— 落子时始终显示
-            const boardAfter = state.board;
-            const willEndAfterThis = checkGameOver(boardAfter);
 
             setPhase("aiLine");
             const attackLine = aiMove.isConfused ? (aiChar.confusedLine || "呼诶诶~~~") : getRandomLine(aiChar.attackLines);
@@ -247,11 +241,9 @@ export default function GamePage() {
 
             setAIBubble({ text: "", visible: false });
 
-            setAIEmotion("idle");
 
             // 清除可能还在显示的玩家气泡（防止重叠）
             setPlayerBubble({ text: "", visible: false });
-            setPlayerEmotion("idle");
 
             // 阶段 4：切换回合给玩家
             switchTurn();
@@ -337,7 +329,6 @@ export default function GamePage() {
 
             // 执行落子
             placePiece(row, col, playerColor);
-            setPlayerEmotion("attack");
 
             // 递增落子计数
             moveCountRef.current += 1;
@@ -364,7 +355,6 @@ export default function GamePage() {
                 // 2 秒后自动隐藏玩家气泡
                 setTimeout(() => {
                     setPlayerBubble({ text: "", visible: false });
-                    setPlayerEmotion("idle");
                 }, 2000);
             }
 
@@ -380,8 +370,6 @@ export default function GamePage() {
         moveCountRef.current = 0;
         setPlayerBubble({ text: "", visible: false });
         setAIBubble({ text: "", visible: false });
-        setAIEmotion("idle");
-        setPlayerEmotion("idle");
         clearAIWeights();
         setReviewingBoard(false);
         reset();
@@ -402,8 +390,6 @@ export default function GamePage() {
         moveCountRef.current = 0;
         setPlayerBubble({ text: "", visible: false });
         setAIBubble({ text: "", visible: false });
-        setAIEmotion("idle");
-        setPlayerEmotion("idle");
         clearAIWeights();
         resetSelection();
     };
