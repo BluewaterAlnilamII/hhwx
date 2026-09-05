@@ -8,51 +8,32 @@ import {
   useState,
   type FocusEventHandler,
   type KeyboardEventHandler,
+  type MouseEventHandler,
 } from "react";
-
-const CLOSE_DELAY_MS = 120;
 
 export function useBandoriCardHoverTooltip<TElement extends HTMLElement>() {
   const anchorRef = useRef<TElement | null>(null);
   const tooltipId = useId();
   const [isOpen, setIsOpen] = useState(false);
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isPointerInsideRef = useRef(false);
   const isFocusInsideRef = useRef(false);
 
-  const cancelScheduledClose = useCallback(() => {
-    if (closeTimerRef.current !== null) {
-      clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
+  const openTooltip = useCallback(() => {
+    setIsOpen(true);
   }, []);
 
-  const openTooltip = useCallback(() => {
-    cancelScheduledClose();
-    setIsOpen(true);
-  }, [cancelScheduledClose]);
-
-  const scheduleClose = useCallback(() => {
-    cancelScheduledClose();
+  const closeIfInactive = useCallback(() => {
     if (isPointerInsideRef.current || isFocusInsideRef.current) {
       return;
     }
-    closeTimerRef.current = setTimeout(() => {
-      closeTimerRef.current = null;
-      if (!isPointerInsideRef.current && !isFocusInsideRef.current) {
-        setIsOpen(false);
-      }
-    }, CLOSE_DELAY_MS);
-  }, [cancelScheduledClose]);
+    setIsOpen(false);
+  }, []);
 
   const closeTooltip = useCallback(() => {
-    cancelScheduledClose();
     isPointerInsideRef.current = false;
     isFocusInsideRef.current = false;
     setIsOpen(false);
-  }, [cancelScheduledClose]);
-
-  useEffect(() => cancelScheduledClose, [cancelScheduledClose]);
+  }, []);
 
   useEffect(() => {
     if (!isOpen) {
@@ -71,24 +52,34 @@ export function useBandoriCardHoverTooltip<TElement extends HTMLElement>() {
   }, [closeTooltip, isOpen]);
 
   const handleBlur: FocusEventHandler<TElement> = (event) => {
-    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+    if (!anchorRef.current?.contains(event.relatedTarget as Node | null)) {
       isFocusInsideRef.current = false;
-      scheduleClose();
+      closeIfInactive();
     }
   };
   const handleTooltipBlur: FocusEventHandler<HTMLDivElement> = (event) => {
-    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+    if (!anchorRef.current?.contains(event.relatedTarget as Node | null)) {
       isFocusInsideRef.current = false;
-      scheduleClose();
+      closeIfInactive();
     }
   };
   const handleMouseEnter = () => {
     isPointerInsideRef.current = true;
     openTooltip();
   };
-  const handleMouseLeave = () => {
+  const handleMouseLeave: MouseEventHandler<TElement> = (event) => {
+    if (anchorRef.current?.contains(event.relatedTarget as Node | null)) {
+      return;
+    }
     isPointerInsideRef.current = false;
-    scheduleClose();
+    closeIfInactive();
+  };
+  const handleTooltipMouseLeave: MouseEventHandler<HTMLDivElement> = (event) => {
+    if (anchorRef.current?.contains(event.relatedTarget as Node | null)) {
+      return;
+    }
+    isPointerInsideRef.current = false;
+    closeIfInactive();
   };
   const handleFocus = () => {
     isFocusInsideRef.current = true;
@@ -115,7 +106,7 @@ export function useBandoriCardHoverTooltip<TElement extends HTMLElement>() {
     onKeyDown: handleKeyDown,
     tooltipInteractionProps: {
       onMouseEnter: handleMouseEnter,
-      onMouseLeave: handleMouseLeave,
+      onMouseLeave: handleTooltipMouseLeave,
       onFocus: handleFocus,
       onBlur: handleTooltipBlur,
     },

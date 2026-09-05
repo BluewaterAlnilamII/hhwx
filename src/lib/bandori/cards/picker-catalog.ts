@@ -48,6 +48,7 @@ export interface BandoriCardCatalogFallbackLabels {
 export interface BandoriCardCatalogSourceContext {
   canonicalCards?: Record<string, BandoriCardMaster | null | undefined>;
   assetIndex?: BandoriCardsAssetIndex | null;
+  availabilityScope?: readonly BandoriServer[];
 }
 
 export function buildBandoriCardCatalog(
@@ -59,6 +60,8 @@ export function buildBandoriCardCatalog(
   fallbackLabels?: BandoriCardCatalogFallbackLabels,
   sourceContext: BandoriCardCatalogSourceContext = {},
 ): BandoriCardCatalogEntry[] {
+  const availabilityScope = sourceContext.availabilityScope
+    ?? (contextServer === undefined || contextServer === null ? null : [contextServer]);
   const cardEntries = expandEntityCollisions
     ? expandBandoriCardCatalog(cards).map(({ cardId, cardRef, server, card }) => ({
         rawCardId: String(cardId),
@@ -86,8 +89,8 @@ export function buildBandoriCardCatalog(
       : entityServer === null ? [] : [entityServer];
     const availableServers = entityServer !== null
       ? allAvailableServers
-      : contextServer !== undefined && contextServer !== null
-        ? allAvailableServers.includes(contextServer) ? [contextServer] : []
+      : availabilityScope
+        ? allAvailableServers.filter((server) => availabilityScope.includes(server))
         : allAvailableServers;
     const normalized = normalizeBandoriCardCatalogBase({
       rawCardId,

@@ -64,6 +64,8 @@ test("comment edits use a synchronous single-flight guard and lock editing contr
 });
 
 test("reaction previews stay inside narrow and offset visual viewports", () => {
+  assert.match(itemSource, /relative inline-flex select-none \[-webkit-touch-callout:none\]/u);
+
   const cases = [
     { anchorLeft: 24, viewportLeft: 0, viewportWidth: 390 },
     { anchorLeft: 334, viewportLeft: 0, viewportWidth: 390 },
