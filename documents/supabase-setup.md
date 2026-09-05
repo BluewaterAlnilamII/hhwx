@@ -28,6 +28,7 @@ This document describes HHWX's Supabase schema workflow. New schema changes shou
 - `supabase/migrations/20260815211415_add_profile_display_degree.sql`: stores the selected public Degree, restricts writes to a service-role RPC, and restores JP Degree 100 when the final owning CN binding is removed or transferred.
 - `supabase/migrations/20260801185414_accept_manual_profile_server.sql`: makes the service-role manual-profile RPC persist the profile payload's explicit Bandori server.
 - `scripts/backfill-user-game-profile-servers.mjs`: audits or repairs manual-profile summary servers from their checksummed compressed payloads.
+- `scripts/update-supabase-auth-email-templates.ps1`: previews or updates remote Auth email templates; see the operational scope below.
 - `documents/profile-public-uid-schema.sql`: public numeric profile UID support.
 - `documents/game-profile-schema.sql`: persisted user game profiles.
 - `documents/game-account-binding-schema.sql`: game-account binding challenges and bindings.
@@ -35,20 +36,22 @@ This document describes HHWX's Supabase schema workflow. New schema changes shou
 
 ## Migration Workflow
 
-Use the project-local Supabase CLI. It is installed as a development dependency, so global installation is not required.
+Use the project-local Supabase CLI. It is installed as a development dependency, so global installation is not required. Check the relevant command's `--help` and current [Supabase migration guidance](https://supabase.com/docs/guides/deployment/database-migrations) before relying on version-sensitive behavior.
 
 ```powershell
 npm exec -- supabase --version
-npm exec -- supabase migration new <name>
+npm exec -- supabase migration new --help
 ```
 
 For new schema work:
 
-1. Create a migration with `npm exec -- supabase migration new <name>`.
-2. Put the SQL change in the generated `supabase/migrations/<timestamp>_<name>.sql` file.
-3. Review grants, RLS policies, function `search_path`, and service-role boundaries before applying it.
-4. If Docker is available, test against a local Supabase stack with `npm exec -- supabase db reset`.
-5. For a linked remote project, review with `npm exec -- supabase db push --dry-run` before running `npm exec -- supabase db push`.
+1. Either create a migration with `npm exec -- supabase migration new <name>` and write the SQL there, or experiment through a SQL connection explicitly targeting the local Supabase stack. Capture a successful local experiment with the CLI, for example `npm exec -- supabase db pull <name> --local`. Keep the final change in `supabase/migrations/`; do not invent timestamped filenames or leave uncaptured local drift.
+2. Review the generated SQL for constraints, indexes, grants, RLS, function `search_path`, service-role boundaries, and rollout/data-migration requirements. A generated diff is not a complete security review; check whether required objects or data changes need explicit SQL.
+3. On a disposable local stack, replay with `npm exec -- supabase db reset --local` and verify affected SQL behavior. For changed RLS, grants, or privileged SQL, reuse or extend retained SQL tests for allowed and denied access under the intended roles and ownership/session states, not only the database owner or service role. Temporary queries help iteration but do not preserve regression coverage. Use query-plan evidence when changing performance-sensitive SQL. Docker is required for the local stack; report checks that could not run.
+4. Run the applicable [Supabase Advisors](https://supabase.com/docs/guides/observability/advisors), for example `npm exec -- supabase db advisors --local --type all`. Assess security/performance findings in the changed scope; they complement role-based tests and do not require unrelated historical cleanup.
+5. For an authorized linked-project review, verify the project target and inspect `npm exec -- supabase db push --dry-run`. Apply with `npm exec -- supabase db push` only within explicitly authorized remote-write scope and the required rollout order.
+
+`db pull` defaults to the linked database and can update migration history; always select `--local` for local experimentation. `db reset --local` destroys local database contents, so capture intended changes and preserve needed local data first. Local SQL experiments, dry runs, and available credentials do not authorize remote SQL execution, history repair, configuration changes, or production writes. Reuse explicit operational authorization already given for the target and action.
 
 The current baseline migration is for new empty projects. Do not run it directly against the existing production HHWX project. For the linked production project, keep the historical no-op records for already-applied remote versions and mark the baseline version as applied only after verifying that the live schema already matches it. Run `npm exec -- supabase db push --dry-run` before any production push.
 
@@ -89,9 +92,13 @@ node --import tsx scripts/backfill-user-game-profile-servers.mjs
 
 The repair only considers manual profiles, treats the checksummed payload's `bestdoriProfile.server` as authoritative, and conditionally updates rows whose original `server` and `payload_sha256` are unchanged. It refuses to apply if any manual payload cannot be validated.
 
+## Privileged Scripts
+
+The profile backfill above defaults to a read-only audit; its `--apply` requires remote-write authorization. The email-template script behaves differently: use `scripts/update-supabase-auth-email-templates.ps1 -DryRun` for a local preview. It requires the project ref and Management API token but exits before network calls. Without `-DryRun`, it can read a backup and PATCH the project's Auth configuration; `-WhatIf` alone does not skip the backup read. Verify the target and authorized operation, retain the backup, and keep tokens and private output out of commits and logs.
+
 ## Legacy Manual Order
 
-For older manual setup, run these in the Supabase SQL editor or your migration system:
+The following order is a compatibility reference for older manual deployments, not an alternative to migrations for new schema work. Use it only within an explicitly scoped legacy setup or repair:
 
 1. `supabase/schema/auth_schema.sql`
 2. `supabase/schema/auth_legacy_patch.sql` if you are upgrading an older deployment
@@ -110,13 +117,14 @@ If an existing project still has the historical `comment_likes` table, apply the
 
 ## Review Notes
 
-- Keep row-level security enabled on user-owned tables.
+- Keep RLS enabled on every table in an exposed schema. Review grants and row policies separately: object access does not establish row ownership. `TO authenticated` also includes anonymous sign-ins; do not authorize from mutable `user_metadata`, and account for stale JWT claims when changing Auth rules. See [Supabase RLS guidance](https://supabase.com/docs/guides/database/postgres/row-level-security).
 - Use `supabase/migrations/` for new schema changes. Treat the older standalone SQL files as compatibility references unless a migration explicitly reuses them.
-- Supabase no longer automatically exposes new public tables/functions to the Data API for new projects from May 30, 2026, and applies the same default to existing projects from October 30, 2026. Keep explicit `GRANT`/`REVOKE` statements next to RLS policies in every SQL file that creates Data API objects.
+- Keep explicit least-privilege `GRANT`/`REVOKE` statements next to policies for Data API objects rather than depending on project creation dates or default exposure settings.
+- For user-owned UPDATE policies, explicitly state `USING` and `WITH CHECK` and supply the required SELECT policy. PostgreSQL reuses `USING` when `WITH CHECK` is omitted; explicit predicates make the intended old/new ownership clear. See [CREATE POLICY](https://www.postgresql.org/docs/current/sql-createpolicy.html).
 - For comment interaction tables, keep direct Data API writes disabled unless the browser really needs them. Route profile edits, comment writes, reactions, notifications, and reports through the Next.js API so validation and side effects stay server-side.
 - Treat `security definer` functions as privileged code: verify argument checks, ownership checks, grants, and `search_path` behavior before production use.
 - Grant direct table or function access only where the application requires it.
-- Keep service-role operations server-side. Browser code must use only public Supabase keys and authenticated user sessions.
+- Keep service-role operations server-side. Browser code uses the configured publishable key and authenticated user sessions, without a legacy anon-key fallback.
 - `bandori_tracker_latest` is authenticated read-only and is not a Postgres Changes source. The tracker writes it through the service-role-only `upsert_bandori_tracker_latest` RPC, then publishes to a matching Private Broadcast topic. Do not grant browser `INSERT` on `realtime.messages`.
 - Event TOP10 high-frequency snapshots use `bandori_tracker_topdata_latest_snapshots` and the service-role-only `upsert_bandori_tracker_topdata_latest` RPC. Registered non-anonymous users may SELECT the latest row and receive the anchored `bandori:topdata:cn:events:{eventId}` Private Broadcast topic. The table is not a Postgres Changes source; browsers cannot mutate it, execute the RPC, or insert Broadcast messages.
 - Clients order and deduplicate live data by `(topic, revision)`. `sampleId` identifies the newest observation time, but an older partial patch may fill a missing ranking line while preserving that top-level `sampleId` and incrementing `revision`.

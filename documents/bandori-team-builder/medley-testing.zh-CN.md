@@ -14,7 +14,7 @@ English version: [medley-testing.md](medley-testing.md)
 
 ## 2. 仓库内可运行检查
 
-安装仓库依赖和 Rust 工具链后，任何协作者都能只使用 Git 跟踪文件运行以下检查。
+安装仓库依赖和 Rust 工具链后，任何协作者都能只使用 Git 跟踪文件运行以下检查。按受影响的正确性边界选择检查，不要求每次修改都运行清单中的全部命令。仅修改 Rust 测试或参考实现不自动触发 WASM 检查，仅修改说明文字时检查文档。
 
 ### TypeScript 来源规范化
 
@@ -58,13 +58,13 @@ npm run check:medley-foundation:wasm
 
 ### WebAssembly 产物
 
-修改会发布到浏览器的 Rust 代码后，需要重新生成已提交的包：
+发布到浏览器的 Rust 行为或其构建输入变化时，需要重新生成已提交的包：
 
 ```bash
 npm run build:medley-foundation:wasm
 ```
 
-该命令要求 `wasm-bindgen-cli` 与 workspace 中锁定的 `wasm-bindgen` crate 版本一致。随后重新运行 Rust 和 TypeScript 检查。普通 Next.js 构建只会读取 `src/lib/bandori/medley-wasm/pkg/`，不会重新生成或执行它；只测试原生 Rust 代码可能导致浏览器仍使用旧求解器。
+该命令要求 `wasm-bindgen-cli` 与 workspace 中锁定的 `wasm-bindgen` crate 版本一致。验证受影响的 TypeScript 契约和生成后的浏览器绑定。如果 Rust 源码、依赖、配置和工具链均未变化，可复用已通过的 Rust 检查，不必仅因生成产物而重跑。普通 Next.js 构建只会读取 `src/lib/bandori/medley-wasm/pkg/`，不会重新生成或执行它；只测试原生 Rust 代码可能导致浏览器仍使用旧求解器。
 
 发布前的应用级检查还包括：
 

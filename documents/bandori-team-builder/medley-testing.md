@@ -14,7 +14,7 @@ No single benchmark answers all three. A high score does not prove scoring corre
 
 ## 2. Portable repository checks
 
-These checks use only tracked files and are available to every contributor after installing the repository dependencies and Rust toolchain.
+These checks use only tracked files and are available to every contributor after installing the repository dependencies and Rust toolchain. Select checks for the affected correctness boundaries; this list is not an instruction to run every check for every edit. Test/reference-only Rust edits do not automatically trigger WASM checks, and prose-only edits need documentation review.
 
 ### TypeScript source normalization
 
@@ -58,13 +58,13 @@ The portable evidence is organized as follows:
 
 ### WebAssembly artifact
 
-After changing Rust code that ships to the browser, regenerate the committed package:
+When shipped Rust behavior or its build inputs change, regenerate the committed package:
 
 ```bash
 npm run build:medley-foundation:wasm
 ```
 
-The command requires a `wasm-bindgen-cli` version matching the workspace's locked `wasm-bindgen` crate. Then rerun the Rust and TypeScript checks. The ordinary Next.js build consumes `src/lib/bandori/medley-wasm/pkg/` but does not regenerate or execute it, so testing only native Rust code can leave the browser on an older solver.
+The command requires a `wasm-bindgen-cli` version matching the workspace's locked `wasm-bindgen` crate. Verify affected TypeScript contracts and the generated browser binding. Reuse passed Rust checks when the Rust source, dependencies, configuration, and toolchain are unchanged; generation alone does not require repeating them. The ordinary Next.js build consumes `src/lib/bandori/medley-wasm/pkg/` but does not regenerate or execute it, so testing only native Rust code can leave the browser on an older solver.
 
 For a release-oriented application check, also run:
 

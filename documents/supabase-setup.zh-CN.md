@@ -17,14 +17,6 @@ RLS policy 不变。普通卡牌跨服共用 `<card-id>` 目标；已登记的 E
 
 English version: [supabase-setup.md](supabase-setup.md)
 
-迁移历史说明：`supabase/migrations/` 中 2026-06-02、2026-06-03 和
-`20260610030939` 开头的旧版本文件，是接入 CLI baseline 前线上已经通过
-MCP/手动流程应用过的历史记录。它们在本地有意保持 no-op，用来让 linked CLI
-项目识别远端已存在的 version；全新空库的实际结构仍由
-`20260610073410_baseline_schema.sql` 构建。对生产库不要直接执行 baseline SQL，
-只能在确认线上 schema 已经匹配后，把 baseline version 标记为 applied，并且任何
-生产 push 前都先运行 `npm exec -- supabase db push --dry-run`。
-
 本文档说明 HHWX 的 Supabase schema 工作流。新的 schema 变更应以 Supabase CLI migration 作为事实来源；旧的独立 SQL 文件在过渡期内保留为参考和兼容脚本。
 
 ## 文件
@@ -37,6 +29,7 @@ MCP/手动流程应用过的历史记录。它们在本地有意保持 no-op，�
 - `supabase/schema/bandori_tracker_topdata_latest_schema.sql`：活动 TOP10 latest 表、service-role merge RPC 与锚定的 Private Broadcast 登录读取 policy。
 - `supabase/config.toml`：Supabase CLI 本地项目配置。
 - `supabase/migrations/*_baseline_schema.sql`：当前 HHWX 空 Supabase 项目的迁移基线。
+- `supabase/migrations/20260602*_*.sql`、`supabase/migrations/202606030*_*.sql` 和 `supabase/migrations/20260610030939_*.sql`：接入 CLI baseline 前通过 MCP/手动流程应用的线上历史记录，本地有意保持 no-op，以便 linked CLI 识别远端已有版本；空库结构由 `20260610073410_baseline_schema.sql` 构建。
 - `documents/account-status-schema.sql`：应用侧邮箱验证状态。
 - `documents/account-status-backfill-auth-confirmed.sql`：从 Supabase Auth 确认状态回填的可选脚本。
 - `documents/account-auth-flow.zh-CN.md`：账号注册、邮箱验证、重发和账号管理行为说明。
@@ -48,6 +41,7 @@ MCP/手动流程应用过的历史记录。它们在本地有意保持 no-op，�
 - `supabase/migrations/20260801185414_accept_manual_profile_server.sql`：让仅 service role 可调用的手动档案 RPC 显式保存档案正文中的 Bandori 服务器。
 - `supabase/migrations/20260815211415_add_profile_display_degree.sql`：保存公开展示称号、仅允许 service-role RPC 修改，并在最后一个拥有该称号的国服绑定被解绑或转移时回退到日服称号 100。
 - `scripts/backfill-user-game-profile-servers.mjs`：根据带校验和的压缩档案正文审计或修复手动档案的服务器摘要字段。
+- `scripts/update-supabase-auth-email-templates.ps1`：预览或更新远程 Auth 邮件模板，操作范围见下文。
 - `documents/profile-public-uid-schema.sql`：公开数字 profile UID 支持。
 - `documents/game-profile-schema.sql`：持久化用户游戏档案。
 - `documents/game-account-binding-schema.sql`：游戏账号绑定验证码和绑定关系。
@@ -55,20 +49,22 @@ MCP/手动流程应用过的历史记录。它们在本地有意保持 no-op，�
 
 ## 迁移工作流
 
-使用项目本地安装的 Supabase CLI，不需要全局安装。
+使用项目本地安装的 Supabase CLI，不需要全局安装。依赖版本相关行为前，检查对应命令的 `--help` 和当前 [Supabase 官方迁移说明](https://supabase.com/docs/guides/deployment/database-migrations)。
 
 ```powershell
 npm exec -- supabase --version
-npm exec -- supabase migration new <name>
+npm exec -- supabase migration new --help
 ```
 
 新的 schema 工作按以下流程处理：
 
-1. 用 `npm exec -- supabase migration new <name>` 创建迁移。
-2. 把 SQL 变更写入生成的 `supabase/migrations/<timestamp>_<name>.sql`。
-3. 应用前复查 grants、RLS policies、函数 `search_path` 和 service-role 边界。
-4. 如果本机有 Docker，可用 `npm exec -- supabase db reset` 在本地 Supabase stack 上测试。
-5. 对已 link 的远程项目，先用 `npm exec -- supabase db push --dry-run` 复查，再执行 `npm exec -- supabase db push`。
+1. 可用 `npm exec -- supabase migration new <name>` 创建迁移并编写 SQL，也可通过明确指向本地 Supabase stack 的 SQL 连接先行试验。试验成功后用 CLI 捕获最终变更，例如 `npm exec -- supabase db pull <name> --local`。最终变更必须进入 `supabase/migrations/`，不要自行编造带时间戳的文件名，也不要留下未捕获的本地漂移。
+2. 复查生成 SQL 的约束、索引、grants、RLS、函数 `search_path`、service-role 边界以及发布和数据迁移要求。生成的差异不能替代安全审查；检查是否有对象或数据变更需要显式补充 SQL。
+3. 在可重建的本地 stack 上通过 `npm exec -- supabase db reset --local` 重放，验证受影响的 SQL 行为。修改 RLS、grants 或特权 SQL 时，复用或扩展保留的 SQL 测试，以预期角色和所有权、会话状态检查允许与拒绝场景，不能只用数据库 owner 或 service role。临时查询可以辅助迭代，但不能保留回归覆盖。性能敏感 SQL 的修改需要查询计划证据。本地 stack 需要 Docker；无法执行的检查应明确说明。
+4. 运行适用的 [Supabase Advisors](https://supabase.com/docs/guides/observability/advisors)，例如 `npm exec -- supabase db advisors --local --type all`。评估变更范围内的安全、性能发现；Advisors 补充角色行为测试，不要求顺带清理无关历史问题。
+5. 对已获授权的 linked 项目检查，核实目标后运行 `npm exec -- supabase db push --dry-run`。只有已明确授权远程写入范围，且满足发布顺序时，才能通过 `npm exec -- supabase db push` 应用。
+
+`db pull` 默认面向 linked 数据库，并可能更新迁移历史；本地试验必须显式选择 `--local`。`db reset --local` 会清除本地数据库内容，应先捕获预期变更并保留所需本地数据。本地 SQL 试验、dry run 和现有凭据都不代表已获授权执行远程 SQL、修复迁移历史、修改配置或写入生产环境。目标和操作已经得到明确授权时，沿用该授权。
 
 `20260728185041_scope_bandori_event_comments_by_server.sql` 必须与应用协调发布：先部署已支持服务器隔离的评论 API，使并发新写入直接使用统一目标格式，再立即执行迁移。两个步骤之间旧讨论可能会暂时不可见，但迁移会保留全部评论和通知记录。
 
@@ -105,9 +101,13 @@ node --import tsx scripts/backfill-user-game-profile-servers.mjs
 
 当前 baseline migration 面向全新的空项目。不要直接对现有生产 HHWX 项目执行它。对已 link 的生产项目，保留远端已应用版本对应的历史 no-op 记录；只有在确认线上 schema 已经匹配后，才把 baseline version 标记为 applied。任何生产 push 前都先运行 `npm exec -- supabase db push --dry-run`。
 
+## 特权脚本
+
+上述档案回填脚本默认执行只读审计，`--apply` 需要远程写入授权。邮件模板脚本不同：本地预览使用 `scripts/update-supabase-auth-email-templates.ps1 -DryRun`。它要求提供项目 ref 和 Management API token，但会在网络调用前退出。不带 `-DryRun` 时，它可能读取备份并 PATCH 项目的 Auth 配置；单独使用 `-WhatIf` 也不会跳过备份读取。核实目标和授权操作，保留备份，不要把 token 或私有输出写入提交或日志。
+
 ## 旧手动执行顺序
 
-旧的手动部署可在 Supabase SQL editor 或自己的迁移系统中按顺序执行：
+以下顺序仅供旧手动部署兼容参考，不能替代新 schema 工作的迁移流程。只在明确限定范围的旧部署设置或修复中使用：
 
 1. `supabase/schema/auth_schema.sql`
 2. 如果是升级旧部署，执行 `supabase/schema/auth_legacy_patch.sql`
@@ -126,12 +126,13 @@ node --import tsx scripts/backfill-user-game-profile-servers.mjs
 
 ## 复查要点
 
-- 用户归属表保持 row-level security 开启。
+- 暴露的 schema 中每一张表都保持 RLS 开启。分别复查 grants 和行策略，对象访问权限不等于行所有权。`TO authenticated` 也包含匿名登录用户；不要通过可修改的 `user_metadata` 授权，修改 Auth 规则时应考虑 JWT 声明滞后。见 [Supabase RLS 官方说明](https://supabase.com/docs/guides/database/postgres/row-level-security)。
 - 新的 schema 变更使用 `supabase/migrations/`。除非某个迁移明确复用旧 SQL，否则旧的独立 SQL 文件只作为兼容参考。
-- Supabase 从 2026-05-30 起不再为新项目自动把 public 新表/函数暴露给 Data API，并会从 2026-10-30 起把同一默认行为应用到既有项目。凡是创建 Data API 对象的 SQL 文件，都应把显式 `GRANT`/`REVOKE` 与 RLS policy 放在一起维护。
+- Data API 对象应将显式最小权限 `GRANT`/`REVOKE` 与行策略一同维护，不依赖项目创建日期或默认暴露设置。
+- 用户归属 UPDATE policy 应显式编写 `USING`、`WITH CHECK` 和所需 SELECT policy。省略 `WITH CHECK` 时，PostgreSQL 会复用 `USING`；显式编写是为了清楚表达旧行与新行的所有权约束。见 [CREATE POLICY](https://www.postgresql.org/docs/current/sql-createpolicy.html)。
 - 将 `security definer` 函数视为特权代码：生产前复查参数检查、所有权检查、grants 和 `search_path` 行为。
 - 只在应用确实需要时授予直接 table 或 function 访问权限。
-- service-role 操作必须保持在服务端。浏览器代码只能使用公开 Supabase key 和已认证用户 session。
+- service-role 操作必须保持在服务端。浏览器代码使用配置的 publishable key 和已认证用户 session，不回退到旧 anon key。
 - `bandori_tracker_latest` 仅允许登录用户读取，不加入 Postgres Changes publication。tracker 通过仅 service role 可执行的 `upsert_bandori_tracker_latest` RPC 写入，再向匹配的 Private Broadcast topic 发布；不要给浏览器授予 `realtime.messages` INSERT。
 - 活动 TOP10 高频 snapshot 使用 `bandori_tracker_topdata_latest_snapshots` 和仅 service role 可执行的 `upsert_bandori_tracker_topdata_latest` RPC。已注册且非匿名的用户可 SELECT latest 行并接收锚定的 `bandori:topdata:cn:events:{eventId}` Private Broadcast。该表不作为 Postgres Changes source；浏览器不能写表、执行 RPC 或插入 Broadcast。
 - 客户端必须以 `(topic, revision)` 排序和幂等。`sampleId` 表示顶层最新观测时间；较旧 partial patch 补齐缺失榜线时，顶层 `sampleId` 可以保持不变而 `revision` 继续递增。
