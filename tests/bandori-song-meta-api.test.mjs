@@ -8,15 +8,18 @@ import {
 } from "../src/lib/bandori-song-meta-server.ts";
 
 const validArtifact = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   updatedAt: "2026-09-04T00:00:00Z",
   musicIndexSha256: "a".repeat(64),
   durations: [5, 5.5],
   songs: {
     "1": {
       "3": {
-        "5": [2.5, 1, 2.5, 2],
-        "5.5": [2, 1.5, 2, 2.5],
+        total: [3.5, 4.5],
+        covered: {
+          "5": [1, 2],
+          "5.5": [1.5, 2.5],
+        },
       },
     },
   },
@@ -42,10 +45,56 @@ test("song meta parser requires the exact music index identity", () => {
 
 test("song meta parser rejects incomplete duration coverage", () => {
   const invalid = structuredClone(validArtifact);
-  delete invalid.songs["1"]["3"]["5.5"];
+  delete invalid.songs["1"]["3"].covered["5.5"];
   assert.throws(
     () => parseBandoriSongMetaArtifact(invalid),
     /difficulty is invalid/u,
+  );
+});
+
+test("song meta parser rejects the former four-component schema", () => {
+  const invalid = structuredClone(validArtifact);
+  invalid.schemaVersion = 1;
+  invalid.songs["1"]["3"] = {
+    "5": [2.5, 1, 2.5, 2],
+    "5.5": [2, 1.5, 2, 2.5],
+  };
+  assert.throws(
+    () => parseBandoriSongMetaArtifact(invalid),
+    /artifact is invalid/u,
+  );
+});
+
+test("release audit rejects matching legacy Meta responses without network access", async (context) => {
+  const legacy = structuredClone(validArtifact);
+  legacy.schemaVersion = 1;
+  legacy.songs["1"]["3"] = {
+    "5": [2.5, 1, 2.5, 2],
+    "5.5": [2, 1.5, 2, 2.5],
+  };
+  context.mock.method(globalThis, "fetch", async (url) => {
+    const path = new URL(url).pathname;
+    const body = path === "/bandori/music/meta.json" ? legacy : {
+      success: true,
+      data: path === "/api/bandori/master/music/meta"
+        ? { durations: legacy.durations, songs: legacy.songs }
+        : {},
+    };
+    return new Response(JSON.stringify(body));
+  });
+
+  await assert.rejects(
+    import("../scripts/audit-bandori-contracts.mjs"),
+    /Bandori song meta artifact is invalid/u,
+  );
+});
+
+test("song meta parser rejects covered coefficients above the chart total", () => {
+  const invalid = structuredClone(validArtifact);
+  invalid.songs["1"]["3"].covered["5"][0] = 4;
+  assert.throws(
+    () => parseBandoriSongMetaArtifact(invalid),
+    /covered coefficients exceed total/u,
   );
 });
 
