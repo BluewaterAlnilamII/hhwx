@@ -39,6 +39,43 @@
   transition: background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
 }
 
+/* Opt-in page chrome: component layout and existing dark appearances stay local. */
+@media (prefers-color-scheme: light) {
+  .hhwx-panel {
+    border-radius: 0;
+    border-color: var(--theme-color-panel-border);
+    background-color: var(--theme-color-panel-background);
+    box-shadow: var(--theme-shadow-panel);
+  }
+
+  .hhwx-panel-media {
+    border-radius: 0;
+    box-shadow: 0 0 0 1px var(--theme-color-panel-border);
+  }
+
+  .hhwx-navigation-item {
+    position: relative;
+    border-radius: 0;
+  }
+
+  .hhwx-navigation-item[aria-current='page'] {
+    font-weight: 700;
+  }
+
+  .hhwx-navigation-item[aria-current='page']::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: 3px;
+    background: var(--theme-color-shell-navigation-item-border-current);
+  }
+
+  .hhwx-desktop-sidebar {
+    border-right-color: transparent;
+  }
+}
+
 .hhwx-accent-button:hover {
   background: var(--theme-color-action-primary-background-hover);
 }

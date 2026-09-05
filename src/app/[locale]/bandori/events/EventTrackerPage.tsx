@@ -179,7 +179,7 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
   );
 
   return (
-    <div className="rounded-2xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-6 shadow-[var(--theme-shadow-surface-raised)] dark:border-slate-700/80 dark:bg-[#111827] dark:shadow-[0_18px_44px_rgba(0,0,0,0.22)]">
+    <div className="hhwx-panel rounded-2xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-6 shadow-[var(--theme-shadow-surface-raised)] dark:border-slate-700/80 dark:bg-[#111827] dark:shadow-[0_18px_44px_rgba(0,0,0,0.22)]">
       <div className="mb-2 flex items-start justify-between gap-3 text-sm font-semibold">
         <span className="shrink-0 whitespace-nowrap font-bold text-[var(--theme-color-progress-foreground)]">{t("title")}</span>
         <span className="min-w-0 flex flex-col items-end gap-0.5 text-right leading-tight">
@@ -1140,7 +1140,7 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
           recommendedEventId={recommendedEventId !== null ? String(recommendedEventId) : null}
         />
 
-        <div role="tablist" aria-label={viewT("label")} className="grid grid-cols-2 overflow-hidden rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] shadow-sm dark:border-slate-700 dark:bg-[#111827]">
+        <div role="tablist" aria-label={viewT("label")} className="hhwx-panel grid grid-cols-2 overflow-hidden rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] shadow-sm dark:border-slate-700 dark:bg-[#111827]">
           {(["tracker", "info"] as const).map((view) => {
             const active = view === activeView;
             return (
@@ -1173,7 +1173,7 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
             ) : null}
 
             {/* ========== 导航与控制区 ========== */}
-            <div className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-3 shadow-[var(--theme-shadow-surface-raised)] sm:p-5 dark:border-slate-700/80 dark:bg-[#111827] dark:shadow-[0_24px_60px_rgba(0,0,0,0.24)]">
+            <div className="hhwx-panel rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-3 shadow-[var(--theme-shadow-surface-raised)] sm:p-5 dark:border-slate-700/80 dark:bg-[#111827] dark:shadow-[0_24px_60px_rgba(0,0,0,0.24)]">
           <Tabs.Root
             value={trackingMode}
             onValueChange={handleTrackingModeChange}
@@ -1199,10 +1199,10 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
 
             {/* ========== 图表区域 ========== */}
             <Tabs.Content value={trackingMode} className="outline-hidden focus:outline-hidden w-full animate-in fade-in zoom-in-95 duration-500">
-              <div className="mt-3 relative rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] p-2 shadow-[var(--theme-shadow-surface-raised)] sm:p-4 dark:border-slate-800/80 dark:bg-[#0C111C] dark:shadow-[0_24px_60px_rgba(0,0,0,0.28)]">
+              <div className="mt-3 relative rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-2 shadow-[var(--theme-shadow-surface-raised)] sm:p-4 dark:border-slate-800/80 dark:bg-[#0C111C] dark:shadow-[0_24px_60px_rgba(0,0,0,0.28)]">
 
                 {!isTop10Selected && loading && (
-                  <div className="absolute inset-0 z-30 flex items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--theme-color-surface-background)_75%,transparent)] dark:bg-[#0C111C]/75">
+                  <div className="absolute inset-0 z-30 flex items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--theme-color-panel-background)_75%,transparent)] dark:bg-[#0C111C]/75">
                     <div className="flex flex-col items-center">
                       <div className="w-10 h-10 border-4 border-[var(--theme-color-semantic-info-border)] border-t-transparent rounded-full animate-spin" />
                       <p className="mt-4 text-sm font-semibold text-[var(--theme-color-semantic-info-foreground)] animate-pulse">{commonT("loadingLatestData")}</p>

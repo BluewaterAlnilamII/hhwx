@@ -318,7 +318,7 @@ export default function EventInfoPanel({
 
   if (loading && !model) {
     return (
-      <div className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-8 text-center shadow-sm dark:border-slate-700 dark:bg-[#111827]">
+      <div className="hhwx-panel rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-8 text-center shadow-sm dark:border-slate-700 dark:bg-[#111827]">
         <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-[var(--theme-color-action-primary-background)] border-t-transparent" />
         <p className="mt-4 text-sm font-semibold text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">{t("loading")}</p>
       </div>
@@ -327,14 +327,14 @@ export default function EventInfoPanel({
 
   if (!model || eventId === null) {
     return (
-      <div className="rounded-3xl border border-dashed border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] p-10 text-center text-sm font-semibold text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-slate-900/60 dark:text-[var(--theme-color-text-muted-on-dark)]">
+      <div className="hhwx-panel rounded-3xl border border-dashed border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] p-10 text-center text-sm font-semibold text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-slate-900/60 dark:text-[var(--theme-color-text-muted-on-dark)]">
         {t("unavailable")}
       </div>
     );
   }
 
   return (
-    <article className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700/80 dark:bg-[#111827]">
+    <article className="hhwx-panel rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700/80 dark:bg-[#111827]">
       <section className="@container">
         <Heading as="h2" visualRole="section" accentSlot="a" icon={<ClipboardList className="h-5 w-5" />} className="dark:text-[var(--theme-color-text-default-on-dark)]">{t("overviewTitle")}</Heading>
         <div className="mt-3 grid min-w-0 items-stretch gap-y-0 @min-[54rem]:grid-cols-2 @min-[54rem]:gap-x-0">

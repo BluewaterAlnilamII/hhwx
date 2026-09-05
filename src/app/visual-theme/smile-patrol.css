@@ -47,6 +47,109 @@
   --theme-color-control-background: #ffffff;
 }
 
+@media (prefers-color-scheme: light) {
+  [data-visual-theme="smile-patrol"] {
+    --theme-color-shell-canvas-background: #faf8f4;
+    --smile-patrol-canvas-yellow: color-mix(in srgb, var(--smile-patrol-palette-yellow-f9e065) 80%, var(--smile-patrol-palette-yellow-ffee22));
+    --smile-patrol-canvas-soft: color-mix(in srgb, var(--theme-seed-shell-tint) 45%, var(--theme-color-shell-canvas-background));
+    --smile-patrol-canvas-pale: color-mix(in srgb, var(--theme-seed-shell-tint) 24%, var(--theme-color-shell-canvas-background));
+    --smile-patrol-canvas-mist: color-mix(in srgb, var(--theme-seed-shell-tint) 8%, var(--theme-color-shell-canvas-background));
+    --smile-patrol-canvas-line: color-mix(in srgb, var(--theme-seed-shell-tint) 72%, var(--theme-seed-brand-primary));
+
+    /* Unequal continuous bands frame the quiet center. One-pixel transitions soften diagonal edges. */
+    --theme-effect-shell-canvas-image: linear-gradient(132deg,
+      var(--smile-patrol-canvas-yellow) 0 6.4%,
+      #fff calc(6.4% + 1px) 7.2%,
+      var(--smile-patrol-canvas-soft) calc(7.2% + 1px) 11.6%,
+      #fff calc(11.6% + 1px) 12.4%,
+      var(--smile-patrol-canvas-mist) calc(12.4% + 1px) 13%,
+      #fff calc(13% + 1px) 14.6%,
+      var(--smile-patrol-canvas-pale) calc(14.6% + 1px) 27.3%,
+      #fff calc(27.3% + 1px) 28.2%,
+      var(--smile-patrol-canvas-mist) calc(28.2% + 1px) 32.2%,
+      var(--theme-color-shell-canvas-background) calc(32.2% + 1px) 72.5%,
+      var(--smile-patrol-canvas-mist) calc(72.5% + 1px) 76.8%,
+      #fff calc(76.8% + 1px) 77.7%,
+      var(--smile-patrol-canvas-soft) calc(77.7% + 1px) 79.5%,
+      #fff calc(79.5% + 1px) 80.8%,
+      var(--smile-patrol-canvas-pale) calc(80.8% + 1px) 86.4%,
+      #fff calc(86.4% + 1px) 87.4%,
+      var(--smile-patrol-canvas-yellow) calc(87.4% + 1px) 100%);
+    --theme-effect-shell-canvas-size: 100% 100%;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+
+    --theme-color-panel-background: #fffefa;
+    --theme-color-panel-border: #dddcd5;
+    --theme-shadow-panel: none;
+    --theme-color-shell-sidebar-background: var(--theme-color-panel-background);
+    --theme-color-shell-sidebar-backdrop: color-mix(in srgb, var(--theme-seed-text-primary) 28%, transparent);
+    --theme-color-shell-navigation-item-background-current: var(--smile-patrol-canvas-yellow);
+    --theme-shadow-navigation-current: none;
+    --theme-shadow-navigation-hover: none;
+    --theme-shadow-toolbar-header: none;
+    --theme-shadow-shell-sidebar: none;
+  }
+
+  /* Continuous fine lines fade toward the interior; soft edges avoid hard one-pixel strokes. */
+  [data-visual-theme="smile-patrol"]::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: linear-gradient(132deg,
+      transparent calc(13.8% - 1px),
+      var(--smile-patrol-canvas-line) 13.8% calc(13.8% + 0.6px),
+      transparent calc(13.8% + 1.6px) calc(21.3% - 1px),
+      var(--smile-patrol-canvas-line) 21.3% calc(21.3% + 0.6px),
+      transparent calc(21.3% + 1.6px) calc(22.1% - 1px),
+      var(--smile-patrol-canvas-line) 22.1% calc(22.1% + 0.6px),
+      transparent calc(22.1% + 1.6px));
+    mask-image: radial-gradient(ellipse at top left, #000a 10%, #0006 30%, transparent 60%);
+  }
+
+  /* Decorative copies of the site's actual logo, derived from src/app/icon.png. */
+  [data-visual-theme="smile-patrol"] body::before,
+  [data-visual-theme="smile-patrol"] body::after {
+    content: "";
+    position: fixed;
+    z-index: -1;
+    pointer-events: none;
+    width: clamp(130px, 9.5vw, 180px);
+    aspect-ratio: 1;
+    background: url('/favicon/smile-patrol-logo-white.png') center / contain no-repeat;
+    filter: drop-shadow(0 0 1px var(--theme-seed-shell-tint));
+  }
+
+  [data-visual-theme="smile-patrol"] body::before {
+    left: 0.5vw;
+    top: 68svh;
+    transform: rotate(-12deg);
+  }
+
+  [data-visual-theme="smile-patrol"] body::after {
+    right: 0.5vw;
+    bottom: -2.5rem;
+    width: clamp(170px, 12vw, 240px);
+    transform: rotate(16deg);
+  }
+}
+
+@media (prefers-color-scheme: light) and (max-width: 767px) {
+  [data-visual-theme="smile-patrol"] body::before {
+    width: 100px;
+    left: -36px;
+    top: 62svh;
+  }
+
+  [data-visual-theme="smile-patrol"] body::after {
+    width: 140px;
+    right: -45px;
+    bottom: -24px;
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   [data-visual-theme="smile-patrol"] {
     --theme-color-heading-section-accent-a-background: color-mix(in srgb, var(--theme-seed-decoration-a) 18%, #111827);

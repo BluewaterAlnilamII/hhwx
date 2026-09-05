@@ -1,3 +1,93 @@
+# Smile Patrol pre-release audit
+
+Date: 2026-09-05. Base commit: `42e3650f`. Result: no blocking issues found in the scoped local working-tree audit. No commit, remote CI run or deployment was performed.
+
+Final light-theme screenshot from the audited production build, captured at 1920 x 1000 in a signed-out Chromium session for the PR. The temporary local preview was stopped after capture.
+
+![Final Smile Patrol light theme](documents/smile-patrol-light-theme.png)
+
+## Accepted design and code boundaries
+
+- Canvas: `#FAF8F4`, with continuous, unequal-width 132-degree yellow, pale-yellow and white ribbons. The upper-left bright yellow is restored and the lower-right yellow area enlarged. Fine strokes have softened edges and a mask that fades toward the center.
+- Selected sidebar item: the same bright yellow as the canvas ribbon, with a 3 px orange indicator and bold text.
+- Page panels and nested ranking-mode/chart containers share `--theme-color-panel-background: #FFFEFA`. Main panels are square with a `#DDDCD5` border and no shadow; nested containers retain their existing geometry. Plot backgrounds and individual controls keep their own color roles.
+- Theme-specific palette/effects remain in the theme stylesheet; shared recipes provide semantic fallbacks. Components consume semantic tokens, and the frontend rules now document this separation of fill and geometry. No unresolved theme variable references were found.
+- The white LOGO preserves the geometry and cutouts of `src/app/icon.png`. Stars remain undecided. Chart rendering/data, dark-mode values, event behavior and data sources were not changed.
+- Reviewed all changed TSX, CSS and rule files. TSX edits only affect class names; no dependency or API changes are included.
+
+## Verification
+
+- `npm run build`: passed, including TypeScript validation and generation of 50 static pages. Compiled CSS contains the accepted panel color, panel class and LOGO URL.
+- `npm run lint`: passed with 0 errors and 24 warnings, all in files outside this patch. Existing warnings were left outside this visual change.
+- `node --import tsx --test tests/comment-ui-regressions.test.mjs tests/bandori-eventtracker-top10-ui.test.mjs tests/bandori-eventtracker-comment-links.test.mjs tests/bandori-events-consumers.test.mjs`: 21/21 passed.
+- `node scripts/build-smile-patrol-logo.mjs`: passed its geometry/cutout checks and reproduced the PNG byte-for-byte. The dev asset URL returned HTTP 200, `image/png`, 65,014 bytes.
+- Reused focused Chromium desktop/mobile evidence from this iteration: no horizontal overflow at 390 px, navigation drawer and tracker/info switching work, decorative layers do not intercept input, and toolbar controls retain their styles. Latest computed fills were `rgb(255, 254, 250)` for both nested containers and white for the plot; their existing corner radii were retained.
+- Dark-mode checks from earlier in this change remain applicable: subsequent overrides are light-only, and the new nested semantic token defaults to the previous surface color in dark mode. Dynamic chart SVG element counts were not used as a pixel-equivalence claim.
+
+## Release handoff
+
+- Include both new files, `public/favicon/smile-patrol-logo-white.png` and `scripts/build-smile-patrol-logo.mjs`, with the eventual commit; the stylesheet depends on the PNG.
+- Full unrelated CI/Rust suites, Safari/Firefox and authenticated write flows were not exercised. Required CI remains an integration gate.
+- `git diff --check`: passed. The verified HHWX dev process tree was stopped; port 3000 has no listening process.
+
+---
+
+# Earlier Smile Patrol light-theme iterations
+
+The following captures and results describe earlier iterations. The accepted palette and audit above supersede their old color and background descriptions.
+
+## Scope and visual reference
+
+- Date: 2026-09-05. Base commit: `42e3650f`; reviewed working-tree changes.
+- Reference: `C:/Users/bluew/.codex/generated_images/01a070b0-9b13-7550-984e-65941d43a710/exec-d0d6ca69-262e-481a-8f53-bbd2277bf8ec.png` (1844 x 853 pixels).
+- Preview: http://localhost:3000/bandori/events/322?type=event&tier=1000&server=cn&page=1
+- Desktop capture: `C:/Users/bluew/.codex/visualizations/2026/09/05/01a070b0-9b13-7550-984e-65941d43a710/hhwx-desktop.png` (1842 x 854 CSS/image pixels, DPR 1).
+- Mobile capture: same evidence directory, `hhwx-mobile.png` (390 x 844, DPR 1).
+- Dark capture: same evidence directory, `hhwx-dark.png` (929 x 861, DPR 1).
+- Browser: Chrome DevTools MCP. The in-app browser had repeatedly timed out during the preceding design iterations. Screenshot file export was denied by the tool's workspace mapping; its returned image bytes were saved unchanged through the local filesystem tools.
+- State: Chinese, signed out, CN event 322, event ranking T1000. Live scores, timestamps and progress naturally differ from the generated mock.
+
+## Visual comparison
+
+The selected reference and final desktop capture were opened together for comparison. The negligible frame-size difference was recorded rather than resizing UI or changing the existing responsive layout. Existing layout, functional controls, chart internals and dark mode take precedence over incidental variations in the generated mock, as agreed with the user.
+
+| Surface | Result |
+| --- | --- |
+| Typography and content | Existing fonts, sizes, labels, event banner and live data retained. Red title, blue functional accents and text hierarchy remain readable. |
+| Layout and spacing | Main panel positions, dimensions and padding match the pre-change application. Outer panels are square, white and lightly bordered. |
+| Colors and tokens | Broad warm-white center with continuous diagonal yellow/pale-yellow/white corner bands; pale-yellow navigation selection and orange indicator. Orange toolbar retained. |
+| Assets | White site LOGO derived from `src/app/icon.png`, preserving the source geometry and negative space. The generated mock's inaccurate decorative mark is intentionally not reproduced. |
+| Controls and layers | Existing toolbar button computed styles unchanged. Background decoration uses non-interactive body pseudo-elements without creating a new app stacking context. |
+
+Initial review covered toolbar buttons, selected navigation, panel edges, the event banner frame and the derived LOGO on a yellow backing. It missed the diagonal hairlines and overly sparse background identified in the user's subsequent screenshot; those were corrected below. Individual comment cards and other pages' panels were not redesigned in this first rollout.
+
+## Background refinement after user review
+
+- The orange diagonal hairlines came from hard-stop, one-pixel gradient strokes. Removed these strokes and their orange token; continuous ribbons now have actual width and one-pixel color transitions at their edges.
+- Expanded both corner compositions using unequal yellow, soft-yellow, pale-yellow and white bands. A very pale intermediate band connects each group to the warm-white center. Existing LOGO geometry, placement, controls and panel styling were retained.
+- Updated captures in the evidence directory above: `hhwx-background-v2-desktop.png` (1920 x 911, DPR 1, matching the user's browser content area) and `hhwx-background-v2-mobile.png` (390 x 844, DPR 1). Visual inspection confirmed the circled orange hairlines were absent and the wider ribbons remained continuous.
+- At 1842 x 854, light-mode chart styles/tokens, panel styles/rectangles, toolbar and navigation matched the state immediately before this refinement. Dark-mode styles also matched after responsive/color transitions settled; only the live comment section's height differed by 1.25 px.
+- Mobile client width and scroll width both remained 390 px; decorative layers retained `pointer-events: none`. No browser console errors or warnings were observed.
+- `npm run build` passed after the CSS refinement. Earlier lint/typecheck evidence remains applicable to the unchanged TypeScript files. No new application logic, dependency, chart styling or dark-mode rule was introduced.
+
+## Iterations and verification
+
+- The first mobile drawer check exposed the old saturated yellow backdrop. It was replaced with a white drawer and a neutral translucent backdrop; a subsequent 390 px screenshot verified the visible selection and overlay.
+- The initial decorative layer used app isolation. It was moved to body pseudo-elements to preserve existing modal/header stacking; the final desktop comparison verified both LOGOs remained visible.
+- Light-mode comparison: all 174 chart-subtree elements' captured style properties, chart color tokens, outer panel rectangles and toolbar controls matched the pre-change baseline.
+- Dark-mode comparison: chart, outer-panel, toolbar, navigation and canvas styles matched the pre-change baseline. Decorative pseudo-elements are absent. A small comment-section height difference followed live content/image loading; the first four panel rectangles were identical.
+- Mobile page width and scroll width both measured 390 px. Navigation opened and closed; switching to Activity Information updated the URL and rendered the overview/rewards/songs, then switching back restored the tracker.
+- Long-page comment-area inspection verified the fixed background and non-obstructing decoration. Team-builder shell smoke check rendered meaningful content without horizontal overflow or console errors.
+- No relevant browser console warnings/errors or framework error overlay were observed. The development toolbar is present in local screenshots.
+- Passed: targeted ESLint for changed components and the logo script; `npm run typecheck`; final `npm run build`; `git diff --check`.
+- `node scripts/build-smile-patrol-logo.mjs` generated the repository asset and verified both solid geometry and transparent cutouts. No runtime dependency was added.
+
+## Remaining coverage
+
+Chromium desktop/mobile emulation was exercised; Safari and Firefox were not. Authenticated comment submission and optimizer execution were outside this visual-only scope. Stars remain a separate future design decision. No production deployment was performed.
+
+---
+
 # Display Degree Design QA
 
 ## Comparison target
