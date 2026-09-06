@@ -202,7 +202,7 @@ test("card catalog and max-profile creation treat zero-only training as untraine
   assert.equal(defaultTrainedCard.skillLevel, 1);
 });
 
-test("card picker catalog sorts by every regional release slot", () => {
+test("card picker release sorting keeps missing and placeholder dates last in both directions", () => {
   const catalog = buildBandoriCardCatalog({
     "1": {
       characterId: 1,
@@ -228,6 +228,14 @@ test("card picker catalog sorts by every regional release slot", () => {
       resourceSetName: "res001003",
       releasedAt: [4102444800000, 4102444800000, 4102444800000, 4102444800000],
     },
+    "4": {
+      characterId: 1,
+      rarity: 5,
+      attribute: "powerful",
+      levelLimit: 50,
+      resourceSetName: "res001004",
+      releasedAt: [null, null, null, null],
+    },
   }, {
     "1": {
       bandId: 1,
@@ -242,14 +250,15 @@ test("card picker catalog sorts by every regional release slot", () => {
     characterIds: [1],
     sortDirection: "desc",
   };
-  const sortedIds = (sortBy) => filterBandoriCardCatalog(
+  const sortedIds = (sortBy, sortDirection = "desc") => filterBandoriCardCatalog(
     catalog,
-    { ...baseFilter, sortBy },
+    { ...baseFilter, sortBy, sortDirection },
   ).map((card) => card.cardId);
 
-  assert.deepEqual(sortedIds("id"), [3, 2, 1]);
-  assert.deepEqual(sortedIds("release_jp"), [2, 1]);
-  assert.deepEqual(sortedIds("release_en"), [1, 2]);
-  assert.deepEqual(sortedIds("release_tw"), [2, 1]);
-  assert.deepEqual(sortedIds("release_cn"), [2, 1]);
+  assert.deepEqual(sortedIds("id"), [4, 3, 2, 1]);
+  for (const sortBy of ["release_jp", "release_en", "release_tw", "release_cn"]) {
+    const datedIds = sortBy === "release_en" ? [1, 2] : [2, 1];
+    assert.deepEqual(sortedIds(sortBy), [...datedIds, 4, 3], `${sortBy} desc`);
+    assert.deepEqual(sortedIds(sortBy, "asc"), [...datedIds.reverse(), 3, 4], `${sortBy} asc`);
+  }
 });

@@ -5,6 +5,7 @@ import {
   resolveBandoriCardSkillLabel,
   type BandoriCharacterMaster,
   type BandoriSkillMaster,
+  type BandoriCardMaster,
 } from "@/lib/bandori/cards/master";
 import {
   BANDORI_CARD_ATTRIBUTES,
@@ -14,6 +15,8 @@ import {
   isBandoriCardAttribute,
   matchesBandoriCardFilterSelection,
   normalizeBandoriCardReleaseSortTimestamp,
+  normalizeBandoriCardCatalogType,
+  BANDORI_CARD_CATALOG_TYPES,
   type BandoriCardAttribute,
   type BandoriCardFilterState,
   type BandoriCardSortBy,
@@ -34,6 +37,14 @@ import {
   type BestdoriCardMaster,
 } from "@/lib/bandori-team-calculator";
 import { type UserGameProfileCardRecord } from "@/lib/user-game-profile-payload";
+import { listBandoriCardCatalogAvailableServers } from "./catalog";
+import { isKnownBandoriCardEntityCollision } from "./regional-extensions";
+import { buildBandoriCardSearchData, buildBandoriCardSearchMetadata, compileBandoriCardSearch, type BandoriCardSearchEntry } from "./search";
+
+export type BandoriProfileCardSearchContext = {
+  canonicalCards: Readonly<Record<string, BandoriCardMaster | null | undefined>>;
+  metadata: ReturnType<typeof buildBandoriCardSearchMetadata>;
+};
 
 export type BandoriProfileCardEntry = {
   card: UserGameProfileCardRecord;
@@ -48,7 +59,7 @@ export type BandoriProfileCardEntry = {
   characterName: string;
   skillEffectLabel: string;
   skillEffectLanguageTag: BandoriServerLanguageTag;
-  searchText: string;
+  search: BandoriCardSearchEntry;
 };
 
 export type BandoriProfileCardSortBy = BandoriCardSortBy;
@@ -87,6 +98,7 @@ export function buildBandoriProfileCardEntry(
   preferredServer: BandoriServer = DEFAULT_BANDORI_PREFERRED_SERVER,
   contextServer: BandoriServer = preferredServer,
   unknownSkillLabel = "",
+  searchContext?: BandoriProfileCardSearchContext,
 ): BandoriProfileCardEntry {
   const metadata = cardMetadata[String(card.cardId)];
   const characterId = Number(metadata?.characterId);
@@ -109,6 +121,8 @@ export function buildBandoriProfileCardEntry(
     unknownSkillLabel,
   );
   const totalPower = calculateProfileCardTotalPower(card, metadata, characters, characterBonusesById);
+  const canonicalCard = (searchContext?.canonicalCards ?? cardMetadata)[String(card.cardId)];
+  const entityServer = isKnownBandoriCardEntityCollision(card.cardId) ? contextServer : null;
   return {
     card,
     metadata,
@@ -122,17 +136,16 @@ export function buildBandoriProfileCardEntry(
     characterName,
     skillEffectLabel: skillEffect.label,
     skillEffectLanguageTag: skillEffect.languageTag,
-    searchText: [
-      card.cardId,
-      cardName,
-      characterName,
-      skillEffect.label,
-      normalizedCharacterId,
+    search: {
+      cardId: card.cardId,
+      characterId: normalizedCharacterId,
       bandId,
       attribute,
-      normalizedRarity,
-      totalPower,
-    ].join(" ").toLowerCase(),
+      rarity: normalizedRarity,
+      type: metadata ? normalizeBandoriCardCatalogType(metadata.type) : null,
+      availableServers: canonicalCard ? listBandoriCardCatalogAvailableServers(canonicalCard, entityServer) : [],
+      ...buildBandoriCardSearchData(canonicalCard, entityServer, searchContext?.metadata ?? buildBandoriCardSearchMetadata(characters, skills)),
+    },
   };
 }
 
@@ -196,6 +209,7 @@ export function filterAndSortBandoriProfileCardEntries(
   }
 
   const selection = buildBandoriCardFilterSelection(filter);
+  const matchesSearch = compileBandoriCardSearch(filter.query);
   const unknownFieldPolicy = {
     shouldIncludeUnknownBand: includesUnknownValue(filter.bandIds.length, options.availableBandIds.length, options.unknownMetadataPolicy),
     shouldIncludeUnknownAttribute: includesUnknownValue(filter.attributes.length, BANDORI_CARD_ATTRIBUTES.length, options.unknownMetadataPolicy),
@@ -205,10 +219,11 @@ export function filterAndSortBandoriProfileCardEntries(
   const direction = filter.sortDirection === "asc" ? 1 : -1;
 
   return entries.filter((entry) => {
-    if (selection.query && !entry.searchText.includes(selection.query)) return false;
+    if (!matchesSearch(entry.search)) return false;
+    if (filter.types && (entry.search.type === null
+      ? filter.types.length !== BANDORI_CARD_CATALOG_TYPES.length
+      : !filter.types.includes(normalizeBandoriCardCatalogType(entry.search.type)))) return false;
     if (!matchesBandoriCardFilterSelection(entry, selection, unknownFieldPolicy)) return false;
-    if (getBandoriCardReleaseSortServer(filter.sortBy) !== null
-      && readBandoriProfileCardReleaseTimestamp(entry.metadata, filter.sortBy) <= 0) return false;
     return true;
   }).sort((left, right) => {
     if (filter.sortBy === "power") {
@@ -217,10 +232,15 @@ export function filterAndSortBandoriProfileCardEntries(
     if (filter.sortBy === "id") {
       return direction * (left.card.cardId - right.card.cardId);
     }
-    return direction * (
-      readBandoriProfileCardReleaseTimestamp(left.metadata, filter.sortBy)
-      - readBandoriProfileCardReleaseTimestamp(right.metadata, filter.sortBy)
-    ) || direction * (left.card.cardId - right.card.cardId);
+    const leftTimestamp = readBandoriProfileCardReleaseTimestamp(left.metadata, filter.sortBy);
+    const rightTimestamp = readBandoriProfileCardReleaseTimestamp(right.metadata, filter.sortBy);
+    if (leftTimestamp <= 0 || rightTimestamp <= 0) {
+      if (leftTimestamp <= 0 && rightTimestamp <= 0) {
+        return direction * (left.card.cardId - right.card.cardId);
+      }
+      return leftTimestamp <= 0 ? 1 : -1;
+    }
+    return direction * (leftTimestamp - rightTimestamp) || direction * (left.card.cardId - right.card.cardId);
   });
 }
 

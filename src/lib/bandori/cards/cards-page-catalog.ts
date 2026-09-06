@@ -9,9 +9,11 @@ import {
 } from "@/lib/bandori/cards/regional-extensions";
 import {
   BANDORI_CARD_ATTRIBUTES,
+  BANDORI_CARD_CATALOG_TYPES,
   BANDORI_CARD_RARITIES,
+  normalizeBandoriCardCatalogType,
+  type BandoriCardCatalogType,
   getBandoriCardReleaseSortServer,
-  isBandoriCardAttribute,
   type BandoriCardAttribute,
   type BandoriCardFilterState,
   type BandoriCardPickerSortBy,
@@ -20,7 +22,6 @@ import {
   expandBandoriCardCatalog,
   listBandoriCardCatalogAvailableServers,
   normalizeBandoriCardCatalogBase,
-  parsePositiveBandoriCardCatalogInteger,
   readBandoriCardCatalogReleaseTimestamp,
   type BandoriCardCatalogBaseEntry,
 } from "@/lib/bandori/cards/catalog";
@@ -31,29 +32,20 @@ import {
   readBandoriRegionalTextAt,
   type BandoriServer,
 } from "@/lib/bandori-server";
+import {
+  buildBandoriCardSearchData,
+  buildBandoriCardSearchMetadata,
+  compileBandoriCardSearch,
+  type BandoriCardSearchData,
+} from "@/lib/bandori/cards/search";
 
-export const BANDORI_CARD_CATALOG_TYPES = [
-  "permanent",
-  "kirafes",
-  "dreamfes",
-  "limited",
-  "birthday",
-  "event",
-  "campaign",
-  "initial",
-  "special",
-  "others",
-] as const;
-
-export type BandoriCardCatalogType = typeof BANDORI_CARD_CATALOG_TYPES[number];
-
-const BANDORI_CARD_CATALOG_TYPE_SET = new Set<string>(BANDORI_CARD_CATALOG_TYPES);
+export { BANDORI_CARD_CATALOG_TYPES, normalizeBandoriCardCatalogType, type BandoriCardCatalogType } from "./filter";
 
 export type BandoriCardsPageFilter = BandoriCardFilterState<BandoriCardPickerSortBy> & {
   types: BandoriCardCatalogType[];
 };
 
-export type BandoriCardsPageCatalogEntry = BandoriCardCatalogBaseEntry & {
+export type BandoriCardsPageCatalogEntry = BandoriCardCatalogBaseEntry & BandoriCardSearchData & {
   entityServer: BandoriCardServer | null;
   displayServer: BandoriServer;
   displayCard: BandoriCardMaster;
@@ -67,14 +59,7 @@ export type BandoriCardsPageCatalogEntry = BandoriCardCatalogBaseEntry & {
   filterRarity: number | null;
   filterAttribute: BandoriCardAttribute | null;
   filterType: BandoriCardCatalogType | null;
-  filterSearchText: string;
 };
-
-export function normalizeBandoriCardCatalogType(value: unknown): BandoriCardCatalogType {
-  return typeof value === "string" && BANDORI_CARD_CATALOG_TYPE_SET.has(value)
-    ? value as BandoriCardCatalogType
-    : "others";
-}
 
 function readCharacterNameAt(
   character: BandoriCharacterMaster | null | undefined,
@@ -96,6 +81,7 @@ export function buildBandoriCardsPageCatalog(
     skill: string;
   },
 ): BandoriCardsPageCatalogEntry[] {
+  const searchMetadata = buildBandoriCardSearchMetadata(characters, skills);
   return expandBandoriCardCatalog(cards).flatMap((catalogEntry) => {
     const canonicalCard = cards[String(catalogEntry.cardId)];
     if (!canonicalCard) {
@@ -115,9 +101,6 @@ export function buildBandoriCardsPageCatalog(
     const displayCard = catalogEntry.server !== null
       ? catalogEntry.card
       : materializeBandoriCardForServer(canonicalCard, displayServer);
-    const filterCard = catalogEntry.server !== null
-      ? catalogEntry.server === preferredServer ? catalogEntry.card : null
-      : materializeBandoriCardForServer(canonicalCard, preferredServer);
     if (!displayCard) {
       return [];
     }
@@ -144,33 +127,11 @@ export function buildBandoriCardsPageCatalog(
     }
 
     const { entry, character, skillId: displaySkillId, rawType } = normalized;
-    const filterCharacterId = filterCard
-      ? parsePositiveBandoriCardCatalogInteger(filterCard.characterId)
-      : null;
-    const filterCharacter = filterCharacterId === null
-      ? null
-      : characters[String(filterCharacterId)];
-    const filterSkillId = filterCard
-      ? parsePositiveBandoriCardCatalogInteger(filterCard.skillId)
-      : null;
-    const filterSkill = filterSkillId === null ? undefined : skills[String(filterSkillId)] ?? undefined;
     const displaySkill = displaySkillId === null ? undefined : skills[String(displaySkillId)] ?? undefined;
     const displayName = readBandoriRegionalTextAt(displayCard.prefix, displayServer)
       ?? fallbackLabels.card(entry.cardId);
     const characterName = readCharacterNameAt(character, displayServer)
       ?? fallbackLabels.character(entry.characterId);
-    const filterName = filterCard
-      ? readBandoriRegionalTextAt(filterCard.prefix, preferredServer)
-      : null;
-    const filterCharacterName = filterCard
-      ? readCharacterNameAt(filterCharacter, preferredServer)
-      : null;
-    const filterSkillName = filterCard
-      ? readBandoriRegionalTextAt(filterCard.skillName, preferredServer)
-      : null;
-    const filterSkillEffect = filterCard
-      ? resolveBandoriSkillLabelForServer(filterSkill, 5, preferredServer, 5).label
-      : "";
     return [{
       ...entry,
       displayServer,
@@ -186,23 +147,13 @@ export function buildBandoriCardsPageCatalog(
       ).label,
       type: normalizeBandoriCardCatalogType(rawType),
       displayReleaseTimestamp: releaseTimestamps[displayServer],
-      filterBandId: filterCard
-        ? parsePositiveBandoriCardCatalogInteger(filterCharacter?.bandId)
-        : null,
-      filterCharacterId,
-      filterRarity: filterCard
-        ? parsePositiveBandoriCardCatalogInteger(filterCard.rarity)
-        : null,
-      filterAttribute: filterCard && isBandoriCardAttribute(filterCard.attribute)
-        ? filterCard.attribute
-        : null,
-      filterType: filterCard ? normalizeBandoriCardCatalogType(filterCard.type) : null,
-      filterSearchText: [
-        filterName,
-        filterCharacterName,
-        filterSkillName,
-        filterSkillEffect,
-      ].filter(Boolean).join(" ").toLowerCase(),
+      // Structural filters follow the displayed entity, even when the preferred server lacks it.
+      filterBandId: entry.bandId,
+      filterCharacterId: entry.characterId,
+      filterRarity: entry.rarity,
+      filterAttribute: entry.attribute,
+      filterType: normalizeBandoriCardCatalogType(rawType),
+      ...buildBandoriCardSearchData(canonicalCard, catalogEntry.server, searchMetadata),
     }];
   });
 }
@@ -230,14 +181,13 @@ export function filterBandoriCardsPageCatalog(
     return [];
   }
 
-  const normalizedQuery = filter.query.trim().toLowerCase();
-  const exactId = /^[1-9]\d*$/u.test(normalizedQuery) ? Number(normalizedQuery) : null;
+  const matchesSearch = compileBandoriCardSearch(filter.query);
   const releaseServer = getBandoriCardReleaseSortServer(filter.sortBy);
   const direction = filter.sortDirection === "asc" ? 1 : -1;
 
   return entries.filter((entry) => {
     if (!entry.availableServers.some((server) => filter.servers.includes(server))) return false;
-    if (exactId !== null ? entry.cardId !== exactId : normalizedQuery && !entry.filterSearchText.includes(normalizedQuery)) return false;
+    if (!matchesSearch(entry)) return false;
     if (!matchesNullableSelection(entry.filterBandId, filter.bandIds, availableBandIds)) return false;
     if (!matchesNullableSelection(entry.filterAttribute, filter.attributes, BANDORI_CARD_ATTRIBUTES)) return false;
     if (!matchesNullableSelection(entry.filterRarity, filter.rarities, BANDORI_CARD_RARITIES)) return false;

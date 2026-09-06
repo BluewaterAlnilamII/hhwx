@@ -119,11 +119,11 @@ function RegionalDetailRow({
   );
 }
 
-function SingleDetailRow({ label, children }: { label: string; children: ReactNode }) {
+function SingleDetailRow({ label, children, alignment = "baseline" }: { label: string; children: ReactNode; alignment?: "baseline" | "center" }) {
   return (
-    <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-start gap-3 border-b border-[var(--theme-color-border-subtle)] py-3 last:border-b-0 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-5 dark:border-slate-700">
-      <dt className="pt-0.5 text-sm font-semibold leading-5 text-[var(--theme-color-text-muted)] dark:text-slate-400">{label}</dt>
-      <dd className="min-w-0 wrap-break-word text-right text-sm font-semibold leading-5 text-[var(--theme-color-text-default)] dark:text-slate-100">{children}</dd>
+    <div className={`grid grid-cols-[7rem_minmax(0,1fr)] ${alignment === "center" ? "items-center" : "items-baseline"} gap-3 border-b border-[var(--theme-color-border-subtle)] py-3 last:border-b-0 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-5 dark:border-slate-700`}>
+      <dt className="text-sm font-semibold leading-5 text-[var(--theme-color-text-muted)] dark:text-slate-400">{label}</dt>
+      <dd className="flex min-w-0 flex-col items-end wrap-break-word text-right text-sm font-semibold leading-5 text-[var(--theme-color-text-default)] dark:text-slate-100">{children}</dd>
     </div>
   );
 }
@@ -154,7 +154,7 @@ function GachaVoiceButton({
       }}
       aria-label={playLabel}
       title={playLabel}
-      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-action-secondary-foreground)] outline-hidden transition-colors hover:border-[var(--theme-color-action-secondary-border)] hover:bg-[var(--theme-color-action-secondary-background-hover)] focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-color-surface-background)]"
+      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-action-secondary-foreground)] outline-hidden transition-colors hover:border-[var(--theme-color-action-secondary-border)] hover:bg-[var(--theme-color-action-secondary-background-hover)] focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-color-panel-background)]"
     >
       <Play className="ml-px h-4 w-4" aria-hidden="true" />
     </button>
@@ -300,16 +300,16 @@ export default function CardDetailPageClient({
 
   return (
     <BandoriPageShell contentClassName="max-w-6xl">
-      <article className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700 dark:bg-[#111827]">
+      <article className="hhwx-panel rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700 dark:bg-[#111827]">
         <Link href={cardsListHref} className="inline-flex items-center gap-2 text-sm font-black text-sky-700 transition hover:text-sky-500 dark:text-sky-300">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           {t("detail.back")}
         </Link>
         <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
-            <h1 className="wrap-break-word text-2xl font-black tracking-tight text-[var(--theme-color-text-default)] sm:text-3xl dark:text-slate-100">
+            <Heading as="h1" visualRole="page" className="wrap-break-word tracking-tight dark:font-black dark:text-slate-100">
               {characterName} - {cardName}
-            </h1>
+            </Heading>
             <div className="mt-2 flex min-h-5 flex-wrap items-baseline gap-x-3 gap-y-1 text-sm leading-5 text-[var(--theme-color-text-muted)] dark:text-slate-400">
               <span className="font-black uppercase tracking-[0.18em]">#{cardId}</span>
               {jpReferenceName ? (
@@ -325,11 +325,11 @@ export default function CardDetailPageClient({
           />
         </div>
 
-        <section className="@container mt-7 border-t border-[var(--theme-color-border-subtle)] pt-6 dark:border-slate-700">
+        <section className="@container mt-6 border-t border-[var(--theme-color-border-subtle)] pt-6 dark:border-slate-700">
           <Heading as="h2" visualRole="section" accentSlot="c" icon={<Images className="h-5 w-5" />}>
             {t("detail.artworkTitle")}
           </Heading>
-          <div className="mt-5">
+          <div className="mt-4">
             <BandoriFullCardGallery
               metadata={{
                 cardId,
@@ -354,12 +354,12 @@ export default function CardDetailPageClient({
           </div>
         </section>
 
-        <section className="@container mt-7 border-t border-[var(--theme-color-border-subtle)] pt-6 dark:border-slate-700">
+        <section className="@container mt-6 border-t border-[var(--theme-color-border-subtle)] pt-6 dark:border-slate-700">
           <Heading as="h2" visualRole="section" accentSlot="a" icon={<ClipboardList className="h-5 w-5" />}>
             {t("detail.informationTitle")}
           </Heading>
 
-          <div className="mt-3 grid min-w-0 items-stretch gap-y-0 @min-[54rem]:grid-cols-2 @min-[54rem]:gap-x-0">
+          <div className="mt-4 grid min-w-0 items-stretch gap-y-0 @min-[54rem]:grid-cols-2 @min-[54rem]:gap-x-0">
             <dl className="min-w-0 @min-[54rem]:pr-8">
               <SingleDetailRow label={t("detail.cardId")}>{cardId}</SingleDetailRow>
               <RegionalDetailRow
@@ -367,7 +367,7 @@ export default function CardDetailPageClient({
                 currentValue={cardName}
                 jpValue={jpReferenceName}
               />
-              <SingleDetailRow label={t("detail.character")}>
+              <SingleDetailRow label={t("detail.character")} alignment="center">
                 <span className="inline-flex items-center justify-end gap-2">
                   {characterIconUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -381,7 +381,7 @@ export default function CardDetailPageClient({
                   <span>{characterName}</span>
                 </span>
               </SingleDetailRow>
-              <SingleDetailRow label={t("detail.band")}>
+              <SingleDetailRow label={t("detail.band")} alignment="center">
                 <span className="inline-flex items-center justify-end gap-2">
                   {bandIconUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -395,7 +395,7 @@ export default function CardDetailPageClient({
                   <span>{bandName}</span>
                 </span>
               </SingleDetailRow>
-              <SingleDetailRow label={t("detail.attribute")}>
+              <SingleDetailRow label={t("detail.attribute")} alignment="center">
                 <span className="inline-flex items-center justify-end gap-2">
                   {attributeIconUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -409,7 +409,7 @@ export default function CardDetailPageClient({
                   <span>{attribute ? termsT(`attributes.${attribute}`) : noInformation}</span>
                 </span>
               </SingleDetailRow>
-              <SingleDetailRow label={t("detail.rarity")}>
+              <SingleDetailRow label={t("detail.rarity")} alignment="center">
                 {rarityStarIconUrl ? (
                   <span className="inline-flex items-center justify-end gap-0.5">
                     <span className="sr-only">{rarity}</span>

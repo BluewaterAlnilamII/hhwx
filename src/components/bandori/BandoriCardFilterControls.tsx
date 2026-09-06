@@ -1,7 +1,7 @@
 "use client";
 
-import { type ReactNode } from "react";
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Filter, Search, X } from "lucide-react";
+import { useEffect, useRef, type ReactNode } from "react";
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, Search, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
   buildBandoriCardAttributeIconUrl,
@@ -10,8 +10,11 @@ import {
   buildBandoriLegacyRarityCompositeUrl,
 } from "@/lib/bandori-builtin-resources";
 import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
+import BandoriSearchHelp from "./BandoriSearchHelp";
+import BandoriFilterResultCount from "./BandoriFilterResultCount";
 import {
   BANDORI_CARD_ATTRIBUTES,
+  BANDORI_CARD_CATALOG_TYPES,
   BANDORI_CARD_RARITIES,
   type BandoriCardAttribute,
   type BandoriCardFilterState,
@@ -19,6 +22,7 @@ import {
 import { getBandoriServerCode, type BandoriServer } from "@/lib/bandori-server";
 
 export type BandoriCardFilterControlsProps<TSortBy extends string> = {
+  className?: string;
   filter: BandoriCardFilterState<TSortBy>;
   resultCountLabel: string;
   bandOptions: Array<{ bandId: number; label: string }>;
@@ -27,9 +31,6 @@ export type BandoriCardFilterControlsProps<TSortBy extends string> = {
   availableCharacterIds: number[];
   availableServers: BandoriServer[];
   sortOptions: Array<{ value: TSortBy; label: string }>;
-  typeOptions?: Array<{ value: string; label: string }>;
-  selectedTypes?: string[];
-  onTypesChange?: (types: string[]) => void;
   onFilterChange: (patch: Partial<BandoriCardFilterState<TSortBy>>) => void;
   onClearFilter: () => void;
 };
@@ -113,13 +114,14 @@ function ToggleAllButton({
 function FilterRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid gap-2 sm:grid-cols-[5.5rem_1fr] sm:items-start">
-      <div className="pt-2 text-sm font-medium text-slate-600">{label}</div>
+      <div className="hhwx-filter-label pt-2 text-sm font-medium text-slate-600">{label}</div>
       <div className="flex min-w-0 flex-wrap items-center gap-2">{children}</div>
     </div>
   );
 }
 
 export default function BandoriCardFilterControls<TSortBy extends string>({
+  className = "",
   filter,
   resultCountLabel,
   bandOptions,
@@ -128,13 +130,17 @@ export default function BandoriCardFilterControls<TSortBy extends string>({
   availableCharacterIds,
   availableServers,
   sortOptions,
-  typeOptions = [],
-  selectedTypes = [],
-  onTypesChange,
   onFilterChange,
   onClearFilter,
 }: BandoriCardFilterControlsProps<TSortBy>) {
   const t = useTranslations("bandori.cardFilters");
+  const typeT = useTranslations("bandori.cards.types");
+  const selectedTypes = filter.types ?? [...BANDORI_CARD_CATALOG_TYPES];
+  const typeOptions = BANDORI_CARD_CATALOG_TYPES.map((value) => ({ value, label: typeT(value) }));
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (searchInputRef.current) searchInputRef.current.value = filter.query;
+  }, [filter.query]);
   const allLabel = t("actions.all");
   const bandLabel = t("rows.band");
   const attributeLabel = t("rows.attribute");
@@ -143,26 +149,61 @@ export default function BandoriCardFilterControls<TSortBy extends string>({
   const serverLabel = t("rows.serverAvailability");
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+    <div className={`hhwx-panel hhwx-catalog-filters rounded-2xl border border-slate-200 bg-white p-4 shadow-xs ${className}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-          <input
-            type="search"
-            value={filter.query}
-            onChange={(event) => onFilterChange({ query: event.target.value })}
-            placeholder={t("searchPlaceholder")}
-            className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-hidden transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-          />
-        </div>
+        <form
+          role="search"
+          className="flex min-w-0 flex-1 gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const query = searchInputRef.current?.value.trim() ?? "";
+            if (query !== filter.query) onFilterChange({ query });
+          }}
+        >
+          <div className="relative min-w-0 flex-1">
+            <Search className="hhwx-filter-search-icon pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+            <input
+              ref={searchInputRef}
+              type="search"
+              defaultValue={filter.query}
+              onInput={(event) => {
+                if (
+                  event.currentTarget.value === ""
+                  && filter.query !== ""
+                  && !(event.nativeEvent as InputEvent).isComposing
+                ) onFilterChange({ query: "" });
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.stopPropagation();
+                if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) {
+                  event.preventDefault();
+                }
+              }}
+              enterKeyHint="search"
+              aria-label={t("searchPlaceholder")}
+              placeholder={t("searchPlaceholder")}
+              className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-hidden transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+            />
+          </div>
+          <button
+            type="submit"
+            aria-label={t("actions.search")}
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
+          >
+            <Search className="h-4 w-4" aria-hidden="true" />
+          </button>
+          <BandoriSearchHelp kind="cards" />
+        </form>
         <div className="flex items-center gap-2">
-          <span className="inline-flex h-10 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700">
-            <Filter className="h-4 w-4" aria-hidden="true" />
-            {resultCountLabel}
-          </span>
+          <BandoriFilterResultCount label={resultCountLabel} />
           <button
             type="button"
-            onClick={onClearFilter}
+            onClick={() => {
+              if (searchInputRef.current) searchInputRef.current.value = "";
+              onClearFilter();
+            }}
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
           >
             <X className="h-4 w-4" aria-hidden="true" />
@@ -301,32 +342,30 @@ export default function BandoriCardFilterControls<TSortBy extends string>({
           />
         </FilterRow>
 
-        {typeOptions.length > 0 && onTypesChange ? (
-          <FilterRow label={t("rows.type")}>
-            {typeOptions.map((option) => (
-              <SelectionButton
-                key={option.value}
-                title={option.label}
-                isSelected={selectedTypes.includes(option.value)}
-                onClick={() => onTypesChange(toggleSelection(selectedTypes, option.value))}
-                className="px-3 text-xs"
-              >
-                {option.label}
-              </SelectionButton>
-            ))}
-            <ToggleAllButton
-              isSelected={areAllSelected(selectedTypes, typeOptions.map((option) => option.value))}
-              allLabel={allLabel}
-              selectAllLabel={t("actions.selectAllGroup", { group: t("rows.type") })}
-              clearAllLabel={t("actions.clearAllGroup", { group: t("rows.type") })}
-              onClick={() => onTypesChange(
-                areAllSelected(selectedTypes, typeOptions.map((option) => option.value))
-                  ? []
-                  : typeOptions.map((option) => option.value),
-              )}
-            />
-          </FilterRow>
-        ) : null}
+        <FilterRow label={t("rows.type")}>
+          {typeOptions.map((option) => (
+            <SelectionButton
+              key={option.value}
+              title={option.label}
+              isSelected={selectedTypes.includes(option.value)}
+              onClick={() => onFilterChange({ types: toggleSelection(selectedTypes, option.value) })}
+              className="px-3 text-xs"
+            >
+              {option.label}
+            </SelectionButton>
+          ))}
+          <ToggleAllButton
+            isSelected={areAllSelected(selectedTypes, typeOptions.map((option) => option.value))}
+            allLabel={allLabel}
+            selectAllLabel={t("actions.selectAllGroup", { group: t("rows.type") })}
+            clearAllLabel={t("actions.clearAllGroup", { group: t("rows.type") })}
+            onClick={() => onFilterChange({ types:
+              areAllSelected(selectedTypes, typeOptions.map((option) => option.value))
+                ? []
+                : [...BANDORI_CARD_CATALOG_TYPES],
+            })}
+          />
+        </FilterRow>
 
         <FilterRow label={t("rows.sort")}>
           <select

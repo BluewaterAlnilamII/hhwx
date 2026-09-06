@@ -1,14 +1,16 @@
 "use client";
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { ListMusic, Loader2, SearchX } from "lucide-react";
+import { Loader2, SearchX } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
+import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 import { useBandoriMusicMaster } from "@/hooks/useBandoriMusicMaster";
 import { useBandoriMusicAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import {
   BANDORI_SONG_BAND_FILTERS,
+  BANDORI_SONG_DIFFICULTY_FILTERS,
   BANDORI_SONG_TYPES,
   buildBandoriSongCatalog,
   filterBandoriSongCatalog,
@@ -18,7 +20,6 @@ import {
 import {
   BANDORI_SERVERS,
   getBandoriServerCode,
-  type BandoriServer,
 } from "@/lib/bandori-server";
 import BandoriPageShell from "../BandoriPageShell";
 import BandoriSongDetailedRow from "./_components/BandoriSongDetailedRow";
@@ -43,11 +44,10 @@ function setListParam<T extends string | number>(
 
 export default function SongsPageClient() {
   const t = useTranslations("bandori.songs");
-  const locale = useLocale();
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
-  const preferredTextServer: BandoriServer = locale === "en" ? 1 : 3;
+  const preferredTextServer = useBandoriPreferredServer();
   const musicMaster = useBandoriMusicMaster();
   const musicAssetIndex = useBandoriMusicAssetIndex();
   const [visibleState, setVisibleState] = useState({ key: "", count: INITIAL_VISIBLE_COUNT });
@@ -103,8 +103,7 @@ export default function SongsPageClient() {
     );
     setListParam(params, "bands", nextFilter.bands, BANDORI_SONG_BAND_FILTERS);
     setListParam(params, "types", nextFilter.types, BANDORI_SONG_TYPES);
-    if (nextFilter.difficulty === "expert") params.delete("difficulty");
-    else params.set("difficulty", nextFilter.difficulty);
+    setListParam(params, "difficulty", nextFilter.difficulties, BANDORI_SONG_DIFFICULTY_FILTERS);
     if (nextFilter.minLevel === null) params.delete("minLevel");
     else params.set("minLevel", String(nextFilter.minLevel));
     if (nextFilter.maxLevel === null) params.delete("maxLevel");
@@ -130,16 +129,7 @@ export default function SongsPageClient() {
 
   return (
     <BandoriPageShell contentClassName="max-w-6xl">
-      <section className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-5 shadow-[var(--theme-shadow-surface-raised)] sm:p-8 dark:border-slate-700 dark:bg-[#111827]">
-        <div className="flex items-center gap-3">
-          <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
-            <ListMusic className="h-6 w-6" aria-hidden="true" />
-          </span>
-          <h1 className="text-2xl font-black tracking-tight text-[var(--theme-color-text-default)] sm:text-3xl dark:text-slate-100">
-            {t("page.title")}
-          </h1>
-        </div>
-      </section>
+      <h1 className="sr-only">{t("page.title")}</h1>
 
       <BandoriSongFilterControls
         filter={filter}
@@ -149,16 +139,16 @@ export default function SongsPageClient() {
       />
 
       {musicMaster.error ? (
-        <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm font-bold text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
+        <div role="alert" className="hhwx-catalog-error rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm font-bold text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
           {t("states.loadFailed")}
         </div>
       ) : musicMaster.loading ? (
-        <div className="flex min-h-64 items-center justify-center gap-3 rounded-2xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] text-sm font-bold text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-[#111827]">
+        <div className="hhwx-panel flex min-h-64 items-center justify-center gap-3 rounded-2xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] text-sm font-bold text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-[#111827]">
           <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
           {t("states.loading")}
         </div>
       ) : filteredSongs.length === 0 ? (
-        <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-2xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] text-center text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-[#111827]">
+        <div className="hhwx-panel flex min-h-64 flex-col items-center justify-center gap-3 rounded-2xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] text-center text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-[#111827]">
           <SearchX className="h-9 w-9" aria-hidden="true" />
           <div className="text-sm font-bold">{t("states.empty")}</div>
         </div>
@@ -176,7 +166,7 @@ export default function SongsPageClient() {
             <button
               type="button"
               onClick={() => setVisibleState({ key: filterKey, count: visibleCount + PAGE_SIZE })}
-              className="h-12 w-full rounded-2xl border border-sky-200 bg-white text-sm font-black text-sky-700 shadow-xs transition hover:border-sky-300 hover:bg-sky-50 dark:border-sky-900 dark:bg-slate-900 dark:text-sky-300 dark:hover:bg-slate-800"
+              className="hhwx-panel hhwx-catalog-action h-12 w-full rounded-2xl border border-sky-200 bg-white text-sm font-black text-sky-700 shadow-xs transition hover:border-sky-300 hover:bg-sky-50 dark:border-sky-900 dark:bg-slate-900 dark:text-sky-300 dark:hover:bg-slate-800"
             >
               {t("page.showMore", { count: Math.min(PAGE_SIZE, remainingCount) })}
             </button>

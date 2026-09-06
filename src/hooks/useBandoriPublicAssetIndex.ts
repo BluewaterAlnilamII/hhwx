@@ -46,7 +46,12 @@ function useBandoriPublicAssetIndex<T>(
       ? store.getState(indexUrl)
       : EMPTY_INDEX_STATE as BandoriPublicAssetIndexStoreState<T>
   ), [indexUrl, store]);
-  const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  // Hydration must start from the server's empty state, even with a warm browser cache.
+  const state = useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    () => EMPTY_INDEX_STATE as BandoriPublicAssetIndexStoreState<T>,
+  );
 
   useEffect(() => {
     if (!indexUrl) {

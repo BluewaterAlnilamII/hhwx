@@ -134,7 +134,7 @@ export default function BandoriCardThumbnailTile({
           detailHref={`/bandori/cards/${card.cardId}?server=${getBandoriServerCode(detailServer)}`}
           {...tooltipInteractionProps}
         >
-          <span className="block w-full whitespace-normal wrap-break-word rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
+          <span className="hhwx-card-picker-surface block w-full whitespace-normal wrap-break-word rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
             {resolvedSkillEffectLabel}
           </span>
         </BandoriCardHoverPopover>

@@ -50,7 +50,6 @@
   "avatar": {
     "chooseTitle": "Choose avatar",
     "dialogTitle": "Choose avatar card",
-    "dialogDescription": "The after-training art is used by default. You can switch card art after selecting a card.",
     "close": "Close",
     "useDefault": "Use default avatar",
     "cancel": "Cancel",

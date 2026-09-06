@@ -12,10 +12,8 @@ import Heading from "@/components/Heading";
 import MusicArtwork from "@/components/music-player/MusicArtwork";
 import { usePathname } from "@/i18n/navigation";
 import type { BandoriChartDifficulty } from "@/lib/bandori-master-contract";
-import {
-  pickBandoriRegionalText,
-  type BandoriServer,
-} from "@/lib/bandori-server";
+import { pickBandoriRegionalText } from "@/lib/bandori-server";
+import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 import { cn } from "@/lib/utils";
 
 export type SongDetailRegionalTextSlots = [
@@ -69,7 +67,7 @@ export default function SongDetailPageClient({
 }: SongDetailPageClientProps) {
   const t = useTranslations("bandori.songs");
   const locale = useLocale();
-  const preferredTextServer: BandoriServer = locale === "en" ? 1 : 3;
+  const preferredTextServer = useBandoriPreferredServer();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const initialView = searchParams.get("view") === "simulator" ? "simulator" : "info";
@@ -160,7 +158,7 @@ export default function SongDetailPageClient({
 
   return (
     <BandoriPageShell contentClassName="max-w-6xl">
-      <article className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700 dark:bg-[#111827]">
+      <article className="hhwx-panel rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700 dark:bg-[#111827]">
         <div className="grid gap-5 sm:grid-cols-[8rem_minmax(0,1fr)] sm:items-start">
           <div className="flex aspect-square w-32 items-center justify-center overflow-hidden rounded-2xl bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] shadow-[var(--theme-shadow-media)]">
             {artworkUrl ? (
@@ -184,7 +182,7 @@ export default function SongDetailPageClient({
         </div>
       </article>
 
-      <div role="tablist" aria-label={t("detail.view.label")} className="grid grid-cols-2 overflow-hidden rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] shadow-sm dark:border-slate-700 dark:bg-[#111827]">
+      <div role="tablist" aria-label={t("detail.view.label")} className="hhwx-panel grid grid-cols-2 overflow-hidden rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] shadow-sm dark:border-slate-700 dark:bg-[#111827]">
         {(["info", "simulator"] as const).map((view) => {
           const active = view === activeView;
           return (
@@ -210,8 +208,8 @@ export default function SongDetailPageClient({
       </div>
 
       <div role="tabpanel" hidden={activeView !== "info"}>
-        <section className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700 dark:bg-[#111827]">
-          <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <section className="hhwx-panel rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700 dark:bg-[#111827]">
+          <dl className="hhwx-catalog-statistics grid grid-cols-2 gap-2 sm:grid-cols-4">
           {statistics.map(({ id, value, icon: Icon }) => (
             <div key={id} className="rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] p-3">
               <dt className="flex items-center gap-1.5 text-xs font-semibold text-[var(--theme-color-text-muted)]">

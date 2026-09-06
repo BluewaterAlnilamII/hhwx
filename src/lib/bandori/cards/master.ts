@@ -21,6 +21,7 @@ export type BandoriCharacterMaster = {
   nickname?: Array<string | null> | string;
   characterName?: Array<string | null> | string;
   firstName?: Array<string | null> | string;
+  lastName?: Array<string | null> | string;
 };
 
 export type BandoriSkillMaster = BandoriSkillLabelMaster;

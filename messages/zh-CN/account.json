@@ -50,7 +50,6 @@
   "avatar": {
     "chooseTitle": "选择头像",
     "dialogTitle": "选择头像卡面",
-    "dialogDescription": "默认使用特训后卡面，可在选择后切换卡面版本。",
     "close": "关闭",
     "useDefault": "使用默认头像",
     "cancel": "取消",

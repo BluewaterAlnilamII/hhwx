@@ -123,7 +123,7 @@ export function SimulatorSubcontrolRow({
 }
 
 function choiceClassName(isSelected: boolean, isDisabled = false): string {
-  return `inline-flex min-h-9 items-center justify-center rounded-full border px-3 py-1.5 text-[13px] font-semibold outline-hidden transition focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-color-surface-background)] sm:min-h-11 sm:px-3.5 sm:py-2 sm:text-sm ${
+  return `inline-flex min-h-9 items-center justify-center rounded-full border px-3 py-1.5 text-[13px] font-semibold outline-hidden transition focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-color-panel-background)] sm:min-h-11 sm:px-3.5 sm:py-2 sm:text-sm ${
     isDisabled
       ? "cursor-not-allowed border-[var(--theme-color-control-border-disabled)] bg-[var(--theme-color-control-background-disabled)] text-[var(--theme-color-control-foreground-disabled)] opacity-60"
       : isSelected

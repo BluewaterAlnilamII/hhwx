@@ -145,7 +145,7 @@ const BandoriCardHoverTooltip = forwardRef<HTMLDivElement, BandoriCardHoverToolt
           )}
         />
       ) : null}
-      <div className="max-h-[calc(100vh-24px)] overflow-y-auto rounded-[18px] border border-white/90 bg-white p-3 text-center shadow-[0_18px_48px_rgba(15,23,42,0.22)] ring-1 ring-slate-950/5">
+      <div className="hhwx-card-picker-surface max-h-[calc(100vh-24px)] overflow-y-auto rounded-[18px] border border-white/90 bg-white p-3 text-center shadow-[0_18px_48px_rgba(15,23,42,0.22)] ring-1 ring-slate-950/5">
         <div className="whitespace-normal wrap-break-word text-sm font-black leading-snug text-slate-900">{cardName}</div>
         <div className="mt-1 whitespace-normal wrap-break-word text-xs font-semibold leading-snug text-slate-500">
           {characterName}

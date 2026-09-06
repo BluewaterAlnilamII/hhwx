@@ -11,6 +11,7 @@ export type BandoriSkillLabelMaster = BestdoriSkillMaster & {
   description?: Array<string | null>;
   simpleDescription?: Array<string | null>;
   onceEffect?: {
+    onceEffectType?: string;
     onceEffectValue?: unknown;
   };
 };

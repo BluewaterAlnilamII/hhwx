@@ -1,9 +1,32 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createElement } from "react";
+import { renderToString } from "react-dom/server";
+import { useBandoriCardsAssetIndex } from "../src/hooks/useBandoriPublicAssetIndex.ts";
 
 import {
   createBandoriPublicAssetIndexStore,
+  bandoriCardsAssetIndexStore,
 } from "../src/lib/bandori-public-asset-index-client.ts";
+
+test("asset hook hydration uses an empty server snapshot even when the shared cache is warm", (context) => {
+  const originalBaseUrl = process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL;
+  process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL = "https://assets.example.test";
+  context.mock.method(bandoriCardsAssetIndexStore, "getState", () => ({
+    value: { cards: {} }, loadedAt: 100, inFlight: null, error: null,
+  }));
+  function Status({ enabled }) {
+    const state = useBandoriCardsAssetIndex(enabled);
+    return state.loading ? "loading" : state.value ? "ready" : "disabled";
+  }
+  try {
+    assert.equal(renderToString(createElement(Status, { enabled: true })), "loading");
+    assert.equal(renderToString(createElement(Status, { enabled: false })), "disabled");
+  } finally {
+    if (originalBaseUrl === undefined) delete process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL;
+    else process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL = originalBaseUrl;
+  }
+});
 
 function deferred() {
   let resolve;

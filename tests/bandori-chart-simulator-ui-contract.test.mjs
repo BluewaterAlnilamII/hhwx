@@ -216,7 +216,7 @@ test("mobile simulator settings match the compact transport control rhythm", asy
   assert.match(adjustmentControls, /h-9 min-w-14[\s\S]*text-sm font-bold[\s\S]*sm:h-10 sm:min-w-24[\s\S]*sm:text-base sm:font-black/u);
   assert.match(adjustmentControls, /className\?: string[\s\S]*className=\{cn\(/u);
   assert.match(runtime, /<SimulatorAdjustmentValue\s+ariaLabel=\{currentAriaLabel\}\s+className="min-w-\[4\.5rem\]"/u);
-  assert.match(settingsCard, /p-3 shadow-sm sm:p-5/u);
+  assert.match(settingsCard, /p-3 dark:shadow-sm sm:p-5/u);
   assert.match(settingsCard, /text-\[15px\][^"\n]*sm:text-base/u);
   assert.match(settingsCard, /mt-2[^"\n]*sm:mt-3/u);
   assert.match(skinControls, /mobileLayout\?: "inline" \| "stacked"/u);
@@ -818,7 +818,7 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(skinControls, /sm:\[&>\*\]:min-h-11/u);
   assert.doesNotMatch(skinControls, /className="pt-2 text-sm/u);
   assert.doesNotMatch(skinControls, /limitedPerformance\.coverage/u);
-  assert.match(settingsCard, /theme-color-surface-background/u);
+  assert.match(settingsCard, /theme-color-panel-background/u);
   assert.match(switchControl, /role="switch"/u);
   assert.match(switchControl, /aria-checked=\{checked\}/u);
   assert.match(switchControl, /theme-color-semantic-info-foreground/u);

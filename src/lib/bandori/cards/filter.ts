@@ -21,6 +21,17 @@ export const BANDORI_CARD_ATTRIBUTES: BandoriCardAttribute[] = [
 ];
 export const BANDORI_CARD_RARITIES = [1, 2, 3, 4, 5];
 
+export const BANDORI_CARD_CATALOG_TYPES = [
+  "permanent", "kirafes", "dreamfes", "limited", "birthday", "event", "campaign", "initial", "special", "others",
+] as const;
+export type BandoriCardCatalogType = typeof BANDORI_CARD_CATALOG_TYPES[number];
+const BANDORI_CARD_CATALOG_TYPE_SET = new Set<string>(BANDORI_CARD_CATALOG_TYPES);
+export function normalizeBandoriCardCatalogType(value: unknown): BandoriCardCatalogType {
+  return typeof value === "string" && BANDORI_CARD_CATALOG_TYPE_SET.has(value)
+    ? value as BandoriCardCatalogType
+    : "others";
+}
+
 const BANDORI_CARD_ATTRIBUTE_SET = new Set<string>(BANDORI_CARD_ATTRIBUTES);
 const BANDORI_BAND_LABELS = new Map(BANDORI_CHARACTER_GROUPS.map((group) => [group.bandId, group.label]));
 const BANDORI_CARD_PLACEHOLDER_RELEASE_CUTOFF_TIMESTAMP = Date.UTC(2100, 0, 1);
@@ -96,6 +107,7 @@ export function buildBandoriCardSortValues({
 }
 
 export type BandoriCardFilterState<TSortBy extends string> = {
+  types?: BandoriCardCatalogType[];
   query: string;
   servers: BandoriServer[];
   bandIds: number[];

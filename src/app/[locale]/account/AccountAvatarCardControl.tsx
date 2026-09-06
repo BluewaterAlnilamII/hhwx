@@ -137,11 +137,10 @@ export default function AccountAvatarCardControl({
 
       {open && typeof document !== "undefined" ? createPortal((
         <div data-testid="account-avatar-card-dialog" className="fixed inset-0 z-1000 flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="account-avatar-card-dialog-title">
-          <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-slate-50 shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
+          <div className="hhwx-card-picker-surface flex max-h-[calc(100dvh-1.5rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-slate-50 shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
+            <div className="hhwx-card-picker-surface flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
               <div className="min-w-0">
                 <h2 id="account-avatar-card-dialog-title" className="text-lg font-bold text-slate-900">{t("dialogTitle")}</h2>
-                <p className="mt-1 text-sm text-slate-500">{t("dialogDescription")}</p>
               </div>
               <button
                 type="button"
@@ -161,7 +160,7 @@ export default function AccountAvatarCardControl({
               />
             </div>
 
-            <div className="flex shrink-0 flex-col gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div className="hhwx-card-picker-surface flex shrink-0 flex-col gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
               <div className="min-h-5 text-sm font-semibold text-rose-600">
                 {message}
               </div>

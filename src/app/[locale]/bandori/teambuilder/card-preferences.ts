@@ -153,7 +153,10 @@ export function writeCardPreferences(profileCacheKey: string, preferences: TeamB
   let stored: Record<string, unknown> = {};
   try {
     const rawValue = window.localStorage.getItem(TEAMBUILDER_CARD_PREFERENCES_STORAGE_KEY);
-    stored = rawValue ? JSON.parse(rawValue) as Record<string, unknown> : {};
+    const parsed: unknown = rawValue ? JSON.parse(rawValue) : null;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      stored = parsed as Record<string, unknown>;
+    }
   } catch {
     stored = {};
   }
@@ -162,5 +165,9 @@ export function writeCardPreferences(profileCacheKey: string, preferences: TeamB
     excludedCardIds: normalized.excludedCardIds,
     ownedCardParameters: normalized.ownedCardParameters,
   };
-  window.localStorage.setItem(TEAMBUILDER_CARD_PREFERENCES_STORAGE_KEY, JSON.stringify(stored));
+  try {
+    window.localStorage.setItem(TEAMBUILDER_CARD_PREFERENCES_STORAGE_KEY, JSON.stringify(stored));
+  } catch {
+    // Optional persistence must not interrupt the current card configuration.
+  }
 }

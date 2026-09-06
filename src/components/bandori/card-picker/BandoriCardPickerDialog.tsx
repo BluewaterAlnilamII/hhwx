@@ -47,8 +47,8 @@ export default function BandoriCardPickerDialog({
     <Dialog.Root open={isOpen} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-1000 bg-slate-950/55" />
-        <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-1000 flex max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-6xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-slate-50 shadow-2xl focus:outline-hidden sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100%-3rem)]">
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
+        <Dialog.Content aria-describedby={undefined} className="hhwx-card-picker-surface fixed left-1/2 top-1/2 z-1000 flex max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-6xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-slate-50 shadow-2xl focus:outline-hidden sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100%-3rem)]">
+          <div className="hhwx-card-picker-surface flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
             <Dialog.Title className="min-w-0 text-lg font-bold text-slate-900">{title}</Dialog.Title>
             <Dialog.Close asChild>
               <button

@@ -53,6 +53,135 @@
     box-shadow: 0 0 0 1px var(--theme-color-panel-border);
   }
 
+  .hhwx-card-picker-surface {
+    border-color: var(--theme-color-panel-border);
+    background-color: var(--theme-color-panel-background);
+  }
+
+  /* Catalog rows and shared card controls use the same theme semantics. */
+  .hhwx-catalog-row:hover {
+    translate: none;
+    border-color: var(--theme-color-action-secondary-border);
+    box-shadow: none;
+  }
+
+  .hhwx-catalog-action {
+    color: var(--theme-color-action-secondary-foreground);
+  }
+
+  .hhwx-catalog-action:hover {
+    border-color: var(--theme-color-action-secondary-border);
+    background-color: var(--theme-color-action-secondary-background-hover);
+  }
+
+  .hhwx-catalog-error {
+    border-radius: 0;
+    border-color: var(--theme-color-semantic-danger-border);
+    background-color: var(--theme-color-semantic-danger-background);
+    color: var(--theme-color-semantic-danger-foreground);
+    box-shadow: none;
+  }
+
+  .hhwx-catalog-filters :is(input, select, button) {
+    border-color: var(--theme-color-border-subtle);
+    background-color: var(--theme-color-control-background);
+    color: var(--theme-color-text-default);
+    --tw-ring-color: var(--theme-color-focus-ring);
+  }
+
+  .hhwx-catalog-filters button:hover {
+    border-color: var(--theme-color-action-secondary-border);
+    background-color: var(--theme-color-control-background-hover);
+    color: var(--theme-color-text-default);
+  }
+
+  .hhwx-catalog-filters button[aria-pressed="true"] {
+    border-color: var(--theme-color-selection-subtle-ring);
+    background-color: var(--theme-color-semantic-info-background);
+    color: var(--theme-color-control-foreground-pressed);
+    --tw-ring-color: var(--theme-color-selection-subtle-ring);
+    box-shadow: inset 0 0 0 1px var(--theme-color-selection-subtle-ring);
+  }
+
+  .hhwx-catalog-filters :is(input, select):focus {
+    border-color: var(--theme-color-focus-ring);
+    box-shadow: none;
+  }
+
+  .hhwx-catalog-filters :is(.hhwx-filter-label, label, .hhwx-filter-search-icon) {
+    color: var(--theme-color-text-muted);
+  }
+
+  .hhwx-catalog-filters .hhwx-filter-count {
+    border-color: var(--theme-color-action-secondary-border);
+    background-color: var(--theme-color-panel-background);
+    color: var(--theme-color-action-secondary-foreground);
+  }
+
+  :is(.hhwx-catalog-row, .hhwx-catalog-action):focus-visible,
+  .hhwx-catalog-filters :is(input, select, button):focus-visible {
+    outline: 2px solid var(--theme-color-focus-ring);
+    outline-offset: 3px;
+    box-shadow: none;
+  }
+
+  .hhwx-card-art-toggle {
+    gap: 0.5rem;
+    overflow: visible;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .hhwx-card-art-toggle button {
+    border: 1px solid var(--theme-color-border-subtle);
+    border-radius: 1rem;
+  }
+
+  .hhwx-card-art-toggle button[aria-pressed="true"] {
+    border-color: transparent;
+    background-color: var(--theme-color-selection-strong-background);
+    color: var(--theme-color-selection-strong-foreground);
+    box-shadow: 0 0 0 1px var(--theme-color-panel-background), 0 0 0 3px var(--theme-color-selection-strong-ring);
+  }
+
+  .hhwx-catalog-statistics {
+    gap: 0;
+  }
+
+  .hhwx-catalog-statistics > div {
+    border: 0 solid var(--theme-color-border-subtle);
+    border-radius: 0;
+    background-color: var(--theme-color-panel-background);
+    text-align: center;
+  }
+
+  .hhwx-catalog-statistics > div:nth-child(even) {
+    border-left-width: 1px;
+  }
+
+  .hhwx-catalog-statistics > div:nth-child(n + 3) {
+    border-top-width: 1px;
+  }
+
+  .hhwx-catalog-statistics dt {
+    justify-content: center;
+  }
+
+  .hhwx-catalog-statistics dd {
+    font-size: 1.25rem;
+    font-weight: 900;
+  }
+
+  @media (min-width: 40rem) {
+    .hhwx-catalog-statistics > div:nth-child(n + 3) {
+      border-top-width: 0;
+    }
+
+    .hhwx-catalog-statistics > div + div {
+      border-left-width: 1px;
+    }
+  }
+
   .hhwx-navigation-item {
     position: relative;
     border-radius: 0;
@@ -95,7 +224,8 @@
   --eventtracker-bestdori-color: var(--theme-color-text-muted);
 
   /* Calendar bands are component-private recipes derived from theme chrome. */
-  --eventtracker-nonworking-band-fill: color-mix(in srgb, var(--theme-color-control-background-muted) 56%, transparent);
+  /* ReferenceArea also applies 0.5 fill opacity, so start from the accent rather than an already-muted surface. */
+  --eventtracker-nonworking-band-fill: color-mix(in srgb, var(--theme-color-border-default) 32%, transparent);
   --eventtracker-nonworking-band-stroke: color-mix(in srgb, var(--theme-color-border-default) 34%, transparent);
 
 }
