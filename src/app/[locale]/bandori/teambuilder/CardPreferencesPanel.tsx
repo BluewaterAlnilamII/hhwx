@@ -34,6 +34,7 @@ export type TeamBuilderCardPreferencesPanelProps = {
   profileCards: UserGameProfileCardRecord[];
   preferences: TeamBuilderCardPreferences;
   cardMetadata: Record<string, GameProfileCardMetadata | undefined>;
+  canonicalCardMetadata: Readonly<Record<string, GameProfileCardMetadata | null | undefined>>;
   characters: Record<string, BandoriCharacterMaster | undefined>;
   skills: Record<string, BandoriSkillMaster | undefined>;
   characterBonusesById: Record<string, BandoriCharacterBonusState | undefined>;
@@ -54,6 +55,7 @@ export default function TeamBuilderCardPreferencesPanel({
   profileCards,
   preferences,
   cardMetadata,
+  canonicalCardMetadata,
   characters,
   skills,
   characterBonusesById,
@@ -97,12 +99,14 @@ export default function TeamBuilderCardPreferencesPanel({
   const {
     entries: profileCardEntries,
     isReady: isProfileCardEntryCollectionReady,
+    searchContext,
   } = useBandoriProfileCardEntries({
     cacheScopeKey,
     isEnabled: true,
     locale,
     profileCards,
     cardMetadata,
+    canonicalCardMetadata,
     characters,
     skills,
     characterBonusesById,
@@ -121,6 +125,7 @@ export default function TeamBuilderCardPreferencesPanel({
       preferredServer,
       displayServer,
       termsT("unknownSkill"),
+      searchContext,
     ),
     card,
   })), [
@@ -130,6 +135,7 @@ export default function TeamBuilderCardPreferencesPanel({
     displayServer,
     locale,
     preferences.temporaryCards,
+    searchContext,
     preferredServer,
     skills,
     termsT,
@@ -177,7 +183,7 @@ export default function TeamBuilderCardPreferencesPanel({
   const isProfileCardEntryCollectionRefreshing = !isProfileCardEntryCollectionReady && profileCardEntries.length > 0;
 
   return (
-    <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+    <div className="hhwx-panel space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
       <div>
         <div>
           <h3 className="text-lg font-bold text-slate-900">{t("title")}</h3>
@@ -305,7 +311,7 @@ export default function TeamBuilderCardPreferencesPanel({
             ))}
           </div>
         ) : (
-          <div className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">{t("emptyTemporary")}</div>
+          <div className="hhwx-card-picker-surface rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">{t("emptyTemporary")}</div>
         )}
       </div>
 
@@ -365,11 +371,11 @@ export default function TeamBuilderCardPreferencesPanel({
         ) : null}
         {profileCards.length > 0 ? (
           isInitialProfileCardEntryLoad ? (
-            <div className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">{t("preparingCards")}</div>
+            <div className="hhwx-card-picker-surface rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">{t("preparingCards")}</div>
           ) : (
           <>
             {isProfileCardEntryCollectionRefreshing ? (
-              <div role="status" aria-live="polite" className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">
+              <div role="status" aria-live="polite" className="hhwx-card-picker-surface rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">
                 {t("updatingCards")}
               </div>
             ) : null}

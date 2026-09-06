@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { type AppLocale } from "@/i18n/routing";
 import {
   buildBandoriProfileCardEntry,
   type BandoriProfileCardEntry,
+  type BandoriProfileCardSearchContext,
 } from "@/lib/bandori/cards/profile-card-collection";
 import { type BandoriCharacterMaster, type BandoriSkillMaster } from "@/lib/bandori/cards/master";
 import { type GameProfileCardMetadata } from "@/lib/bandori/cards/game-profile-card";
@@ -12,6 +13,8 @@ import { type BandoriServer } from "@/lib/bandori-server";
 import { type BandoriCharacterBonusState } from "@/lib/bandori-team-calculator";
 import { type UserGameProfileCardRecord } from "@/lib/user-game-profile-payload";
 import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
+import { buildBandoriCardSearchMetadata } from "@/lib/bandori/cards/search";
+import type { BandoriCardsMasterMap } from "@/lib/bandori/cards/api-client";
 
 const PROFILE_CARD_ENTRY_BUILD_CHUNK_SIZE = 80;
 const metadataCacheParts = new WeakMap<object, string>();
@@ -141,6 +144,7 @@ export function useBandoriProfileCardEntries({
   locale,
   profileCards,
   cardMetadata,
+  canonicalCardMetadata,
   characters,
   skills,
   characterBonusesById,
@@ -152,13 +156,19 @@ export function useBandoriProfileCardEntries({
   locale: AppLocale;
   profileCards: UserGameProfileCardRecord[];
   cardMetadata: Record<string, GameProfileCardMetadata | undefined>;
+  canonicalCardMetadata?: BandoriCardsMasterMap | null;
   characters: Record<string, BandoriCharacterMaster | undefined>;
   skills: Record<string, BandoriSkillMaster | undefined>;
   characterBonusesById: Record<string, BandoriCharacterBonusState | undefined>;
   displayServer: BandoriServer;
   unknownSkillLabel: string;
-}): { entries: BandoriProfileCardEntry[]; isReady: boolean } {
+}): { entries: BandoriProfileCardEntry[]; isReady: boolean; searchContext: BandoriProfileCardSearchContext } {
   const preferredServer = useBandoriPreferredServer();
+  const searchContext = useMemo(() => ({
+    canonicalCards: canonicalCardMetadata ?? cardMetadata,
+    metadata: buildBandoriCardSearchMetadata(characters, skills),
+  }), [canonicalCardMetadata, cardMetadata, characters, skills]);
+  const previousSearchContext = useRef(searchContext);
   const entryCacheRef = useRef(new Map<string, BandoriProfileCardEntry>());
   const cacheScopeKeyRef = useRef(cacheScopeKey);
   const [state, setState] = useState<{ entries: BandoriProfileCardEntry[]; isReady: boolean }>({
@@ -167,6 +177,10 @@ export function useBandoriProfileCardEntries({
   });
 
   useEffect(() => {
+    if (previousSearchContext.current !== searchContext) {
+      entryCacheRef.current.clear();
+      previousSearchContext.current = searchContext;
+    }
     const hasCacheScopeChanged = cacheScopeKeyRef.current !== cacheScopeKey;
     if (hasCacheScopeChanged) {
       cacheScopeKeyRef.current = cacheScopeKey;
@@ -224,6 +238,7 @@ export function useBandoriProfileCardEntries({
           preferredServer,
           displayServer,
           unknownSkillLabel,
+          searchContext,
         );
         nextEntryCache.set(cacheKey, entry);
         nextEntries.push(entry);
@@ -253,9 +268,10 @@ export function useBandoriProfileCardEntries({
     locale,
     preferredServer,
     profileCards,
+    searchContext,
     skills,
     unknownSkillLabel,
   ]);
 
-  return state;
+  return { ...state, searchContext };
 }

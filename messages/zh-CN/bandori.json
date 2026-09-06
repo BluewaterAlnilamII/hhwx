@@ -218,7 +218,6 @@
   "cards": {
     "page": {
       "title": "卡牌图鉴",
-      "displayServer": "显示服务器",
       "resultCount": "{count} 张卡牌",
       "showMore": "再显示 {count} 张"
     },
@@ -283,7 +282,7 @@
     }
   },
   "cardFilters": {
-    "searchPlaceholder": "搜索卡牌名称、角色名或卡牌 ID",
+    "searchPlaceholder": "搜索卡牌名称或其他条件",
     "rarityAlt": "{rarity} 星",
     "bandFallback": "乐队 {bandId}",
     "characterFallback": "角色 {characterId}",
@@ -323,7 +322,22 @@
       "all": "全部",
       "selectAllGroup": "选择全部{group}",
       "clearAllGroup": "取消全部{group}",
+      "search": "搜索",
       "clear": "清空"
+    },
+    "searchHelp": {
+      "label": "搜索规则",
+      "title": "条件规则示例：",
+      "band": "乐队：如 <code>r</code> / <code>ポピパ</code> / <code>蝶团</code> / <code>mygo</code>，匹配对应乐队",
+      "character": "角色：如 <code>kkr</code> / <code>つぐ</code> / <code>若宫 伊芙</code> / <code>chu2</code>，匹配对应角色",
+      "attribute": "属性：如 <code>powerful</code> / <code>power</code> / <code>红</code> / <code>パワフル</code> 匹配 Powerful 属性",
+      "rarity": "稀有度：如 <code>4*+</code> 匹配四星及以上的卡牌",
+      "skillRate": "技能倍率：如 <code>{rate}</code> 匹配技能倍率不高于130%的卡牌",
+      "skillType": "技能类型：如 <code>plock</code> / <code>判</code> / <code>判卡</code> 匹配判定强化技能",
+      "cardType": "卡牌类型：如 <code>perm</code> / <code>permanent</code> / <code>常驻</code> / <code>無期限</code> 匹配常驻卡牌",
+      "server": "可用服务器：如 <code>en</code> / <code>intl</code> / <code>ww</code> / <code>国际服</code> 匹配 EN 服可用的卡牌",
+      "id": "ID：如 <code>#4</code> 匹配 ID 为4的卡牌",
+      "name": "强制名称：如 <code>/happy</code> / <code>\"happy\"</code> 仅匹配名称中包含happy的卡牌"
     }
   },
   "gameProfiles": {
@@ -561,7 +575,19 @@
       "showMore": "再显示 {count} 首"
     },
     "filters": {
-      "searchPlaceholder": "搜索歌曲名、乐队名或歌曲 ID",
+      "searchPlaceholder": "搜索歌曲名称或其他条件",
+      "searchHelp": {
+        "label": "搜索规则",
+        "title": "条件规则示例：",
+        "band": "乐队：如 <code>r</code> / <code>ポピパ</code> / <code>蝶团</code> / <code>mygo</code>，匹配对应乐队",
+        "difficulty": "难易度：如 <code>hd</code> / <code>hard</code> / <code>困难</code> / <code>ハード</code> 匹配 HARD 难易度",
+        "difficultyRange": "难易度范围：如 <code>hd+</code> / <code>{difficulty}</code> 匹配 HARD / EXPERT / SPECIAL 难易度",
+        "level": "乐曲等级：如 <code>{level}</code> 匹配所选难易度中存在26级及以下谱面的歌曲",
+        "songType": "歌曲类型：如 <code>cover</code> / <code>翻唱</code> / <code>カバー</code> 匹配翻唱歌曲",
+        "server": "可用服务器：如 <code>en</code> / <code>intl</code> / <code>ww</code> / <code>国际服</code> 匹配 EN 服可用的歌曲",
+        "id": "ID：如 <code>#4</code> 匹配 ID 为4的歌曲",
+        "name": "强制名称：如 <code>/happy</code> / <code>\"happy\"</code> 仅匹配名称中包含happy的歌曲"
+      },
       "otherBand": "其他",
       "serverAvailabilityAria": "筛选在 {server} 服务器有效的歌曲",
       "levelMin": "最低",
@@ -606,7 +632,7 @@
       },
       "actions": {
         "all": "全部",
-        "clear": "清除筛选",
+        "clear": "清空",
         "selectAll": "选择全部{group}",
         "clearAll": "清除全部{group}"
       }

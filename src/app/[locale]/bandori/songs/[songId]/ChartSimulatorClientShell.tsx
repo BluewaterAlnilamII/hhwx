@@ -27,7 +27,7 @@ function LoadingFallback() {
   return (
     <section
       aria-busy="true"
-      className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700 dark:bg-[#111827]"
+      className="hhwx-panel rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700 dark:bg-[#111827]"
     >
       <h2 className="text-xl font-black text-[var(--theme-color-text-default)]">
         {t("title")}

@@ -371,6 +371,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
     locale,
     profileCards: draftCards,
     cardMetadata,
+    canonicalCardMetadata: cardsMaster.canonicalData,
     characters,
     skills,
     characterBonusesById,
@@ -675,9 +676,9 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
               />
             ) : null}
 
-            <div className="min-h-[420px] overflow-visible rounded-2xl border border-slate-100 bg-[#fffdf1]/72 p-3 shadow-inner">
+            <div className="hhwx-panel min-h-[420px] overflow-visible rounded-2xl border border-slate-100 bg-[#fffdf1]/72 p-3 shadow-inner">
               {!areEntriesReady && entries.length > 0 ? (
-                <div role="status" className="mb-3 rounded-xl bg-white p-3 text-sm font-semibold text-slate-500">{t("collectionStates.updatingCards")}</div>
+                <div role="status" className="hhwx-card-picker-surface mb-3 rounded-xl bg-white p-3 text-sm font-semibold text-slate-500">{t("collectionStates.updatingCards")}</div>
               ) : null}
               {filteredEntries.length === 0 ? (
                 <div className="flex min-h-[360px] flex-col items-center justify-center gap-3 text-center text-slate-500">
@@ -749,6 +750,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
               server={profileServer}
               missingCardFallback="none"
               cardMetadata={cardMetadata}
+              canonicalCardMetadata={cardsMaster.canonicalData ?? undefined}
               scrollElementRef={cardPickerScrollRef}
               characters={characters}
               skills={skills}

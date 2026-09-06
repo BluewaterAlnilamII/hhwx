@@ -218,7 +218,6 @@
   "cards": {
     "page": {
       "title": "Card Catalog",
-      "displayServer": "Display server",
       "resultCount": "{count} cards",
       "showMore": "Show {count} more"
     },
@@ -283,7 +282,7 @@
     }
   },
   "cardFilters": {
-    "searchPlaceholder": "Search card name, character name, or card ID",
+    "searchPlaceholder": "Search card names or other filters",
     "rarityAlt": "{rarity} star",
     "bandFallback": "Band {bandId}",
     "characterFallback": "Character {characterId}",
@@ -323,7 +322,22 @@
       "all": "All",
       "selectAllGroup": "Select all {group}",
       "clearAllGroup": "Clear all {group}",
+      "search": "Search",
       "clear": "Clear"
+    },
+    "searchHelp": {
+      "label": "Search rules",
+      "title": "Filter examples:",
+      "band": "Band: e.g. <code>r</code> / <code>ポピパ</code> / <code>蝶团</code> / <code>mygo</code> match the corresponding band",
+      "character": "Character: e.g. <code>kkr</code> / <code>つぐ</code> / <code>若宫 伊芙</code> / <code>chu2</code> match the corresponding character",
+      "attribute": "Attribute: e.g. <code>powerful</code> / <code>power</code> / <code>红</code> / <code>パワフル</code> match Powerful cards",
+      "rarity": "Rarity: e.g. <code>4*+</code> matches cards with four stars or more",
+      "skillRate": "Skill rate: e.g. <code>{rate}</code> matches skill rates of 130% or less",
+      "skillType": "Skill type: e.g. <code>plock</code> / <code>判</code> / <code>判卡</code> match judgment enhancement skills",
+      "cardType": "Card type: e.g. <code>perm</code> / <code>permanent</code> / <code>常驻</code> / <code>無期限</code> match permanent cards",
+      "server": "Available server: e.g. <code>en</code> / <code>intl</code> / <code>ww</code> / <code>国际服</code> match cards available on EN",
+      "id": "ID: e.g. <code>#4</code> matches cards with ID 4",
+      "name": "Name only: e.g. <code>/happy</code> / <code>\"happy\"</code> match only cards whose names contain happy"
     }
   },
   "gameProfiles": {
@@ -561,7 +575,19 @@
       "showMore": "Show {count} more"
     },
     "filters": {
-      "searchPlaceholder": "Search song title, band, or song ID",
+      "searchPlaceholder": "Search song names or other filters",
+      "searchHelp": {
+        "label": "Search rules",
+        "title": "Filter examples:",
+        "band": "Band: e.g. <code>r</code> / <code>ポピパ</code> / <code>蝶团</code> / <code>mygo</code> match the corresponding band",
+        "difficulty": "Difficulty: e.g. <code>hd</code> / <code>hard</code> / <code>困难</code> / <code>ハード</code> match HARD difficulty",
+        "difficultyRange": "Difficulty range: e.g. <code>hd+</code> / <code>{difficulty}</code> match HARD / EXPERT / SPECIAL difficulties",
+        "level": "Level: e.g. <code>{level}</code> matches songs with a chart at level 26 or below among the selected difficulties",
+        "songType": "Song type: e.g. <code>cover</code> / <code>翻唱</code> / <code>カバー</code> match cover songs",
+        "server": "Available server: e.g. <code>en</code> / <code>intl</code> / <code>ww</code> / <code>国际服</code> match songs available on EN",
+        "id": "ID: e.g. <code>#4</code> matches songs with ID 4",
+        "name": "Name only: e.g. <code>/happy</code> / <code>\"happy\"</code> match only songs whose names contain happy"
+      },
       "otherBand": "Other",
       "serverAvailabilityAria": "Filter songs available on the {server} server",
       "levelMin": "Min",
@@ -606,7 +632,7 @@
       },
       "actions": {
         "all": "All",
-        "clear": "Clear filters",
+        "clear": "Clear",
         "selectAll": "Select all {group}",
         "clearAll": "Clear all {group}"
       }

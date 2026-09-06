@@ -1,5 +1,11 @@
 import { BANDORI_CHARACTER_GROUPS } from "@/lib/bandori-character-groups";
 import {
+  BANDORI_SEARCH_BAND_ALIASES,
+  BANDORI_SEARCH_SERVER_ALIASES,
+  normalizeBandoriSearchText,
+  tokenizeBandoriSearch,
+} from "@/lib/bandori/search";
+import {
   BANDORI_CHART_DIFFICULTIES,
   type BandoriChartDifficulty,
 } from "@/lib/bandori-master-contract";
@@ -59,6 +65,7 @@ export type BandoriSongCatalogEntry = {
   ];
   difficultyLevels: Partial<Record<BandoriChartDifficulty, number>>;
   searchText: string;
+  searchNames: readonly string[];
 };
 
 export type BandoriSongsPageFilter = {
@@ -66,7 +73,7 @@ export type BandoriSongsPageFilter = {
   servers: BandoriServer[];
   bands: BandoriSongBandFilter[];
   types: BandoriSongType[];
-  difficulty: BandoriSongDifficultyFilter;
+  difficulties: BandoriSongDifficultyFilter[];
   minLevel: number | null;
   maxLevel: number | null;
   sortBy: BandoriSongSort;
@@ -134,14 +141,12 @@ function isDifficultyReleased(
   return publishedTimestamp !== null && publishedTimestamp > 0 && publishedTimestamp <= now;
 }
 
-function collectSearchText(record: BandoriMusicMasterRecord, songId: number): string {
+function collectSearchText(record: BandoriMusicMasterRecord): string {
   return [
-    String(songId),
     ...(Array.isArray(record.musicTitle) ? record.musicTitle : []),
     ...(Array.isArray(record.bandName) ? record.bandName : []),
   ].filter((value): value is string => typeof value === "string")
-    .join("\n")
-    .toLocaleLowerCase();
+    .map(normalizeBandoriSearchText).join("\n");
 }
 
 function resolveSongType(tag: unknown): BandoriSongCatalogType {
@@ -221,39 +226,122 @@ export function buildBandoriSongCatalog(
       publishedAtServer: firstRelease.server,
       publishedAtByServer,
       difficultyLevels,
-      searchText: collectSearchText(record, songId),
+      searchText: collectSearchText(record),
+      searchNames: (Array.isArray(record.musicTitle) ? record.musicTitle : [])
+        .filter((value): value is string => typeof value === "string")
+        .map(normalizeBandoriSearchText),
     }];
   });
 }
 
 function selectedLevels(
   entry: BandoriSongCatalogEntry,
-  difficulty: BandoriSongDifficultyFilter,
+  difficulties: readonly BandoriSongDifficultyFilter[],
 ): number[] {
-  const level = entry.difficultyLevels[difficulty];
-  return level === undefined ? [] : [level];
+  return difficulties.flatMap((difficulty) => {
+    const level = entry.difficultyLevels[difficulty];
+    return level === undefined ? [] : [level];
+  });
 }
 
 function sortLevel(
   entry: BandoriSongCatalogEntry,
-  difficulty: BandoriSongDifficultyFilter,
+  difficulties: readonly BandoriSongDifficultyFilter[],
 ): number {
-  const levels = selectedLevels(entry, difficulty);
+  const levels = selectedLevels(entry, difficulties);
   return levels.length > 0 ? Math.max(...levels) : 0;
+}
+
+const DIFFICULTY_ALIASES: Record<BandoriChartDifficulty, readonly string[]> = {
+  easy: ["easy", "ez", "简单", "簡單", "イージー"],
+  normal: ["normal", "nm", "普通", "ノーマル"],
+  hard: ["hard", "hd", "困难", "困難", "ハード"],
+  expert: ["expert", "ex", "专家", "專家", "エキスパート"],
+  special: ["special", "sp", "特殊", "スペシャル"],
+};
+const difficultyRanks = new Map(BANDORI_CHART_DIFFICULTIES.flatMap((difficulty, rank) => (
+  DIFFICULTY_ALIASES[difficulty].map((alias) => [alias, rank] as const)
+)));
+
+type SongKeywordCondition = (entry: BandoriSongCatalogEntry) => boolean;
+const keywordConditions = new Map<string, SongKeywordCondition[]>();
+function addKeywords(aliases: readonly string[], condition: SongKeywordCondition) {
+  for (const alias of aliases) {
+    const key = normalizeBandoriSearchText(alias);
+    const conditions = keywordConditions.get(key) ?? [];
+    conditions.push(condition);
+    keywordConditions.set(key, conditions);
+  }
+}
+for (const [id, aliases] of Object.entries(BANDORI_SEARCH_BAND_ALIASES)) {
+  const bandId = Number(id);
+  addKeywords(aliases, (entry) => entry.bandId === bandId);
+}
+addKeywords(["other", "others", "其他"], (entry) => entry.bandFilter === "other");
+for (const server of BANDORI_SERVERS) {
+  addKeywords(BANDORI_SEARCH_SERVER_ALIASES[server], (entry) => entry.publishedAtByServer[server] !== null);
+}
+for (const [type, aliases] of Object.entries({
+  original: ["og", "original", "原创", "原創", "オリジナル"],
+  cover: ["cv", "cover", "anime", "翻唱", "カバー"],
+  extra: ["extra", "エキストラ"],
+})) addKeywords(aliases, (entry) => entry.type === type);
+
+function matchesSearchRange(value: number, target: number, operator: string): boolean {
+  switch (operator) {
+    case "+": case ">=": return value >= target;
+    case "-": case "<=": return value <= target;
+    case ">": return value > target;
+    case "<": return value < target;
+    default: return value === target;
+  }
+}
+
+function compileSongSearch(query: string) {
+  type Condition = (entry: BandoriSongCatalogEntry, difficulty: BandoriChartDifficulty, level: number) => boolean;
+  const conditions: Condition[] = tokenizeBandoriSearch(query).map(({ value: token, nameOnly }): Condition => {
+    if (nameOnly) return (entry) => token !== "" && entry.searchNames.some((name) => name.includes(token));
+    const explicitId = /^#(\d+)$/u.exec(token);
+    if (explicitId) {
+      const id = parsePositiveInteger(explicitId[1]);
+      return (entry) => entry.songId === id;
+    }
+    const range = /^(>=|<=|>|<)?(.+?)([+-])?$/u.exec(token);
+    const value = range?.[2] ?? token;
+    const rank = difficultyRanks.get(value);
+    const level = parsePositiveInteger(value);
+    if (rank !== undefined || level !== null) {
+      if (range?.[1] && range[3]) return () => false;
+      const operator = range?.[1] ?? range?.[3] ?? "";
+      if (rank !== undefined) {
+        return (_entry, difficulty) => matchesSearchRange(BANDORI_CHART_DIFFICULTIES.indexOf(difficulty), rank, operator);
+      }
+      return (entry, _difficulty, candidateLevel) => (
+        (operator === "" && entry.songId === level)
+        || matchesSearchRange(candidateLevel, level!, operator)
+      );
+    }
+    const keywords = keywordConditions.get(token);
+    if (keywords) return (entry) => keywords.some((condition) => condition(entry));
+    if (/^[#<>]|^\d+$|^\d.*[+-]$/u.test(token)) return () => false;
+    return (entry) => entry.searchText.includes(token);
+  });
+  return (entry: BandoriSongCatalogEntry, difficulty: BandoriChartDifficulty, level: number) => (
+    conditions.every((condition) => condition(entry, difficulty, level))
+  );
 }
 
 export function filterBandoriSongCatalog(
   catalog: readonly BandoriSongCatalogEntry[],
   filter: BandoriSongsPageFilter,
 ): BandoriSongCatalogEntry[] {
-  const query = filter.query.trim().toLocaleLowerCase();
+  const matchesSearch = compileSongSearch(filter.query);
   const shouldFilterBands = filter.bands.length < BANDORI_SONG_BAND_FILTERS.length;
   const shouldFilterTypes = filter.types.length < BANDORI_SONG_TYPES.length;
   const direction = filter.sortDirection === "asc" ? 1 : -1;
   const releaseServer = getSongReleaseSortServer(filter.sortBy);
 
   return catalog.filter((entry) => {
-    if (query && !entry.searchText.includes(query)) return false;
     if (!filter.servers.some((server) => entry.publishedAtByServer[server] !== null)) {
       return false;
     }
@@ -264,17 +352,18 @@ export function filterBandoriSongCatalog(
     ) {
       return false;
     }
-    const levels = selectedLevels(entry, filter.difficulty);
-    if (levels.length === 0) return false;
-    return levels.some((level) => (
-      (filter.minLevel === null || level >= filter.minLevel)
-      && (filter.maxLevel === null || level <= filter.maxLevel)
-    ));
+    return filter.difficulties.some((difficulty) => {
+      const level = entry.difficultyLevels[difficulty];
+      return level !== undefined
+        && (filter.minLevel === null || level >= filter.minLevel)
+        && (filter.maxLevel === null || level <= filter.maxLevel)
+        && matchesSearch(entry, difficulty, level);
+    });
   }).sort((left, right) => {
     let comparison = 0;
     if (filter.sortBy === "title") comparison = left.title.localeCompare(right.title);
     else if (filter.sortBy === "level") {
-      comparison = sortLevel(left, filter.difficulty) - sortLevel(right, filter.difficulty);
+      comparison = sortLevel(left, filter.difficulties) - sortLevel(right, filter.difficulties);
     } else if (filter.sortBy === "id") comparison = left.songId - right.songId;
     else if (releaseServer !== null) {
       const leftTimestamp = left.publishedAtByServer[releaseServer] ?? 0;
@@ -320,9 +409,9 @@ export function parseBandoriSongsPageFilter(
   searchParams: URLSearchParams,
 ): BandoriSongsPageFilter {
   const rawDifficulty = searchParams.get("difficulty");
-  const difficulty = BANDORI_SONG_DIFFICULTY_FILTERS.includes(
-    rawDifficulty as BandoriSongDifficultyFilter,
-  ) ? rawDifficulty as BandoriSongDifficultyFilter : "expert";
+  const difficulties = rawDifficulty === null
+    ? [...BANDORI_SONG_DIFFICULTY_FILTERS]
+    : BANDORI_SONG_DIFFICULTY_FILTERS.filter((difficulty) => rawDifficulty.split(",").includes(difficulty));
   const rawSort = searchParams.get("sort");
   const sortBy = BANDORI_SONG_SORTS.includes(rawSort as BandoriSongSort)
     ? rawSort as BandoriSongSort
@@ -333,7 +422,7 @@ export function parseBandoriSongsPageFilter(
     servers: parseServerSelection(searchParams.get("available")),
     bands: parseBandSelection(searchParams.get("bands")),
     types: parseTypeSelection(searchParams.get("types")),
-    difficulty,
+    difficulties,
     minLevel: parsePositiveInteger(searchParams.get("minLevel")),
     maxLevel: parsePositiveInteger(searchParams.get("maxLevel")),
     sortBy,

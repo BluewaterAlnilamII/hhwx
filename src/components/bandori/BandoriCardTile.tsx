@@ -198,7 +198,7 @@ function InteractiveBandoriCardTile(props: BandoriCardTileInteractiveProps) {
           detailHref={`/bandori/cards/${props.card.cardId}?server=${getBandoriServerCode(props.server)}`}
           {...tooltipInteractionProps}
         >
-          <span className="block w-full whitespace-normal wrap-break-word rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
+          <span className="hhwx-card-picker-surface block w-full whitespace-normal wrap-break-word rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
             {skillEffectLabel}
           </span>
         </BandoriCardHoverPopover>

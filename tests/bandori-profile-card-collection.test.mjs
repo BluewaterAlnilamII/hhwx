@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
+import ts from "typescript";
+import * as cardFilters from "../src/lib/bandori/cards/filter.ts";
+import * as cardCollection from "../src/lib/bandori/cards/profile-card-collection.ts";
 
 import { encodeBestdoriProfile } from "../src/lib/bestdori-profile-codec.ts";
 import { areGameProfileCardsEqual } from "../src/lib/bandori/cards/game-profile-card.ts";
@@ -53,7 +57,7 @@ function card(cardId, overrides = {}) {
 
 function entry(cardId, overrides = {}) {
   const profileCard = card(cardId, overrides.card);
-  return {
+  const result = {
     card: profileCard,
     metadata: {
       releasedAt: [cardId * 100, cardId * 80, cardId * 60, cardId === 3 ? null : cardId * 10],
@@ -67,7 +71,21 @@ function entry(cardId, overrides = {}) {
     cardName: overrides.cardName ?? `Card ${cardId}`,
     characterName: overrides.characterName ?? `Character ${overrides.characterId ?? 1}`,
     skillEffectLabel: "Skill",
-    searchText: overrides.searchText ?? `card ${cardId} character ${overrides.characterId ?? 1}`,
+  };
+  return {
+    ...result,
+    search: {
+      cardId,
+      bandId: result.bandId,
+      characterId: result.characterId,
+      attribute: result.attribute,
+      rarity: result.rarity,
+      type: "permanent",
+      availableServers: [3],
+      filterSearchText: overrides.searchText ?? result.cardName.toLowerCase(),
+      searchNames: [result.cardName.toLowerCase()],
+      searchSkills: [],
+    },
   };
 }
 
@@ -182,12 +200,12 @@ test("card equality and change summaries compare every persisted field without c
 test("profile card filtering covers every dimension, sort, direction, and missing metadata policy", () => {
   const entries = [
     entry(1, { totalPower: 100, searchText: "kasumi powerful", card: { isTrained: false, hasTrainedArt: false } }),
-    entry(2, { totalPower: 300, bandId: 2, characterId: 2, attribute: "cool", rarity: 4, searchText: "ran cool" }),
+    entry(2, { totalPower: 300, bandId: 2, characterId: 6, attribute: "cool", rarity: 4, searchText: "ran cool" }),
     entry(3, { totalPower: 200, characterId: 2, attribute: "pure", rarity: 3, searchText: "aya pure" }),
     entry(4, { totalPower: 50, bandId: null, characterId: null, attribute: null, rarity: null, searchText: "legacy card" }),
   ];
   const availableBandIds = [1, 2];
-  const availableCharacterIds = [1, 2];
+  const availableCharacterIds = [1, 2, 6];
   const defaults = buildDefaultBandoriProfileCardFilter(availableBandIds, availableCharacterIds);
   const run = (patch, unknownMetadataPolicy = "exclude") => filterAndSortBandoriProfileCardEntries(
     entries,
@@ -205,7 +223,8 @@ test("profile card filtering covers every dimension, sort, direction, and missin
   assert.deepEqual(run({ sortBy: "release_jp", sortDirection: "desc" }), [3, 2, 1]);
   assert.deepEqual(run({ sortBy: "release_en", sortDirection: "desc" }), [3, 2, 1]);
   assert.deepEqual(run({ sortBy: "release_tw", sortDirection: "asc" }), [1, 2, 3]);
-  assert.deepEqual(run({ sortBy: "release_cn", sortDirection: "desc" }), [2, 1]);
+  assert.deepEqual(run({ sortBy: "release_cn", sortDirection: "desc" }), [2, 1, 3]);
+  assert.deepEqual(run({ sortBy: "release_cn", sortDirection: "asc" }), [1, 2, 3]);
   assert.deepEqual(run({ sortBy: "id", sortDirection: "asc" }), [1, 2, 3]);
   assert.deepEqual(run({}, "include-when-unfiltered"), [2, 3, 1, 4]);
   assert.deepEqual(run({ bandIds: [1] }, "include-when-unfiltered"), [3, 1]);
@@ -243,7 +262,7 @@ test("shared sort values follow product priority and server context", () => {
   assert.equal(getBandoriCardReleaseSortServer("power"), null);
 });
 
-test("all servers exclude placeholder dates from release sorting", () => {
+test("all servers keep missing and placeholder release dates last in both directions", () => {
   const placeholderTimestamp = Date.UTC(2100, 0, 1);
   assert.equal(normalizeBandoriCardReleaseSortTimestamp(placeholderTimestamp - 1), placeholderTimestamp - 1);
   assert.equal(normalizeBandoriCardReleaseSortTimestamp(placeholderTimestamp), 0);
@@ -261,16 +280,75 @@ test("all servers exclude placeholder dates from release sorting", () => {
     },
   });
   const defaults = buildDefaultBandoriProfileCardFilter([1], [1]);
-  const run = (sortBy) => filterAndSortBandoriProfileCardEntries(
-    [entry(1), placeholderEntry],
-    { ...defaults, sortBy },
+  const run = (sortBy, sortDirection = "desc") => filterAndSortBandoriProfileCardEntries(
+    [entry(1), entry(2), entry(3), placeholderEntry, { ...entry(6), metadata: undefined }],
+    { ...defaults, sortBy, sortDirection },
     { availableBandIds: [1], availableCharacterIds: [1], unknownMetadataPolicy: "exclude" },
   ).map((item) => item.card.cardId);
 
-  assert.deepEqual(run("id"), [5, 1]);
+  assert.deepEqual(run("id"), [6, 5, 3, 2, 1]);
   for (const sortBy of ["release_jp", "release_en", "release_tw", "release_cn"]) {
-    assert.deepEqual(run(sortBy), [1], sortBy);
+    assert.deepEqual(run(sortBy), sortBy === "release_cn" ? [2, 1, 6, 5, 3] : [3, 2, 1, 6, 5], `${sortBy} desc`);
+    assert.deepEqual(run(sortBy, "asc"), [1, 2, 3, 5, 6], `${sortBy} asc`);
   }
+});
+
+test("optional card preference storage tolerates unavailable storage and malformed roots", () => {
+  const previousWindow = globalThis.window;
+  const preferences = normalizeCardPreferences({ excludedCardIds: [2] });
+  try {
+    globalThis.window = { get localStorage() { throw new Error("unavailable"); } };
+    assert.doesNotThrow(() => writeCardPreferences("profile-1", preferences));
+    for (const rawValue of ["null", "[]", "42", "invalid"]) {
+      let saved;
+      globalThis.window = { localStorage: {
+        getItem: () => rawValue,
+        setItem: (_key, value) => { saved = JSON.parse(value); },
+      } };
+      writeCardPreferences("profile-1", preferences);
+      assert.deepEqual(saved["profile-1"].excludedCardIds, [2]);
+      globalThis.window.localStorage.setItem = () => { throw new Error("quota"); };
+      assert.doesNotThrow(() => writeCardPreferences("profile-1", preferences));
+    }
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  }
+});
+
+test("profile filters migrate an all-server selection across contexts but preserve explicit clearing", async () => {
+  let stored = null;
+  const dependencies = {
+    react: {
+      useMemo: (build) => build(), useCallback: (callback) => callback, useDeferredValue: (value) => value,
+      useState: () => [stored, (next) => { stored = next; }],
+    },
+    "@/lib/bandori/cards/filter": cardFilters,
+    "@/lib/bandori/cards/profile-card-collection": cardCollection,
+  };
+  const source = await readSource("src/hooks/useBandoriProfileCardFilter.ts");
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  });
+  const exports = {};
+  runInNewContext(outputText, { exports, require: (id) => {
+    assert.ok(Object.hasOwn(dependencies, id), id);
+    return dependencies[id];
+  } });
+  const render = (contextServer) => exports.useBandoriProfileCardFilter({
+    entries: [], characters: {}, preferredServer: 3, contextServer,
+    unknownMetadataPolicy: "exclude", getBandLabel: String, getCharacterLabel: String,
+    sortValues: ["id"],
+  });
+  render(3).updateFilter({ query: "kkr", rarities: [4] });
+  const en = render(1);
+  assert.deepEqual([...en.filter.servers], [1]);
+  assert.equal(en.filter.query, "kkr");
+  assert.deepEqual([...en.filter.rarities], [4]);
+  en.updateFilter({ servers: [] });
+  assert.deepEqual([...render(3).filter.servers], []);
+  render(3).resetFilter();
+  assert.deepEqual([...render(3).filter.servers], [3]);
 });
 
 test("shared filter options come from global character Master instead of current cards", () => {

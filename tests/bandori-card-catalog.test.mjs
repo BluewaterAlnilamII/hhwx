@@ -14,7 +14,7 @@ import {
   pickAvailableBandoriServer,
 } from "../src/lib/bandori-server.ts";
 
-const availableBandIds = [1];
+const availableBandIds = [1, 2];
 const availableCharacterIds = [21, 22];
 
 function createEntry(overrides = {}) {
@@ -45,6 +45,8 @@ function createEntry(overrides = {}) {
     filterAttribute: "cool",
     filterType: "permanent",
     filterSearchText: "card character skill",
+    searchNames: ["card"],
+    searchSkills: [],
     ...overrides,
   };
 }
@@ -154,8 +156,92 @@ test("cards-page projection reuses normalized identity, availability, training, 
     filterRarity: 4,
     filterAttribute: "cool",
     filterType: "limited",
-    filterSearchText: "cn card cn character",
+    filterSearchText: "jp card jp character cn character cn card",
+    searchNames: ["jp card", "cn card"],
+    searchSkills: [],
   });
+});
+
+test("structural filters retain cards absent from the preferred server", () => {
+  for (const server of BANDORI_SERVERS) {
+    const catalog = buildBandoriCardsPageCatalog({
+      "90050": {
+        characterId: 21,
+        rarity: 2,
+        attribute: "cool",
+        type: "campaign",
+        resourceSetName: "res021001",
+        prefix: BANDORI_SERVERS.map((value) => value === server ? "Regional Card" : null),
+        serverExtensions: BANDORI_SERVERS.map((value) => value === server ? {} : null),
+      },
+    }, { "21": { bandId: 1 } }, {}, (server + 1) % 4, {
+      card: (cardId) => `Card ${cardId}`,
+      character: (characterId) => `Character ${characterId}`,
+      skill: "Unknown skill",
+    });
+
+    assert.equal(catalog[0]?.displayServer, server);
+    for (const [field, matching, excluded] of [
+      ["bandIds", 1, 2],
+      ["characterIds", 21, 22],
+      ["attributes", "cool", "powerful"],
+      ["rarities", 2, 4],
+      ["types", "campaign", "permanent"],
+    ]) {
+      assert.deepEqual(
+        run(catalog, createFilter({ [field]: [matching] })).map((entry) => entry.cardId),
+        [90050],
+        `server=${server}, filter=${field}`,
+      );
+      assert.deepEqual(run(catalog, createFilter({ [field]: [excluded] })), []);
+    }
+    assert.equal(run(catalog, createFilter({ servers: [server], bandIds: [1] })).length, 1);
+    assert.deepEqual(run(catalog, createFilter({ servers: [(server + 1) % 4] })), []);
+  }
+});
+
+test("structural filters use each registered collision entity's own metadata", () => {
+  const cards = {
+    "10001": {
+      characterId: 21,
+      rarity: 2,
+      attribute: "cool",
+      type: "campaign",
+      resourceSetName: "res021500",
+      serverExtensions: [null, {}, null, {
+        characterId: 22,
+        resourceSetName: "res022900",
+        attribute: "powerful",
+        type: "limited",
+      }],
+    },
+  };
+  for (const preferredServer of BANDORI_SERVERS) {
+    const catalog = buildBandoriCardsPageCatalog(cards, {
+      "21": { bandId: 1 },
+      "22": { bandId: 2 },
+    }, {}, preferredServer, {
+      card: (cardId) => `Card ${cardId}`,
+      character: (characterId) => `Character ${characterId}`,
+      skill: "Unknown skill",
+    });
+    assert.deepEqual(run(catalog, createFilter({ query: "10001" }))
+      .map((entry) => entry.cardRef), ["1:10001", "3:10001"]);
+    assert.deepEqual(run(catalog, createFilter({ servers: [0, 2] })), []);
+    for (const [characterId, bandId, attribute, type, cardRef] of [
+      [21, 1, "cool", "campaign", "1:10001"],
+      [22, 2, "powerful", "limited", "3:10001"],
+    ]) {
+      assert.deepEqual(run(catalog, createFilter({
+        query: "10001",
+        characterIds: [characterId],
+        bandIds: [bandId],
+        attributes: [attribute],
+        rarities: [2],
+        types: [type],
+      })).map((entry) => entry.cardRef), [cardRef]);
+    }
+  }
 });
 
 test("exact card IDs retain both registered collision entities", () => {

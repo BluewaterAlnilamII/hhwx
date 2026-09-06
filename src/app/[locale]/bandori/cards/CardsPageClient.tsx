@@ -1,19 +1,17 @@
 "use client";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { Images, Loader2, SearchX } from "lucide-react";
+import { Loader2, SearchX } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import BandoriCardFilterControls from "@/components/bandori/BandoriCardFilterControls";
 import { useBandoriCharactersMaster } from "@/hooks/useBandoriCharactersMaster";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { useBandoriSkillsMaster } from "@/hooks/useBandoriSkillsMaster";
-import { usePathname, useRouter } from "@/i18n/navigation";
 import {
   BANDORI_CARD_CATALOG_TYPES,
   buildBandoriCardsPageCatalog,
   filterBandoriCardsPageCatalog,
-  type BandoriCardCatalogType,
   type BandoriCardsPageFilter,
 } from "@/lib/bandori/cards/cards-page-catalog";
 import {
@@ -25,21 +23,17 @@ import {
   isBandoriCardAttribute,
   isBandoriCardPickerSortBy,
 } from "@/lib/bandori/cards/filter";
-import { saveBandoriCardsListQuery } from "@/lib/bandori/cards/cards-list-query-snapshot";
+import { saveBandoriCardsListQuery, updateBandoriCardsListQuery } from "@/lib/bandori/cards/cards-list-query-snapshot";
 import {
   BANDORI_SERVERS,
   getBandoriServerCode,
   getBandoriServerFromCode,
   type BandoriServer,
 } from "@/lib/bandori-server";
-import {
-  useBandoriPreferencesStore,
-  useBandoriPreferredServer,
-} from "@/store/useBandoriPreferencesStore";
+import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 import BandoriPageShell from "../BandoriPageShell";
 import { useTranslations } from "next-intl";
 import BandoriCardDetailedRow from "./_components/BandoriCardDetailedRow";
-import BandoriCardServerSwitcher from "./_components/BandoriCardServerSwitcher";
 
 const INITIAL_VISIBLE_COUNT = 40;
 const PAGE_SIZE = 40;
@@ -72,21 +66,9 @@ function parseServerSelection(rawValue: string | null): BandoriServer[] {
   });
 }
 
-function selectionsEqual<T>(left: readonly T[], right: readonly T[]): boolean {
-  return left.length === right.length && right.every((value) => left.includes(value));
-}
-
-function setListParam<T extends string | number>(
-  params: URLSearchParams,
-  key: string,
-  values: readonly T[],
-  defaults: readonly T[],
-): void {
-  if (selectionsEqual(values, defaults)) {
-    params.delete(key);
-  } else {
-    params.set(key, values.join(","));
-  }
+function replaceCardsListQuery(query: string): void {
+  saveBandoriCardsListQuery(query);
+  window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
 }
 
 export default function CardsPageClient() {
@@ -94,11 +76,7 @@ export default function CardsPageClient() {
   const filterT = useTranslations("bandori.cardFilters");
   const cardPickerT = useTranslations("bandori.cardPicker");
   const searchParams = useSearchParams();
-  const pathname = usePathname();
-  const router = useRouter();
   const preferredServer = useBandoriPreferredServer();
-  const setPreferredServer = useBandoriPreferencesStore((state) => state.setPreferredServer);
-  const selectedServer = getBandoriServerFromCode(searchParams.get("server")) ?? preferredServer;
   const cardsMaster = useBandoriCardsMaster();
   const charactersMaster = useBandoriCharactersMaster();
   const skillsMaster = useBandoriSkillsMaster();
@@ -108,17 +86,22 @@ export default function CardsPageClient() {
 
   useEffect(() => {
     saveBandoriCardsListQuery(cardsListQuery);
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("server")) {
+      params.delete("server");
+      replaceCardsListQuery(params.toString());
+    }
   }, [cardsListQuery]);
 
   const filterOptions = useMemo(() => buildBandoriCardFilterOptions(
     charactersMaster.data ?? {},
     {
-      preferredServer: selectedServer,
-      contextServer: selectedServer,
+      preferredServer,
+      contextServer: preferredServer,
       getBandLabel: (bandId) => filterT("bandFallback", { bandId }),
       getCharacterLabel: (characterId) => filterT("characterFallback", { characterId }),
     },
-  ), [charactersMaster.data, filterT, selectedServer]);
+  ), [charactersMaster.data, filterT, preferredServer]);
   const sortValues = useMemo(
     () => buildBandoriCardSortValues({ shouldIncludePower: false }),
     [],
@@ -127,8 +110,12 @@ export default function CardsPageClient() {
     const rawSortBy = searchParams.get("sort");
     const sortBy = rawSortBy && isBandoriCardPickerSortBy(rawSortBy)
       ? rawSortBy
-      : getBandoriCardReleaseSortBy(selectedServer);
-    const query = searchParams.get("id") ?? searchParams.get("q") ?? "";
+      : getBandoriCardReleaseSortBy(preferredServer);
+    const legacyId = searchParams.get("id");
+    // Existing ID links remain exact after bare numbers gain additional meanings.
+    const query = legacyId !== null
+      ? /^\d+$/u.test(legacyId) ? `#${legacyId}` : legacyId
+      : searchParams.get("q") ?? "";
     return {
       query,
       servers: parseServerSelection(searchParams.get("available")),
@@ -143,7 +130,7 @@ export default function CardsPageClient() {
       sortBy,
       sortDirection: searchParams.get("direction") === "asc" ? "asc" : "desc",
     };
-  }, [filterOptions.bandIds, filterOptions.characterIds, searchParams, selectedServer]);
+  }, [filterOptions.bandIds, filterOptions.characterIds, preferredServer, searchParams]);
   const deferredQuery = useDeferredValue(filter.query);
   const deferredFilter = useMemo(
     () => ({ ...filter, query: deferredQuery }),
@@ -153,7 +140,7 @@ export default function CardsPageClient() {
     cardsMaster.canonicalData ?? {},
     charactersMaster.data ?? {},
     skillsMaster.data ?? {},
-    selectedServer,
+    preferredServer,
     {
       card: (cardId) => cardPickerT("cardFallback", { cardId }),
       character: (characterId) => filterT("characterFallback", { characterId }),
@@ -164,7 +151,7 @@ export default function CardsPageClient() {
     cardsMaster.canonicalData,
     charactersMaster.data,
     filterT,
-    selectedServer,
+    preferredServer,
     skillsMaster.data,
     t,
   ]);
@@ -184,81 +171,17 @@ export default function CardsPageClient() {
     || cardsAssetIndex.loading;
   const error = cardsMaster.error ?? charactersMaster.error ?? skillsMaster.error;
 
-  const replaceFilter = (
-    nextFilter: BandoriCardsPageFilter,
-    options: { queryChanged?: boolean; server?: BandoriServer } = {},
-  ) => {
-    const params = new URLSearchParams(searchParams.toString());
-    const server = options.server ?? selectedServer;
-    params.set("server", getBandoriServerCode(server));
-    if (options.queryChanged) {
-      params.delete("id");
-      if (nextFilter.query.trim()) params.set("q", nextFilter.query.trim());
-      else params.delete("q");
-    }
-    setListParam(
-      params,
-      "available",
-      nextFilter.servers.map(getBandoriServerCode),
-      BANDORI_SERVERS.map(getBandoriServerCode),
-    );
-    setListParam(params, "bands", nextFilter.bandIds, filterOptions.bandIds);
-    setListParam(params, "attributes", nextFilter.attributes, BANDORI_CARD_ATTRIBUTES);
-    setListParam(params, "rarities", nextFilter.rarities, BANDORI_CARD_RARITIES);
-    setListParam(params, "characters", nextFilter.characterIds, filterOptions.characterIds);
-    setListParam(params, "types", nextFilter.types, BANDORI_CARD_CATALOG_TYPES);
-    const defaultSort = getBandoriCardReleaseSortBy(server);
-    if (nextFilter.sortBy === defaultSort) params.delete("sort");
-    else params.set("sort", nextFilter.sortBy);
-    if (nextFilter.sortDirection === "desc") params.delete("direction");
-    else params.set("direction", nextFilter.sortDirection);
-    const queryString = params.toString();
-    router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false });
-  };
-
   const updateFilter = (patch: Partial<BandoriCardsPageFilter>) => {
-    replaceFilter(
-      { ...filter, ...patch },
-      { queryChanged: patch.query !== undefined },
-    );
+    replaceCardsListQuery(updateBandoriCardsListQuery(window.location.search, patch, filterOptions));
   };
 
   const clearFilter = () => {
-    const params = new URLSearchParams();
-    params.set("server", getBandoriServerCode(selectedServer));
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  };
-
-  const handleServerChange = (server: BandoriServer) => {
-    setPreferredServer(server);
-    const nextFilter = {
-      ...filter,
-      sortBy: searchParams.has("sort") ? filter.sortBy : getBandoriCardReleaseSortBy(server),
-    };
-    replaceFilter(nextFilter, { server });
+    replaceCardsListQuery("");
   };
 
   return (
     <BandoriPageShell contentClassName="max-w-6xl">
-      <section className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-5 shadow-[var(--theme-shadow-surface-raised)] sm:p-8 dark:border-slate-700 dark:bg-[#111827]">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-3">
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
-                <Images className="h-6 w-6" aria-hidden="true" />
-              </span>
-              <h1 className="text-2xl font-black tracking-tight text-[var(--theme-color-text-default)] sm:text-3xl dark:text-slate-100">
-                {t("page.title")}
-              </h1>
-            </div>
-          </div>
-          <BandoriCardServerSwitcher
-            selectedServer={selectedServer}
-            label={t("page.displayServer")}
-            onChange={handleServerChange}
-          />
-        </div>
-      </section>
+      <h1 className="sr-only">{t("page.title")}</h1>
 
       <BandoriCardFilterControls
         filter={filter}
@@ -269,27 +192,21 @@ export default function CardsPageClient() {
         availableCharacterIds={filterOptions.characterIds}
         availableServers={[...BANDORI_SERVERS]}
         sortOptions={sortValues.map((value) => ({ value, label: filterT(`sort.${value}`) }))}
-        typeOptions={BANDORI_CARD_CATALOG_TYPES.map((value) => ({
-          value,
-          label: t(`types.${value}`),
-        }))}
-        selectedTypes={filter.types}
-        onTypesChange={(types) => updateFilter({ types: types as BandoriCardCatalogType[] })}
         onFilterChange={updateFilter}
         onClearFilter={clearFilter}
       />
 
       {error ? (
-        <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm font-bold text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
+        <div role="alert" className="hhwx-catalog-error rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm font-bold text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
           {t("states.loadFailed")}
         </div>
       ) : isLoading ? (
-        <div className="flex min-h-64 items-center justify-center gap-3 rounded-2xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] text-sm font-bold text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-[#111827]">
+        <div className="hhwx-panel flex min-h-64 items-center justify-center gap-3 rounded-2xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] text-sm font-bold text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-[#111827]">
           <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
           {t("states.loading")}
         </div>
       ) : filteredCards.length === 0 ? (
-        <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-2xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] text-center text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-[#111827]">
+        <div className="hhwx-panel flex min-h-64 flex-col items-center justify-center gap-3 rounded-2xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] text-center text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-[#111827]">
           <SearchX className="h-9 w-9" aria-hidden="true" />
           <div className="text-sm font-bold">{t("states.empty")}</div>
         </div>
@@ -308,7 +225,7 @@ export default function CardsPageClient() {
             <button
               type="button"
               onClick={() => setVisibleState({ key: filterKey, count: visibleCount + PAGE_SIZE })}
-              className="h-12 w-full rounded-2xl border border-sky-200 bg-white text-sm font-black text-sky-700 shadow-xs transition hover:border-sky-300 hover:bg-sky-50 dark:border-sky-900 dark:bg-slate-900 dark:text-sky-300 dark:hover:bg-slate-800"
+              className="hhwx-panel hhwx-catalog-action h-12 w-full rounded-2xl border border-sky-200 bg-white text-sm font-black text-sky-700 shadow-xs transition hover:border-sky-300 hover:bg-sky-50 dark:border-sky-900 dark:bg-slate-900 dark:text-sky-300 dark:hover:bg-slate-800"
             >
               {t("page.showMore", { count: Math.min(PAGE_SIZE, remainingCount) })}
             </button>

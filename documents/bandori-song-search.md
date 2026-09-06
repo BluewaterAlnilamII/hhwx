@@ -1,0 +1,20 @@
+# Song difficulty and search filters
+
+The song catalog combines submitted search conditions with the visible filters. Typing does not update results until Enter or Search; clearing the search field also clears the submitted query. Level fields apply on Enter or blur.
+
+The list and detail read the global preferred server for displayed titles and performing-unit names, falling back through JP/EN/TW/CN with duplicate slots removed. Interface labels still follow the UI locale; server-rendered metadata uses the locale because browser preferences are unavailable there. Availability filters and search do not change this preference. The shared toolbar and result-count appearance follow [Cards](bandori-card-search.md). Team Builder song search remains outside this rollout and keeps its existing behavior for now.
+
+- Difficulties are independent selections, initially all selected. All toggles between selecting and clearing the group. A song needs at least one selected chart satisfying all difficulty and level conditions together; conditions cannot be satisfied by different charts.
+- Difficulty order is EASY < NORMAL < HARD < EXPERT < SPECIAL. Aliases include `easy/ez/简单/簡單/イージー`, `normal/nm/普通/ノーマル`, `hard/hd/困难/困難/ハード`, `expert/ex/专家/專家/エキスパート`, and `special/sp/特殊/スペシャル`.
+- Suffix `+` and prefix `>=` mean at least; suffix `-` and prefix `<=` mean at most; `>` and `<` are exclusive. They work with difficulties and levels. `hd+` and `>=hd` cover HARD, EXPERT, and SPECIAL. `hd >=26` requires a HARD chart at level 26 or higher. `26+ 27-` requires one chart between levels 26 and 27.
+- A bare positive integer matches an exact song ID or chart level; `#26` matches only song ID 26. Numeric comparisons match levels only. Levels have no fixed upper cap.
+- Bands and servers use the same [reviewed aliases and tokenizer](../src/lib/bandori/search.ts) as Cards, including `r/ポピパ/蝶团/mygo`, `m/go`, and full multiword band names. `other/others/其他` matches the visible Other band group, including solo singers and special units.
+- Song types: `og/original/原创/原創/オリジナル` matches original songs; `cv/cover/anime/翻唱/カバー` matches covers; `extra/エキストラ` matches EXTRA songs.
+- Other words match all language fields of song titles and performing-unit names, independently of the display language or preferred server. Search normalizes character width and case; recognized full band names stay together, and the remaining whitespace-separated conditions are intersected. A token's recognized meanings are unioned; recognized keywords do not fall back to text matching.
+- Server selections check song availability only. They do not restrict charts to the selected server. Chart publication checks retain the existing catalog policy.
+- Level sorting uses the highest level among the selected difficulties and does not change the result set. Search does not alter sorting or the preferred server.
+- `/special` or `"special"` forces a multilingual song-title substring search, excluding performing-unit names and bypassing keyword, ID, and level interpretation. A slash prefixes one word; use quotes for spaces, e.g. `"Hello, Happy World!"`. Straight and Chinese double quotes (`“…”`) are supported. Phrases cannot span separate title fields; other conditions still intersect. Empty name conditions match nothing; an unclosed quote treats the rest of the input as a name phrase.
+
+The existing `difficulty` URL parameter accepts comma-separated values. Legacy `?difficulty=expert` still selects only EXPERT. An omitted parameter selects all difficulties; `?difficulty=` selects none. Other query parameters keep their existing names.
+
+The Search button is followed by the shared Cards/Songs `?` help. It shows eight single-row examples: band, difficulty, difficulty range, level, song type, available server, ID, and name. Hover opens immediately and leaving the button closes it; clicking pins it until the next click, an outside click, or Escape. Opening help does not submit the search. The help consumes the theme panel background (`#FFFEFA` in the light theme).

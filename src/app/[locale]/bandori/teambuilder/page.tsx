@@ -883,10 +883,14 @@ function writeLivePreferences(patch: LivePreferenceState): void {
   }
 
   const current = readLivePreferences();
-  window.localStorage.setItem(TEAMBUILDER_LIVE_PREFERENCES_STORAGE_KEY, JSON.stringify({
-    ...current,
-    ...patch,
-  }));
+  try {
+    window.localStorage.setItem(TEAMBUILDER_LIVE_PREFERENCES_STORAGE_KEY, JSON.stringify({
+      ...current,
+      ...patch,
+    }));
+  } catch {
+    // Optional persistence must not interrupt the current live configuration.
+  }
 }
 
 function shouldShowParameterBonus(eventType: BandoriTeamSearchEventType): boolean {
@@ -3275,6 +3279,7 @@ function TeamBuilderPanel() {
               profileCards={selectedProfileCards}
               preferences={cardPreferences}
               cardMetadata={profileCardMetadata}
+              canonicalCardMetadata={canonicalCardMetadata}
               characters={data.characters}
               skills={data.skills}
               characterBonusesById={selectedProfileCharacterBonusesById}

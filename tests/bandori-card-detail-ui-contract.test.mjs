@@ -11,6 +11,7 @@ import {
   buildBandoriCardsListHref,
   readBandoriCardsListHref,
   saveBandoriCardsListQuery,
+  updateBandoriCardsListQuery,
 } from "../src/lib/bandori/cards/cards-list-query-snapshot.ts";
 
 const ROOT_URL = new URL("../", import.meta.url);
@@ -27,21 +28,49 @@ function createMemoryStorage() {
   };
 }
 
+test("successive Cards query edits preserve earlier selections and exact legacy IDs", () => {
+  const options = { bandIds: [1, 5], characterIds: [1, 2] };
+  let query = "id=4&server=cn&custom=keep";
+  query = updateBandoriCardsListQuery(query, { bandIds: [5] }, options);
+  query = updateBandoriCardsListQuery(query, { rarities: [4] }, options);
+  query = updateBandoriCardsListQuery(query, { sortBy: "release_en", sortDirection: "asc" }, options);
+  assert.deepEqual(Object.fromEntries(new URLSearchParams(query)), {
+    id: "4", custom: "keep", bands: "5", rarities: "4", sort: "release_en", direction: "asc",
+  });
+  query = updateBandoriCardsListQuery(query, { query: " r " }, options);
+  assert.equal(new URLSearchParams(query).get("q"), "r");
+  assert.equal(new URLSearchParams(query).has("id"), false);
+  query = updateBandoriCardsListQuery(query, { query: "", servers: [], sortDirection: "desc" }, options);
+  assert.deepEqual(Object.fromEntries(new URLSearchParams(query)), {
+    custom: "keep", bands: "5", rarities: "4", sort: "release_en", available: "",
+  });
+  query = updateBandoriCardsListQuery(query, { servers: [0, 1, 2, 3], bandIds: [1, 5] }, options);
+  assert.equal(new URLSearchParams(query).has("available"), false);
+  assert.equal(new URLSearchParams(query).has("bands"), false);
+  const defaults = updateBandoriCardsListQuery("", { rarities: [4] }, options);
+  assert.equal(defaults, "rarities=4", "An untouched default sort must keep following the preferred server");
+});
+
 test("Cards list snapshots restore only normalized filter query state", () => {
   const storage = createMemoryStorage();
 
   saveBandoriCardsListQuery(
-    "?sort=release&bands=&server=cn&returnTo=https%3A%2F%2Fexample.com&server=jp",
+    "?sort=release_jp&bands=&available=cn&server=cn&returnTo=https%3A%2F%2Fexample.com&server=jp",
     storage,
   );
 
   assert.equal(
     readBandoriCardsListHref(storage),
-    "/bandori/cards?server=cn&bands=&sort=release",
+    "/bandori/cards?available=cn&bands=&sort=release_jp",
   );
   assert.equal(
     buildBandoriCardsListHref("returnTo=https%3A%2F%2Fexample.com"),
     "/bandori/cards",
+  );
+  storage.setItem("hhwx:bandori:cards-list-query:v1", "server=en&id=10001&available=en&sort=id");
+  assert.equal(
+    readBandoriCardsListHref(storage),
+    "/bandori/cards?id=10001&available=en&sort=id",
   );
 });
 

@@ -56,3 +56,13 @@ Before inspecting or editing implementation, Codex and Claude Code load the rule
 | Medley normalization, scoring, search, Worker/WASM delivery | [medley.md](.claude/rules/medley.md) |
 
 Keep durable Agent instructions here and path-specific constraints in topic rules. CONTRIBUTING and setup guides serve human contributors; consult relevant procedures and contracts as needed, without requiring whole-document loading or moving Agent policy into them. Delete obsolete or inferable guidance; keep `.claude/CLAUDE.md` as a short import, not a duplicate rulebook.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

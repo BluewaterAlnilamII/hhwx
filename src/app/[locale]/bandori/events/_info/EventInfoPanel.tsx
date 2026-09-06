@@ -115,23 +115,22 @@ type OverviewRowProps = {
   label: string;
   children: ReactNode;
   mobileLayout?: "inline" | "stacked";
+  alignment?: "baseline" | "center" | "start";
 };
 
-function OverviewRow({ label, children, mobileLayout = "inline" }: OverviewRowProps) {
+function OverviewRow({ label, children, mobileLayout = "inline", alignment = "baseline" }: OverviewRowProps) {
   return (
     <div className={cn(
       "grid border-b border-[var(--theme-color-border-subtle)] py-3 last:border-b-0 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-5 dark:border-slate-700",
+      alignment === "center" ? "items-center" : alignment === "start" ? "items-start" : "items-baseline",
       mobileLayout === "inline"
-        ? "grid-cols-[7rem_minmax(0,1fr)] items-start gap-3"
+        ? "grid-cols-[7rem_minmax(0,1fr)] gap-3"
         : "grid-cols-1 gap-1",
     )}>
-      <dt className={cn(
-        "text-sm font-semibold leading-5 text-[var(--theme-color-text-muted)] dark:text-slate-400",
-        mobileLayout === "inline" && "pt-0.5",
-      )}>
+      <dt className="text-sm font-semibold leading-5 text-[var(--theme-color-text-muted)] dark:text-slate-400">
         {label}
       </dt>
-      <dd className="min-w-0 text-right text-sm font-semibold leading-5 text-[var(--theme-color-text-default)] dark:text-slate-100">{children}</dd>
+      <dd className="flex min-w-0 flex-col items-end text-right text-sm font-semibold leading-5 text-[var(--theme-color-text-default)] dark:text-slate-100">{children}</dd>
     </div>
   );
 }
@@ -337,19 +336,19 @@ export default function EventInfoPanel({
     <article className="hhwx-panel rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700/80 dark:bg-[#111827]">
       <section className="@container">
         <Heading as="h2" visualRole="section" accentSlot="a" icon={<ClipboardList className="h-5 w-5" />} className="dark:text-[var(--theme-color-text-default-on-dark)]">{t("overviewTitle")}</Heading>
-        <div className="mt-3 grid min-w-0 items-stretch gap-y-0 @min-[54rem]:grid-cols-2 @min-[54rem]:gap-x-0">
+        <div className="mt-4 grid min-w-0 items-stretch gap-y-0 @min-[54rem]:grid-cols-2 @min-[54rem]:gap-x-0">
           <dl className="min-w-0 @min-[54rem]:pr-8">
             <OverviewRow label={t("eventId")}>{eventId}</OverviewRow>
             <OverviewRow label={t("eventTitle")} mobileLayout="stacked">
               <span>{localizedTitle ?? t("eventTitleFallback", { eventId })}</span>
               {jpTitle ? <span className="mt-1 block font-medium text-[var(--theme-color-text-muted)] opacity-70">{jpTitle}</span> : null}
             </OverviewRow>
-            <OverviewRow label={t("eventType")}>
+            <OverviewRow label={t("eventType")} alignment="center">
               <span className="inline-flex rounded-full border border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)] px-3 py-1 text-[var(--theme-color-semantic-info-foreground)]">
                 {eventTypeLabel}
               </span>
             </OverviewRow>
-            <OverviewRow label={t("featuredBand")}>
+            <OverviewRow label={t("featuredBand")} alignment="center">
               <span className="inline-flex items-center gap-2">
                 {eventBandId !== null ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -396,11 +395,11 @@ export default function EventInfoPanel({
         </div>
       </section>
 
-      <section className="@container mt-7 border-t border-[var(--theme-color-border-subtle)] pt-6 dark:border-slate-700">
+      <section className="@container mt-6 border-t border-[var(--theme-color-border-subtle)] pt-6 dark:border-slate-700">
         <Heading as="h2" visualRole="section" accentSlot="b" icon={<Gift className="h-5 w-5" />} className="dark:text-[var(--theme-color-text-default-on-dark)]">{t("rewardsTitle")}</Heading>
         <div className="mt-4 grid min-w-0 items-stretch gap-y-0 @min-[54rem]:grid-cols-2 @min-[54rem]:gap-x-0">
           <dl className="min-w-0 @min-[54rem]:pr-8">
-            <OverviewRow label={t("rewardStamps", { server: SERVER_LABELS[rewardStampSelection.server] })} mobileLayout="stacked">
+            <OverviewRow label={t("rewardStamps", { server: SERVER_LABELS[rewardStampSelection.server] })} mobileLayout="stacked" alignment="start">
               {rewardStamps.length > 0 ? (
                 <div className="flex min-h-16 flex-wrap items-center justify-end gap-2">
                   {rewardStamps.map((stamp) => (
@@ -421,7 +420,7 @@ export default function EventInfoPanel({
           </dl>
 
           <dl className="mt-2 min-w-0 border-t border-[var(--theme-color-border-subtle)] pt-2 @min-[54rem]:mt-0 @min-[54rem]:border-l @min-[54rem]:border-t-0 @min-[54rem]:pl-8 @min-[54rem]:pt-0 dark:border-slate-700">
-            <OverviewRow label={t("rewardCards")} mobileLayout="stacked">
+            <OverviewRow label={t("rewardCards")} mobileLayout="stacked" alignment="start">
               {model.rewardCardIds.length > 0 ? (
                 <div className="flex min-h-16 flex-wrap items-start justify-end gap-3">
                   {model.rewardCardIds.map((cardId) => (
@@ -445,7 +444,7 @@ export default function EventInfoPanel({
         </div>
       </section>
 
-      <section className="mt-7 border-t border-[var(--theme-color-border-subtle)] pt-6 dark:border-slate-700">
+      <section className="mt-6 border-t border-[var(--theme-color-border-subtle)] pt-6 dark:border-slate-700">
         <Heading as="h2" visualRole="section" accentSlot="c" icon={<Music2 className="h-5 w-5" />} className="dark:text-[var(--theme-color-text-default-on-dark)]">
           {t("songsTitle", { server: SERVER_LABELS[songSelection?.sourceServer ?? server] })}
         </Heading>

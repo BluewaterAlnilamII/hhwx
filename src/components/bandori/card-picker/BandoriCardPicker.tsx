@@ -89,9 +89,10 @@ function ArtToggle({
   onChange: (nextTrainType: BandoriCardArtVariant) => void;
 }) {
   return (
-    <div className="inline-flex overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
+    <div className="hhwx-card-art-toggle hhwx-catalog-filters hhwx-card-picker-surface inline-flex overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
       <button
         type="button"
+        aria-pressed={trainType === "normal"}
         onClick={() => onChange("normal")}
         className={cn(
           "inline-flex h-9 items-center gap-1.5 px-3 text-sm font-semibold transition",
@@ -103,6 +104,7 @@ function ArtToggle({
       </button>
       <button
         type="button"
+        aria-pressed={trainType === "after_training"}
         onClick={() => onChange("after_training")}
         className={cn(
           "inline-flex h-9 items-center gap-1.5 border-l border-slate-200 px-3 text-sm font-semibold transition",
@@ -213,6 +215,7 @@ export default function BandoriCardPicker({
     filter: BandoriCardPickerFilter;
     availableBandIds: number[];
     availableCharacterIds: number[];
+    availableServers: BandoriCardServer[];
   } | null>(null);
   const [previewTrainType, setPreviewTrainType] = useState<BandoriCardArtVariant>(() => value?.trainType ?? "after_training");
   const [visibleState, setVisibleState] = useState({ key: "", count: INITIAL_VISIBLE_COUNT });
@@ -239,6 +242,7 @@ export default function BandoriCardPicker({
           canonicalCards: canonicalCardMetadata ?? {},
           assetIndex: cardsAssetIndex.value,
           availabilityScope: availableServers,
+          skills: skillMetadata ?? {},
         },
       );
       return cards;
@@ -249,6 +253,7 @@ export default function BandoriCardPicker({
       cardsAssetIndex.value,
       availableServers,
       characterMetadata,
+      skillMetadata,
       filterT,
       preferredServer,
       server,
@@ -271,7 +276,11 @@ export default function BandoriCardPicker({
     const hasAvailableSort = sortValues.includes(storedFilterState.filter.sortBy);
     return {
       ...storedFilterState.filter,
-      servers: storedFilterState.filter.servers.filter((candidate) => availableServers.includes(candidate)),
+      servers: reconcileBandoriCardFilterSelection(
+        storedFilterState.filter.servers,
+        storedFilterState.availableServers,
+        availableServers,
+      ),
       bandIds: reconcileBandoriCardFilterSelection(
         storedFilterState.filter.bandIds,
         storedFilterState.availableBandIds,
@@ -306,6 +315,7 @@ export default function BandoriCardPicker({
   const filterKey = useMemo(
     () => JSON.stringify({
       query: deferredQuery,
+      types: effectiveFilter.types,
       servers: effectiveFilter.servers,
       bandIds: effectiveFilter.bandIds,
       attributes: effectiveFilter.attributes,
@@ -314,7 +324,7 @@ export default function BandoriCardPicker({
       sortBy: effectiveFilter.sortBy,
       sortDirection: effectiveFilter.sortDirection,
     }),
-    [deferredQuery, effectiveFilter.attributes, effectiveFilter.bandIds, effectiveFilter.characterIds, effectiveFilter.rarities, effectiveFilter.servers, effectiveFilter.sortBy, effectiveFilter.sortDirection],
+    [deferredQuery, effectiveFilter.types, effectiveFilter.attributes, effectiveFilter.bandIds, effectiveFilter.characterIds, effectiveFilter.rarities, effectiveFilter.servers, effectiveFilter.sortBy, effectiveFilter.sortDirection],
   );
 
   const selectedCard = useMemo(
@@ -343,6 +353,7 @@ export default function BandoriCardPicker({
       filter: { ...effectiveFilter, ...patch },
       availableBandIds: bandIds,
       availableCharacterIds: characterIds,
+      availableServers,
     });
   };
 
@@ -382,8 +393,8 @@ export default function BandoriCardPicker({
       />
 
       {value && showArtToggle ? (
-        <div className="sticky -top-3 z-80 -mx-3 bg-slate-50/95 px-3 pb-2 pt-3 backdrop-blur-sm sm:-top-5 sm:-mx-5 sm:px-5 sm:pt-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-xs">
+        <div className="hhwx-card-picker-surface sticky -top-3 z-80 -mx-3 bg-slate-50/95 px-3 pb-2 pt-3 backdrop-blur-sm sm:-top-5 sm:-mx-5 sm:px-5 sm:pt-5">
+          <div className="hhwx-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-xs">
             <div className="min-w-0 text-sm text-slate-600">
             {t("currentSelection")}
             <span className="font-semibold text-slate-900">
@@ -402,7 +413,7 @@ export default function BandoriCardPicker({
         </div>
       ) : null}
 
-      <div className="rounded-2xl border border-slate-200 bg-[#fffdf1]/72 p-3 shadow-inner">
+      <div className="hhwx-panel rounded-2xl border border-slate-200 bg-[#fffdf1]/72 p-3 shadow-inner">
         {isLoading && catalog.length === 0 ? (
           <div className="flex min-h-56 items-center justify-center gap-2 text-sm font-semibold text-slate-500">
             <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />

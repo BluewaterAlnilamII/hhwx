@@ -246,8 +246,8 @@ test("event overview integrates bonuses into a responsive two-column layout", ()
   assert.match(eventInfoPanelSource, /<BandoriEventBonusPanel[\s\S]*variant="embedded"/u);
   assert.match(eventBonusPanelSource, /variant === "card" \? \([\s\S]*labelsT\("eventBonus"\)/u);
   assert.match(eventBonusPanelSource, /variant === "card" \? \([\s\S]*labelsT\("type"\)/u);
-  assert.match(eventBonusPanelSource, /border-b border-\[var\(--theme-color-border-subtle\)\] py-3 last:border-b-0[\s\S]*md:gap-5/u);
-  assert.match(eventBonusPanelSource, /grid-cols-\[7rem_minmax\(0,1fr\)\] items-start gap-3/u);
+  assert.match(eventBonusPanelSource, /border-b border-\[var\(--theme-color-border-subtle\)\] py-3 last:border-b-0[\s\S]*sm:grid-cols-\[9rem_minmax\(0,1fr\)\] sm:gap-5/u);
+  assert.match(eventBonusPanelSource, /grid-cols-\[7rem_minmax\(0,1fr\)\] items-center gap-3/u);
   assert.match(eventBonusPanelSource, /variant === "embedded" && "justify-end"/u);
   assert.match(eventBonusPanelSource, /const LabelElement = variant === "embedded" \? "dt" : "div"/u);
   assert.match(eventBonusPanelSource, /const ValueElement = variant === "embedded" \? "dd" : "div"/u);
@@ -314,7 +314,7 @@ test("event rewards fallback stamps by server and keep reward cards unlabelled",
   assert.match(bandoriStampViewSource, /h-16 w-24 sm:h-\[76px\] sm:w-\[114px\]/u);
   assert.doesNotMatch(bandoriStampViewSource, /shortcode|COMMENT_CONTENT_TOKEN_PATTERN/u);
   assert.match(eventInfoPanelSource, /<OverviewRow label=\{t\("rewardStamps"/u);
-  assert.match(eventInfoPanelSource, /<OverviewRow label=\{t\("rewardCards"\)\} mobileLayout="stacked">/u);
+  assert.match(eventInfoPanelSource, /<OverviewRow label=\{t\("rewardCards"\)\} mobileLayout="stacked" alignment="start">/u);
   assert.match(eventInfoPanelSource, /useBandoriCardsMaster\(server, Boolean\(model\), "regional"\)/u);
   assert.equal(eventInfoPanelSource.match(/justify-end/gu)?.length >= 4, true);
   assert.match(eventInfoPanelSource, /@min-\[54rem\]:grid-cols-2/u);

@@ -46,7 +46,7 @@ export default function BandoriSongDetailedRow({
   return (
     <Link
       href={href}
-      className="group block rounded-2xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-3 shadow-[var(--theme-shadow-surface-raised)] outline-hidden transition hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-[0_16px_34px_rgba(15,23,42,0.11)] focus-visible:ring-2 focus-visible:ring-sky-400 sm:p-4 dark:border-slate-700 dark:bg-[#111827]"
+      className="hhwx-panel hhwx-catalog-row group block rounded-2xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-3 shadow-[var(--theme-shadow-surface-raised)] outline-hidden transition hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-[0_16px_34px_rgba(15,23,42,0.11)] focus-visible:ring-2 focus-visible:ring-sky-400 sm:p-4 dark:border-slate-700 dark:bg-[#111827]"
     >
       <article className="grid min-h-24 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 sm:gap-5">
         <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] shadow-[var(--theme-shadow-media)] sm:h-24 sm:w-24">

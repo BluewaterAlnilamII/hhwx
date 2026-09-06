@@ -345,7 +345,7 @@ function createLoopSeekTransport(
 }
 
 function controlClassName(): string {
-  return "inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] px-4 text-sm font-semibold text-[var(--theme-color-action-secondary-foreground)] shadow-xs outline-hidden transition hover:bg-[var(--theme-color-action-secondary-background-hover)] focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-color-surface-background)] disabled:cursor-not-allowed disabled:border-[var(--theme-color-control-border-disabled)] disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] disabled:opacity-50";
+  return "inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] px-4 text-sm font-semibold text-[var(--theme-color-action-secondary-foreground)] shadow-xs outline-hidden transition hover:bg-[var(--theme-color-action-secondary-background-hover)] focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-color-panel-background)] disabled:cursor-not-allowed disabled:border-[var(--theme-color-control-border-disabled)] disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] disabled:opacity-50";
 }
 
 function formatPlaybackTime(timeSeconds: number): string {
@@ -2283,7 +2283,7 @@ export default function ChartSimulatorRuntime({
 
   if (!displayedChart && loadState.status === "error") {
     return (
-      <section className="rounded-3xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] p-6">
+      <section className="hhwx-catalog-error rounded-3xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] p-6">
         <h2 className="text-lg font-bold text-[var(--theme-color-semantic-danger-foreground)]">{t("unavailableTitle")}</h2>
         <p className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{loadState.message}</p>
         <button
@@ -2299,7 +2299,7 @@ export default function ChartSimulatorRuntime({
 
   if (assetLoadState.status === "error") {
     return (
-      <section className="rounded-3xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] p-6">
+      <section className="hhwx-catalog-error rounded-3xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] p-6">
         <h2 className="text-lg font-bold text-[var(--theme-color-semantic-danger-foreground)]">{t("unavailableTitle")}</h2>
         <p className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{assetLoadState.message}</p>
         <button type="button" className={`${controlClassName()} mt-4`} onClick={retryLoading}>
@@ -2314,7 +2314,7 @@ export default function ChartSimulatorRuntime({
     return (
       <section
         aria-busy="true"
-        className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700 dark:bg-[#111827]"
+        className="hhwx-panel rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700 dark:bg-[#111827]"
       >
         <h2 className="text-xl font-black text-[var(--theme-color-text-default)]">
           {t("title")}
@@ -2349,7 +2349,7 @@ export default function ChartSimulatorRuntime({
     fps: stageRenderFpsText,
   });
   return (
-    <section className="rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700 dark:bg-[#111827]">
+    <section className="hhwx-panel rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700 dark:bg-[#111827]">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-black text-[var(--theme-color-text-default)]">{t("title")}</h2>

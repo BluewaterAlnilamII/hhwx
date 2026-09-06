@@ -40,6 +40,7 @@ export function useBandoriProfileCardFilter({
     filter: BandoriProfileCardFilterState;
     availableBandIds: number[];
     availableCharacterIds: number[];
+    contextServer: BandoriServer;
   } | null>(null);
   const { bandOptions, characterOptions, bandIds, characterIds } = useMemo(
     () => buildBandoriCardFilterOptions(characters, {
@@ -61,7 +62,11 @@ export function useBandoriProfileCardFilter({
     if (!storedState) return defaultFilter;
     return {
       ...storedState.filter,
-      servers: storedState.filter.servers.includes(contextServer) ? [contextServer] : [],
+      servers: reconcileBandoriCardFilterSelection(
+        storedState.filter.servers,
+        [storedState.contextServer],
+        [contextServer],
+      ),
       bandIds: reconcileBandoriCardFilterSelection(
         storedState.filter.bandIds,
         storedState.availableBandIds,
@@ -89,6 +94,7 @@ export function useBandoriProfileCardFilter({
   ), [bandIds, characterIds, deferredQuery, entries, filter, unknownMetadataPolicy]);
   const filterKey = useMemo(() => JSON.stringify({
     query: deferredQuery,
+    types: filter.types,
     servers: filter.servers,
     bandIds: filter.bandIds,
     attributes: filter.attributes,
@@ -104,8 +110,9 @@ export function useBandoriProfileCardFilter({
       filter: { ...filter, ...patch },
       availableBandIds: bandIds,
       availableCharacterIds: characterIds,
+      contextServer,
     });
-  }, [bandIds, characterIds, filter]);
+  }, [bandIds, characterIds, contextServer, filter]);
   const resetFilter = useCallback(() => {
     setStoredState(null);
   }, []);

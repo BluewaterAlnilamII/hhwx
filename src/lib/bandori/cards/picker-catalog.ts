@@ -3,9 +3,11 @@ import {
   pickBandoriCharacterDisplayName,
   type BandoriCardMaster,
   type BandoriCharacterMaster,
+  type BandoriSkillMaster,
 } from "@/lib/bandori/cards/master";
 import {
   buildBandoriCardFilterSelection,
+  normalizeBandoriCardCatalogType,
   getBandoriCardReleaseSortServer,
   matchesBandoriCardFilterSelection,
   type BandoriCardFilterState,
@@ -28,13 +30,15 @@ import {
   type BandoriCardAssetVariant,
   type BandoriCardsAssetIndex,
 } from "@/lib/bandori-public-asset-index";
+import { isKnownBandoriCardEntityCollision } from "./regional-extensions";
+import { buildBandoriCardSearchData, buildBandoriCardSearchMetadata, compileBandoriCardSearch, type BandoriCardSearchEntry } from "./search";
 
 export type BandoriCardCatalogEntry = BandoriCardCatalogBaseEntry & {
   skillId: number | null;
   characterName: string;
   type?: string;
   displayName: string;
-  searchText: string;
+  search: BandoriCardSearchEntry;
   availableArtVariants: readonly BandoriCardAssetVariant[];
 };
 
@@ -49,6 +53,7 @@ export interface BandoriCardCatalogSourceContext {
   canonicalCards?: Record<string, BandoriCardMaster | null | undefined>;
   assetIndex?: BandoriCardsAssetIndex | null;
   availabilityScope?: readonly BandoriServer[];
+  skills?: Readonly<Record<string, BandoriSkillMaster | null | undefined>>;
 }
 
 export function buildBandoriCardCatalog(
@@ -60,6 +65,7 @@ export function buildBandoriCardCatalog(
   fallbackLabels?: BandoriCardCatalogFallbackLabels,
   sourceContext: BandoriCardCatalogSourceContext = {},
 ): BandoriCardCatalogEntry[] {
+  const searchMetadata = buildBandoriCardSearchMetadata(characters, sourceContext.skills ?? {});
   const availabilityScope = sourceContext.availabilityScope
     ?? (contextServer === undefined || contextServer === null ? null : [contextServer]);
   const cardEntries = expandEntityCollisions
@@ -126,23 +132,20 @@ export function buildBandoriCardCatalog(
         ? ["normal", "after_training"]
         : ["normal"];
     const hasTrainedArt = availableArtVariants.includes("after_training");
-    const searchText = [
-      entry.cardId,
-      displayName,
-      characterName,
-      entry.characterId,
-      entry.bandId,
-      entry.attribute,
-      entry.rarity,
-    ].join(" ").toLowerCase();
+    const searchServer = entityServer ?? (isKnownBandoriCardEntityCollision(entry.cardId) ? contextServer ?? null : null);
 
     return [{
       ...entry,
       skillId,
       characterName,
-      type: rawType,
+      type: normalizeBandoriCardCatalogType(rawType),
       displayName,
-      searchText,
+      search: {
+        ...entry,
+        type: normalizeBandoriCardCatalogType(rawType),
+        availableServers: canonicalCard ? listBandoriCardCatalogAvailableServers(canonicalCard, searchServer) : [],
+        ...buildBandoriCardSearchData(canonicalCard, searchServer, searchMetadata),
+      },
       availableArtVariants,
       hasTrainedArt,
     }];
@@ -165,16 +168,13 @@ export function filterBandoriCardCatalog(
   }
 
   const selection = buildBandoriCardFilterSelection(filter);
+  const matchesSearch = compileBandoriCardSearch(filter.query);
   const releaseServer = getBandoriCardReleaseSortServer(filter.sortBy);
   const filtered = cards.filter((card) => {
-    if (selection.query && !card.searchText.includes(selection.query)) {
+    if (!matchesSearch(card.search) || (filter.types && !filter.types.includes(normalizeBandoriCardCatalogType(card.type)))) {
       return false;
     }
     if (!matchesBandoriCardFilterSelection(card, selection)) {
-      return false;
-    }
-    const releaseTimestamp = releaseServer === null ? 0 : card.releaseTimestamps[releaseServer];
-    if (releaseServer !== null && releaseTimestamp <= 0) {
       return false;
     }
     return true;
@@ -185,9 +185,15 @@ export function filterBandoriCardCatalog(
     if (filter.sortBy === "id" || releaseServer === null) {
       return direction * (left.cardId - right.cardId);
     }
-    return direction * (
-      left.releaseTimestamps[releaseServer] - right.releaseTimestamps[releaseServer]
-    ) || direction * (left.cardId - right.cardId);
+    const leftTimestamp = left.releaseTimestamps[releaseServer];
+    const rightTimestamp = right.releaseTimestamps[releaseServer];
+    if (leftTimestamp <= 0 || rightTimestamp <= 0) {
+      if (leftTimestamp <= 0 && rightTimestamp <= 0) {
+        return direction * (left.cardId - right.cardId);
+      }
+      return leftTimestamp <= 0 ? 1 : -1;
+    }
+    return direction * (leftTimestamp - rightTimestamp) || direction * (left.cardId - right.cardId);
   });
 }
 

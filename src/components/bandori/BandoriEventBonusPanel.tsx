@@ -284,17 +284,17 @@ function EventBonusInfoRow({
       "grid gap-2",
       variant === "card" && "md:grid-cols-[7rem_1fr] md:items-start",
       variant === "embedded" && [
-        "border-b border-[var(--theme-color-border-subtle)] py-3 last:border-b-0 md:grid-cols-[7rem_1fr] md:items-start md:gap-5",
+        "border-b border-[var(--theme-color-border-subtle)] py-3 last:border-b-0 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-5",
         mobileLayout === "inline"
-          ? "grid-cols-[7rem_minmax(0,1fr)] items-start gap-3"
-          : "grid-cols-1 gap-2",
+          ? "grid-cols-[7rem_minmax(0,1fr)] items-center gap-3"
+          : "grid-cols-1 items-start gap-1",
       ],
     )}>
       <LabelElement className={cn(
-        "pt-1 text-sm font-semibold",
+        "text-sm font-semibold",
         variant === "embedded"
-          ? "text-[var(--theme-color-text-muted)] dark:text-slate-400"
-          : "text-[var(--theme-color-text-muted)]",
+          ? "leading-5 text-[var(--theme-color-text-muted)] dark:text-slate-400"
+          : "pt-1 text-[var(--theme-color-text-muted)]",
       )}>
         {label}
       </LabelElement>

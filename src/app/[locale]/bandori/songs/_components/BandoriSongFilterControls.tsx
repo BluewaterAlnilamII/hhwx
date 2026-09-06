@@ -1,9 +1,11 @@
 "use client";
 
-import { type ReactNode } from "react";
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Filter, Search, X } from "lucide-react";
+import { useEffect, useRef, type ReactNode, type RefObject } from "react";
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, Search, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
+import BandoriSearchHelp from "@/components/bandori/BandoriSearchHelp";
+import BandoriFilterResultCount from "@/components/bandori/BandoriFilterResultCount";
 import { buildBandoriCardBandIconUrl } from "@/lib/bandori-builtin-resources";
 import { BANDORI_CHARACTER_GROUPS } from "@/lib/bandori-character-groups";
 import {
@@ -90,7 +92,7 @@ function ToggleAllButton({
 function FilterRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid gap-2 sm:grid-cols-[5.5rem_1fr] sm:items-start">
-      <div className="pt-2 text-sm font-medium text-slate-600">{label}</div>
+      <div className="hhwx-filter-label pt-2 text-sm font-medium text-slate-600">{label}</div>
       <div className="flex min-w-0 flex-wrap items-center gap-2">{children}</div>
     </div>
   );
@@ -106,6 +108,36 @@ function parseLevelInput(value: string): number | null {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+function LevelInput({ label, value, onCommit, inputRef }: { label: string; value: number | null; onCommit: (value: number | null) => void; inputRef: RefObject<HTMLInputElement | null> }) {
+  useEffect(() => {
+    if (inputRef.current) inputRef.current.value = numberInputValue(value);
+  }, [value, inputRef]);
+  const commit = () => {
+    const next = parseLevelInput(inputRef.current?.value ?? "");
+    if (next !== value) onCommit(next);
+  };
+  return (
+    <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+      {label}
+      <input
+        ref={inputRef}
+        type="number"
+        min={1}
+        inputMode="numeric"
+        defaultValue={numberInputValue(value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            commit();
+          }
+        }}
+        className="h-10 w-20 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-hidden transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+      />
+    </label>
+  );
+}
+
 export default function BandoriSongFilterControls({
   filter,
   resultCountLabel,
@@ -113,31 +145,71 @@ export default function BandoriSongFilterControls({
   onClearFilter,
 }: BandoriSongFilterControlsProps) {
   const t = useTranslations("bandori.songs.filters");
+  const searchT = useTranslations("bandori.cardFilters.actions");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const minLevelInputRef = useRef<HTMLInputElement>(null);
+  const maxLevelInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (searchInputRef.current) searchInputRef.current.value = filter.query;
+  }, [filter.query]);
   const bandLabel = t("rows.band");
   const typeLabel = t("rows.type");
   const serverLabel = t("rows.serverAvailability");
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+    <div className="hhwx-panel hhwx-catalog-filters rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-          <input
-            type="search"
-            value={filter.query}
-            onChange={(event) => onFilterChange({ query: event.target.value })}
-            placeholder={t("searchPlaceholder")}
-            className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-hidden transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-          />
-        </div>
+        <form
+          role="search"
+          className="flex min-w-0 flex-1 gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const query = searchInputRef.current?.value.trim() ?? "";
+            if (query !== filter.query) onFilterChange({ query });
+          }}
+        >
+          <div className="relative min-w-0 flex-1">
+            <Search className="hhwx-filter-search-icon pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+            <input
+              ref={searchInputRef}
+              type="search"
+              defaultValue={filter.query}
+              onInput={(event) => {
+                if (event.currentTarget.value === "" && filter.query !== "" && !(event.nativeEvent as InputEvent).isComposing) {
+                  onFilterChange({ query: "" });
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.stopPropagation();
+                if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) event.preventDefault();
+              }}
+              enterKeyHint="search"
+              aria-label={t("searchPlaceholder")}
+              placeholder={t("searchPlaceholder")}
+              className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-hidden transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+            />
+          </div>
+          <button
+            type="submit"
+            aria-label={searchT("search")}
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
+          >
+            <Search className="h-4 w-4" aria-hidden="true" />
+          </button>
+          <BandoriSearchHelp kind="songs" />
+        </form>
         <div className="flex items-center gap-2">
-          <span className="inline-flex h-10 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700">
-            <Filter className="h-4 w-4" aria-hidden="true" />
-            {resultCountLabel}
-          </span>
+          <BandoriFilterResultCount label={resultCountLabel} />
           <button
             type="button"
-            onClick={onClearFilter}
+            onClick={() => {
+              for (const inputRef of [searchInputRef, minLevelInputRef, maxLevelInputRef]) {
+                if (inputRef.current) inputRef.current.value = "";
+              }
+              onClearFilter();
+            }}
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
           >
             <X className="h-4 w-4" aria-hidden="true" />
@@ -247,41 +319,28 @@ export default function BandoriSongFilterControls({
             <SelectionButton
               key={difficulty}
               title={t(`difficulties.${difficulty}`)}
-              isSelected={filter.difficulty === difficulty}
-              onClick={() => onFilterChange({ difficulty })}
+              isSelected={filter.difficulties.includes(difficulty)}
+              onClick={() => onFilterChange({ difficulties: toggleSelection(filter.difficulties, difficulty) })}
               className="px-3 text-xs"
             >
               {t(`difficulties.${difficulty}`)}
             </SelectionButton>
           ))}
+          <ToggleAllButton
+            isSelected={areAllSelected(filter.difficulties, BANDORI_SONG_DIFFICULTY_FILTERS)}
+            label={t("rows.difficulty")}
+            onClick={() => onFilterChange({
+              difficulties: areAllSelected(filter.difficulties, BANDORI_SONG_DIFFICULTY_FILTERS)
+                ? []
+                : [...BANDORI_SONG_DIFFICULTY_FILTERS],
+            })}
+          />
         </FilterRow>
 
         <FilterRow label={t("rows.level")}>
-          <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
-            {t("levelMin")}
-            <input
-              type="number"
-              min={1}
-              max={99}
-              inputMode="numeric"
-              value={numberInputValue(filter.minLevel)}
-              onChange={(event) => onFilterChange({ minLevel: parseLevelInput(event.target.value) })}
-              className="h-10 w-20 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-hidden transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-            />
-          </label>
+          <LevelInput inputRef={minLevelInputRef} label={t("levelMin")} value={filter.minLevel} onCommit={(minLevel) => onFilterChange({ minLevel })} />
           <span className="text-slate-400" aria-hidden="true">–</span>
-          <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
-            {t("levelMax")}
-            <input
-              type="number"
-              min={1}
-              max={99}
-              inputMode="numeric"
-              value={numberInputValue(filter.maxLevel)}
-              onChange={(event) => onFilterChange({ maxLevel: parseLevelInput(event.target.value) })}
-              className="h-10 w-20 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-hidden transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-            />
-          </label>
+          <LevelInput inputRef={maxLevelInputRef} label={t("levelMax")} value={filter.maxLevel} onCommit={(maxLevel) => onFilterChange({ maxLevel })} />
         </FilterRow>
 
         <FilterRow label={t("rows.sort")}>
