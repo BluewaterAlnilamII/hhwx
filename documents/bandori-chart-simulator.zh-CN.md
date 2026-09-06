@@ -90,6 +90,8 @@ bandori/chart-simulator/packs/{packTreeHash}/{logicalPath}
 
 Web Audio 运行时在音效皮肤切换后只保留当前 TapSE Cue Bank。旧 Note SE 音源停止后，其余已解码 `AudioBuffer` 及 URL Promise 引用都会被移除；再次选择时会先复用正常的 HTTP 缓存，再重新解码。当前歌曲 Buffer 以及按需准备的 Signalsmith PCM 副本会保留到模拟器音频运行时销毁。
 
+设置区与皮肤控件会在 transport 更新之间复用 React 子树。每条可见 Ribbon 只按实际使用的速度模式延迟创建一个 Mesh，保留原有的逐段顶点、UV、三角形顺序及 Launcher 行为；相邻段复用同一帧的端点投影。判定归属、轮廓与偏移标签只在裁剪或优先级候选集合尚未变化时复用；输入包含过期候选时会重新计算，保留原算法的返回顺序。相关设置变化会使缓存失效；跳转后按新时间更新画面，完全相同的诊断帧保留已有绘制。Transport 更新频率、暂停 ticker、FPS 采样及渲染质量保持不变。
+
 ## 普通控件与限定覆盖
 
 背景、按键条／判定线、节奏标志／Note、Directional Flick、点击效果与 TapSE 是彼此独立的普通控件。Habahiro 不是另一种皮肤控件：谱面级 `laneChange=true` 标志启用其多轨演出，之后每个 Note 或连接带节点仍使用自身编译后的覆盖范围。当一个点提供 `lanes` 时，这段连续范围就是完整的位置合同：编译器不会读取旧的标量 `lane`，而会直接从范围派生画面中心和原生整数按键位。Long 或 Slide 可以让连续覆盖范围横向移动，但同一次按压中的覆盖宽度保持不变。

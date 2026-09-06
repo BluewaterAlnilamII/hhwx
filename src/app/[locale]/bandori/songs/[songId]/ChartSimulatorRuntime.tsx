@@ -621,18 +621,18 @@ export default function ChartSimulatorRuntime({
   );
   const [slideJudgmentFrameCorrectionTenths, setSlideJudgmentFrameCorrectionTenths] =
     useState(initialPreferences.slideJudgmentFrameCorrectionTenths);
-  const changePerfectJudgmentWindowEnabled = (isEnabled: boolean) => {
+  const changePerfectJudgmentWindowEnabled = useCallback((isEnabled: boolean) => {
     if (!isEnabled && isGreatJudgmentWindowEnabled) {
       setIsGreatJudgmentWindowEnabled(false);
     }
     setIsPerfectJudgmentWindowEnabled(isEnabled);
-  };
-  const changeGreatJudgmentWindowEnabled = (isEnabled: boolean) => {
+  }, [isGreatJudgmentWindowEnabled]);
+  const changeGreatJudgmentWindowEnabled = useCallback((isEnabled: boolean) => {
     if (isEnabled && !isPerfectJudgmentWindowEnabled) {
       setIsPerfectJudgmentWindowEnabled(true);
     }
     setIsGreatJudgmentWindowEnabled(isEnabled);
-  };
+  }, [isPerfectJudgmentWindowEnabled]);
   const [suddenRate, setSuddenRate] = useState(initialPreferences.suddenRate);
   const [isSuddenLaneEnabled, setIsSuddenLaneEnabled] = useState(
     initialPreferences.isSuddenLaneEnabled,
@@ -2087,16 +2087,6 @@ export default function ChartSimulatorRuntime({
     void seekAudioAndTransport(next);
   };
 
-  const changeTapSeSkin = (skin: BandoriNativeTapSeSkin) => {
-    setTapSeSkin(skin);
-  };
-
-  const changeLimitedPerformanceSkin = (
-    skin: BandoriLimitedPerformanceSkin | null,
-  ) => {
-    setLimitedPerformanceSkin(skin);
-  };
-
   const changeDifficulty = (
     nextDifficulty: ChartSimulatorClientShellProps["difficulty"],
   ) => {
@@ -2180,7 +2170,7 @@ export default function ChartSimulatorRuntime({
     };
   }, [exitStageFullscreen, stageFullscreenMode]);
 
-  const changePlaybackRate = (adjustmentHundredths: number) => {
+  const changePlaybackRate = useCallback((adjustmentHundredths: number) => {
     const nextHundredths = adjustBandoriSimulatorPlaybackRate(
       playbackRateHundredthsRef.current,
       adjustmentHundredths,
@@ -2208,7 +2198,272 @@ export default function ChartSimulatorRuntime({
         { includeStartBoundary: true },
       );
     }
-  };
+  }, [seekAudioAndTransport, snapshotTransportAtAudioTime]);
+
+  const simulatorSettings = useMemo(() => (
+      <div className="mt-5 space-y-4">
+        <SimulatorSettingsCard title={t("effectControlsTitle")}>
+            <SimulatorControlRow label={t("controls.playbackRate")}>
+              <div className="flex items-center gap-1 sm:gap-2">
+                  {PLAYBACK_RATE_DECREASES.map((adjustmentHundredths) => (
+                    <SimulatorAdjustmentButton
+                      key={adjustmentHundredths}
+                      ariaLabel={t("controls.decreasePlaybackRate", {
+                        amount: (Math.abs(adjustmentHundredths) / 100).toFixed(2),
+                      })}
+                      direction="decrease"
+                      disabled={
+                        playbackRateHundredths
+                        === BANDORI_SIMULATOR_PLAYBACK_RATE_MIN_HUNDREDTHS
+                      }
+                      level={getPlaybackRateAdjustmentLevel(adjustmentHundredths)}
+                      onClick={() => changePlaybackRate(adjustmentHundredths)}
+                    />
+                  ))}
+                  <SimulatorAdjustmentValue ariaLabel={t("controls.currentPlaybackRate")}>
+                    {playbackRate.toFixed(2)}×
+                  </SimulatorAdjustmentValue>
+                  {PLAYBACK_RATE_INCREASES.map((adjustmentHundredths) => (
+                    <SimulatorAdjustmentButton
+                      key={adjustmentHundredths}
+                      ariaLabel={t("controls.increasePlaybackRate", {
+                        amount: (adjustmentHundredths / 100).toFixed(2),
+                      })}
+                      direction="increase"
+                      disabled={
+                        playbackRateHundredths
+                        === BANDORI_SIMULATOR_PLAYBACK_RATE_MAX_HUNDREDTHS
+                      }
+                      level={getPlaybackRateAdjustmentLevel(adjustmentHundredths)}
+                      onClick={() => changePlaybackRate(adjustmentHundredths)}
+                    />
+                  ))}
+              </div>
+            </SimulatorControlRow>
+
+            <SimulatorControlRow label={t("controls.noteSpeed")}>
+              <div className="flex items-center gap-1 sm:gap-2">
+                  {NOTE_SPEED_DECREASES.map((adjustment) => (
+                    <SimulatorAdjustmentButton
+                      key={adjustment}
+                      ariaLabel={t("controls.decreaseNoteSpeed", {
+                        amount: Math.abs(adjustment).toFixed(2),
+                      })}
+                      direction="decrease"
+                      disabled={noteSpeed === BANDORI_NATIVE_NOTE_SPEED_MIN}
+                      level={getNoteSpeedAdjustmentLevel(adjustment)}
+                      onClick={() => setNoteSpeed((current) => (
+                        adjustBandoriSimulatorNoteSpeed(current, adjustment)
+                      ))}
+                    />
+                  ))}
+                  <SimulatorAdjustmentValue ariaLabel={t("controls.currentNoteSpeed")}>
+                    {noteSpeed.toFixed(2)}
+                  </SimulatorAdjustmentValue>
+                  {NOTE_SPEED_INCREASES.map((adjustment) => (
+                    <SimulatorAdjustmentButton
+                      key={adjustment}
+                      ariaLabel={t("controls.increaseNoteSpeed", {
+                        amount: adjustment.toFixed(2),
+                      })}
+                      direction="increase"
+                      disabled={noteSpeed === BANDORI_NATIVE_NOTE_SPEED_MAX}
+                      level={getNoteSpeedAdjustmentLevel(adjustment)}
+                      onClick={() => setNoteSpeed((current) => (
+                        adjustBandoriSimulatorNoteSpeed(current, adjustment)
+                      ))}
+                    />
+                  ))}
+              </div>
+            </SimulatorControlRow>
+
+            <SimulatorControlRow label={t("controls.noteSize")}>
+              <SimulatorIntegerAdjustmentControl
+                adjustments={NOTE_SIZE_ADJUSTMENTS}
+                currentAriaLabel={t("controls.currentNoteSize")}
+                decreaseAriaLabel={(amount) => t("controls.decreaseNoteSize", { amount })}
+                increaseAriaLabel={(amount) => t("controls.increaseNoteSize", { amount })}
+                maximum={BANDORI_NATIVE_NOTE_SIZE_MAX}
+                minimum={BANDORI_NATIVE_NOTE_SIZE_MIN}
+                onAdjust={(adjustment) => setNoteSize((current) => (
+                  adjustBandoriNativeNoteSize(current, adjustment)
+                ))}
+                suffix="%"
+                value={noteSize}
+              />
+            </SimulatorControlRow>
+
+            <SimulatorControlRow
+              label={t("controls.perfectJudgmentWindow")}
+              mobileLayout="inline"
+              subcontrols={(
+                <>
+                  <SimulatorSubcontrolRow label={t("controls.greatJudgmentWindow")}>
+                    <SimulatorBooleanControl
+                      disabledLabel={t("skinControls.off")}
+                      enabledLabel={t("skinControls.on")}
+                      isEnabled={isGreatJudgmentWindowEnabled}
+                      label={t("controls.greatJudgmentWindow")}
+                      onChange={changeGreatJudgmentWindowEnabled}
+                    />
+                  </SimulatorSubcontrolRow>
+                  <SimulatorSubcontrolRow label={t("controls.maximumJudgmentOffset")}>
+                    <SimulatorBooleanControl
+                      disabledLabel={t("skinControls.off")}
+                      enabledLabel={t("skinControls.on")}
+                      isEnabled={isJudgmentWindowOffsetLabelEnabled}
+                      label={t("controls.maximumJudgmentOffset")}
+                      onChange={setIsJudgmentWindowOffsetLabelEnabled}
+                    />
+                  </SimulatorSubcontrolRow>
+                  <SimulatorSubcontrolRow label={t("controls.slideJudgmentFrameCorrection")}>
+                    <SimulatorDiscreteAdjustmentControl
+                      adjustmentLevel={1}
+                      currentAriaLabel={t("controls.currentSlideJudgmentFrameCorrection")}
+                      decreaseAriaLabel={t("controls.decreaseSlideJudgmentFrameCorrection")}
+                      formatValue={formatSlideJudgmentFrameCorrection}
+                      increaseAriaLabel={t("controls.increaseSlideJudgmentFrameCorrection")}
+                      onChange={setSlideJudgmentFrameCorrectionTenths}
+                      options={BANDORI_SLIDE_JUDGMENT_FRAME_CORRECTION_OPTIONS}
+                      value={slideJudgmentFrameCorrectionTenths}
+                    />
+                  </SimulatorSubcontrolRow>
+                </>
+              )}
+            >
+              <SimulatorBooleanControl
+                disabledLabel={t("skinControls.off")}
+                enabledLabel={t("skinControls.on")}
+                isEnabled={isPerfectJudgmentWindowEnabled}
+                label={t("controls.perfectJudgmentWindow")}
+                onChange={changePerfectJudgmentWindowEnabled}
+              />
+            </SimulatorControlRow>
+
+            <SimulatorControlRow label={t("controls.suddenRate")}>
+              <SimulatorIntegerAdjustmentControl
+                adjustments={BANDORI_NATIVE_SUDDEN_RATE_ADJUSTMENTS}
+                currentAriaLabel={t("controls.currentSuddenRate")}
+                decreaseAriaLabel={(amount) => t("controls.decreaseSuddenRate", { amount })}
+                increaseAriaLabel={(amount) => t("controls.increaseSuddenRate", { amount })}
+                maximum={BANDORI_NATIVE_SUDDEN_RATE_MAX}
+                minimum={BANDORI_NATIVE_SUDDEN_RATE_MIN}
+                onAdjust={(adjustment) => setSuddenRate((current) => (
+                  adjustBandoriNativeSuddenRate(current, adjustment)
+                ))}
+                suffix="%"
+                value={suddenRate}
+              />
+              <SimulatorSubcontrolRow label={t("controls.suddenLane")}>
+                <SimulatorBooleanControl
+                  disabledLabel={t("skinControls.off")}
+                  enabledLabel={t("skinControls.on")}
+                  isEnabled={isSuddenLaneEnabled}
+                  label={t("controls.suddenLane")}
+                  onChange={setIsSuddenLaneEnabled}
+                />
+              </SimulatorSubcontrolRow>
+            </SimulatorControlRow>
+
+            <SimulatorControlRow label={t("skinControls.syncLine")} mobileLayout="inline">
+              <SimulatorBooleanControl
+                disabledLabel={t("skinControls.off")}
+                enabledLabel={t("skinControls.on")}
+                isEnabled={isSyncLineEnabled}
+                label={t("skinControls.syncLine")}
+                onChange={setIsSyncLineEnabled}
+              />
+            </SimulatorControlRow>
+
+            <SimulatorControlRow label={t("skinControls.rhythmSupport")} mobileLayout="inline">
+              <SimulatorBooleanControl
+                disabledLabel={t("skinControls.off")}
+                enabledLabel={t("skinControls.on")}
+                isEnabled={isRhythmSupportEnabled}
+                label={t("skinControls.rhythmSupport")}
+                onChange={setIsRhythmSupportEnabled}
+              />
+            </SimulatorControlRow>
+
+            <SimulatorControlRow label={t("controls.mirrorData")} mobileLayout="inline">
+              <SimulatorBooleanControl
+                disabledLabel={t("skinControls.off")}
+                enabledLabel={t("skinControls.on")}
+                isEnabled={isMirrored}
+                label={t("controls.mirrorData")}
+                onChange={setIsMirrored}
+              />
+            </SimulatorControlRow>
+
+            <SimulatorControlRow label={t("skinControls.laneEffect")} mobileLayout="inline">
+              <SimulatorBooleanControl
+                disabledLabel={t("skinControls.off")}
+                enabledLabel={t("skinControls.on")}
+                isEnabled={isLaneEffectEnabled}
+                label={t("skinControls.laneEffect")}
+                onChange={setIsLaneEffectEnabled}
+              />
+            </SimulatorControlRow>
+
+            <SimulatorControlRow label={t("controls.frameRateLimit")}>
+              <SimulatorDiscreteAdjustmentControl
+                currentAriaLabel={t("controls.currentFrameRateLimit")}
+                decreaseAriaLabel={t("controls.decreaseFrameRateLimit")}
+                formatValue={(value) => value === null
+                  ? t("controls.unlimitedFrameRate")
+                  : `${value} FPS`}
+                increaseAriaLabel={t("controls.increaseFrameRateLimit")}
+                onChange={setFrameRateLimit}
+                options={BANDORI_SIMULATOR_FRAME_RATE_LIMIT_OPTIONS}
+                value={frameRateLimit}
+              />
+            </SimulatorControlRow>
+
+            <SimulatorControlRow label={t("controls.resolutionScale")}>
+              <SimulatorDiscreteAdjustmentControl
+                currentAriaLabel={t("controls.currentResolutionScale")}
+                decreaseAriaLabel={t("controls.decreaseResolutionScale")}
+                formatValue={(value) => `${value}%`}
+                increaseAriaLabel={t("controls.increaseResolutionScale")}
+                onChange={setResolutionScale}
+                options={BANDORI_SIMULATOR_RESOLUTION_SCALE_OPTIONS}
+                value={resolutionScale}
+              />
+            </SimulatorControlRow>
+
+        </SimulatorSettingsCard>
+
+        <SimulatorSkinControls
+          backgroundSkin={backgroundSkin}
+          backgroundSkins={BANDORI_NATIVE_BACKGROUND_SKINS}
+          directionalFlickSkin={directionalFlickSkin}
+          directionalEffectVariant={directionalEffectVariant}
+          fieldSkin={fieldSkin}
+          fieldSkins={BANDORI_NATIVE_FIELD_SKIN_CHOICES}
+          limitedPerformanceSkin={limitedPerformanceSkin}
+          noteSkin={noteSkin}
+          onBackgroundSkinChange={setBackgroundSkin}
+          onDirectionalFlickSkinChange={setDirectionalFlickSkin}
+          onDirectionalEffectVariantChange={setDirectionalEffectVariant}
+          onFieldSkinChange={setFieldSkin}
+          onLimitedPerformanceSkinChange={setLimitedPerformanceSkin}
+          onNoteSkinChange={setNoteSkin}
+          onTapEffectSkinChange={setTapEffectSkin}
+          onTapSeSkinChange={setTapSeSkin}
+          tapEffectSkin={tapEffectSkin}
+          tapSeSkin={tapSeSkin}
+        />
+      </div>
+  ), [
+    backgroundSkin, changeGreatJudgmentWindowEnabled, changePerfectJudgmentWindowEnabled,
+    changePlaybackRate, directionalEffectVariant, directionalFlickSkin, fieldSkin,
+    frameRateLimit, isGreatJudgmentWindowEnabled, isJudgmentWindowOffsetLabelEnabled,
+    isLaneEffectEnabled, isMirrored, isPerfectJudgmentWindowEnabled,
+    isRhythmSupportEnabled, isSuddenLaneEnabled, isSyncLineEnabled,
+    limitedPerformanceSkin, noteSize, noteSkin, noteSpeed, playbackRate,
+    playbackRateHundredths, resolutionScale, slideJudgmentFrameCorrectionTenths,
+    suddenRate, t, tapEffectSkin, tapSeSkin,
+  ]);
 
   const currentStageLoadProgress = stageLoadProgress?.loadId === stageLoadId
     ? stageLoadProgress
@@ -3011,259 +3266,7 @@ export default function ChartSimulatorRuntime({
         </div>
       </div>
 
-      <div className="mt-5 space-y-4">
-        <SimulatorSettingsCard title={t("effectControlsTitle")}>
-            <SimulatorControlRow label={t("controls.playbackRate")}>
-              <div className="flex items-center gap-1 sm:gap-2">
-                  {PLAYBACK_RATE_DECREASES.map((adjustmentHundredths) => (
-                    <SimulatorAdjustmentButton
-                      key={adjustmentHundredths}
-                      ariaLabel={t("controls.decreasePlaybackRate", {
-                        amount: (Math.abs(adjustmentHundredths) / 100).toFixed(2),
-                      })}
-                      direction="decrease"
-                      disabled={
-                        playbackRateHundredths
-                        === BANDORI_SIMULATOR_PLAYBACK_RATE_MIN_HUNDREDTHS
-                      }
-                      level={getPlaybackRateAdjustmentLevel(adjustmentHundredths)}
-                      onClick={() => changePlaybackRate(adjustmentHundredths)}
-                    />
-                  ))}
-                  <SimulatorAdjustmentValue ariaLabel={t("controls.currentPlaybackRate")}>
-                    {playbackRate.toFixed(2)}×
-                  </SimulatorAdjustmentValue>
-                  {PLAYBACK_RATE_INCREASES.map((adjustmentHundredths) => (
-                    <SimulatorAdjustmentButton
-                      key={adjustmentHundredths}
-                      ariaLabel={t("controls.increasePlaybackRate", {
-                        amount: (adjustmentHundredths / 100).toFixed(2),
-                      })}
-                      direction="increase"
-                      disabled={
-                        playbackRateHundredths
-                        === BANDORI_SIMULATOR_PLAYBACK_RATE_MAX_HUNDREDTHS
-                      }
-                      level={getPlaybackRateAdjustmentLevel(adjustmentHundredths)}
-                      onClick={() => changePlaybackRate(adjustmentHundredths)}
-                    />
-                  ))}
-              </div>
-            </SimulatorControlRow>
-
-            <SimulatorControlRow label={t("controls.noteSpeed")}>
-              <div className="flex items-center gap-1 sm:gap-2">
-                  {NOTE_SPEED_DECREASES.map((adjustment) => (
-                    <SimulatorAdjustmentButton
-                      key={adjustment}
-                      ariaLabel={t("controls.decreaseNoteSpeed", {
-                        amount: Math.abs(adjustment).toFixed(2),
-                      })}
-                      direction="decrease"
-                      disabled={noteSpeed === BANDORI_NATIVE_NOTE_SPEED_MIN}
-                      level={getNoteSpeedAdjustmentLevel(adjustment)}
-                      onClick={() => setNoteSpeed((current) => (
-                        adjustBandoriSimulatorNoteSpeed(current, adjustment)
-                      ))}
-                    />
-                  ))}
-                  <SimulatorAdjustmentValue ariaLabel={t("controls.currentNoteSpeed")}>
-                    {noteSpeed.toFixed(2)}
-                  </SimulatorAdjustmentValue>
-                  {NOTE_SPEED_INCREASES.map((adjustment) => (
-                    <SimulatorAdjustmentButton
-                      key={adjustment}
-                      ariaLabel={t("controls.increaseNoteSpeed", {
-                        amount: adjustment.toFixed(2),
-                      })}
-                      direction="increase"
-                      disabled={noteSpeed === BANDORI_NATIVE_NOTE_SPEED_MAX}
-                      level={getNoteSpeedAdjustmentLevel(adjustment)}
-                      onClick={() => setNoteSpeed((current) => (
-                        adjustBandoriSimulatorNoteSpeed(current, adjustment)
-                      ))}
-                    />
-                  ))}
-              </div>
-            </SimulatorControlRow>
-
-            <SimulatorControlRow label={t("controls.noteSize")}>
-              <SimulatorIntegerAdjustmentControl
-                adjustments={NOTE_SIZE_ADJUSTMENTS}
-                currentAriaLabel={t("controls.currentNoteSize")}
-                decreaseAriaLabel={(amount) => t("controls.decreaseNoteSize", { amount })}
-                increaseAriaLabel={(amount) => t("controls.increaseNoteSize", { amount })}
-                maximum={BANDORI_NATIVE_NOTE_SIZE_MAX}
-                minimum={BANDORI_NATIVE_NOTE_SIZE_MIN}
-                onAdjust={(adjustment) => setNoteSize((current) => (
-                  adjustBandoriNativeNoteSize(current, adjustment)
-                ))}
-                suffix="%"
-                value={noteSize}
-              />
-            </SimulatorControlRow>
-
-            <SimulatorControlRow
-              label={t("controls.perfectJudgmentWindow")}
-              mobileLayout="inline"
-              subcontrols={(
-                <>
-                  <SimulatorSubcontrolRow label={t("controls.greatJudgmentWindow")}>
-                    <SimulatorBooleanControl
-                      disabledLabel={t("skinControls.off")}
-                      enabledLabel={t("skinControls.on")}
-                      isEnabled={isGreatJudgmentWindowEnabled}
-                      label={t("controls.greatJudgmentWindow")}
-                      onChange={changeGreatJudgmentWindowEnabled}
-                    />
-                  </SimulatorSubcontrolRow>
-                  <SimulatorSubcontrolRow label={t("controls.maximumJudgmentOffset")}>
-                    <SimulatorBooleanControl
-                      disabledLabel={t("skinControls.off")}
-                      enabledLabel={t("skinControls.on")}
-                      isEnabled={isJudgmentWindowOffsetLabelEnabled}
-                      label={t("controls.maximumJudgmentOffset")}
-                      onChange={setIsJudgmentWindowOffsetLabelEnabled}
-                    />
-                  </SimulatorSubcontrolRow>
-                  <SimulatorSubcontrolRow label={t("controls.slideJudgmentFrameCorrection")}>
-                    <SimulatorDiscreteAdjustmentControl
-                      adjustmentLevel={1}
-                      currentAriaLabel={t("controls.currentSlideJudgmentFrameCorrection")}
-                      decreaseAriaLabel={t("controls.decreaseSlideJudgmentFrameCorrection")}
-                      formatValue={formatSlideJudgmentFrameCorrection}
-                      increaseAriaLabel={t("controls.increaseSlideJudgmentFrameCorrection")}
-                      onChange={setSlideJudgmentFrameCorrectionTenths}
-                      options={BANDORI_SLIDE_JUDGMENT_FRAME_CORRECTION_OPTIONS}
-                      value={slideJudgmentFrameCorrectionTenths}
-                    />
-                  </SimulatorSubcontrolRow>
-                </>
-              )}
-            >
-              <SimulatorBooleanControl
-                disabledLabel={t("skinControls.off")}
-                enabledLabel={t("skinControls.on")}
-                isEnabled={isPerfectJudgmentWindowEnabled}
-                label={t("controls.perfectJudgmentWindow")}
-                onChange={changePerfectJudgmentWindowEnabled}
-              />
-            </SimulatorControlRow>
-
-            <SimulatorControlRow label={t("controls.suddenRate")}>
-              <SimulatorIntegerAdjustmentControl
-                adjustments={BANDORI_NATIVE_SUDDEN_RATE_ADJUSTMENTS}
-                currentAriaLabel={t("controls.currentSuddenRate")}
-                decreaseAriaLabel={(amount) => t("controls.decreaseSuddenRate", { amount })}
-                increaseAriaLabel={(amount) => t("controls.increaseSuddenRate", { amount })}
-                maximum={BANDORI_NATIVE_SUDDEN_RATE_MAX}
-                minimum={BANDORI_NATIVE_SUDDEN_RATE_MIN}
-                onAdjust={(adjustment) => setSuddenRate((current) => (
-                  adjustBandoriNativeSuddenRate(current, adjustment)
-                ))}
-                suffix="%"
-                value={suddenRate}
-              />
-              <SimulatorSubcontrolRow label={t("controls.suddenLane")}>
-                <SimulatorBooleanControl
-                  disabledLabel={t("skinControls.off")}
-                  enabledLabel={t("skinControls.on")}
-                  isEnabled={isSuddenLaneEnabled}
-                  label={t("controls.suddenLane")}
-                  onChange={setIsSuddenLaneEnabled}
-                />
-              </SimulatorSubcontrolRow>
-            </SimulatorControlRow>
-
-            <SimulatorControlRow label={t("skinControls.syncLine")} mobileLayout="inline">
-              <SimulatorBooleanControl
-                disabledLabel={t("skinControls.off")}
-                enabledLabel={t("skinControls.on")}
-                isEnabled={isSyncLineEnabled}
-                label={t("skinControls.syncLine")}
-                onChange={setIsSyncLineEnabled}
-              />
-            </SimulatorControlRow>
-
-            <SimulatorControlRow label={t("skinControls.rhythmSupport")} mobileLayout="inline">
-              <SimulatorBooleanControl
-                disabledLabel={t("skinControls.off")}
-                enabledLabel={t("skinControls.on")}
-                isEnabled={isRhythmSupportEnabled}
-                label={t("skinControls.rhythmSupport")}
-                onChange={setIsRhythmSupportEnabled}
-              />
-            </SimulatorControlRow>
-
-            <SimulatorControlRow label={t("controls.mirrorData")} mobileLayout="inline">
-              <SimulatorBooleanControl
-                disabledLabel={t("skinControls.off")}
-                enabledLabel={t("skinControls.on")}
-                isEnabled={isMirrored}
-                label={t("controls.mirrorData")}
-                onChange={setIsMirrored}
-              />
-            </SimulatorControlRow>
-
-            <SimulatorControlRow label={t("skinControls.laneEffect")} mobileLayout="inline">
-              <SimulatorBooleanControl
-                disabledLabel={t("skinControls.off")}
-                enabledLabel={t("skinControls.on")}
-                isEnabled={isLaneEffectEnabled}
-                label={t("skinControls.laneEffect")}
-                onChange={setIsLaneEffectEnabled}
-              />
-            </SimulatorControlRow>
-
-            <SimulatorControlRow label={t("controls.frameRateLimit")}>
-              <SimulatorDiscreteAdjustmentControl
-                currentAriaLabel={t("controls.currentFrameRateLimit")}
-                decreaseAriaLabel={t("controls.decreaseFrameRateLimit")}
-                formatValue={(value) => value === null
-                  ? t("controls.unlimitedFrameRate")
-                  : `${value} FPS`}
-                increaseAriaLabel={t("controls.increaseFrameRateLimit")}
-                onChange={setFrameRateLimit}
-                options={BANDORI_SIMULATOR_FRAME_RATE_LIMIT_OPTIONS}
-                value={frameRateLimit}
-              />
-            </SimulatorControlRow>
-
-            <SimulatorControlRow label={t("controls.resolutionScale")}>
-              <SimulatorDiscreteAdjustmentControl
-                currentAriaLabel={t("controls.currentResolutionScale")}
-                decreaseAriaLabel={t("controls.decreaseResolutionScale")}
-                formatValue={(value) => `${value}%`}
-                increaseAriaLabel={t("controls.increaseResolutionScale")}
-                onChange={setResolutionScale}
-                options={BANDORI_SIMULATOR_RESOLUTION_SCALE_OPTIONS}
-                value={resolutionScale}
-              />
-            </SimulatorControlRow>
-
-        </SimulatorSettingsCard>
-
-        <SimulatorSkinControls
-          backgroundSkin={backgroundSkin}
-          backgroundSkins={BANDORI_NATIVE_BACKGROUND_SKINS}
-          directionalFlickSkin={directionalFlickSkin}
-          directionalEffectVariant={directionalEffectVariant}
-          fieldSkin={fieldSkin}
-          fieldSkins={BANDORI_NATIVE_FIELD_SKIN_CHOICES}
-          limitedPerformanceSkin={limitedPerformanceSkin}
-          noteSkin={noteSkin}
-          onBackgroundSkinChange={setBackgroundSkin}
-          onDirectionalFlickSkinChange={setDirectionalFlickSkin}
-          onDirectionalEffectVariantChange={setDirectionalEffectVariant}
-          onFieldSkinChange={setFieldSkin}
-          onLimitedPerformanceSkinChange={changeLimitedPerformanceSkin}
-          onNoteSkinChange={setNoteSkin}
-          onTapEffectSkinChange={setTapEffectSkin}
-          onTapSeSkinChange={changeTapSeSkin}
-          tapEffectSkin={tapEffectSkin}
-          tapSeSkin={tapSeSkin}
-        />
-      </div>
+      {simulatorSettings}
 
       {!audioUrl ? <p className="mt-2 text-sm text-[var(--theme-color-semantic-warning-foreground)]">{t("audioUnavailable")}</p> : null}
       {hasPlaybackError ? (

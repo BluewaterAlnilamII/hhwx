@@ -704,6 +704,38 @@ test("width-7 Directional uses seven scalar bodies, one outer icon, and six back
   assert.deepEqual(group.visuals.filter(({ icon }) => icon).map(({ lane }) => lane), [6]);
 });
 
+test("combined ribbon segments preserve independent vertices, UVs, and triangle order", () => {
+  const points = [
+    { x: -10, y: 200, halfWidth: 12 },
+    { x: 300, y: 500, halfWidth: 50 },
+    { x: 100, y: 100, halfWidth: 2 },
+    { x: 100, y: 100, halfWidth: 2 },
+  ];
+  for (const mode of ["ordinary", "advanced"]) {
+    const combined = createBandoriNativeRibbonMeshGeometry(mode, points.length - 1);
+    for (let segment = 0; segment < points.length - 1; segment += 1) {
+      const single = createBandoriNativeRibbonMeshGeometry(mode);
+      updateBandoriNativeRibbonMeshVertices(single, points[segment], points[segment + 1]);
+      updateBandoriNativeRibbonMeshVertices(combined, points[segment], points[segment + 1], segment);
+      const vertexOffset = segment * single.vertices.length;
+      assert.deepEqual(combined.vertices.slice(vertexOffset, vertexOffset + single.vertices.length), single.vertices);
+      assert.deepEqual(combined.uvs.slice(vertexOffset, vertexOffset + single.uvs.length), single.uvs);
+      assert.deepEqual(
+        combined.indices.slice(segment * single.indices.length, (segment + 1) * single.indices.length),
+        single.indices.map((index) => index + vertexOffset / 2),
+      );
+    }
+    const before = combined.vertices.slice();
+    updateBandoriNativeRibbonMeshVertices(combined, points[3], points[0], 2);
+    assert.deepEqual(combined.vertices.slice(0, before.length * 2 / 3), before.slice(0, before.length * 2 / 3));
+    assert.throws(() => updateBandoriNativeRibbonMeshVertices(combined, points[0], points[1], 3));
+    assert.throws(() => updateBandoriNativeRibbonMeshVertices(combined, points[0], points[1], -1));
+  }
+  for (const invalid of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.throws(() => createBandoriNativeRibbonMeshGeometry("ordinary", invalid));
+  }
+});
+
 test("native ribbon and Directional connector geometry preserves verified tessellation", () => {
   const ordinary = createBandoriNativeRibbonMeshGeometry("ordinary");
   assert.equal(ordinary.vertices.length, 44);
