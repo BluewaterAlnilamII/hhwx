@@ -892,25 +892,31 @@ export function isBandoriNativeAdvancedNoteSpeed(noteSpeed: number): boolean {
 
 export function createBandoriNativeRibbonMeshGeometry(
   mode: BandoriNativeRibbonMeshMode,
+  segmentCount = 1,
 ): BandoriNativeRibbonMeshGeometry {
+  if (!Number.isSafeInteger(segmentCount) || segmentCount < 1) {
+    return fail("Native ribbon mesh segment count must be a positive integer");
+  }
   const progress = getRibbonSectionProgress(mode);
-  const vertices = new Float32Array(progress.length * 4);
-  const uvs = new Float32Array(progress.length * 4);
-  const indices = new Uint32Array((progress.length - 1) * 6);
-  for (let section = 0; section < progress.length; section += 1) {
-    const vertexOffset = section * 4;
-    const v = section / (progress.length - 1);
-    uvs[vertexOffset] = 0;
-    uvs[vertexOffset + 1] = v;
-    uvs[vertexOffset + 2] = 1;
-    uvs[vertexOffset + 3] = v;
-    if (section === progress.length - 1) continue;
-    const left = section * 2;
-    const right = left + 1;
-    const nextLeft = left + 2;
-    const nextRight = left + 3;
-    const indexOffset = section * 6;
-    indices.set([left, right, nextLeft, right, nextRight, nextLeft], indexOffset);
+  const vertices = new Float32Array(segmentCount * progress.length * 4);
+  const uvs = new Float32Array(vertices.length);
+  const indices = new Uint32Array(segmentCount * (progress.length - 1) * 6);
+  for (let segment = 0; segment < segmentCount; segment += 1) {
+    for (let section = 0; section < progress.length; section += 1) {
+      const vertexOffset = (segment * progress.length + section) * 4;
+      const v = section / (progress.length - 1);
+      uvs[vertexOffset] = 0;
+      uvs[vertexOffset + 1] = v;
+      uvs[vertexOffset + 2] = 1;
+      uvs[vertexOffset + 3] = v;
+      if (section === progress.length - 1) continue;
+      const left = (segment * progress.length + section) * 2;
+      const right = left + 1;
+      const nextLeft = left + 2;
+      const nextRight = left + 3;
+      const indexOffset = (segment * (progress.length - 1) + section) * 6;
+      indices.set([left, right, nextLeft, right, nextRight, nextLeft], indexOffset);
+    }
   }
   return { indices, mode, uvs, vertices };
 }
@@ -919,9 +925,16 @@ export function updateBandoriNativeRibbonMeshVertices(
   geometry: BandoriNativeRibbonMeshGeometry,
   start: { halfWidth: number; x: number; y: number },
   end: { halfWidth: number; x: number; y: number },
+  segmentIndex = 0,
 ): void {
   const progress = getRibbonSectionProgress(geometry.mode);
-  if (geometry.vertices.length !== progress.length * 4) {
+  const segmentSize = progress.length * 4;
+  if (
+    geometry.vertices.length % segmentSize !== 0
+    || !Number.isInteger(segmentIndex)
+    || segmentIndex < 0
+    || (segmentIndex + 1) * segmentSize > geometry.vertices.length
+  ) {
     return fail("Native ribbon mesh geometry has an invalid vertex count");
   }
   for (let section = 0; section < progress.length; section += 1) {
@@ -929,7 +942,7 @@ export function updateBandoriNativeRibbonMeshVertices(
     const x = start.x + (end.x - start.x) * t;
     const y = start.y + (end.y - start.y) * t;
     const halfWidth = start.halfWidth + (end.halfWidth - start.halfWidth) * t;
-    const offset = section * 4;
+    const offset = segmentIndex * segmentSize + section * 4;
     geometry.vertices[offset] = x - halfWidth;
     geometry.vertices[offset + 1] = y;
     geometry.vertices[offset + 2] = x + halfWidth;

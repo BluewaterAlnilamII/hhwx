@@ -1103,6 +1103,49 @@ export function collectBandoriNativeJudgmentWindowSegments({
   ));
 }
 
+/** Reuses unchanged regions until clipping or priority membership can change. */
+export function createBandoriNativeJudgmentWindowSegmentCollector() {
+  type Options = Parameters<typeof collectBandoriNativeJudgmentWindowSegments>[0];
+  let previous: Options | null = null;
+  let segments: BandoriNativeJudgmentWindowSegment[] = [];
+  let validUntil = Number.NEGATIVE_INFINITY;
+  return (options: Options): BandoriNativeJudgmentWindowSegment[] => {
+    const minimum = options.minimumInputTimeSeconds ?? Number.NEGATIVE_INFINITY;
+    const previousMinimum = previous?.minimumInputTimeSeconds ?? Number.NEGATIVE_INFINITY;
+    if (
+      previous
+      && (minimum === previousMinimum || (minimum > previousMinimum && minimum < validUntil))
+      && options.approachTimeScale === previous.approachTimeScale
+      && options.compiled === previous.compiled
+      && options.noteSpeed === previous.noteSpeed
+      && options.priorityIndex === previous.priorityIndex
+      && options.showGreat === previous.showGreat
+      && options.showPerfect === previous.showPerfect
+      && options.slideFrameCorrectionTenths === previous.slideFrameCorrectionTenths
+      && options.activeCandidates.length === previous.activeCandidates.length
+      // Expired inputs can change the collector's output order when their windows end.
+      && options.activeCandidates.every((candidate, index) => (
+        candidate === previous!.activeCandidates[index] && candidate.timeSeconds > minimum
+      ))
+    ) return segments;
+
+    segments = collectBandoriNativeJudgmentWindowSegments(options);
+    previous = { ...options, activeCandidates: [...options.activeCandidates] };
+    validUntil = Number.POSITIVE_INFINITY;
+    for (const segment of segments) {
+      validUntil = Math.min(validUntil, segment.startTimeSeconds);
+    }
+    // Indexed candidates outside the displayed set can still own an input.
+    for (const button of options.priorityIndex ?? []) {
+      for (const candidates of [button.standardPresses, button.slideHeads]) {
+        const next = candidates[upperBoundPriorityCandidateTime(candidates, minimum)];
+        if (next) validUntil = Math.min(validUntil, next.timeSeconds);
+      }
+    }
+    return segments;
+  };
+}
+
 type JudgmentWindowBoundaryLaneInterval = Readonly<{
   leftLane: number;
   rightLane: number;

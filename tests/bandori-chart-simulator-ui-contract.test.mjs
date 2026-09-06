@@ -393,7 +393,7 @@ test("native judgment windows stay diagnostic, lane-owned, and outside the Sudde
   assert.match(stage, /prepareBandoriNativeJudgmentWindowCandidates/u);
   assert.match(
     stage,
-    /const firstJudgmentIndex = upperBoundBandoriNoteTime\([\s\S]*for \(let index = firstJudgmentIndex; index < endIndex; index \+= 1\)[\s\S]*activeJudgmentCandidates\.push\(candidate\)[\s\S]*collectBandoriNativeJudgmentWindowSegments/u,
+    /const firstJudgmentIndex = upperBoundBandoriNoteTime\([\s\S]*for \(let index = firstJudgmentIndex; index < endIndex; index \+= 1\)[\s\S]*activeJudgmentCandidates\.push\(candidate\)[\s\S]*collectJudgmentWindowSegments/u,
   );
   assert.match(stage, /projectBandoriNativeTimelinePosition/u);
   assert.doesNotMatch(stage, /getBandoriNativeRibbonLaneAtBeat/u);
@@ -776,8 +776,8 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(stage, /updateBandoriNativeDirectionalConnectorVertices/u);
   assert.match(stage, /createNativeTransparentColoredShader/u);
   assert.doesNotMatch(stage, /BANDORI_NATIVE_(?:DIRECTIONAL_BACK_LINE|CURVE_SLIDE_BELT|LONG_BELT)_THRESHOLD/u);
-  assert.match(stage, /createRibbonMeshDisplay\(texture, "ordinary"\)/u);
-  assert.match(stage, /createRibbonMeshDisplay\(texture, "advanced"\)/u);
+  assert.match(stage, /const mode = useAdvancedMesh \? "advanced" : "ordinary"/u);
+  assert.match(stage, /if \(!selected\)[\s\S]*createRibbonMeshDisplay\([\s\S]*display\.texture,[\s\S]*mode,[\s\S]*display\.ribbon\.points\.length - 1/u);
   assert.match(stage, /source\.alphaMode = "no-premultiply-alpha"/u);
   assert.match(stage, /backgroundAlpha: backgroundSkin\.id === "off" \? 1 : 0/u);
   assert.match(stage, /backgroundColor: 0x000000/u);
@@ -888,7 +888,9 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.doesNotMatch(runtime, /<SkipBack|<SkipForward/u);
   assert.ok(bgmVolumeIndex > playbackControlsIndex);
   assert.ok(seVolumeIndex > bgmVolumeIndex);
-  assert.ok(effectControlsIndex > seVolumeIndex);
+  assert.match(runtime, /const simulatorSettings = useMemo\(/u);
+  assert.ok(runtime.indexOf("{simulatorSettings}") > seVolumeIndex);
+  assert.ok(effectControlsIndex >= 0);
   assert.ok(playbackRateIndex > effectControlsIndex);
   assert.ok(noteSpeedIndex > playbackRateIndex);
   assert.ok(syncLineIndex > noteSpeedIndex);

@@ -21,6 +21,7 @@ import {
   collectBandoriNativeJudgmentWindowOutlineEdges,
   collectBandoriNativeJudgmentWindowOffsetLabels,
   collectBandoriNativeJudgmentWindowSegments,
+  createBandoriNativeJudgmentWindowSegmentCollector,
   formatBandoriNativeJudgmentWindowOffsetFrames,
   isBandoriNativeStandardPressTriggerable,
   prepareBandoriNativeJudgmentWindowCandidates,
@@ -91,6 +92,67 @@ const slideCandidate = (
   slideTailKind,
   timingKind: "slidePosition",
   timeSeconds,
+});
+
+test("cached ownership matches fresh regions across clipping, priority removal, settings, and seeks", () => {
+  const candidates = [
+    standardCandidate(0, 1, [2]),
+    standardCandidate(1, 1.05, [3]),
+    longReleaseCandidate(2, 1.1, [1, 2]),
+    slideCandidate(3, 1.15, { buttons: [3], isSlideHead: true }),
+    slideCandidate(4, 1.3, { buttons: [3, 4], slidePreviousScoringTimeSeconds: 1.15 }),
+    standardCandidate(5, 1.7, [4]),
+  ];
+  const priorityIndex = prepareBandoriNativeJudgmentWindowPriorityIndex(candidates);
+  const collect = createBandoriNativeJudgmentWindowSegmentCollector();
+  let previous;
+  let reused = 0;
+  const times = Array.from({ length: 241 }, (_, index) => index / 120);
+  times.push(...candidates.flatMap(({ timeSeconds }) => [timeSeconds - 1e-12, timeSeconds, timeSeconds + 1e-12]));
+  for (const approachTimeScale of [0.25, 0.5, 1]) {
+    for (const noteSpeed of [10, 11.5]) {
+      for (const slideFrameCorrectionTenths of [0, 10]) {
+        for (const [showPerfect, showGreat] of [[true, false], [true, true], [false, true], [false, false]]) {
+          for (const minimumInputTimeSeconds of [...times, ...times.toReversed()]) {
+            const options = {
+              activeCandidates: candidates.filter((candidate) => candidate.timeSeconds > minimumInputTimeSeconds),
+              approachTimeScale, minimumInputTimeSeconds, noteSpeed, priorityIndex,
+              showGreat, showPerfect, slideFrameCorrectionTenths,
+            };
+            const actual = collect(options);
+            assert.deepEqual(actual, collectBandoriNativeJudgmentWindowSegments(options));
+            assert.strictEqual(collect(options), actual, "paused frame must reuse its regions");
+            if (actual === previous) reused += 1;
+            previous = actual;
+          }
+        }
+      }
+    }
+  }
+  assert.ok(reused > 100, "moving frames before a boundary must also reuse regions");
+  const activeCandidates = [candidates[1]];
+  for (const minimumInputTimeSeconds of [0.8, 0.9, 1 - 1e-12, 1, 1.01, 0.8]) {
+    const options = { activeCandidates, priorityIndex, minimumInputTimeSeconds, showPerfect: true, showGreat: true };
+    assert.deepEqual(collect(options), collectBandoriNativeJudgmentWindowSegments(options), "hidden priority candidate removal must invalidate");
+  }
+  activeCandidates[0] = { ...candidates[1], buttons: [5] };
+  const options = { activeCandidates, minimumInputTimeSeconds: 0.8, showPerfect: true, showGreat: true };
+  assert.deepEqual(collect(options), collectBandoriNativeJudgmentWindowSegments(options), "mutated active array must invalidate");
+});
+
+test("cached regions preserve fresh ordering when an expired candidate window ends", () => {
+  const activeCandidates = [standardCandidate(0, 1), longReleaseCandidate(1, 2)];
+  const options = {
+    activeCandidates,
+    priorityIndex: prepareBandoriNativeJudgmentWindowPriorityIndex(activeCandidates),
+    showGreat: true,
+    showPerfect: true,
+  };
+  const collect = createBandoriNativeJudgmentWindowSegmentCollector();
+  for (const minimumInputTimeSeconds of [1.08, 1.10, 1.10, 1.08]) {
+    const input = { ...options, minimumInputTimeSeconds };
+    assert.deepEqual(collect(input), collectBandoriNativeJudgmentWindowSegments(input));
+  }
 });
 
 test("standard judgment classification preserves midpoint-to-even boundaries", () => {

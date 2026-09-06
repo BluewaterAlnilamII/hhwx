@@ -41,7 +41,7 @@ import {
 import {
   collectBandoriNativeJudgmentWindowOutlineEdges,
   collectBandoriNativeJudgmentWindowOffsetLabels,
-  collectBandoriNativeJudgmentWindowSegments,
+  createBandoriNativeJudgmentWindowSegmentCollector,
   formatBandoriNativeJudgmentWindowOffsetFrames,
   prepareBandoriNativeJudgmentWindowCandidates,
   prepareBandoriNativeJudgmentWindowPriorityIndex,
@@ -77,7 +77,6 @@ import {
   type BandoriNativeNoteVisualGroup,
   type BandoriNativeProjectedNote,
   type BandoriNativeRibbonMeshGeometry,
-  type BandoriNativeRibbonPoint,
   type BandoriNativeRibbonVisual,
   type BandoriNativeSyncLinePair,
 } from "@/lib/bandori/chart-simulator/native-note-presentation";
@@ -439,13 +438,12 @@ type RibbonMeshDisplay = {
   mesh: MeshSimple;
 };
 
-type RibbonSegmentDisplay = {
-  advanced: RibbonMeshDisplay;
-  end: BandoriNativeRibbonPoint;
-  ordinary: RibbonMeshDisplay;
+type RibbonDisplay = {
+  advanced: RibbonMeshDisplay | null;
+  container: Container;
+  ordinary: RibbonMeshDisplay | null;
   ribbon: BandoriNativeRibbonVisual;
-  ribbonPointIndex: number;
-  start: BandoriNativeRibbonPoint;
+  texture: Texture;
 };
 
 type StaticHitLayerDisplay = {
@@ -888,8 +886,9 @@ function createNoteGroupDisplay(
 function createRibbonMeshDisplay(
   texture: Texture,
   mode: BandoriNativeRibbonMeshGeometry["mode"],
+  segmentCount: number,
 ): RibbonMeshDisplay {
-  const geometry = createBandoriNativeRibbonMeshGeometry(mode);
+  const geometry = createBandoriNativeRibbonMeshGeometry(mode, segmentCount);
   const mesh = new MeshSimple({
     indices: geometry.indices,
     texture,
@@ -2812,29 +2811,22 @@ export default function NativeSimulatorStage({
       const swipeEffects = new Map<string, SwipeEffectDisplay>();
       const holdEffects = new Map<number, HoldEffectDisplay>();
 
-      const ribbonSegments: RibbonSegmentDisplay[] = [];
-      const ribbonSegmentsByIndex = new Map<number, RibbonSegmentDisplay[]>();
+      const ribbonDisplays = new Map<number, RibbonDisplay>();
       for (const ribbon of chartVisuals.ribbons) {
-        const displays: RibbonSegmentDisplay[] = [];
-        ribbonSegmentsByIndex.set(ribbon.ribbonIndex, displays);
+        const container = new Container();
+        container.eventMode = "none";
+        container.visible = false;
+        ribbonLayer.addChild(container);
         const texture = ribbon.isCurvedSlide
           ? curveSlideNoteLineTexture
           : longNoteLineTexture;
-        for (let pointIndex = 1; pointIndex < ribbon.points.length; pointIndex += 1) {
-          const ordinary = createRibbonMeshDisplay(texture, "ordinary");
-          const advanced = createRibbonMeshDisplay(texture, "advanced");
-          ribbonLayer.addChild(ordinary.mesh, advanced.mesh);
-          const display = {
-            advanced,
-            end: ribbon.points[pointIndex],
-            ordinary,
-            ribbon,
-            ribbonPointIndex: pointIndex - 1,
-            start: ribbon.points[pointIndex - 1],
-          };
-          ribbonSegments.push(display);
-          displays.push(display);
-        }
+        ribbonDisplays.set(ribbon.ribbonIndex, {
+          advanced: null,
+          container,
+          ordinary: null,
+          ribbon,
+          texture,
+        });
       }
 
       const ribbonByIndex = new Map<number, BandoriNativeRibbonVisual>();
@@ -2871,23 +2863,16 @@ export default function NativeSimulatorStage({
           indexes.push(noteIndex);
           ribbonNoteIndexes.set(ribbonIndex, indexes);
         }
-        let segmentIndex = 0;
         for (const ribbon of chartVisuals.ribbons) {
-          for (let pointIndex = 1; pointIndex < ribbon.points.length; pointIndex += 1) {
-            const segment = ribbonSegments[segmentIndex];
-            if (!segment) {
-              throw new BandoriNativeNoteContractError(
-                "Mirrored ribbon topology does not match the source chart",
-              );
-            }
-            segment.end = ribbon.points[pointIndex];
-            segment.ribbon = ribbon;
-            segment.ribbonPointIndex = pointIndex - 1;
-            segment.start = ribbon.points[pointIndex - 1];
-            segmentIndex += 1;
+          const display = ribbonDisplays.get(ribbon.ribbonIndex);
+          if (!display || display.ribbon.points.length !== ribbon.points.length) {
+            throw new BandoriNativeNoteContractError(
+              "Mirrored ribbon topology does not match the source chart",
+            );
           }
+          display.ribbon = ribbon;
         }
-        if (segmentIndex !== ribbonSegments.length) {
+        if (chartVisuals.ribbons.length !== ribbonDisplays.size) {
           throw new BandoriNativeNoteContractError(
             "Mirrored ribbon topology does not match the source chart",
           );
@@ -3023,6 +3008,11 @@ export default function NativeSimulatorStage({
       const activeNotes = new Map<number, NoteGroupDisplay>();
       const projectedHoldStates = new Map<number, BandoriNativeProjectedHoldState>();
       const activeJudgmentCandidates: BandoriNativeJudgmentWindowCandidate[] = [];
+      const collectJudgmentWindowSegments = createBandoriNativeJudgmentWindowSegmentCollector();
+      let cachedJudgmentSegments: ReturnType<typeof collectJudgmentWindowSegments> | null = null;
+      let judgmentWindowOutlineEdges: ReturnType<typeof collectBandoriNativeJudgmentWindowOutlineEdges> = [];
+      let offsetLabels: ReturnType<typeof collectBandoriNativeJudgmentWindowOffsetLabels> = [];
+      let renderedJudgmentInputs: readonly unknown[] = [];
       const renderedRibbonIndexes = new Set<number>();
       const desiredNoteMarks = new Uint32Array(compiled.notes.times.length);
       const desiredNoteIndexes: number[] = [];
@@ -3073,9 +3063,8 @@ export default function NativeSimulatorStage({
           for (const [index, display] of activeNotes) {
             removeNoteGroup(index, display);
           }
-          for (const segment of ribbonSegments) {
-            segment.ordinary.mesh.visible = false;
-            segment.advanced.mesh.visible = false;
+          for (const display of ribbonDisplays.values()) {
+            display.container.visible = false;
           }
           renderedRibbonIndexes.clear();
           clearEffects();
@@ -3176,214 +3165,191 @@ export default function NativeSimulatorStage({
           presentationTime + arrivalSeconds,
         );
 
-        judgmentWindowLayer.clear();
         const showGreat = greatJudgmentWindowEnabledRef.current;
         const showPerfect = perfectJudgmentWindowEnabledRef.current;
         const showOffsetLabels = showPerfect
           && judgmentWindowOffsetLabelEnabledRef.current;
-        judgmentWindowOffsetLabelLayer.visible = showOffsetLabels;
-        let usedGreatOffsetLabelCount = 0;
-        let usedPerfectOffsetLabelCount = 0;
-        if (showGreat || showPerfect) {
-          activeJudgmentCandidates.length = 0;
-          for (let index = firstJudgmentIndex; index < endIndex; index += 1) {
-            const candidate = judgmentCandidatesByNoteIndex[index];
-            if (candidate) activeJudgmentCandidates.push(candidate);
-          }
-          const judgmentWindowSegments = collectBandoriNativeJudgmentWindowSegments({
-            activeCandidates: activeJudgmentCandidates,
-            approachTimeScale: currentNoteApproachTimeScale,
-            compiled,
-            minimumInputTimeSeconds: presentationTime,
-            noteSpeed: currentNoteSpeed,
-            priorityIndex: judgmentPriorityIndex,
-            showGreat,
-            showPerfect,
-            slideFrameCorrectionTenths:
-              slideJudgmentFrameCorrectionTenthsRef.current,
-          });
-          const judgmentWindowOutlineEdges =
-            collectBandoriNativeJudgmentWindowOutlineEdges(
-              judgmentWindowSegments,
-            );
-          for (const segment of judgmentWindowSegments) {
-            const startLeftLane = segment.leftLane;
-            const startRightLane = segment.rightLane;
-            const endLeftLane = startLeftLane;
-            const endRightLane = startRightLane;
-            const startLeft = projectBandoriNativeTimelinePosition(
-              startLeftLane,
-              segment.startTimeSeconds,
-              presentationTime,
-              currentNoteSpeed,
-              currentNoteApproachTimeScale,
-            );
-            const startRight = projectBandoriNativeTimelinePosition(
-              startRightLane,
-              segment.startTimeSeconds,
-              presentationTime,
-              currentNoteSpeed,
-              currentNoteApproachTimeScale,
-            );
-            const endLeft = projectBandoriNativeTimelinePosition(
-              endLeftLane,
-              segment.endTimeSeconds,
-              presentationTime,
-              currentNoteSpeed,
-              currentNoteApproachTimeScale,
-            );
-            const endRight = projectBandoriNativeTimelinePosition(
-              endRightLane,
-              segment.endTimeSeconds,
-              presentationTime,
-              currentNoteSpeed,
-              currentNoteApproachTimeScale,
-            );
-            judgmentWindowLayer
-              .poly([
-                startLeft.screenX,
-                startLeft.screenY,
-                startRight.screenX,
-                startRight.screenY,
-                endRight.screenX,
-                endRight.screenY,
-                endLeft.screenX,
-                endLeft.screenY,
-              ])
-              .fill({
-                alpha: JUDGMENT_WINDOW_ALPHA,
-                color: segment.category === "perfect"
-                  ? PERFECT_JUDGMENT_WINDOW_COLOR
-                  : GREAT_JUDGMENT_WINDOW_COLOR,
-              });
-          }
-          for (const category of ["perfect", "great"] as const) {
-            let hasOutline = false;
-            for (const edge of judgmentWindowOutlineEdges) {
-              if (edge.category !== category) continue;
-              const start = projectBandoriNativeTimelinePosition(
-                edge.startLane,
-                edge.startTimeSeconds,
-                presentationTime,
-                currentNoteSpeed,
-                currentNoteApproachTimeScale,
-              );
-              const end = projectBandoriNativeTimelinePosition(
-                edge.endLane,
-                edge.endTimeSeconds,
-                presentationTime,
-                currentNoteSpeed,
-                currentNoteApproachTimeScale,
-              );
-              judgmentWindowLayer
-                .moveTo(start.screenX, start.screenY)
-                .lineTo(end.screenX, end.screenY);
-              hasOutline = true;
+        const judgmentInputs = [
+          presentationTime, currentNoteSpeed, currentNoteApproachTimeScale,
+          judgmentCandidatesByNoteIndex, showGreat, showPerfect, showOffsetLabels,
+          slideJudgmentFrameCorrectionTenthsRef.current, app.renderer.resolution,
+        ];
+        if (judgmentInputs.some((value, index) => value !== renderedJudgmentInputs[index])) {
+          renderedJudgmentInputs = judgmentInputs;
+          judgmentWindowLayer.clear();
+          judgmentWindowOffsetLabelLayer.visible = showOffsetLabels;
+          let usedGreatOffsetLabelCount = 0;
+          let usedPerfectOffsetLabelCount = 0;
+          if (showGreat || showPerfect) {
+            activeJudgmentCandidates.length = 0;
+            for (let index = firstJudgmentIndex; index < endIndex; index += 1) {
+              const candidate = judgmentCandidatesByNoteIndex[index];
+              if (candidate) activeJudgmentCandidates.push(candidate);
             }
-            if (hasOutline) {
-              judgmentWindowLayer.stroke({
-                alpha: JUDGMENT_WINDOW_BORDER_ALPHA,
-                color: category === "perfect"
-                  ? PERFECT_JUDGMENT_WINDOW_COLOR
-                  : GREAT_JUDGMENT_WINDOW_COLOR,
-                width: JUDGMENT_WINDOW_BORDER_WIDTH,
-              });
-            }
-          }
-          if (showOffsetLabels) {
-            const offsetLabels = collectBandoriNativeJudgmentWindowOffsetLabels({
-              candidatesByNoteIndex: judgmentCandidatesByNoteIndex,
+            const judgmentWindowSegments = collectJudgmentWindowSegments({
+              activeCandidates: activeJudgmentCandidates,
+              approachTimeScale: currentNoteApproachTimeScale,
+              compiled,
               minimumInputTimeSeconds: presentationTime,
-              segments: judgmentWindowSegments,
+              noteSpeed: currentNoteSpeed,
+              priorityIndex: judgmentPriorityIndex,
+              showGreat,
+              showPerfect,
+              slideFrameCorrectionTenths:
+                slideJudgmentFrameCorrectionTenthsRef.current,
             });
-            const visibleStartY = BANDORI_NATIVE_STAGE_SIZE.height
-              * JUDGMENT_WINDOW_OFFSET_LABEL_TOP_HIDDEN_RATIO;
-            const judgmentLineY = projectBandoriNativeTimelinePosition(
-              3,
-              presentationTime,
-              presentationTime,
-              currentNoteSpeed,
-              currentNoteApproachTimeScale,
-            ).screenY;
-            for (const label of offsetLabels) {
-              const anchor = projectBandoriNativeTimelinePosition(
-                label.lane,
-                label.boundaryTimeSeconds,
-                presentationTime,
-                currentNoteSpeed,
-                currentNoteApproachTimeScale,
-              );
-              if (
-                anchor.screenX < 0
-                || anchor.screenX > BANDORI_NATIVE_STAGE_SIZE.width
-                || anchor.screenY < visibleStartY
-                || anchor.screenY > BANDORI_NATIVE_STAGE_SIZE.height
-              ) {
-                continue;
+            if (judgmentWindowSegments !== cachedJudgmentSegments) {
+              cachedJudgmentSegments = judgmentWindowSegments;
+              judgmentWindowOutlineEdges = collectBandoriNativeJudgmentWindowOutlineEdges(judgmentWindowSegments);
+              offsetLabels = collectBandoriNativeJudgmentWindowOffsetLabels({
+                candidatesByNoteIndex: judgmentCandidatesByNoteIndex,
+                minimumInputTimeSeconds: presentationTime,
+                segments: judgmentWindowSegments,
+              });
+            }
+            const projections = new Map<number, Map<number, ReturnType<typeof projectBandoriNativeTimelinePosition>>>();
+            const projectJudgmentPosition = (lane: number, timeSeconds: number) => {
+              let lanes = projections.get(timeSeconds);
+              if (!lanes) {
+                lanes = new Map();
+                projections.set(timeSeconds, lanes);
               }
-              const pool = judgmentWindowOffsetLabelPools[label.category];
-              const poolIndex = label.category === "perfect"
-                ? usedPerfectOffsetLabelCount++
-                : usedGreatOffsetLabelCount++;
-              let display = pool[poolIndex];
-              if (!display) {
-                display = createJudgmentWindowOffsetLabelText(
-                  label.category,
-                  app.renderer.resolution,
+              let projection = lanes.get(lane);
+              if (!projection) {
+                projection = projectBandoriNativeTimelinePosition(
+                  lane, timeSeconds, presentationTime, currentNoteSpeed, currentNoteApproachTimeScale,
                 );
-                pool.push(display);
-                judgmentWindowOffsetLabelLayer.addChild(display);
+                lanes.set(lane, projection);
               }
-              if (display.resolution !== app.renderer.resolution) {
-                display.resolution = app.renderer.resolution;
+              return projection;
+            };
+            for (const segment of judgmentWindowSegments) {
+              const startLeftLane = segment.leftLane;
+              const startRightLane = segment.rightLane;
+              const endLeftLane = startLeftLane;
+              const endRightLane = startRightLane;
+              const startLeft = projectJudgmentPosition(startLeftLane, segment.startTimeSeconds);
+              const startRight = projectJudgmentPosition(startRightLane, segment.startTimeSeconds);
+              const endLeft = projectJudgmentPosition(endLeftLane, segment.endTimeSeconds);
+              const endRight = projectJudgmentPosition(endRightLane, segment.endTimeSeconds);
+              judgmentWindowLayer
+                .poly([
+                  startLeft.screenX,
+                  startLeft.screenY,
+                  startRight.screenX,
+                  startRight.screenY,
+                  endRight.screenX,
+                  endRight.screenY,
+                  endLeft.screenX,
+                  endLeft.screenY,
+                ])
+                .fill({
+                  alpha: JUDGMENT_WINDOW_ALPHA,
+                  color: segment.category === "perfect"
+                    ? PERFECT_JUDGMENT_WINDOW_COLOR
+                    : GREAT_JUDGMENT_WINDOW_COLOR,
+                });
+            }
+            for (const category of ["perfect", "great"] as const) {
+              let hasOutline = false;
+              for (const edge of judgmentWindowOutlineEdges) {
+                if (edge.category !== category) continue;
+                const start = projectJudgmentPosition(edge.startLane, edge.startTimeSeconds);
+                const end = projectJudgmentPosition(edge.endLane, edge.endTimeSeconds);
+                judgmentWindowLayer
+                  .moveTo(start.screenX, start.screenY)
+                  .lineTo(end.screenX, end.screenY);
+                hasOutline = true;
               }
-              const text = formatBandoriNativeJudgmentWindowOffsetFrames(
-                label.offsetFrames,
-              );
-              if (display.text !== text) display.text = text;
-              const labelFontSize = getJudgmentWindowOffsetLabelFontSize(
-                anchor.screenY,
-                visibleStartY,
-                judgmentLineY,
-              );
-              const labelLayoutScale = labelFontSize
-                / JUDGMENT_WINDOW_OFFSET_LABEL_MAX_FONT_SIZE;
-              display.scale.set(
-                labelFontSize / JUDGMENT_WINDOW_OFFSET_LABEL_BASE_FONT_SIZE,
-              );
-              const halfWidth = display.width / 2;
-              const halfHeight = display.height / 2;
-              const direction = label.side === "fast" ? -1 : 1;
-              const preferredY = anchor.screenY + direction * (
-                halfHeight
-                  + JUDGMENT_WINDOW_OFFSET_LABEL_GAP * labelLayoutScale
-              );
-              const screenX = Math.min(
-                BANDORI_NATIVE_STAGE_SIZE.width - halfWidth,
-                Math.max(halfWidth, anchor.screenX),
-              );
-              const screenY = Math.min(
-                BANDORI_NATIVE_STAGE_SIZE.height - halfHeight,
-                Math.max(halfHeight, preferredY),
-              );
-              display.position.set(screenX, screenY);
-              display.visible = true;
+              if (hasOutline) {
+                judgmentWindowLayer.stroke({
+                  alpha: JUDGMENT_WINDOW_BORDER_ALPHA,
+                  color: category === "perfect"
+                    ? PERFECT_JUDGMENT_WINDOW_COLOR
+                    : GREAT_JUDGMENT_WINDOW_COLOR,
+                  width: JUDGMENT_WINDOW_BORDER_WIDTH,
+                });
+              }
             }
-            for (
-              let index = usedPerfectOffsetLabelCount;
-              index < judgmentWindowOffsetLabelPools.perfect.length;
-              index += 1
-            ) {
-              judgmentWindowOffsetLabelPools.perfect[index].visible = false;
-            }
-            for (
-              let index = usedGreatOffsetLabelCount;
-              index < judgmentWindowOffsetLabelPools.great.length;
-              index += 1
-            ) {
-              judgmentWindowOffsetLabelPools.great[index].visible = false;
+            if (showOffsetLabels) {
+              const visibleStartY = BANDORI_NATIVE_STAGE_SIZE.height
+                * JUDGMENT_WINDOW_OFFSET_LABEL_TOP_HIDDEN_RATIO;
+              const judgmentLineY = projectJudgmentPosition(3, presentationTime).screenY;
+              for (const label of offsetLabels) {
+                const anchor = projectJudgmentPosition(label.lane, label.boundaryTimeSeconds);
+                if (
+                  anchor.screenX < 0
+                  || anchor.screenX > BANDORI_NATIVE_STAGE_SIZE.width
+                  || anchor.screenY < visibleStartY
+                  || anchor.screenY > BANDORI_NATIVE_STAGE_SIZE.height
+                ) {
+                  continue;
+                }
+                const pool = judgmentWindowOffsetLabelPools[label.category];
+                const poolIndex = label.category === "perfect"
+                  ? usedPerfectOffsetLabelCount++
+                  : usedGreatOffsetLabelCount++;
+                let display = pool[poolIndex];
+                if (!display) {
+                  display = createJudgmentWindowOffsetLabelText(
+                    label.category,
+                    app.renderer.resolution,
+                  );
+                  pool.push(display);
+                  judgmentWindowOffsetLabelLayer.addChild(display);
+                }
+                if (display.resolution !== app.renderer.resolution) {
+                  display.resolution = app.renderer.resolution;
+                }
+                const text = formatBandoriNativeJudgmentWindowOffsetFrames(
+                  label.offsetFrames,
+                );
+                if (display.text !== text) display.text = text;
+                const labelFontSize = getJudgmentWindowOffsetLabelFontSize(
+                  anchor.screenY,
+                  visibleStartY,
+                  judgmentLineY,
+                );
+                const labelLayoutScale = labelFontSize
+                  / JUDGMENT_WINDOW_OFFSET_LABEL_MAX_FONT_SIZE;
+                display.scale.set(
+                  labelFontSize / JUDGMENT_WINDOW_OFFSET_LABEL_BASE_FONT_SIZE,
+                );
+                const halfWidth = display.width / 2;
+                const halfHeight = display.height / 2;
+                const direction = label.side === "fast" ? -1 : 1;
+                const preferredY = anchor.screenY + direction * (
+                  halfHeight
+                    + JUDGMENT_WINDOW_OFFSET_LABEL_GAP * labelLayoutScale
+                );
+                const screenX = Math.min(
+                  BANDORI_NATIVE_STAGE_SIZE.width - halfWidth,
+                  Math.max(halfWidth, anchor.screenX),
+                );
+                const screenY = Math.min(
+                  BANDORI_NATIVE_STAGE_SIZE.height - halfHeight,
+                  Math.max(halfHeight, preferredY),
+                );
+                display.position.set(screenX, screenY);
+                display.visible = true;
+              }
+              for (
+                let index = usedPerfectOffsetLabelCount;
+                index < judgmentWindowOffsetLabelPools.perfect.length;
+                index += 1
+              ) {
+                judgmentWindowOffsetLabelPools.perfect[index].visible = false;
+              }
+              for (
+                let index = usedGreatOffsetLabelCount;
+                index < judgmentWindowOffsetLabelPools.great.length;
+                index += 1
+              ) {
+                judgmentWindowOffsetLabelPools.great[index].visible = false;
+              }
             }
           }
+
         }
 
         const activeHoldIndexes = new Set<number>();
@@ -3473,57 +3439,77 @@ export default function NativeSimulatorStage({
         const useAdvancedMesh = isBandoriNativeAdvancedNoteSpeed(currentNoteSpeed);
         for (const ribbonIndex of renderedRibbonIndexes) {
           if (visibleRibbonIndexes.has(ribbonIndex)) continue;
-          for (const segment of ribbonSegmentsByIndex.get(ribbonIndex) ?? []) {
-            segment.ordinary.mesh.visible = false;
-            segment.advanced.mesh.visible = false;
-          }
+          const display = ribbonDisplays.get(ribbonIndex);
+          if (display) display.container.visible = false;
           renderedRibbonIndexes.delete(ribbonIndex);
         }
         for (const ribbonIndex of visibleRibbonIndexes) {
+          const display = ribbonDisplays.get(ribbonIndex);
+          if (!display || display.ribbon.points.length < 2) continue;
           renderedRibbonIndexes.add(ribbonIndex);
-          for (const segment of ribbonSegmentsByIndex.get(ribbonIndex) ?? []) {
-          const start = projectBandoriNativeRibbonPoint(
-            segment.ribbon,
-            segment.ribbonPointIndex,
+          display.container.visible = true;
+          const mode = useAdvancedMesh ? "advanced" : "ordinary";
+          const deferred = display[useAdvancedMesh ? "ordinary" : "advanced"];
+          if (deferred) deferred.mesh.visible = false;
+          let selected = display[mode];
+          if (!selected) {
+            selected = createRibbonMeshDisplay(
+              display.texture,
+              mode,
+              display.ribbon.points.length - 1,
+            );
+            display[mode] = selected;
+            display.container.addChild(selected.mesh);
+          }
+          selected.mesh.visible = true;
+          const { ribbon } = display;
+          const segmentSize = selected.geometry.vertices.length / (ribbon.points.length - 1);
+          let start = projectBandoriNativeRibbonPoint(
+            ribbon,
+            0,
             currentBeat,
             presentationTime,
             currentNoteSpeed,
             0,
             currentNoteApproachTimeScale,
           );
-          const end = projectBandoriNativeRibbonPoint(
-            segment.ribbon,
-            segment.ribbonPointIndex + 1,
-            currentBeat,
-            presentationTime,
-            currentNoteSpeed,
-            0,
-            currentNoteApproachTimeScale,
-          );
-          const selected = useAdvancedMesh ? segment.advanced : segment.ordinary;
-          const deferred = useAdvancedMesh ? segment.ordinary : segment.advanced;
-          deferred.mesh.visible = false;
-          selected.mesh.visible = start !== null && end !== null;
-          if (!start || !end) continue;
-          updateBandoriNativeRibbonMeshVertices(
-            selected.geometry,
-            {
-              halfWidth: start.worldScale
-                * BANDORI_NATIVE_NOTE_PIXELS_PER_UNIT
-                * segment.start.meshWidthRate
-                * currentNoteScale,
-              x: start.screenX,
-              y: start.screenY,
-            },
-            {
-              halfWidth: end.worldScale
-                * BANDORI_NATIVE_NOTE_PIXELS_PER_UNIT
-                * segment.end.meshWidthRate
-                * currentNoteScale,
-              x: end.screenX,
-              y: end.screenY,
-            },
-          );
+          for (let pointIndex = 1; pointIndex < ribbon.points.length; pointIndex += 1) {
+            const end = projectBandoriNativeRibbonPoint(
+              ribbon,
+              pointIndex,
+              currentBeat,
+              presentationTime,
+              currentNoteSpeed,
+              0,
+              currentNoteApproachTimeScale,
+            );
+            if (!start || !end) {
+              selected.geometry.vertices.fill(
+                0, (pointIndex - 1) * segmentSize, pointIndex * segmentSize,
+              );
+            } else {
+              updateBandoriNativeRibbonMeshVertices(
+                selected.geometry,
+                {
+                  halfWidth: start.worldScale
+                    * BANDORI_NATIVE_NOTE_PIXELS_PER_UNIT
+                    * ribbon.points[pointIndex - 1].meshWidthRate
+                    * currentNoteScale,
+                  x: start.screenX,
+                  y: start.screenY,
+                },
+                {
+                  halfWidth: end.worldScale
+                    * BANDORI_NATIVE_NOTE_PIXELS_PER_UNIT
+                    * ribbon.points[pointIndex].meshWidthRate
+                    * currentNoteScale,
+                  x: end.screenX,
+                  y: end.screenY,
+                },
+                pointIndex - 1,
+              );
+            }
+            start = end;
           }
         }
 

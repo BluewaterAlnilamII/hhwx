@@ -273,6 +273,17 @@ normal HTTP cache before decoding. The current song buffer and an optional
 prepared Signalsmith PCM copy remain warm until the simulator audio runtime is
 disposed.
 
+The settings and skin controls reuse their React subtree between transport
+updates. Each visible ribbon lazily creates one mesh per used speed mode, with
+the original per-segment vertices, UVs, triangle order, and launcher behavior;
+adjacent segments share each frame's endpoint projection. Judgment ownership,
+outlines, and offset labels are reused only before clipping or priority
+membership can change. Inputs containing expired candidates are recomputed to
+preserve the uncached collector's output order. Relevant setting changes invalidate this reuse; seeks
+update the drawing for the new time, and identical diagnostic frames retain
+their drawing. Transport update
+frequency, the paused ticker, FPS sampling, and rendering quality are unchanged.
+
 ## Ordinary and limited controls
 
 Background, lane/judgment line, rhythm marker/Note, Directional Flick, tap
