@@ -312,10 +312,7 @@ function resizeBandoriNativeStageRenderer(
   application.renderer.resize(
     BANDORI_NATIVE_STAGE_SIZE.width,
     BANDORI_NATIVE_STAGE_SIZE.height,
-    getBandoriSimulatorRendererResolution(
-      window.devicePixelRatio,
-      resolutionScale,
-    ),
+    getBandoriSimulatorRendererResolution(resolutionScale),
   );
   // Pixi auto-density writes fixed CSS pixels during resize; the stage itself
   // must remain responsive inside the simulator viewport.
@@ -2119,7 +2116,6 @@ export default function NativeSimulatorStage({
           autoStart: false,
           autoDensity: true,
           resolution: getBandoriSimulatorRendererResolution(
-            window.devicePixelRatio,
             resolutionScaleRef.current,
           ),
         });

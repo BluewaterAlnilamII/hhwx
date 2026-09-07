@@ -50,7 +50,7 @@ hhwx/
 - `[locale]/bandori/events/`: event tracker entry and event-ID routes. Route-local event information and tracker implementations are grouped under `_info/` and `_tracker/`; the former `/bandori/eventtracker` URL is a permanent redirect handled by `src/proxy.ts`.
 - `[locale]/bandori/cards/`: server-aware Card catalog and per-card detail routes, with page-private UI grouped under `_components/`.
 - `[locale]/bandori/calendar/`: regional event calendar pages.
-- `[locale]/bandori/songs/[songId]/`: development-only song detail, complete-chart analysis, and whitelist-based chart simulator UI. Its fixed native stage loads only individually verified JP presentation resources.
+- `[locale]/bandori/songs/[songId]/`: public song detail and whitelist-based chart simulator UI. The complete-chart analysis implementation is retained with its UI entry disabled. Its fixed native stage loads only individually verified JP presentation resources.
 - `api/`: same-origin API routes used by the frontend.
 - `api/account/game-bind/`: game account binding challenge, verification, listing, and unlinking APIs.
 - `api/account/game-profiles/`: game profile sync, import, export, copy, and deletion APIs.

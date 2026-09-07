@@ -192,12 +192,14 @@ test("simulator render settings preserve the approved discrete options", () => {
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
   ]);
   assert.equal(BANDORI_SLIDE_JUDGMENT_FRAME_CORRECTION_DEFAULT_TENTHS, 0);
-  assert.equal(getBandoriSimulatorRendererResolution(1, 100), 1);
-  assert.equal(getBandoriSimulatorRendererResolution(2, 50), 1);
-  assert.equal(getBandoriSimulatorRendererResolution(3, 100), 2);
-  assert.equal(getBandoriSimulatorRendererResolution(3, 200), 4);
   assert.equal(getBandoriSimulatorTickerMaxFps(144), 144);
   assert.equal(getBandoriSimulatorTickerMaxFps(null), 0);
+});
+
+test("renderer resolution uses only the configured percentage", () => {
+  assert.equal(getBandoriSimulatorRendererResolution(50), 0.5);
+  assert.equal(getBandoriSimulatorRendererResolution(100), 1);
+  assert.equal(getBandoriSimulatorRendererResolution(200), 2);
 });
 
 test("Habahiro charts clamp the effective note scale without changing the stored value", () => {

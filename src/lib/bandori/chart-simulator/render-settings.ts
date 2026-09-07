@@ -48,13 +48,9 @@ export function isBandoriSimulatorResolutionScale(
 }
 
 export function getBandoriSimulatorRendererResolution(
-  devicePixelRatio: number,
   resolutionScale: BandoriSimulatorResolutionScale,
 ): number {
-  const baseResolution = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0
-    ? Math.min(devicePixelRatio, 2)
-    : 1;
-  return baseResolution * resolutionScale / 100;
+  return resolutionScale / 100;
 }
 
 export function getBandoriSimulatorTickerMaxFps(

@@ -2,7 +2,7 @@
 
 ## 范围
 
-谱面模拟器是 `/bandori/songs/{songId}` 下仅供开发使用的歌曲详情界面。它在不改变现有 Music API、谱面与音频契约的前提下，显示完整源谱面及由音频计时的演出舞台。
+谱面模拟器是 `/bandori/songs/{songId}` 下公开提供的歌曲详情界面。它在不改变现有 Music API、谱面与音频契约的前提下，显示完整源谱面及由音频计时的演出舞台。
 
 模拟器内部使用固定的 `1334 x 750` 舞台，再整体等比缩放。音乐音频是演出时间的唯一时钟。播放、暂停、重新开始、固定跳转、拖动、音乐慢放、镜像、seek 重建及区间循环回卷都复用同一条 transport 路径。
 
@@ -29,8 +29,9 @@
 - `0...100` 的节奏图标出现位置，并可独立选择是否同步隐藏边界上方的按键条；
 - 可开关并跨歌曲保存的 Perfect 与 Great-only 诊断判定色带及实际边界偏移标签，覆盖普通点按、Directional 点按、Long 头尾及全部谱面计分 Slide 节点；
 - 5 种普通样式及 Persona 限定覆盖均支持大／小／关三种 Directional 效果选择；
-- 自动 Perfect 的按键闪光、判定、Combo、点击／Flick／Directional／保持效果，其中普通点击特效可单独关闭，以及按需加载的 TapSE／Web Audio；
-- 与原生演出舞台彼此独立的完整谱面分析视图。
+- 自动 Perfect 的按键闪光、判定、Combo、点击／Flick／Directional／保持效果，其中普通点击特效可单独关闭，以及按需加载的 TapSE／Web Audio。
+
+独立的完整谱面分析实现仍然保留，但界面入口当前已禁用，不属于可用功能。
 
 当前实现与测试没有列入的能力一律禁用。交互失败与断 Hold、交互式非 Perfect 判定、非 AutoPerfect 音效路由、Fever 与动态舞台切换、角色承载组件、MV／Live2D／3D 背景及未经确认的设置都不会静默回退到猜测行为。
 
@@ -90,7 +91,9 @@ bandori/chart-simulator/packs/{packTreeHash}/{logicalPath}
 
 Web Audio 运行时在音效皮肤切换后只保留当前 TapSE Cue Bank。旧 Note SE 音源停止后，其余已解码 `AudioBuffer` 及 URL Promise 引用都会被移除；再次选择时会先复用正常的 HTTP 缓存，再重新解码。当前歌曲 Buffer 以及按需准备的 Signalsmith PCM 副本会保留到模拟器音频运行时销毁。
 
-设置区与皮肤控件会在 transport 更新之间复用 React 子树。每条可见 Ribbon 只按实际使用的速度模式延迟创建一个 Mesh，保留原有的逐段顶点、UV、三角形顺序及 Launcher 行为；相邻段复用同一帧的端点投影。判定归属、轮廓与偏移标签只在裁剪或优先级候选集合尚未变化时复用；输入包含过期候选时会重新计算，保留原算法的返回顺序。相关设置变化会使缓存失效；跳转后按新时间更新画面，完全相同的诊断帧保留已有绘制。Transport 更新频率、暂停 ticker、FPS 采样及渲染质量保持不变。
+设置区与皮肤控件会在 transport 更新之间复用 React 子树。每条可见 Ribbon 只按实际使用的速度模式延迟创建一个 Mesh，保留原有的逐段顶点、UV、三角形顺序及 Launcher 行为；相邻段复用同一帧的端点投影。判定归属、轮廓与偏移标签只在裁剪或优先级候选集合尚未变化时复用；输入包含过期候选时会重新计算，保留原算法的返回顺序。相关设置变化会使缓存失效；跳转后按新时间更新画面，完全相同的诊断帧保留已有绘制。Transport 更新频率、暂停 ticker 及 FPS 采样保持不变。
+
+分辨率缩放直接作用于固定的 1334×750 舞台，与设备 DPR 无关。默认 100% 渲染为 1334×750，50% 为 667×375，200% 为 2668×1500。已保存的百分比保持原值，不再乘以 DPR。高 DPR 设备的默认像素开销因此降低；需要更清晰的画面时可以手动提高百分比。
 
 ## 普通控件与限定覆盖
 
@@ -121,7 +124,7 @@ Hololive 联动第二弹使用新的 `skin_collabo23_winter_d` 背景，并复�
 ## 架构与校验
 
 - `src/lib/bandori/chart-simulator/` 负责纯编译、transport、演出计算、效果、音效、不变调变速适配及 CDN manifest 解析；
-- `src/app/[locale]/bandori/songs/[songId]/` 负责开发路由、控件、固定 Pixi 舞台及渲染生命周期；
+- `src/app/[locale]/bandori/songs/[songId]/` 负责公开的歌曲详情路由、控件、固定 Pixi 舞台及渲染生命周期；
 - 私有 assets-builder 负责发布已审查的资源投影并保存逆向证据；公开 Web 仓库只保留产品行为与加载契约。
 
 运行聚焦校验：
