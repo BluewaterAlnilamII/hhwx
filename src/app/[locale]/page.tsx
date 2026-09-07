@@ -1,5 +1,4 @@
 import Image from "next/image";
-import hhwLogo from "@/app/icon.png";
 import SidebarTrigger from "@/components/SidebarTrigger";
 import HomeVisitorCounter from "./HomeVisitorCounter";
 import styles from "./home.module.css";
@@ -32,7 +31,7 @@ export default function Home() {
       </h1>
       <div className={styles.emblem}>
         <Image
-          src={hhwLogo}
+          src="/icon.png"
           alt="HHW団のエンブレム"
           width={252}
           height={252}
