@@ -130,6 +130,10 @@ The chart normalizer keeps:
 
 Other entities, including System entries, do not score. A `skill` property marks a trigger whenever the property exists, even if its value is `false`. Each song must contain exactly six triggers.
 
+Recognized scoring entities are validated before conversion: each retained node must be an object with a finite `beat`; Long and Slide must have an array of at least two endpoints; every BPM entry must have a finite `beat` and a finite positive `bpm`. Finite numbers and nonempty numeric strings are accepted; missing values, blank strings, `null`, booleans and nonfinite values are rejected. Long interior data and Slide middle nodes carrying `hidden` remain ignored, as do unknown/non-scoring entities; their unused fields are not a full chart-schema validation target.
+
+Malformed required data returns `INVALID_CHART` with its original source path, such as `sourceInput.songs[0].chart[7].beat` or `chart[8].connections[1].beat`. Both fixed-team evaluation and search use this same normalizer. An invalid ordinary note or BPM must fail the request before scoring/search, even when six valid triggers remain; silently dropping it would certify a different chart. This validation tightening preserves valid normalized outputs and does not change `hhwx-medley-bestdori-v3`.
+
 Notes are ordered by beat, with a trigger note before another note on the same beat. Time is calculated from the nearest preceding BPM change:
 
 ```text

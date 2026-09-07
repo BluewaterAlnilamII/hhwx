@@ -1,23 +1,22 @@
 import type { ScoringNoteV1 } from "./contracts";
-import { failInput, readArray } from "./errors";
+import { failInput, readArray, readFiniteNumber, readRecord } from "./errors";
 
-type SourceNote = { beat: number; isSkillTrigger: boolean };
+type SourceNote = { beat: number; isSkillTrigger: boolean; path: string };
 type SourceBpm = { beat: number; bpm: number };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function toFiniteNumber(value: unknown, fallback = Number.NaN): number {
-  const number = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(number) ? number : fallback;
+function readChartNumber(value: unknown, path: string): number {
+  const number = typeof value === "string" && value.trim() !== "" ? Number(value) : value;
+  return readFiniteNumber(number, path, "INVALID_CHART");
 }
 
-function addNote(notes: SourceNote[], value: unknown): void {
-  if (!isRecord(value)) return;
-  const beat = toFiniteNumber(value.beat);
-  if (!Number.isFinite(beat)) return;
-  notes.push({ beat, isSkillTrigger: Object.hasOwn(value, "skill") });
+function addNote(notes: SourceNote[], value: unknown, path: string): void {
+  const note = readRecord(value, path, "INVALID_CHART");
+  const beat = readChartNumber(note.beat, `${path}.beat`);
+  notes.push({ beat, isSkillTrigger: Object.hasOwn(note, "skill"), path });
 }
 
 /** Normalize only the chart fields used by Bestdori score calculation. */
@@ -29,36 +28,36 @@ export function normalizeBestdoriScoringChart(
   const notes: SourceNote[] = [];
   const bpms: SourceBpm[] = [];
 
-  chart.forEach((rawEntity) => {
+  chart.forEach((rawEntity, entityIndex) => {
     if (!isRecord(rawEntity)) return;
+    const entityPath = `${path}[${entityIndex}]`;
     switch (rawEntity.type) {
       case "Single":
       case "Directional":
-        addNote(notes, rawEntity);
+        addNote(notes, rawEntity, entityPath);
         break;
-      case "Long": {
-        const connections = Array.isArray(rawEntity.connections) ? rawEntity.connections : [];
-        addNote(notes, connections[0]);
-        addNote(notes, connections[connections.length - 1]);
-        break;
-      }
+      case "Long":
       case "Slide": {
-        const connections = Array.isArray(rawEntity.connections) ? rawEntity.connections : [];
-        connections.forEach((connection, index) => {
+        const connectionsPath = `${entityPath}.connections`;
+        const connections = readArray(rawEntity.connections, connectionsPath, "INVALID_CHART");
+        if (connections.length < 2) {
+          failInput("INVALID_CHART", connectionsPath, "must contain at least two endpoints");
+        }
+        for (const [index, connection] of connections.entries()) {
           if (
             index > 0
             && index < connections.length - 1
-            && isRecord(connection)
-            && Object.hasOwn(connection, "hidden")
-          ) return;
-          addNote(notes, connection);
-        });
+            && (rawEntity.type === "Long" || (isRecord(connection) && Object.hasOwn(connection, "hidden")))
+          ) continue;
+          addNote(notes, connection, `${connectionsPath}[${index}]`);
+        }
         break;
       }
       case "BPM": {
-        const beat = toFiniteNumber(rawEntity.beat);
-        const bpm = toFiniteNumber(rawEntity.bpm);
-        if (Number.isFinite(beat) && Number.isFinite(bpm) && bpm > 0) bpms.push({ beat, bpm });
+        const beat = readChartNumber(rawEntity.beat, `${entityPath}.beat`);
+        const bpm = readChartNumber(rawEntity.bpm, `${entityPath}.bpm`);
+        if (bpm <= 0) failInput("INVALID_CHART", `${entityPath}.bpm`, "must be positive");
+        bpms.push({ beat, bpm });
         break;
       }
       default:
@@ -83,12 +82,12 @@ export function normalizeBestdoriScoringChart(
       bpmIndex += 1;
     }
     if (bpmIndex === 0) {
-      failInput("INVALID_CHART", `${path}[${noteId}]`, "scoring notes require a preceding BPM change");
+      failInput("INVALID_CHART", note.path, "scoring notes require a preceding BPM change");
     }
     // Bestdori anchors time at BPM changes; per-note accumulation drifts at skill endpoints.
     const timeSeconds = bpmTime + (note.beat - bpmBeat) * timePerBeat;
     if (!Number.isFinite(timeSeconds) || timeSeconds < 0 || Object.is(timeSeconds, -0)) {
-      failInput("INVALID_CHART", `${path}[${noteId}]`, "normalized note time is invalid");
+      failInput("INVALID_CHART", note.path, "normalized note time is invalid");
     }
     return { noteId, timeSeconds, isSkillTrigger: note.isSkillTrigger };
   });

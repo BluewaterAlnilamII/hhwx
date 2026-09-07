@@ -24,6 +24,8 @@ npm run test:medley-foundation:source
 
 这组 Node 专项测试覆盖档案解码、角色加成、卡牌参数、区域道具、活动参数、技能规范化、谱面转换、固定队计分、搜索输入构造和前端来源契约。样本刻意保持很小，以便在不运行大规模搜索的情况下定位规则错误。
 
+谱面用例既断言合法音符和时间，也检查非法输入会明确失败：已识别音符、Long／Slide 端点或 BPM 损坏时，必须报告原始字段路径。即使六个触发完好，损坏的普通音符仍被两种来源入口拒绝。隐藏中间节点、按属性存在性识别触发、数字字符串等既有行为也有覆盖。
+
 ### Rust 格式、静态检查与测试
 
 ```bash
@@ -50,13 +52,22 @@ npm run check:medley-foundation:wasm
 | 被检查的结论 | 测试源码 | 具体检查方式 |
 | --- | --- | --- |
 | 档案、参数、技能、谱面和来源请求规范化 | [`tests/bandori-medley-*.test.mjs`](../../tests) | 从 HHWX 形状的来源数据调用公开 TypeScript 构造器，直到生成规范的固定队与搜索请求。 |
-| 带版本的 Rust 输入契约 | [`json_contract.rs`](../../crates/bandori-medley-model/tests/json_contract.rs) | 接受仓库中的合法样本，并拒绝未知计分规则版本。 |
+| 带版本的 Rust 输入契约 | [`json_contract.rs`](../../crates/bandori-medley-model/tests/json_contract.rs) | 接受仓库中的合法样本，并以 `DECODE_FAILED` 拒绝未知 JSON 字段。 |
+| 已提交的 JavaScript／WASM 绑定 | [`bandori-medley-wasm.test.mjs`](../../tests/bandori-medley-wasm.test.mjs) | 检查公开样本的分数与稳定队伍、补算和回调；保留提前停止原因及当前最好方案状态，证明一个小型无解用例，并拒绝未知计分规则版本。 |
 | 优化计分与直接枚举 120 种顺序一致 | [`exact_score.rs`](../../crates/bandori-medley-search/src/exact_score.rs) | `production_song_scores_match_reference_bits`、`score_range_matches_all_120_reference_orders` 及重叠／概率用例比较两条实现。 |
 | 搜索在保留的有限空间上与完整枚举一致 | [`tiny_exact_search.rs`](../../crates/bandori-medley-search/tests/tiny_exact_search.rs) | `tiny_search_matches_the_independent_exhaustive_reference_across_memory_budgets` 覆盖对称的五角色用例；`tiny_search_matches_the_reference_when_characters_and_cards_can_be_unused` 覆盖六个合格角色、一张未使用的合格卡、各队省略不同角色，以及一张数值很高但被排除的卡。两者都比较精确分数和稳定同分代表。 |
 | 上界和结构推论保持安全 | [`fast_upper.rs`](../../crates/bandori-medley-search/src/fast_upper.rs)、[`joint_upper.rs`](../../crates/bandori-medley-search/src/joint_upper.rs)、[`search.rs`](../../crates/bandori-medley-search/src/search.rs) | 用极小完成穷举检查单队上界、联合前后表和角色占用模式；专项用例检查实际去向单例闭包及索引／扫描连接一致。 |
 | 各类失败保留各自结果 | [`control.rs`](../../crates/bandori-medley-search/src/control.rs)、[`validation.rs`](../../crates/bandori-medley-search/src/validation.rs)、[`hydration.rs`](../../crates/bandori-medley-search/src/hydration.rs)、[`tiny_exact_search.rs`](../../crates/bandori-medley-search/tests/tiny_exact_search.rs) | 存储预算为零时搜索返回 `incomplete`；控制器保留 `TimedOut`；非法请求和补算分数不一致返回错误，不会成为虚假的 `exact`。 |
 
 ### WebAssembly 产物
+
+只使用公开来源样本，在 Node 中直接运行已提交的包：
+
+```bash
+npm run test:medley-foundation:binding
+```
+
+CI 在来源规范化测试之后运行此命令。它通过已提交的生成后 JavaScript 绑定初始化已提交的 `.wasm`，经 `buildMedleySearchInput` 构造请求，检查两个存储预算下的精确分数与规范队伍、补算分数范围与顺序、严格涨分回调、搜索结束通知、超时／取消、零预算、当前最好方案补算、无合法分配以及 `UNSUPPORTED_RULES`。公开样本的预期分数也独立保留在直接 Rust 参考计分器中。这是绑定回归检查，不是完整穷举证明，也不是源码／产物逐字节一致性检查。
 
 发布到浏览器的 Rust 行为或其构建输入变化时，需要重新生成已提交的包：
 
@@ -74,7 +85,7 @@ npm run lint
 npm run build
 ```
 
-仓库目前没有端到端执行生成后 JavaScript／WebAssembly 绑定的自动命令。发布前应手动启动应用，在组队计算器页面运行一个保留的组曲用例，并确认搜索进度、最终状态和补算结果都能显示。应把它记录为手工检查，不能声称 `cargo check` 或 `next build` 已经覆盖浏览器运行。
+Node 绑定测试不运行真实 Web Worker、进度节流或页面。发布前应手动启动应用，在组队计算器页面运行一个保留的组曲用例，并确认搜索进度、最终状态和补算结果都能显示。应把它记录为手工检查，不能声称绑定测试、`cargo check` 或 `next build` 已经覆盖浏览器运行。
 
 ## 3. 计分测试应比较什么
 

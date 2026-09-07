@@ -22,6 +22,27 @@ A single-team bound asks how strong one unfinished team could become while tempo
 
 The rest of this document defines the represented search space, derives both bounds, describes exact residual enumeration, and then combines those facts into the final correctness proof.
 
+The control flow below omits caches and traversal hints. Every phase honors controlled stops; only exhaustion can certify the result.
+
+```text
+validate input; prove feasibility or return exact(best = null)
+prepare songs and configuration bounds; score legal warm-start proposals
+for each configuration not strictly below the incumbent:
+  push its root range
+  while a range remains:
+    if stopped: return incomplete(reason, bestSoFar)
+    restore its domain; settle complete teams and refresh safe bounds
+    if infeasible or upper < incumbent: continue
+    if exact local enumeration closes the range: continue
+    if forced-singleton closure changes the range: restart its analysis
+    calculate/update joint bounds and apply proved conditional deductions
+    if deductions change the range: restart its analysis
+    push every feasible ownership child, or the complete prefix partition
+return exact(best)
+```
+
+The binding then hydrates retained candidates and rejects delivery if scores disagree.
+
 ## Implementation map
 
 The table links each part of the argument to the code that carries it out.
@@ -98,6 +119,8 @@ The fourth invariant must be established from the *effective* destination masks,
 
 This closure is set-preserving. Every completion of the node must send a non-unused singleton to its sole remaining team. Materializing all singletons merely records those forced choices. Earlier materializations can only remove destinations from later cards; they cannot create a completion that was absent or remove a completion that chose a different destination.
 
+For example, card `i` of character `g` may have stored destinations `{song0, song1}` with no `unused`. If song 0 already contains another card of `g`, its effective mask is only `{song1}`. If song 1 reserves `g`, closure selects `i` there and removes that reservation together: selected-plus-required capacity stays constant. It then restarts analysis before constructing the joint model. Counting both `i` and the old reservation would represent the same character twice and could falsely declare a feasible range impossible.
+
 ## 4. Individual-team upper bound
 
 ### 4.1 Ideal product
@@ -107,17 +130,11 @@ For a fixed song and a reachable whole-team skill context, let:
 - `P` be an upward-rounded sum of the five card parameters under the current area configuration;
 - `K` be the song's base coefficient plus the five cards' average first-five-window contributions and exactly one leader contribution.
 
+Intuitively, `P` measures team power and `K` measures how much score this song and skill arrangement can extract per unit of power. Maximizing them independently is safe but can combine the power of one team with the skills of another. The weighted sum below keeps more of that relationship while remaining additive over card choices.
+
 The exact settled song score is no greater than the ideal nonnegative product `P*K` after the documented final-rounding envelope. Negative skill deltas may be replaced by zero because doing so can only raise the score. Each card contributes one fifth of the sum of its first five windows because it occupies every one of those positions in exactly 24 of the 120 orders.
 
-The bridge from the integer scorer to this product is explicit. Let `R(n) = 2^52 / (2^52 - n)`, evaluated upward; for nonnegative binary64 additions this is a conservative `n`-operation rounding factor. For `m` selected area items, the parameter model starts from the scorer's already-rounded card/event sums and area products, then multiplies by `R(12 + 16m)` to cover the remaining addition tree. The fixed 12 operations are five additions into card power, five into event power, and two final additions. Each area item adds at most fifteen card-component products into its item subtotal and then adds that subtotal once, giving another 16 operations. Thus its additive `P` is not smaller than the scorer's deck parameter.
-
-For a note, `R(3)` covers the scorer's ordered base products `(parameter * chartCoefficient) * combo * judgment`. Let their exact floored `u32` result be `B`, let `fl` denote the implemented binary64 operation order, and let `muMax >= mu` cover every materialized skill multiplier reachable by that card and window. The implementation takes `delta = nextUp(fl(nextUp(muMax) - 1))`. The first upward step covers rounding in `B*mu`; the second covers the subtraction from one, giving
-
-```text
-floor(fl(B * mu)) - B <= B * delta.
-```
-
-Multipliers no greater than one use `delta = 0`, which is an upper relaxation. Summing the base and window contributions, then applying the exact `24/120 = 1/5` positional frequency, gives `P*K` above the unrounded 120-order mean. If `U` is that calculated upper and `N` is the scorer's exact signed-`i128` mean numerator, then `N <= 5*ceil(U)`. Integer-to-binary64 conversion and division by positive five are monotone; `reference_ceiling(ceil(U))` therefore also covers the final conversion and floor. All following inequalities use `P >= 0`, `K >= 0`, and `t > 0`.
+The scorer-to-product rounding derivation is in [Section 9.1](#91-from-scorer-to-product). It establishes `reference_ceiling(ceil(P*K))` as a settled-song upper. Here assume `P >= 0`, `K >= 0` and `t > 0`.
 
 For every `t > 0`, arithmetic-geometric mean gives
 
@@ -174,7 +191,9 @@ For a team whose exact song score is already known, that score contributes direc
 
 For each character group and each team, the character has three roles: absent, ordinary member, or leader. Across three teams there are `3^3 = 27` role patterns. For each pattern, a local exact matching chooses distinct physical cards for the occupied roles, respects destination masks, and contains every physical card that cannot be unused.
 
-Only four ranked reachable cards per team/role are needed inside this local matching. Consider one occupied role using a candidate ranked below its first four. The other two teams can consume at most two of those four physical cards, and a conditional query can make at most one additional card unavailable to this role. At least one of the first four therefore remains usable and has weight no smaller than the lower candidate, so replacing the lower candidate cannot reduce the local maximum. A conditional query handles its named card explicitly: it either fixes the card to the requested team or excludes it from every team role when querying `unused`. Every card that cannot be unused is inserted when absent from the four and the full required set is checked. This is a local exchange argument, not a global roster truncation.
+Only four ranked reachable cards per team/role are needed inside this local matching. Consider one occupied role using a candidate ranked below its first four. The other two teams can consume at most two of those four physical cards, and a conditional query can make at most one additional card unavailable to this role. At least one of the first four therefore remains usable and has weight no smaller than the lower candidate, so replacing the lower candidate cannot reduce the local maximum. Every card that cannot be unused is inserted when absent from the four and the full required set is checked. This is a local exchange argument, not a global roster truncation.
+
+Conditional queries take two paths. For a card in this local candidate union, matching explicitly fixes it to the requested team or excludes it from all roles for `unused` (or reuses the unconditional winner if it already satisfies that condition). For a card outside the union, the implementation uses the cheaper `nonlocal_bases` relaxation described below; it does not rerun exact forced-card matching for every roster card.
 
 ### 5.3 Count-state dynamic program
 
@@ -183,7 +202,7 @@ The joint program scans character groups. Its state stores, independently for ea
 For character `g`, state transition `x -> y` exists for every locally feasible role pattern whose occupancy and leader effects match the three count axes. If `w(g,r)` is the upward-rounded local weight for pattern `r`, the forward recurrence is
 
 ```text
-F[g+1,y] = max(F[g,x] + w(g,r))
+F[g+1,y] = max(add_up(F[g,x], w(g,r)))
              over every valid transition (x,r) -> y.
 ```
 
@@ -194,6 +213,26 @@ Backward tables compute the corresponding best suffix. Joining a local choice be
 - an upper for assigning each physical card to each of its four destinations; and
 - an upper for each character's eight residual three-team occupancy masks; fixed members and full-team destinations have already left the residual domain.
 
+Equivalently, let `B[g,x]` be the best suffix from state `x` before group `g` to the terminal state. Initialize `F[0,start] = B[G,goal] = 0` and unreachable states to negative infinity, where `G` is the number of groups:
+
+```text
+B[g,x] = max(add_up(w(g,r), B[g+1,y])) over transitions (x,r) -> y
+outside[g,r] = max(add_up(F[g,x], B[g+1,y])) over those transitions
+```
+
+For a concrete count axis, suppose a team still needs two optional members and its leader. A prefix supplying one ordinary member, a local pattern supplying the leader, and a suffix supplying no member satisfy that axis: two members, exactly one leader. A local ordinary member would leave the leader missing; another suffix member would exceed capacity. All three axes must pass this check. If compatible prefix/suffix weights are 100 and 200 and the local matching weight is 40, their upward sum covers 340. This is still a linear model weight; constants, offsets and the final envelope convert it into a score upper.
+
+For a card `i` outside the local union, let `O[p] = outside[g,p]` for each remaining competitive pattern, `W[p]` be its unconditional local matching upper, and `p - s` mean the same pattern with team `s` absent. For ordinary/leader role `r`:
+
+```text
+base[s,r] = max(add_up(O[p], W[p - s])) over patterns with role_s(p) = r
+upper(i -> s) = min(wholeUpper,
+  score_upper(max_r(add_up(base[s,r], cardWeight[i,s,r])), constant, offset))
+upper(i -> unused) = wholeUpper
+```
+
+This is safe because removing `i` from any competitive conditioned assignment leaves a feasible matching for the other occupied roles. The absent-team matching relaxes that team's reservation, so its maximum covers the remainder; adding `i`'s role weight covers the original assignment. An outside card is never forced, since every forced card was inserted into the local union. Using the whole upper for `unused` is likewise safe but potentially loose. Thus these values need only dominate conditioned completions; they need not equal exact conditioned maxima. Patterns removed earlier were already proved strictly below the incumbent.
+
 A destination or occupancy mode is removed only when its conditional upper is strictly below the exact incumbent, or when no conditional completion exists. If all competitive occupancy modes include a team, that character becomes required there; if none include a team, that destination is removed. All deductions in one pass are consequences of the same parent relaxation and may be applied together. Equality always remains searchable.
 
 An incremental joint update is allowed only when fixed members and fixed scores are unchanged, required masks are identical, and every owner mask only shrinks. Changed character choices are rebuilt, and a forward prefix or backward suffix is reused only where its boundary table is element-for-element identical. A boundary table records the best value for every count state at that cut; element-wise equality therefore makes the reused prefix or suffix indistinguishable from a fresh calculation for every later transition. Otherwise the implementation attempts a fresh model. If a new proof bound is unavailable or does not fit the configured search budget, an already valid ancestor whole/destination bound may still constrain its smaller descendant space, but occupancy deductions are consumed only while the incremental-update predicate holds; otherwise the optimization is skipped. Reuse changes work, not the represented completion set.
@@ -202,7 +241,7 @@ An incremental joint update is allowed only when fixed members and fixed scores 
 
 When the sum of the three family row counts is at most the local limit—at most 256 and reduced further when the remaining memory budget requires it—the search materializes every team completion in the three families. A larger block may also close directly when total rows are at most 1,024, the product of the two smaller row sets is at most 65,536, and its temporary storage fits the budget. These thresholds select an exact method; they never discard rows.
 
-Every row initially carries a proof-safe song upper. Exact five-card scoring is deferred until a row participates in a conflict-free, incumbent-competitive triple. The direct join scans all eligible triples. The indexed join instead builds temporary bitsets mapping physical cards and required cards to rows of the largest table, then enumerates all pairs from the other two tables and every compatible indexed row. Both joins:
+Every row carries a proof-safe song upper until its exact score is needed. Scoring is staged: a join can settle its outer row, then a compatible pair, before finding a third compatible row; completed teams in persistent search state can already be settled before the join. Later cuts reuse those exact scores with the remaining uppers. Only a complete legal triple can enter the result. The direct join scans all eligible triples. The indexed join instead builds temporary bitsets mapping physical cards and required cards to rows of the largest table, then enumerates all pairs from the other two tables and every compatible indexed row. Both joins:
 
 1. reject repeated physical cards across teams;
 2. require every card whose `unused` destination has been removed;
@@ -225,6 +264,8 @@ The search proceeds as follows:
 
 The explicit stack avoids call-stack depth proportional to the roster. Branch order favors maximizing proposals and large conditional gaps, but all feasible children remain present. Completion probes run periodically and can improve the incumbent; they cannot certify or remove a branch.
 
+A heuristic proposal may leave the current DFS range after a swap or replacement. It is usable as a global incumbent only if it remains legal in the original input domain and is scored exactly; an incumbent does not have to belong to the range it helps prune. Proposals may reassign complete teams among song slots, but the three songs themselves and their carried combo offsets stay in input order, and each assignment is rescored for those slots.
+
 ## 8. Why an `exact` result is globally optimal
 
 ### 8.1 Complete candidates use the exact scorer
@@ -237,7 +278,7 @@ The source adapter lists every legal `q` in `Q`. Within one configuration, incre
 
 ### 8.3 Every pruning score is a safe upper bound
 
-The scorer-to-product bridge in Section 4 makes `reference_ceiling(ceil(P*K))` an individual settled-song upper, and AM-GM safely bounds its `P*K` input. The joint bound retains the relaxed model's constant and linear algebraic terms through directed upper representations and replaces only `Pr*Kr` by a valid interval-secant upper; its final `R(4)` factor covers settlement and medley addition. It then maximizes over a relaxation containing every legal residual allocation. A forward/backward conditional maximizes the corresponding conditioned relaxation; a local pattern is recorded as unavailable only if no conditioned completion exists or its safe upper is strictly below an exact feasible cutoff. Upward operations enlarge positive terms and downward operations reduce subtracted offsets. If a finite proof value cannot be established, the individual bound becomes infinity or the joint optimization is disabled. Thus no bound is below the best exact completion it represents.
+The scorer-to-product bridge in Sections 4 and 9.1 makes `reference_ceiling(ceil(P*K))` an individual settled-song upper, and AM-GM safely bounds its `P*K` input. The joint bound retains the relaxed model's constant and linear algebraic terms through directed upper representations and replaces only `Pr*Kr` by a valid interval-secant upper; its final `R(4)` factor covers settlement and medley addition. It then maximizes over a relaxation containing every legal residual allocation. A forward/backward conditional maximizes the corresponding conditioned relaxation; a local pattern is recorded as unavailable only if no conditioned completion exists or its safe upper is strictly below an exact feasible cutoff. Upward operations enlarge positive terms and downward operations reduce subtracted offsets. If a finite proof value cannot be established, the individual bound becomes infinity or the joint optimization is disabled. Thus no bound is below the best exact completion it represents.
 
 ### 8.4 Structural deductions preserve competitive completions
 
@@ -250,6 +291,30 @@ These four facts form one chain. Every legal medley is either reached by exact e
 `search_medley` returns `exact` only when `run_search` returns normally: either complete feasibility search has proved that no legal assignment exists, or every configuration and DFS range has been exhausted or safely removed. Every controlled early exit returns `incomplete`. Therefore, `exact` with `best` contains the global maximum and its specified tie representative; `exact` with `best = null` proves that no legal medley exists; `incomplete` makes neither claim.
 
 ## 9. Numeric and failure safety
+
+### 9.1 From scorer to product
+
+The bridge from the integer scorer to this product is explicit. Let `R(n) = 2^52 / (2^52 - n)`, evaluated upward; for nonnegative binary64 additions this is a conservative `n`-operation rounding factor. For `m` selected area items, the parameter model starts from the scorer's already-rounded card/event sums and area products, then multiplies by `R(12 + 16m)` to cover the remaining addition tree. The fixed 12 operations are five additions into card power, five into event power, and two final additions. Each area item adds at most fifteen card-component products into its item subtotal and then adds that subtotal once, giving another 16 operations. Thus its additive `P` is not smaller than the scorer's deck parameter.
+
+For a note, `R(3)` covers the scorer's ordered base products `(parameter * chartCoefficient) * combo * judgment`. Let their exact floored `u32` result be `B`, let `fl` denote the implemented binary64 operation order, and let `muMax >= mu` cover every materialized skill multiplier reachable by that card and window. The implementation takes `delta = nextUp(fl(nextUp(muMax) - 1))`. The first upward step covers rounding in `B*mu`; the second covers the subtraction from one, giving
+
+```text
+floor(fl(B * mu)) - B <= B * delta.
+```
+
+Multipliers no greater than one use `delta = 0`, which is an upper relaxation. Summing the base and window contributions, then applying the exact `24/120 = 1/5` positional frequency, gives `P*K` above the unrounded 120-order mean. If `U` is that calculated upper and `N` is the scorer's exact signed-`i128` mean numerator, then `N <= 5*ceil(U)`. Integer-to-binary64 conversion and division by positive five are monotone; `reference_ceiling(ceil(U))` therefore also covers the final conversion and floor. The product inequalities in Section 4 use `P >= 0`, `K >= 0`, and `t > 0`.
+
+### 9.2 Exact accumulator range
+
+Let `U = 2^32 - 1` and `Q = U^2`. Validated note counts and every accepted floored per-note score are at most `U`. A whole-song base sum is at most `Q`; each window extra is a sum of at most `U` differences between two `u32` scores, so its absolute value is at most `Q`. The production mean numerator contains five copies of the base and sixth-window extra, plus 25 first-five-window extras:
+
+```text
+|5*(base + sixthExtra) + sum(25 window extras)| <= 35*Q < 2^70.
+```
+
+Even summing 120 direct-reference order totals is bounded by `120*(Q + 6*Q) = 840*Q < 2^74`, far below the signed `i128` limit `2^127 - 1`. This justifies those exact accumulations without per-add overflow checks. A per-note value outside `u32` is rejected; these bounds do not authorize saturation or wraparound.
+
+### 9.3 Directed cuts and failures
 
 Proof arithmetic uses explicit upward/downward binary64 helpers. Positive upper terms, slopes, and rounding envelopes are directed upward; lower endpoints and subtracted offsets are directed downward. If proof-bound construction cannot produce a safe finite value, that optimization is disabled or treated as unknown instead of pruning. Controlled allocation, count, and index failures return `incomplete`. Signed-`i128` exact-score accumulations rely on statically proved bounds from the validated `u32` inputs rather than per-add checked arithmetic. An exact row exceeding its claimed local upper produces `scorer_disagreement` rather than continuing with a false proof.
 
@@ -278,7 +343,7 @@ Every change to enumeration, bounds, or deductions must pass the narrowest appli
 - exact scorer agreement with the independent 120-order implementation; and
 - stop-control reason preservation, search-budget exhaustion as `incomplete`, strict input validation, hydration score disagreement, and the complete projected-singleton `joint_step -> Restart` order.
 
-After Rust search code changes, rebuild the committed browser artifact with `npm run build:medley-foundation:wasm`; the ordinary Next.js build does not regenerate or execute it. The repository currently has no automated end-to-end binding check, so release verification must exercise a retained case through the Team Builder page and record that manual result.
+After Rust search code changes, rebuild the committed browser artifact with `npm run build:medley-foundation:wasm`; the ordinary Next.js build does not regenerate or execute it. Run `npm run test:medley-foundation:binding` to execute the committed JavaScript/WASM package with the public fixture. This Node check covers the binding and its callbacks, not the actual Worker or page; release verification must also exercise a retained case through the Team Builder page and record that manual result.
 
 Runnable commands, browser-artifact requirements and the separate provenance rules for optional private real-profile comparisons are documented in [Medley Testing and Verification](medley-testing.md). Historical score comparisons supplement the portable proof tests; they do not replace exhaustive tiny cases or upper-bound coverage.
 

@@ -9,6 +9,8 @@ HHWX provides two team builders for Bandori:
 
 Both calculators start from an HHWX game profile and Bandori master/chart data. They share product concepts, but their scoring and search implementations are separate. A change to one calculator must not be assumed to affect the other.
 
+The medley guarantee is conditional: `exact` proves the optimum within the validated normalized input and the documented scoring rules; `incomplete` reports only the best solution found so far, if any. It does not independently certify the upstream data or unmodeled game mechanics.
+
 ## Reading order
 
 For the single-song calculator, read [Single-Song Team Builder Algorithm](single-song-algorithm.md).
@@ -66,6 +68,7 @@ The checks below use only files tracked by this repository:
 
 ```bash
 npm run test:medley-foundation:source
+npm run test:medley-foundation:binding
 npm run test:medley-foundation
 npm run check:medley-foundation:wasm
 ```
