@@ -57,6 +57,8 @@ Important rules:
 - Homepage images live under `public/res/home/v1/`: `hhwtitle.png`, `post_no.png`, and a dedicated `logo.png` independent of favicon assets. Publish changed content under a new versioned URL.
 - Asset and CDN examples are deployment configuration only. This repository defines the web app's expected URL contract, but does not include the private ingestion tools used to populate HHWX production mirrors. See [NOTICE.md](NOTICE.md) before mirroring, caching, or redistributing third-party game content.
 
+`GET /api/status` exposes the latest status of the four Bandori backend services across JP/EN/TW/CN. The Node server collects it every 60 seconds using the existing private user-fetcher configuration. See [service status](documents/service-status.md) for the response contract and deployment requirements.
+
 ## Scripts
 
 ```bash

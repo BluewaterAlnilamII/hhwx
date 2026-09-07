@@ -1,4 +1,5 @@
 import { ApiRouteError } from "@/lib/api-contracts";
+import { getBandoriBackendToken } from "@/lib/hhwx-bandori-backend-server";
 
 export const BANDORI_PLAYER_MODES = [0, 1, 2, 3] as const;
 export type BandoriPlayerMode = typeof BANDORI_PLAYER_MODES[number];
@@ -101,7 +102,7 @@ export async function fetchBandoriPlayerProfile(
   mode: BandoriPlayerMode,
 ): Promise<BandoriPlayerData> {
   const baseUrl = process.env.HHWX_USER_FETCHER_BASE_URL?.trim();
-  const token = process.env.HHWX_USER_FETCHER_TOKEN?.trim();
+  const token = getBandoriBackendToken();
 
   if (!baseUrl || !token) {
     throw new ApiRouteError(500, "TRACKER_SERVICE_NOT_CONFIGURED", "Player profile service is not configured");
