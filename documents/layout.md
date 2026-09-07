@@ -42,6 +42,8 @@ hhwx/
 ## src/app
 
 - `[locale]/`: localized application routes. The default `zh-CN` locale is served without a URL prefix; non-default locales use a locale prefix such as `/en`.
+- `[locale]/page.tsx`: retro HHW club home page; its Japanese homage copy is intentionally the same in both locales.
+- `[locale]/othello/`: character selection, local saved-game resume, Othello, and in-game comments.
 - `[locale]/account/`: account center, profile, email, and password pages.
 - `[locale]/bandori/game-profiles/`: game profile card and item views.
 - `[locale]/auth/`: sign-in, registration, and password recovery pages.
@@ -77,7 +79,7 @@ hhwx/
 - `TurnstileChallenge.tsx`: security verification component for sensitive actions.
 - `comments/`: target-agnostic comment thread, composer, item, emoji, and stamp-picker UI.
 - `bandori/`: reusable Bandori media and selection UI shared across routes, including Card art and stamp rendering.
-- Other components are grouped by home-page game, account, and reuse contexts.
+- Other components are grouped by Othello, account, and reuse contexts.
 
 ## src/hooks
 
@@ -97,7 +99,7 @@ hhwx/
 - `comments/`: target-agnostic comment contracts, emoji/stamp catalogs, content parsing, and privileged comment persistence service. Each target type keeps its existence and visibility validation in its own domain.
 - `api-*.ts`: API response conventions and cache policies.
 - `bestdori-profile-codec.ts` and `user-game-*-server.ts`: game profile compatibility, sync, and server-side persistence logic.
-- `characters.ts`, `othello.ts`, and `ai/`: home-page Othello and character logic.
+- `characters.ts`, `othello.ts`, and `ai/`: Othello and character logic.
 
 ## scripts
 

@@ -13,8 +13,8 @@ export interface SectionSidebarNavGroup {
 
 export const siteNavigationGroups: SectionSidebarNavGroup[] = [
   {
-    id: "game",
-    labelKey: "groups.game",
+    id: "hhwx",
+    labelKey: "groups.hhwx",
     items: [
       {
         id: "home",
@@ -63,6 +63,18 @@ export const siteNavigationGroups: SectionSidebarNavGroup[] = [
         href: "/bandori/teambuilder",
         labelKey: "items.teambuilder",
         matchMode: "prefix",
+      },
+    ],
+  },
+  {
+    id: "game",
+    labelKey: "groups.game",
+    items: [
+      {
+        id: "othello",
+        href: "/othello",
+        labelKey: "items.othello",
+        matchMode: "exact",
       },
     ],
   },

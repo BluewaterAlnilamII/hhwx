@@ -1,5 +1,9 @@
 {
   "root": {
+    "description": "A retro HHW club homepage with Bandori event tracking, calendars, catalogs, team-building tools, and Othello."
+  },
+  "othello": {
+    "title": "Othello",
     "description": "Play Othello with the members of Hello, Happy World!"
   },
   "calendar": {
@@ -53,6 +57,6 @@
     "description": "Public profile for UID {publicUid}"
   },
   "manifest": {
-    "description": "Play Othello with the members of Hello, Happy World!"
+    "description": "A retro HHW club homepage with Bandori event tracking, calendars, catalogs, team-building tools, and Othello."
   }
 }

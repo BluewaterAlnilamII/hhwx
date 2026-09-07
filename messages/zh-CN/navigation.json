@@ -1,10 +1,12 @@
 {
   "groups": {
+    "hhwx": "HHWX",
     "game": "游戏",
     "bandori": "Bandori"
   },
   "items": {
     "home": "首页",
+    "othello": "黑白棋",
     "calendar": "日历",
     "tracker": "活动追踪",
     "cards": "卡牌图鉴",
