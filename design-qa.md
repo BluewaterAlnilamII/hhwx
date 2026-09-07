@@ -19,9 +19,11 @@ The heading uses thin raster lettering and the accepted text ＨＨＷ団のサ�
 
 ## Assets and layout
 
-`public/home/welcome-title-v1.png` is a 450 x 60 transparent image rendered from installed MS Gothic Regular at 30px; no font file is redistributed. `public/home/post_no.png` is the proportionally prepared 144 x 176 transparent original HHW artwork, displayed in a 72 x 88 slot. The component covers its old raster lettering with a 56 x 22 white sign and accurate live 工事中 text. The image alone is not the final typeset sign.
+`public/res/home/v1/hhwtitle.png` is a 450 x 60 transparent image rendered from installed MS Gothic Regular at 30px; no font file is redistributed. `public/res/home/v1/post_no.png` is the proportionally prepared 144 x 176 transparent original HHW artwork, displayed in a 72 x 88 slot. The component covers its old raster lettering with a 56 x 22 white sign and accurate live 工事中 text. The image alone is not the final typeset sign. `public/res/home/v1/logo.png` is an independent copy of the original 512 x 512 logo, so later favicon changes do not change the homepage emblem.
 
-The 200 x 247 emblem slot, 252px original logo, and 25px entrance remain unchanged. Footer text is 16px, with a 32px top gap and text aligned to the sign. Counter and sign colors use explicit black/white semantic tokens in both color schemes. The counter is decorative (0029850–0029899), not analytics. The two runtime images total 10,501 bytes. No runtime dependency was added.
+All three homepage images use the existing `/res/**` one-year immutable browser and Cloudflare cache policy. Their bytes must not change at these v1 URLs; publish future edits at new versioned URLs and update the consumers.
+
+The 200 x 247 emblem slot, 252px original logo, and 25px entrance remain unchanged. Footer text is 16px, with a 32px top gap and text aligned to the sign. Counter and sign colors use explicit black/white semantic tokens in both color schemes. The counter is decorative (0029850–0029899), not analytics. The three homepage image files total 126,629 bytes. No runtime dependency was added.
 
 ## Release review and checks
 
