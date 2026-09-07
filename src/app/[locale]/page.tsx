@@ -6,7 +6,7 @@ import styles from "./home.module.css";
 function Mailbox() {
   return (
     <span className={styles.mailbox} aria-hidden="true">
-      <Image src="/home/post_no.png" alt="" width={72} height={88} unoptimized />
+      <Image src="/res/home/v1/post_no.png" alt="" width={72} height={88} unoptimized />
       <span className={styles.mailboxLabel}>工事中</span>
     </span>
   );
@@ -20,7 +20,7 @@ export default function Home() {
       </p>
       <h1 className={styles.welcome}>
         <Image
-          src="/home/welcome-title-v1.png"
+          src="/res/home/v1/hhwtitle.png"
           alt="ＨＨＷ団のサイトにようこそ！"
           width={450}
           height={60}
@@ -31,7 +31,7 @@ export default function Home() {
       </h1>
       <div className={styles.emblem}>
         <Image
-          src="/icon.png"
+          src="/res/home/v1/logo.png"
           alt="HHW団のエンブレム"
           width={252}
           height={252}
