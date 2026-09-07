@@ -1,8 +1,18 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { registerHooks } from "node:module";
 import test from "node:test";
 
-import { toNormalizedCards } from "../src/lib/user-game-profiles-server.ts";
+const serverBoundary = registerHooks({
+  resolve(specifier, context, nextResolve) {
+    return nextResolve(
+      specifier === "server-only" ? "next/dist/compiled/server-only/empty" : specifier,
+      context,
+    );
+  },
+});
+const { toNormalizedCards } = await import("../src/lib/user-game-profiles-server.ts");
+serverBoundary.deregister();
 
 const serverSource = fs.readFileSync(
   new URL("../src/lib/user-game-profiles-server.ts", import.meta.url),

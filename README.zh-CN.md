@@ -57,6 +57,8 @@ npm run dev
 - 首页图片位于 `public/res/home/v1/`：`hhwtitle.png`、`post_no.png`，以及独立于 favicon 资源的 `logo.png`。内容变更应使用新的版本化 URL。
 - 资源和 CDN 示例只描述部署配置。本仓库只定义 Web 应用期望的 URL 契约，不包含用于填充 HHWX 生产镜像的私有采集工具。镜像、缓存或再分发第三方游戏内容前，请阅读 [NOTICE.zh-CN.md](NOTICE.zh-CN.md)。
 
+`GET /api/status` 提供四类 Bandori 后端服务在 JP/EN/TW/CN 的最新状态。Node 服务端复用现有私有 user-fetcher 配置，每 60 秒采集一次。响应契约与部署要求见[服务状态](documents/service-status.zh-CN.md)。
+
 ## 脚本
 
 ```bash

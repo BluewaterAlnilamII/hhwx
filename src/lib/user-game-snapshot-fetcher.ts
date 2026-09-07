@@ -1,4 +1,5 @@
 import { ApiRouteError } from "@/lib/api-contracts";
+import { getBandoriBackendToken } from "@/lib/hhwx-bandori-backend-server";
 
 export type TrackerUserSnapshotPayload = {
   gameUid?: string;
@@ -13,7 +14,7 @@ export type TrackerUserSnapshotPayload = {
 
 export async function fetchGameUserSnapshot(gameUid: string): Promise<TrackerUserSnapshotPayload> {
   const baseUrl = process.env.HHWX_USER_FETCHER_BASE_URL?.trim();
-  const token = process.env.HHWX_USER_FETCHER_TOKEN?.trim();
+  const token = getBandoriBackendToken();
 
   if (!baseUrl || !token) {
     throw new ApiRouteError(500, "TRACKER_SERVICE_NOT_CONFIGURED", "游戏账号同步服务尚未配置");

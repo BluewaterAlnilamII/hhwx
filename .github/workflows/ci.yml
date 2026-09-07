@@ -69,6 +69,9 @@ jobs:
       - name: Test cache contracts
         run: npm run test:cache
 
+      - name: Test service status
+        run: npm run test:service-status
+
       - name: Test Bandori cards
         run: npm run test:bandori-cards
 
