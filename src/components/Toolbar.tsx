@@ -180,7 +180,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
     const returnPath = pathname && !pathname.startsWith("/auth") ? pathname : "/account";
     const loginHref = buildAuthPath("login", returnPath, undefined, locale);
     const currentLanguageLabel = languageT(locale);
-    const shouldShowDebugButton = showDebugButton && pathname === "/";
+    const shouldShowDebugButton = showDebugButton && pathname === "/othello";
     const toolbarProfile = storedProfileUserId === userId ? storedProfile : null;
     const toolbarUsername = toolbarProfile?.username ?? username;
     const avatarCardId = toolbarProfile?.avatarCardId ?? null;

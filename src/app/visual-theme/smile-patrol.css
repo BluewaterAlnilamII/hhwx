@@ -14,6 +14,10 @@
 
   /* A visual theme supplies seeds and its own composite effects. */
   --theme-seed-shell-canvas: #ffea2f;
+  --theme-color-home-counter-background: #000000;
+  --theme-color-home-counter-foreground: #ffffff;
+  --theme-color-home-sign-foreground: #000000;
+  --theme-color-home-sign-background: #ffffff;
   --theme-seed-shell-tint: var(--smile-patrol-palette-yellow-f9e065);
   --theme-seed-shell-scrollbar: var(--smile-patrol-palette-blue-006699);
   --theme-seed-surface: #fffef4;

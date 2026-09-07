@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
 import { X } from "lucide-react";
@@ -9,7 +10,6 @@ import { cn } from "@/lib/utils";
 
 interface SectionSidebarShellProps {
   children: ReactNode;
-  isMobileDrawerOpen: boolean;
   onCloseMobileDrawer: () => void;
 }
 
@@ -21,12 +21,13 @@ function isItemActive(pathname: string, item: SectionSidebarNavItem) {
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
 
-export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCloseMobileDrawer }: SectionSidebarShellProps) {
+export default function SectionSidebarShell({ children, onCloseMobileDrawer }: SectionSidebarShellProps) {
   const pathname = usePathname();
   const t = useTranslations("navigation");
   const [prefetchIntents, setPrefetchIntents] = useState<Record<string, boolean>>({});
-  const isHomePage = pathname === "/";
-  const contentWrapperClassName = isHomePage
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const isOthelloPage = pathname === "/othello";
+  const contentWrapperClassName = isOthelloPage
     ? "relative h-[calc(100svh-58px)] min-h-[calc(100svh-58px)] px-2 py-0 sm:px-6 sm:py-0 lg:px-6 lg:py-0"
     : "relative min-h-full px-2 py-5 sm:px-6 lg:px-8 lg:py-6";
 
@@ -92,30 +93,20 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
         <div className={contentWrapperClassName}>{children}</div>
       </div>
 
-      <div
-        aria-hidden={!isMobileDrawerOpen}
-        className={cn(
-          "lg:hidden",
-          isMobileDrawerOpen ? "fixed inset-0 z-240 min-h-svh pointer-events-auto" : "hidden",
-        )}
-      >
-        <button
-          type="button"
-          aria-label={t("toolbar.closeNavigation")}
-          className={cn(
-            "absolute inset-0 transition-[opacity,background-color] duration-300 ease-out",
-            isMobileDrawerOpen
-              ? "pointer-events-auto bg-[var(--theme-color-shell-sidebar-backdrop)] opacity-100"
-              : "pointer-events-none bg-white/0 opacity-0",
-          )}
-          onClick={onCloseMobileDrawer}
-        />
-        <div
-          className={cn(
-            "absolute bottom-0 left-0 top-[58px] flex h-[calc(100svh-58px)] min-h-[calc(100svh-58px)] w-[286px] max-w-[88vw] flex-col overflow-hidden border-r border-[var(--theme-color-shell-sidebar-border)] bg-[var(--theme-color-shell-sidebar-background)] shadow-[var(--theme-shadow-shell-sidebar-overlay)] transition-transform duration-300 ease-out will-change-transform",
-            isMobileDrawerOpen ? "translate-x-0" : "-translate-x-full",
-          )}
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-260 bg-[var(--theme-color-shell-sidebar-backdrop)] lg:hidden" />
+        <Dialog.Content
+          aria-describedby={undefined}
+          className="fixed bottom-0 left-0 top-[58px] z-260 flex h-[calc(100svh-58px)] min-h-[calc(100svh-58px)] w-[286px] max-w-[88vw] flex-col overflow-hidden border-r border-[var(--theme-color-shell-sidebar-border)] bg-[var(--theme-color-shell-sidebar-background)] shadow-[var(--theme-shadow-shell-sidebar-overlay)] lg:hidden"
+          onOpenAutoFocus={() => {
+            returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            returnFocusRef.current?.focus();
+          }}
         >
+          <Dialog.Title className="sr-only">{t("toolbar.openNavigation")}</Dialog.Title>
           <div className="flex items-center justify-end px-4 py-4">
             <button
               type="button"
@@ -127,8 +118,8 @@ export default function SectionSidebarShell({ children, isMobileDrawerOpen, onCl
             </button>
           </div>
           {sidebarContent}
-        </div>
-      </div>
+        </Dialog.Content>
+      </Dialog.Portal>
     </div>
   );
 }

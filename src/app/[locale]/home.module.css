@@ -1,0 +1,125 @@
+.home {
+  display: flex;
+  min-height: 520px;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 24px;
+  color: var(--theme-color-text-default);
+  font-family: "MS PGothic", "ＭＳ Ｐゴシック", Osaka, sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: normal;
+  text-align: center;
+}
+
+.visitors {
+  min-height: 17px;
+  white-space: nowrap;
+}
+
+.counter {
+  display: inline-block;
+  min-width: 77px;
+  background: var(--theme-color-home-counter-background);
+  color: var(--theme-color-home-counter-foreground);
+  font-family: "Times New Roman", serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  line-height: 14px;
+  vertical-align: baseline;
+}
+
+.welcome {
+  display: flex;
+  width: min(100%, 450px);
+  height: 60px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.titleImage {
+  width: 100%;
+  height: auto;
+}
+
+.emblem {
+  position: relative;
+  width: 200px;
+  height: 247px;
+  margin-top: 10px;
+}
+
+.logo {
+  position: absolute;
+  top: -6px;
+  left: -26px;
+  width: 252px;
+  height: 252px;
+  max-width: none;
+}
+
+.entrance {
+  margin-top: 30px;
+  font-size: 25px;
+  line-height: 30px;
+}
+
+.entranceTrigger {
+  position: relative;
+  cursor: pointer;
+}
+
+.entranceTrigger::before {
+  position: absolute;
+  inset: -7px -4px;
+  content: "";
+}
+
+.entranceTrigger:focus-visible,
+.mailboxTrigger:focus-visible,
+.mailboxLink:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 6px;
+}
+
+.contact {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 32px;
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.contact > span {
+  padding-top: 45px;
+}
+
+.mailbox {
+  position: relative;
+  display: block;
+  width: 72px;
+  height: 88px;
+}
+
+.mailboxLabel {
+  position: absolute;
+  top: 44px;
+  left: 8px;
+  display: flex;
+  width: 56px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--theme-color-home-sign-foreground);
+  background: var(--theme-color-home-sign-background);
+  color: var(--theme-color-home-sign-foreground);
+  white-space: nowrap;
+}
+
+.mailboxTrigger {
+  cursor: pointer;
+}

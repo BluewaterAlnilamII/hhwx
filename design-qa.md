@@ -1,3 +1,49 @@
+# HHW homepage verification
+
+Date: 2026-09-07 (Asia/Shanghai). Local release review: passed after resolving both reported P3 findings.
+
+## Accepted behavior
+
+The homepage retains the existing header, sidebar appearance, background, original HHW logo, Japanese homage copy, and decorative random counter. Othello moves to `/othello` and `/en/othello`, retaining the original game page and storage key. Navigation groups are HHWX / Home, Bandori, and Games / Othello.
+
+On screens narrower than the existing 64rem breakpoint, both 入り口 and the mailbox open the navigation drawer. On desktop, the entrance has no action and the mailbox uses a native `href="#"` link. Mail text stays plain text. The main-logo Michelle sticker is removed; the original mailbox keeps its own ears and bear face.
+
+## Visual references and screenshots
+
+- [Original SOS mailbox](documents/home-mailbox-sos-reference.png): user-provided 40 x 40 reference. Preserve the compact body, broad white sign, short post, and small base.
+- [Accepted original HHW artwork](documents/home-mailbox-hhw-reference.png): keep its ears, face, proportions, and base. Compare both reference images before future edits; the rejected wide and elongated mailbox variants are not used.
+- [Final desktop homepage](documents/homepage-desktop.png): production build, 1280 x 720.
+- [Final mobile drawer](documents/homepage-mobile-drawer.png): production build, 390 x 844, showing the corrected backdrop over the header.
+
+The heading uses thin raster lettering and the accepted text ＨＨＷ団のサイトにようこそ！. Its original reference font is unknown, so the result is a visual approximation. The same Japanese region uses `lang="ja"` in both site locales.
+
+## Assets and layout
+
+`public/home/welcome-title-v1.png` is a 450 x 60 transparent image rendered from installed MS Gothic Regular at 30px; no font file is redistributed. `public/home/post_no.png` is the proportionally prepared 144 x 176 transparent original HHW artwork, displayed in a 72 x 88 slot. The component covers its old raster lettering with a 56 x 22 white sign and accurate live 工事中 text. The image alone is not the final typeset sign.
+
+The 200 x 247 emblem slot, 252px original logo, and 25px entrance remain unchanged. Footer text is 16px, with a 32px top gap and text aligned to the sign. Counter and sign colors use explicit black/white semantic tokens in both color schemes. The counter is decorative (0029850–0029899), not analytics. The two runtime images total 10,501 bytes. No runtime dependency was added.
+
+## Release review and checks
+
+- Resolved: the mobile backdrop now covers the header as well as the page, matching Radix's modal interaction boundary. The drawer stays above the backdrop, keeps its internal close button and focus protection, and releases header controls when closed.
+- Resolved: both README versions describe the accepted narrow-screen and desktop behavior.
+- Production-mode keyboard checks passed at 320px: entrance Enter, close-button autofocus, Shift+Tab cycling to Othello, Escape, and focus restoration to each actual trigger.
+- Both narrow-screen triggers open the same localized drawer without changing the URL. Outside clicks and the internal close button close it. Resizing to desktop closes the modal and releases its input restrictions.
+- Desktop entrance clicks have no effect; the mailbox appends # without opening a drawer or resetting the counter. Original toolbar navigation and language controls remain usable after the drawer closes.
+- No horizontal clipping or missing homepage images at 320px. Production browser logs have no warnings or errors in the tested flow. Dark-theme sign readability was verified in the earlier equivalent styling review.
+- The moved Othello page is identical to the previous homepage after normalizing line endings and renaming its component. The storage key and game logic are unchanged.
+- Production review covered player selection, a move against Kaoru, the AI response, refreshing the resulting 3:3 board, and finding the same saved board on the English route. Existing game comments load; none were submitted.
+- Local production HTTP checks passed for both homepages, both Othello pages, both manifests, and both images. The legacy default-locale-prefixed Othello URL redirects to /othello. Manifest start URLs remain / and /en.
+- Build and type checks passed. Full lint: 0 errors and 24 existing warnings, including two img warnings carried with the unchanged game page. Internationalization check: 2 locales and 9 namespaces passed. Decorative-counter and Kaoru Worker/fallback tests passed. Production dependency audit: 0 vulnerabilities.
+- Required remote CI and the deployment result are recorded on the pull request. No database migration, environment change, dependency update, or sibling-repository deployment is required by this change.
+
+Browser coverage is Chromium on Windows, with desktop and 320/390px viewports. Safari, Firefox, physical mobile devices, and complete assistive-technology combinations are not covered by this local check.
+
+---
+
+<details>
+<summary>Previous Smile Patrol audit (2026-09-05)</summary>
+
 # Smile Patrol pre-release audit
 
 Date: 2026-09-05. Base commit: `42e3650f`. Result: no blocking issues found in the scoped local working-tree audit. No commit, remote CI run or deployment was performed.
@@ -363,3 +409,5 @@ Intentional differences:
 - [x] Keep unverified simulator capabilities disabled.
 
 final result: passed
+
+</details>

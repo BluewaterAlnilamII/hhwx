@@ -42,6 +42,8 @@ hhwx/
 ## src/app
 
 - `[locale]/`：本地化应用路由。默认 `zh-CN` 不带 URL 前缀，非默认语言使用 `/en` 等语言前缀。
+- `[locale]/page.tsx`：HHW 团复古首页，致敬用的日文文案在两种语言下保持一致。
+- `[locale]/othello/`：角色选择、本地存档续局、黑白棋与游戏内留言。
 - `[locale]/account/`：账号中心、资料、邮箱和密码页面。
 - `[locale]/bandori/game-profiles/`：游戏档案卡牌和道具视图。
 - `[locale]/auth/`：登录、注册和找回密码页面。
@@ -77,7 +79,7 @@ hhwx/
 - `TurnstileChallenge.tsx`：敏感操作使用的安全验证组件。
 - `comments/`：与目标类型无关的评论列表、编辑器、评论项、表情和贴纸选择 UI。
 - `bandori/`：跨路由复用的 Bandori 媒体和选择 UI，包括卡面与贴纸渲染。
-- 其他组件按首页游戏、账号和复用场景分组。
+- 其他组件按黑白棋、账号和复用场景分组。
 
 ## src/hooks
 
@@ -97,7 +99,7 @@ hhwx/
 - `comments/`：与目标类型无关的评论契约、表情/贴纸目录、内容解析和特权持久化服务；各目标类型的存在性与可见性校验留在各自领域中。
 - `api-*.ts`：API 响应约定和缓存策略。
 - `bestdori-profile-codec.ts` 和 `user-game-*-server.ts`：游戏档案兼容、同步和服务端持久化逻辑。
-- `characters.ts`、`othello.ts` 和 `ai/`：首页黑白棋和角色逻辑。
+- `characters.ts`、`othello.ts` 和 `ai/`：黑白棋和角色逻辑。
 
 ## scripts
 

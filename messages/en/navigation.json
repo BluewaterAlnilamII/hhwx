@@ -1,10 +1,12 @@
 {
   "groups": {
+    "hhwx": "HHWX",
     "game": "Game",
     "bandori": "Bandori"
   },
   "items": {
     "home": "Home",
+    "othello": "Othello",
     "calendar": "Calendar",
     "tracker": "Event Tracker",
     "cards": "Card Catalog",

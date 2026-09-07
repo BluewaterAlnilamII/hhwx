@@ -1,5 +1,9 @@
 {
   "root": {
+    "description": "HHW 团的复古主页，提供 Bandori 活动追踪、日历、图鉴、组队工具与黑白棋。"
+  },
+  "othello": {
+    "title": "黑白棋",
     "description": "与 Hello, Happy World! 的成员们来一场黑白棋对决吧！"
   },
   "calendar": {
@@ -53,6 +57,6 @@
     "description": "UID {publicUid} 的公开个人主页"
   },
   "manifest": {
-    "description": "与 Hello, Happy World! 的成员们来一场黑白棋对决吧！"
+    "description": "HHW 团的复古主页，提供 Bandori 活动追踪、日历、图鉴、组队工具与黑白棋。"
   }
 }

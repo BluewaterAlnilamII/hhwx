@@ -4,7 +4,8 @@ English version: [README.md](README.md)
 
 HHWX 是一个基于 Next.js App Router 的社区工具和实验项目，当前包含：
 
-- 带角色互动的黑白棋风格首页；
+- 致敬 SOS 团网站的 HHW 团复古首页，保留随机装饰计数；窄屏下入口与邮箱打开导航，桌面端入口无动作，邮箱链接到当前页面；
+- 位于 `/othello`（英文 `/en/othello`）的角色互动黑白棋，保留原有本地存档与游戏内留言；
 - BanG Dream! 国服活动日历；
 - BanG Dream! 活动追踪数据展示；
 - BanG Dream! 游戏档案导入、同步、卡牌、道具和组队工具；

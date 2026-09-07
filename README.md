@@ -4,7 +4,8 @@
 
 HHWX is a Next.js App Router application for a small set of community tools and experiments:
 
-- an Othello-style home page with character interactions;
+- a retro HHW club home page inspired by the SOS Dan website, with a decorative random counter; the entrance and mailbox open navigation on narrow screens, while the desktop entrance is inert and its mailbox links to the same page;
+- character-based Othello at `/othello` (`/en/othello` in English), retaining existing local game saves and in-game comments;
 - Bandori CN event calendar views;
 - Bandori event tracker data display;
 - Bandori game profile import, sync, card, item, and team-builder tools;

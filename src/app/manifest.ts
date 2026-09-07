@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: SITE_BRAND,
     short_name: SITE_BRAND,
-    description: "与 Hello, Happy World! 的成员们来一场黑白棋对决吧！",
+    description: "HHW 团的复古主页，提供 Bandori 活动追踪、日历、图鉴、组队工具与黑白棋。",
     start_url: "/",
     display: "standalone",
     background_color: "#FFEE22",
