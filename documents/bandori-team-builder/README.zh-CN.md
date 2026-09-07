@@ -9,6 +9,8 @@ HHWX 提供两种 Bandori 组队计算器：
 
 两种计算器都从 HHWX 游戏档案以及 Bandori 主数据、谱面数据开始。它们共享一部分产品概念，但计分和搜索实现相互独立；不能因为其中一边发生变化，就假定另一边也会随之变化。
 
+组曲的保证有明确前提：`exact` 证明在已校验的规范输入和文档规定的计分规则内最优；`incomplete` 只报告截至停止时找到的最好方案（如果有）。这一保证不能独立认证上游数据或尚未建模的游戏机制。
+
 ## 阅读顺序
 
 了解单曲计算器，请阅读[单曲组队算法](single-song-algorithm.zh-CN.md)。
@@ -66,6 +68,7 @@ HHWX 档案 + Bandori 主数据 + 三张谱面 + 活动设置
 
 ```bash
 npm run test:medley-foundation:source
+npm run test:medley-foundation:binding
 npm run test:medley-foundation
 npm run check:medley-foundation:wasm
 ```

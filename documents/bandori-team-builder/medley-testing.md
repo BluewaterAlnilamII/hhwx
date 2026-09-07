@@ -24,6 +24,8 @@ npm run test:medley-foundation:source
 
 The focused Node test suite covers profile decoding, character bonuses, card parameters, area items, event parameters, skill normalization, chart conversion, fixed-team evaluation, search-input construction and the frontend-facing source contract. Its fixtures are deliberately small so a failed rule can be isolated without running a large search.
 
+Chart cases assert both valid note/timing output and fail-closed behavior: malformed recognized notes, Long/Slide endpoints or BPM entries must report their original field path. A damaged ordinary note with six intact triggers is rejected by both source entry points. Hidden middle nodes, property-presence triggers and numeric strings retain their documented behavior.
+
 ### Rust formatting, linting and tests
 
 ```bash
@@ -50,13 +52,22 @@ The portable evidence is organized as follows:
 | Claim under test | Test source | Concrete check |
 | --- | --- | --- |
 | Profile, parameter, skill, chart and source-request normalization | [`tests/bandori-medley-*.test.mjs`](../../tests) | Exercises the public TypeScript builders from HHWX-shaped source data through normalized fixed-team and search requests. |
-| Versioned Rust input contract | [`json_contract.rs`](../../crates/bandori-medley-model/tests/json_contract.rs) | Accepts the committed valid fixture and rejects unknown scoring-rule versions. |
+| Versioned Rust input contract | [`json_contract.rs`](../../crates/bandori-medley-model/tests/json_contract.rs) | Accepts the committed valid fixture and rejects an unknown JSON field with `DECODE_FAILED`. |
+| Committed JavaScript/WASM binding | [`bandori-medley-wasm.test.mjs`](../../tests/bandori-medley-wasm.test.mjs) | Checks the public fixture's score and deterministic teams, hydration and callbacks; preserves early-stop reasons and best-so-far status, proves a small infeasible case and rejects an unknown scoring-rule version. |
 | Optimized scoring equals the direct 120-order calculation | [`exact_score.rs`](../../crates/bandori-medley-search/src/exact_score.rs) | `production_song_scores_match_reference_bits`, `score_range_matches_all_120_reference_orders` and the overlap/probability case compare both implementations. |
 | Search matches complete enumeration on the retained finite spaces | [`tiny_exact_search.rs`](../../crates/bandori-medley-search/tests/tiny_exact_search.rs) | `tiny_search_matches_the_independent_exhaustive_reference_across_memory_budgets` covers the symmetric five-character case. `tiny_search_matches_the_reference_when_characters_and_cards_can_be_unused` covers six eligible characters, an unused eligible card, different omitted characters by team, and an excluded high-value card. Both compare the exact score and deterministic tie representative. |
 | Bounds and deductions remain safe | [`fast_upper.rs`](../../crates/bandori-medley-search/src/fast_upper.rs), [`joint_upper.rs`](../../crates/bandori-medley-search/src/joint_upper.rs), [`search.rs`](../../crates/bandori-medley-search/src/search.rs) | Exhaustive tiny completions cover individual bounds, forward/backward joint bounds and occupancy modes; focused cases cover projected singleton closure and indexed/scan join parity. |
 | Failure paths preserve distinct outcomes | [`control.rs`](../../crates/bandori-medley-search/src/control.rs), [`validation.rs`](../../crates/bandori-medley-search/src/validation.rs), [`hydration.rs`](../../crates/bandori-medley-search/src/hydration.rs), [`tiny_exact_search.rs`](../../crates/bandori-medley-search/tests/tiny_exact_search.rs) | A zero storage budget returns `incomplete`; control preserves `TimedOut`; invalid requests and hydration score disagreements return errors rather than a false `exact`. |
 
 ### WebAssembly artifact
+
+Run the committed package directly in Node, using only the public source fixture:
+
+```bash
+npm run test:medley-foundation:binding
+```
+
+CI runs this command after source normalization tests. It initializes the tracked `.wasm` through the tracked generated JavaScript binding, constructs the request through `buildMedleySearchInput`, and checks exact scores and canonical teams at two storage budgets, hydrated score ranges and orders, strict incumbent callbacks, search-finished notification, timeout/cancellation, zero budget, best-so-far hydration, no legal assignment and `UNSUPPORTED_RULES`. The expected public-fixture scores are also retained independently in the direct Rust reference scorer. This is a binding regression check, not an exhaustive proof or a byte-for-byte source/artifact identity check.
 
 When shipped Rust behavior or its build inputs change, regenerate the committed package:
 
@@ -74,7 +85,7 @@ npm run lint
 npm run build
 ```
 
-No tracked automated command currently executes the generated JavaScript/WebAssembly binding end to end. Before release, manually start the application, run a retained medley case through the Team Builder page, and confirm that search progress, terminal status and hydrated results appear. Record this as a manual check rather than claiming it was covered by `cargo check` or `next build`.
+The Node binding test does not run the real Web Worker, its progress throttling, or the page. Before release, manually start the application, run a retained medley case through the Team Builder page, and confirm that search progress, terminal status and hydrated results appear. Record this as a manual check rather than claiming it was covered by the binding test, `cargo check` or `next build`.
 
 ## 3. What a scoring test should compare
 

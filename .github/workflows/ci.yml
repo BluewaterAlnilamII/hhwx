@@ -63,6 +63,9 @@ jobs:
       - name: Test medley foundation source boundary
         run: npm run test:medley-foundation:source
 
+      - name: Test committed medley WebAssembly binding
+        run: npm run test:medley-foundation:binding
+
       - name: Test cache contracts
         run: npm run test:cache
 

@@ -6,7 +6,7 @@
 
 The normalized input contains owned physical cards, hard-exclusion flags, card and event parameters, four resolved whole-team skill contexts, owned area-item rows, every legal shared area configuration and exactly three ordered normalized songs. Teams, leaders and the winning area configuration are outputs rather than caller selections. Member index two is the leader.
 
-Area-item IDs preserve their supplied calculation order. Output members are normalized by stable instance ID, then the selected leader is moved to index two. Validation does not silently sort or repair malformed input. The Rust schema accepts one unique empty selected-item configuration; the source adapter generates it only when no usable item exists in a category.
+Area-item IDs preserve their supplied calculation order. Output members are normalized by stable instance ID, then the selected leader is moved to index two. Validation does not silently sort or repair malformed input. The Rust schema accepts one unique empty selected-item configuration; the source adapter generates a wholly empty configuration only when all three categories lack usable owned items. A category with no usable owned item contributes no selection; each other category still contributes one.
 
 The terminal result is either:
 
