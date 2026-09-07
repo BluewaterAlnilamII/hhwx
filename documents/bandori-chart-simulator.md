@@ -2,7 +2,7 @@
 
 ## Scope
 
-The chart simulator is a development-only song-detail surface at
+The chart simulator is a public song-detail surface at
 `/bandori/songs/{songId}`. It renders the complete source chart and an
 audio-timed playfield without changing the existing Music API, chart, or audio
 contracts.
@@ -54,9 +54,10 @@ The current product contract includes:
   families and the Persona limited overlay;
 - automatic Perfect lane flash, judgment, Combo, tap/Flick/Directional/hold
   effects, with ordinary tap effects independently switchable Off, and
-  on-demand TapSE/Web Audio playback; and
-- a complete-chart analysis view that remains separate from native playfield
-  presentation.
+  on-demand TapSE/Web Audio playback.
+
+The separate complete-chart analysis implementation is retained, but its UI
+entry is currently disabled and is not an available feature.
 
 Anything not listed in the current implementation and tests is disabled.
 Interactive failure and broken-hold branches, interactive non-Perfect judgments,
@@ -282,7 +283,13 @@ membership can change. Inputs containing expired candidates are recomputed to
 preserve the uncached collector's output order. Relevant setting changes invalidate this reuse; seeks
 update the drawing for the new time, and identical diagnostic frames retain
 their drawing. Transport update
-frequency, the paused ticker, FPS sampling, and rendering quality are unchanged.
+frequency, the paused ticker, and FPS sampling are unchanged.
+
+Resolution scale applies directly to the fixed 1334 by 750 stage, independently
+of device pixel ratio. The default 100% renders at 1334 by 750; 50% renders at
+667 by 375, and 200% at 2668 by 1500. Saved percentages are retained without a
+DPR multiplier. This reduces the default pixel workload on high-DPR devices;
+users can increase the percentage for a sharper image.
 
 ## Ordinary and limited controls
 
@@ -344,7 +351,7 @@ replacement native constants require separately verified evidence.
 - `src/lib/bandori/chart-simulator/` owns pure compilation, transport,
   presentation calculations, effects, sound, pitch-preserving time-stretch
   adapters, and the CDN manifest resolver.
-- `src/app/[locale]/bandori/songs/[songId]/` owns the development route,
+- `src/app/[locale]/bandori/songs/[songId]/` owns the public song-detail route,
   controls, fixed Pixi stage, and renderer lifecycle.
 - The private assets-builder owns reviewed projection publication and the
   reverse-engineering evidence archive. The public Web repository contains only

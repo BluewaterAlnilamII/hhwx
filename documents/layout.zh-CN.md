@@ -50,7 +50,7 @@ hhwx/
 - `[locale]/bandori/events/`：活动追踪器入口和按活动 ID 定位的页面。页面私有的活动信息与追踪器实现分别归入 `_info/`、`_tracker/`；旧 `/bandori/eventtracker` URL 由 `src/proxy.ts` 永久重定向。
 - `[locale]/bandori/cards/`：支持服务器上下文的卡牌图鉴与单卡详情页面，页面私有 UI 归入 `_components/`。
 - `[locale]/bandori/calendar/`：各服务器的活动日历页面。
-- `[locale]/bandori/songs/[songId]/`：仅供开发阶段使用的歌曲详情、完整谱面分析与白名单式谱面模拟器 UI；固定原生舞台只加载逐项确认过的 JP 演出资源。
+- `[locale]/bandori/songs/[songId]/`：公开的歌曲详情与白名单式谱面模拟器 UI；完整谱面分析实现仍保留，界面入口已禁用；固定原生舞台只加载逐项确认过的 JP 演出资源。
 - `api/`：前端使用的同源 API 路由。
 - `api/account/game-bind/`：游戏账号绑定验证码、验证、列表和解绑 API。
 - `api/account/game-profiles/`：游戏档案同步、导入、导出、复制和删除 API。
