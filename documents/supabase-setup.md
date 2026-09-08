@@ -36,6 +36,8 @@ This document describes HHWX's Supabase schema workflow. New schema changes shou
 
 ## Migration Workflow
 
+The comment UID release includes `20260908145451_add_comment_reaction_public_uid.sql`. Apply it before deploying the app so reaction previews and full participant lists both show public UIDs. It only adds `profiles.public_uid` to the existing reaction-summary JSON; service-role-only execution, ordering, limits, and RLS stay unchanged. The previous app ignores this extra field, and the new app tolerates an older RPC by omitting preview UIDs. Rolling back the app does not require reverting the migration.
+
 Use the project-local Supabase CLI. It is installed as a development dependency, so global installation is not required. Check the relevant command's `--help` and current [Supabase migration guidance](https://supabase.com/docs/guides/deployment/database-migrations) before relying on version-sensitive behavior.
 
 ```powershell

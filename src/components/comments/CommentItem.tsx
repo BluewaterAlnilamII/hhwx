@@ -45,10 +45,11 @@ import {
   type CommentStampLookup,
 } from "@/lib/comments/comment-content";
 import { buildCommentDraftStorageKey } from "@/lib/comments/comment-drafts";
-import { getCommentPopoverHorizontalPosition } from "@/lib/comments/comment-popover-position";
+import { getCommentPopoverHorizontalPosition, getCommentPopoverVerticalPosition } from "@/lib/comments/comment-popover-position";
 import { CommentContent } from "./CommentContent";
 import { CommentComposer } from "./CommentComposer";
 import { CommentReactionEmoji } from "./CommentReactionEmoji";
+import { CommentPublicUid } from "./CommentPublicUid";
 import { CommentReactionsDialog } from "./CommentReactionsDialog";
 import { EmojiPickerButton } from "./EmojiPickerButton";
 import { StampPickerButton } from "./StampPickerButton";
@@ -63,6 +64,7 @@ type ReactionChipProps = {
 function ReactionChip({ reaction, disabled, onToggle, onViewAll }: ReactionChipProps) {
   const t = useTranslations("comments");
   const containerRef = useRef<HTMLSpanElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
   const longPressTimerRef = useRef<number | null>(null);
   const suppressClickRef = useRef(false);
   const [tooltipOpen, setTooltipOpen] = useState(false);
@@ -91,17 +93,26 @@ function ReactionChip({ reaction, disabled, onToggle, onViewAll }: ReactionChipP
 
   const updateTooltipPosition = useCallback(() => {
     const container = containerRef.current;
-    if (!container) return;
+    const tooltip = tooltipRef.current;
+    if (!container || !tooltip) return;
 
     const rect = container.getBoundingClientRect();
     const viewport = window.visualViewport;
-    setTooltipStyle(getCommentPopoverHorizontalPosition({
-      anchorRect: rect,
-      containerLeft: rect.left,
-      preferredWidth: 256,
-      viewportLeft: viewport?.offsetLeft ?? 0,
-      viewportWidth: viewport?.width ?? window.innerWidth,
-    }));
+    setTooltipStyle({
+      ...getCommentPopoverHorizontalPosition({
+        anchorRect: rect,
+        containerLeft: 0,
+        preferredWidth: 256,
+        viewportLeft: viewport?.offsetLeft ?? 0,
+        viewportWidth: viewport?.width ?? window.innerWidth,
+      }),
+      ...getCommentPopoverVerticalPosition({
+        anchorRect: rect,
+        tooltipHeight: tooltip.scrollHeight + tooltip.offsetHeight - tooltip.clientHeight,
+        viewportTop: viewport?.offsetTop ?? 0,
+        viewportHeight: viewport?.height ?? window.innerHeight,
+      }),
+    });
   }, []);
 
   const showTooltip = useCallback(() => {
@@ -111,6 +122,10 @@ function ReactionChip({ reaction, disabled, onToggle, onViewAll }: ReactionChipP
 
   useLayoutEffect(() => {
     if (!tooltipOpen) return;
+    const tooltip = tooltipRef.current;
+    if (!tooltip) return;
+
+    tooltip.showPopover?.();
 
     let frame = window.requestAnimationFrame(updateTooltipPosition);
     const scheduleUpdate = () => {
@@ -118,6 +133,8 @@ function ReactionChip({ reaction, disabled, onToggle, onViewAll }: ReactionChipP
       frame = window.requestAnimationFrame(updateTooltipPosition);
     };
     const viewport = window.visualViewport;
+    const resizeObserver = new ResizeObserver(scheduleUpdate);
+    resizeObserver.observe(tooltip);
 
     window.addEventListener("resize", scheduleUpdate);
     window.addEventListener("scroll", scheduleUpdate, true);
@@ -125,6 +142,8 @@ function ReactionChip({ reaction, disabled, onToggle, onViewAll }: ReactionChipP
     viewport?.addEventListener("scroll", scheduleUpdate);
     return () => {
       window.cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+      tooltip.hidePopover?.();
       window.removeEventListener("resize", scheduleUpdate);
       window.removeEventListener("scroll", scheduleUpdate, true);
       viewport?.removeEventListener("resize", scheduleUpdate);
@@ -196,6 +215,8 @@ function ReactionChip({ reaction, disabled, onToggle, onViewAll }: ReactionChipP
       </button>
       {tooltipOpen ? (
         <div
+          ref={tooltipRef}
+          popover="manual"
           role="dialog"
           aria-label={t("reactions.previewLabel", {
             emoji: reaction.emojiKey,
@@ -203,7 +224,7 @@ function ReactionChip({ reaction, disabled, onToggle, onViewAll }: ReactionChipP
           })}
           style={tooltipStyle ?? undefined}
           className={cn(
-            "absolute bottom-full z-30 mb-0 rounded-lg border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-2.5 text-left text-xs text-[var(--theme-color-text-muted)] shadow-2xl dark:border-slate-200 dark:bg-white dark:text-slate-700",
+            "fixed inset-auto z-30 m-0 w-64 overflow-y-auto overscroll-contain rounded-lg border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-comment-reaction-background)] p-2.5 text-left text-xs text-[var(--theme-color-text-muted)] shadow-2xl dark:border-slate-200 dark:text-slate-700",
             !tooltipStyle && "invisible",
           )}
         >
@@ -222,9 +243,12 @@ function ReactionChip({ reaction, disabled, onToggle, onViewAll }: ReactionChipP
                   size="toolbar"
                   className="ring-1 ring-[var(--theme-color-border-subtle)]"
                 />
-                <span className="min-w-0 flex-1 truncate text-[var(--theme-color-text-muted)]">
-                  {user.username ?? t("states.anonymous")}
-                </span>
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate font-semibold text-[var(--theme-color-text-default)]">
+                    {user.username ?? t("states.anonymous")}
+                  </span>
+                  <CommentPublicUid publicUid={user.publicUid} className="dark:text-[var(--theme-color-text-muted)]" />
+                </div>
               </div>
             ))}
           </div>
@@ -468,13 +492,10 @@ export const CommentItem = memo(function CommentItem({
         "relative transition",
         isReply
           ? "bg-transparent py-2 first:pt-1 last:pb-0 sm:rounded-xl sm:py-1 sm:last:pb-1"
-          : "rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 py-3 shadow-xs sm:p-4 dark:border-slate-700 dark:bg-slate-900",
-        isHighlighted && isReply
+          : "py-5 first:pt-0 last:pb-0",
+        isHighlighted
           ? "rounded-lg bg-[var(--theme-color-semantic-info-background)] ring-2 ring-[var(--theme-color-semantic-info-border)] dark:bg-sky-500/10 dark:ring-sky-500/25"
           : null,
-        !isReply && (isHighlighted
-          ? "border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)] ring-4 ring-[var(--theme-color-semantic-info-border)]/15 dark:border-sky-500 dark:bg-sky-500/10 dark:ring-sky-500/20"
-          : null),
       )}
     >
       <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-x-3">
@@ -488,10 +509,13 @@ export const CommentItem = memo(function CommentItem({
         />
         <div className="flex min-h-11 min-w-0 flex-col items-start justify-center">
           <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-2 gap-y-0.5">
-            <span className="truncate text-sm font-semibold text-[var(--theme-color-text-default)] dark:text-slate-100">
-              {comment.username ?? t("states.anonymous")}
-            </span>
-            <span className="text-xs text-[var(--theme-color-text-muted)]">
+            <div className="flex min-w-0 max-w-full items-center gap-2">
+              <span className="truncate text-sm font-semibold text-[var(--theme-color-text-default)] dark:text-slate-100">
+                {comment.username ?? t("states.anonymous")}
+              </span>
+              <CommentPublicUid publicUid={comment.publicUid} />
+            </div>
+            <span className="whitespace-nowrap text-xs text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">
               {localDateTimeFormatter.format(new Date(comment.createdAt))}
             </span>
             {comment.replyToUsername ? (
@@ -510,7 +534,7 @@ export const CommentItem = memo(function CommentItem({
               )
             ) : null}
             {comment.editedAt && !isDeleted ? (
-              <span className="text-xs text-[var(--theme-color-text-muted)]">{t("states.edited")}</span>
+              <span className="text-xs text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">{t("states.edited")}</span>
             ) : null}
           </div>
           {comment.displayDegree ? (
@@ -534,17 +558,17 @@ export const CommentItem = memo(function CommentItem({
               <fieldset
                 disabled={isSaving}
                 aria-busy={isSaving}
-                className="m-0 min-w-0 border-0 p-0 disabled:cursor-wait disabled:opacity-60"
+                className="m-0 min-w-0 rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-0 transition focus-within:border-[var(--theme-color-focus-ring)] focus-within:ring-2 focus-within:ring-[var(--theme-color-focus-ring)] disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:focus-within:border-sky-400 dark:focus-within:ring-sky-500/25"
               >
                 <textarea
                   ref={editTextareaRef}
                   value={editValue}
                   onChange={(event) => setEditValue(truncateCommentContent(event.target.value))}
-                  className="min-h-20 max-h-60 w-full resize-y overflow-y-hidden rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 py-2 text-sm leading-6 text-[var(--theme-color-text-default)] outline-hidden transition placeholder:text-[var(--theme-color-text-muted)] selection:bg-[var(--theme-color-selection-strong-background)] selection:text-[var(--theme-color-selection-strong-foreground)] focus:border-[var(--theme-color-focus-ring)] focus:ring-2 focus:ring-[var(--theme-color-focus-ring)] dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:selection:bg-sky-500/40 dark:selection:text-white dark:focus:border-sky-400 dark:focus:bg-slate-900 dark:focus:text-slate-50 dark:focus:ring-sky-500/25"
+                  className="block min-h-20 max-h-60 w-full resize-y overflow-y-hidden rounded-t-xl border-0 bg-transparent px-3 py-2 text-[15px] leading-[26px] text-[var(--theme-color-text-default)] outline-hidden placeholder:text-[var(--theme-color-text-muted)] selection:bg-[var(--theme-color-selection-strong-background)] selection:text-[var(--theme-color-selection-strong-foreground)] dark:text-slate-100 dark:placeholder:text-slate-400 dark:selection:bg-sky-500/40 dark:selection:text-white"
                 />
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--theme-color-border-subtle)] px-3 py-2 dark:border-slate-700">
                   <div className="flex items-center gap-2">
-                    <span className={cn("text-xs", editValueLength > COMMENT_LENGTH_WARNING_THRESHOLD ? "text-[var(--theme-color-semantic-warning-foreground)]" : "text-[var(--theme-color-text-muted)]")}>
+                    <span className={cn("text-xs", editValueLength > COMMENT_LENGTH_WARNING_THRESHOLD ? "text-[var(--theme-color-semantic-warning-foreground)]" : "text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]")}>
                       {editValueLength}/{MAX_COMMENT_LENGTH}
                     </span>
                     <EmojiPickerButton
@@ -749,7 +773,6 @@ export const CommentItem = memo(function CommentItem({
                 submitLabel={t("actions.reply")}
                 autoFocus
                 draftStorageKey={replyDraftStorageKey}
-                variant="reply"
                 onCancel={() => setReplying(false)}
                 onSubmit={handleSubmitReply}
               />

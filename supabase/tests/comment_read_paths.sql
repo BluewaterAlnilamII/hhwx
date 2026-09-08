@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(36);
+select plan(37);
 
 select ok(
   to_regprocedure('public.read_comment_reaction_summary_rows(uuid[],uuid)') is not null,
@@ -462,6 +462,20 @@ select is(
   ),
   'comment_read_path_1',
   'reaction preview JSON includes profile display data'
+);
+
+select is(
+  (
+    select (reaction_group.value->'users'->0->>'public_uid')::bigint
+    from public.read_comment_reaction_summary_rows(
+      array['10000000-0000-0000-0000-000000000001']::uuid[],
+      null
+    ) as summary
+    cross join lateral jsonb_array_elements(summary.reaction_groups) as reaction_group(value)
+    where reaction_group.value->>'emoji_key' = 'KokoroYay'
+  ),
+  (select public_uid from public.profiles where id = '00000000-0000-0000-0000-000000000001'),
+  'reaction previews expose the public profile UID'
 );
 
 select is(
