@@ -35,7 +35,6 @@ type CommentComposerProps = {
   onCancel?: () => void;
   autoFocus?: boolean;
   draftStorageKey?: string | null;
-  variant?: "default" | "reply";
 };
 
 export const CommentComposer = memo(function CommentComposer({
@@ -45,7 +44,6 @@ export const CommentComposer = memo(function CommentComposer({
   onCancel,
   autoFocus = false,
   draftStorageKey = null,
-  variant = "default",
 }: CommentComposerProps) {
   const t = useTranslations("comments");
   const [content, setContent] = useState("");
@@ -117,13 +115,7 @@ export const CommentComposer = memo(function CommentComposer({
   };
 
   return (
-    <div
-      className={cn(
-        variant === "reply"
-          ? "bg-transparent sm:rounded-2xl sm:border sm:border-[var(--theme-color-border-subtle)] sm:bg-[var(--theme-color-control-background)] sm:p-3 sm:shadow-xs sm:dark:border-slate-700 sm:dark:bg-slate-900"
-          : "rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-3 shadow-xs dark:border-slate-700 dark:bg-slate-900",
-      )}
-    >
+    <div className="rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] transition focus-within:border-[var(--theme-color-focus-ring)] focus-within:ring-2 focus-within:ring-[var(--theme-color-focus-ring)] dark:border-slate-700 dark:bg-slate-900 dark:focus-within:border-sky-400 dark:focus-within:ring-sky-500/25">
       <textarea
         ref={textareaRef}
         value={content}
@@ -131,11 +123,11 @@ export const CommentComposer = memo(function CommentComposer({
         placeholder={placeholder}
         rows={3}
         autoFocus={autoFocus}
-        className="min-h-21 max-h-60 w-full resize-y overflow-y-hidden rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 py-2 text-sm leading-6 text-[var(--theme-color-text-default)] outline-hidden transition placeholder:text-[var(--theme-color-text-muted)] selection:bg-[var(--theme-color-selection-strong-background)] selection:text-[var(--theme-color-selection-strong-foreground)] focus:border-[var(--theme-color-focus-ring)] focus:ring-2 focus:ring-[var(--theme-color-focus-ring)] dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:selection:bg-sky-500/40 dark:selection:text-white dark:focus:border-sky-400 dark:focus:bg-slate-900 dark:focus:text-slate-50 dark:focus:ring-sky-500/25"
+        className="block min-h-21 max-h-60 w-full resize-y overflow-y-hidden rounded-t-xl border-0 bg-transparent px-3 py-2 text-[15px] leading-[26px] text-[var(--theme-color-text-default)] outline-hidden placeholder:text-[var(--theme-color-text-muted)] selection:bg-[var(--theme-color-selection-strong-background)] selection:text-[var(--theme-color-selection-strong-foreground)] dark:text-slate-100 dark:placeholder:text-slate-400 dark:selection:bg-sky-500/40 dark:selection:text-white"
       />
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--theme-color-border-subtle)] px-3 py-2 dark:border-slate-700">
         <div className="flex items-center gap-2">
-          <span className={cn("text-xs", contentLength > COMMENT_LENGTH_WARNING_THRESHOLD ? "text-[var(--theme-color-semantic-warning-foreground)]" : "text-[var(--theme-color-text-muted)]")}>
+          <span className={cn("text-xs", contentLength > COMMENT_LENGTH_WARNING_THRESHOLD ? "text-[var(--theme-color-semantic-warning-foreground)]" : "text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]")}>
             {contentLength}/{MAX_COMMENT_LENGTH}
           </span>
           <EmojiPickerButton
@@ -179,7 +171,7 @@ export const CommentComposer = memo(function CommentComposer({
           </button>
         </div>
       </div>
-      {error ? <div className="mt-2 text-xs text-[var(--theme-color-semantic-danger-foreground)] dark:text-[var(--theme-color-semantic-danger-foreground-on-dark)]">{error}</div> : null}
+      {error ? <div className="px-3 pb-2 text-xs text-[var(--theme-color-semantic-danger-foreground)] dark:text-[var(--theme-color-semantic-danger-foreground-on-dark)]">{error}</div> : null}
     </div>
   );
 });

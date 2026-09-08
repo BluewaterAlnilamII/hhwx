@@ -91,6 +91,7 @@ export type CommentAvatar = {
 export type CommentReactionParticipant = {
   userId: string;
   username: string | null;
+  publicUid: number | null;
   avatar: CommentAvatar;
   reactedAt: string;
 };
@@ -137,6 +138,7 @@ export type CommentNode = {
   rootId: string | null;
   userId: string;
   username: string | null;
+  publicUid: number | null;
   avatar: CommentAvatar;
   displayDegree: AccountDisplayDegreeSelection | null;
   content: string | null;

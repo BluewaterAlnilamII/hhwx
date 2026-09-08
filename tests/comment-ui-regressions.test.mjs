@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { getCommentPopoverHorizontalPosition } from "../src/lib/comments/comment-popover-position.ts";
+import { getCommentPopoverHorizontalPosition, getCommentPopoverVerticalPosition } from "../src/lib/comments/comment-popover-position.ts";
 
 const threadSource = readFileSync(
   new URL("../src/components/comments/CommentThread.tsx", import.meta.url),
@@ -95,4 +95,27 @@ test("reaction previews stay inside narrow and offset visual viewports", () => {
   assert.match(itemSource, /viewport\?\.addEventListener\("resize", scheduleUpdate\)/u);
   assert.match(itemSource, /viewport\?\.addEventListener\("scroll", scheduleUpdate\)/u);
   assert.doesNotMatch(itemSource, /absolute bottom-full left-1\/2/u);
+});
+
+test("reaction previews prefer above with no gap, flip only when needed, and constrain tall lists", () => {
+  const cases = [
+    { top: 400, bottom: 428, tooltipHeight: 200, viewportHeight: 800, expectedTop: 200, expectedMaxHeight: 384 },
+    { top: 230, bottom: 258, tooltipHeight: 200, viewportHeight: 800, expectedTop: 30, expectedMaxHeight: 214 },
+    { top: 80, bottom: 108, tooltipHeight: 200, viewportHeight: 800, expectedTop: 108, expectedMaxHeight: 676 },
+    { top: 720, bottom: 748, tooltipHeight: 200, viewportHeight: 800, expectedTop: 520, expectedMaxHeight: 704 },
+    { top: 260, bottom: 288, tooltipHeight: 350, viewportHeight: 400, expectedTop: 16, expectedMaxHeight: 244 },
+    { top: 100, bottom: 128, tooltipHeight: 350, viewportHeight: 400, expectedTop: 128, expectedMaxHeight: 256 },
+    { top: 240, bottom: 272, tooltipHeight: 200, viewportTop: 40, viewportHeight: 360, expectedTop: 56, expectedMaxHeight: 184 },
+  ];
+
+  for (const { top, bottom, tooltipHeight, viewportTop = 0, viewportHeight, expectedTop, expectedMaxHeight } of cases) {
+    const result = getCommentPopoverVerticalPosition({
+      anchorRect: { top, bottom }, tooltipHeight, viewportTop, viewportHeight,
+    });
+    assert.deepEqual(result, { top: expectedTop, maxHeight: expectedMaxHeight });
+    const height = Math.min(tooltipHeight, result.maxHeight);
+    assert.ok(result.top >= viewportTop + 16);
+    assert.ok(result.top + height <= viewportTop + viewportHeight - 16);
+    assert.ok(result.top === bottom || result.top + height === top, "preview touches its anchor");
+  }
 });

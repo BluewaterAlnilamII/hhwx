@@ -10,6 +10,7 @@ import type { CommentReactionParticipantPageLoader } from "@/hooks/useCommentRea
 import type { CommentReactionSummary } from "@/lib/comments/comment-contract";
 import { cn } from "@/lib/utils";
 import { CommentReactionEmoji } from "./CommentReactionEmoji";
+import { CommentPublicUid } from "./CommentPublicUid";
 
 export type CommentReactionsDialogProps = {
   commentId: string;
@@ -100,7 +101,7 @@ export function CommentReactionsDialog({
             event.preventDefault();
             contentRef.current?.focus();
           }}
-          className="fixed inset-x-0 bottom-0 z-131 flex h-[min(42rem,88dvh)] flex-col overflow-hidden rounded-t-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-default)] shadow-2xl outline-hidden data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom-4 data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom-4 sm:left-1/2 sm:right-auto sm:top-1/2 sm:bottom-auto sm:h-[min(38rem,calc(100dvh-3rem))] sm:w-[min(34rem,calc(100vw-2rem))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:data-[state=closed]:fade-out sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:fade-in sm:data-[state=open]:zoom-in-95 dark:border-slate-700 dark:bg-[#232428] dark:text-slate-50"
+          className="fixed inset-x-0 bottom-0 z-131 flex h-[min(42rem,88dvh)] flex-col overflow-hidden rounded-t-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-comment-reaction-background)] text-[var(--theme-color-text-default)] shadow-2xl outline-hidden data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom-4 data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom-4 sm:left-1/2 sm:right-auto sm:top-1/2 sm:bottom-auto sm:h-[min(38rem,calc(100dvh-3rem))] sm:w-[min(34rem,calc(100vw-2rem))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:data-[state=closed]:fade-out sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:fade-in sm:data-[state=open]:zoom-in-95 dark:border-slate-700 dark:bg-[#232428] dark:text-slate-50"
         >
           <div className="flex h-16 shrink-0 items-center justify-between border-b border-[var(--theme-color-border-subtle)] px-5 dark:border-white/10">
             <Dialog.Title className="text-lg font-bold tracking-tight">
@@ -175,9 +176,12 @@ export function CommentReactionsDialog({
                     size="toolbar"
                     className="h-9 w-9 ring-1 ring-[var(--theme-color-border-subtle)] dark:ring-white/15"
                   />
-                  <span className="min-w-0 flex-1 truncate font-semibold text-[var(--theme-color-text-default)] dark:text-slate-100">
-                    {user.username ?? t("states.anonymous")}
-                  </span>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate font-semibold text-[var(--theme-color-text-default)] dark:text-slate-100">
+                      {user.username ?? t("states.anonymous")}
+                    </span>
+                    <CommentPublicUid publicUid={user.publicUid} />
+                  </div>
                 </div>
               ))}
 

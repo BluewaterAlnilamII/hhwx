@@ -159,8 +159,8 @@ export default function CommentThread({
   }, []);
 
   return (
-    <section className="hhwx-panel rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[#fffef4] p-2 shadow-[var(--theme-shadow-surface-raised)] sm:p-5 dark:border-slate-800 dark:bg-slate-950">
-      <div className="flex items-center justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] px-2 pb-4 pt-2 sm:px-0 sm:pt-0 dark:border-slate-800">
+    <section className="hhwx-panel rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-3 shadow-[var(--theme-shadow-surface-raised)] sm:p-5 dark:border-slate-800 dark:bg-slate-950">
+      <div className="flex items-center justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] pb-4 dark:border-slate-800">
         <Heading as="h2" visualRole="section" accentSlot="a" icon={<MessageSquare size={20} />} className="dark:text-[var(--theme-color-text-default-on-dark)]">
           {title}
           <span className="text-sm font-semibold text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">
@@ -231,7 +231,7 @@ export default function CommentThread({
         </div>
       ) : null}
 
-      <div className="mt-5 space-y-3">
+      <div className="mt-5 divide-y divide-[var(--theme-color-border-subtle)] dark:divide-slate-700">
         {comments.map((comment) => (
           <CommentItem
             key={comment.id}

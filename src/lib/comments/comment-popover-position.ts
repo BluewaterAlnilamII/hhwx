@@ -18,6 +18,32 @@ function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(Math.max(value, minimum), maximum);
 }
 
+export function getCommentPopoverVerticalPosition({
+  anchorRect,
+  tooltipHeight,
+  viewportTop = 0,
+  viewportHeight,
+}: {
+  anchorRect: Pick<DOMRectReadOnly, "top" | "bottom">;
+  tooltipHeight: number;
+  viewportTop?: number;
+  viewportHeight: number;
+}) {
+  const minimumTop = viewportTop + COMMENT_POPOVER_VIEWPORT_PADDING;
+  const maximumBottom = Math.max(minimumTop, viewportTop + viewportHeight - COMMENT_POPOVER_VIEWPORT_PADDING);
+  const aboveEdge = clamp(anchorRect.top, minimumTop, maximumBottom);
+  const belowEdge = clamp(anchorRect.bottom, minimumTop, maximumBottom);
+  const availableAbove = aboveEdge - minimumTop;
+  const availableBelow = maximumBottom - belowEdge;
+  const placeAbove = tooltipHeight <= availableAbove || availableAbove >= availableBelow;
+  const maxHeight = placeAbove ? availableAbove : availableBelow;
+
+  return {
+    top: placeAbove ? aboveEdge - Math.min(tooltipHeight, maxHeight) : belowEdge,
+    maxHeight,
+  };
+}
+
 export function getCommentPopoverHorizontalPosition({
   anchorRect,
   containerLeft,

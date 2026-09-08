@@ -49,6 +49,7 @@
 
   /* Smile Patrol intentionally lifts controls onto a clean white surface. */
   --theme-color-control-background: #ffffff;
+  --theme-color-comment-reaction-background: #fffefa;
 }
 
 @media (prefers-color-scheme: light) {

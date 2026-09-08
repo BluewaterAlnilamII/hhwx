@@ -34,9 +34,48 @@ import {
   readCommentDraft,
   writeCommentDraft,
 } from "../src/lib/comments/comment-drafts.ts";
-import { parseCommentReactionSummaryRows } from "../src/lib/comments/comments-server.ts";
+import { listComments, listCommentReactionParticipants, parseCommentReactionSummaryRows } from "../src/lib/comments/comments-server.ts";
 
 const VALID_COMMENT_ID = "123e4567-e89b-12d3-a456-426614174000";
+
+test("comment author and reaction participant UIDs come from public profiles and tolerate missing profiles", async (t) => {
+  const previousUrl = process.env.SUPABASE_URL;
+  const previousKey = process.env.SUPABASE_SECRET_KEY;
+  process.env.SUPABASE_URL = "https://comments.test";
+  process.env.SUPABASE_SECRET_KEY = "test-secret";
+  t.after(() => {
+    if (previousUrl === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = previousUrl;
+    if (previousKey === undefined) delete process.env.SUPABASE_SECRET_KEY;
+    else process.env.SUPABASE_SECRET_KEY = previousKey;
+  });
+
+  t.mock.method(globalThis, "fetch", async (input, init) => {
+    const url = new URL(String(input));
+    assert.equal(url.origin, "https://comments.test");
+    if (url.pathname.startsWith("/rest/v1/rpc/")) return Response.json([]);
+    if (init?.method === "HEAD") {
+      return new Response(null, { headers: { "content-range": "0-1/2" } });
+    }
+    if (url.searchParams.get("select") === "id,target_type,target_id,user_id") {
+      assert.equal(url.searchParams.get("moderation_status"), "eq.visible");
+      assert.equal(url.searchParams.get("deleted_at"), "is.null");
+      return Response.json({ id: VALID_COMMENT_ID });
+    }
+    assert.ok(url.searchParams.get("select").includes("public_uid"));
+    return Response.json([
+      { id: VALID_COMMENT_ID, user_id: "00000000-0000-0000-0000-000000000001", created_at: "2026-09-07T00:00:00Z", profiles: { username: "Author", public_uid: 10001 } },
+      { id: "missing-profile", user_id: "00000000-0000-0000-0000-000000000002", created_at: "2026-09-06T00:00:00Z", profiles: null },
+    ], { headers: { "content-range": "0-1/2" } });
+  });
+
+  const result = await listComments({ targetType: "bandori_event", targetId: "322", parentId: null });
+  assert.deepEqual(result.comments.map(({ publicUid }) => publicUid), [10001, null]);
+  const participants = await listCommentReactionParticipants({
+    targetType: "bandori_event", targetId: "322", commentId: VALID_COMMENT_ID, emojiKey: "KokoroYay",
+  });
+  assert.deepEqual(participants.users.map(({ publicUid }) => publicUid), [10001, null]);
+});
 
 test("comment target types remain owned by their Bandori domain adapters", () => {
   const eventTargetSource = readFileSync(
@@ -250,7 +289,7 @@ test("comment responses expose the author's current display Degree", () => {
   assert.match(contractSource, /displayDegree: AccountDisplayDegreeSelection \| null/u);
   assert.match(
     serviceSource,
-    /profiles:profiles!user_id\(username, avatar_card_id, avatar_card_server, avatar_card_train_type, display_degree_server, display_degree_id, display_degree_effect_id\)/u,
+    /profiles:profiles!user_id\(username, public_uid, avatar_card_id, avatar_card_server, avatar_card_train_type, display_degree_server, display_degree_id, display_degree_effect_id\)/u,
   );
   assert.match(
     serviceSource,
@@ -270,6 +309,7 @@ test("comment reaction summary rows map ordered JSON and reject incomplete previ
         {
           user_id: "00000000-0000-0000-0000-000000000001",
           username: "First user",
+          public_uid: 10001,
           avatar_card_id: 1,
           avatar_card_server: null,
           avatar_card_train_type: "normal",
@@ -278,6 +318,7 @@ test("comment reaction summary rows map ordered JSON and reject incomplete previ
         {
           user_id: "00000000-0000-0000-0000-000000000002",
           username: null,
+          public_uid: null,
           avatar_card_id: null,
           avatar_card_server: null,
           avatar_card_train_type: null,
@@ -297,12 +338,14 @@ test("comment reaction summary rows map ordered JSON and reject incomplete previ
         {
           userId: "00000000-0000-0000-0000-000000000001",
           username: "First user",
+          publicUid: 10001,
           avatar: { cardId: 1, entityServer: null, trainType: "normal" },
           reactedAt: "2026-08-11T00:00:00Z",
         },
         {
           userId: "00000000-0000-0000-0000-000000000002",
           username: null,
+          publicUid: null,
           avatar: { cardId: 1, entityServer: null, trainType: "normal" },
           reactedAt: "2026-08-11T00:00:01Z",
         },
@@ -310,6 +353,18 @@ test("comment reaction summary rows map ordered JSON and reject incomplete previ
       remainingUserCount: 0,
     }],
   );
+
+  const legacyRows = structuredClone(rawRows);
+  delete legacyRows[0].reaction_groups[0].users[0].public_uid;
+  assert.equal(parseCommentReactionSummaryRows(legacyRows, [VALID_COMMENT_ID]).get(VALID_COMMENT_ID)[0].users[0].publicUid, null);
+  for (const publicUid of ["10001", 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+    const invalidRows = structuredClone(rawRows);
+    invalidRows[0].reaction_groups[0].users[0].public_uid = publicUid;
+    assert.throws(
+      () => parseCommentReactionSummaryRows(invalidRows, [VALID_COMMENT_ID]),
+      (error) => error?.details === "Invalid comment reaction public UID",
+    );
+  }
 
   const incompleteRows = structuredClone(rawRows);
   incompleteRows[0].reaction_groups[0].reaction_count = "3";
@@ -449,43 +504,17 @@ test("shared comment textareas auto grow on every viewport and cap their height"
   assert.match(autoResizeHook, /new ResizeObserver/u);
 });
 
-test("mobile comment threads group roots into wide cards without nesting replies", () => {
-  const thread = readFileSync(
-    new URL("../src/components/comments/CommentThread.tsx", import.meta.url),
-    "utf8",
-  );
+test("mobile comment threads keep full-width content and shallow replies", () => {
   const item = readFileSync(
     new URL("../src/components/comments/CommentItem.tsx", import.meta.url),
     "utf8",
   );
-  const composer = readFileSync(
-    new URL("../src/components/comments/CommentComposer.tsx", import.meta.url),
-    "utf8",
-  );
-
-  assert.match(thread, /p-2[\s\S]*sm:p-5/u);
-  assert.match(thread, /bg-\[#fffef4\][\s\S]*dark:bg-slate-950/u);
-  assert.match(
-    thread,
-    /border-b border-\[var\(--theme-color-border-subtle\)\] px-2 pb-4 pt-2 sm:px-0 sm:pt-0/u,
-  );
-  assert.match(thread, /mt-5 space-y-3/u);
-  assert.doesNotMatch(thread, /-mx-1/u);
   assert.match(item, /grid-cols-\[2\.75rem_minmax\(0,1fr\)\]/u);
   assert.match(
     item,
     /col-span-2 min-w-0 pt-1 sm:col-span-1 sm:col-start-2 sm:pt-0/u,
   );
   assert.doesNotMatch(item, /col-span-2 min-w-0 pt-3/u);
-  assert.match(item, /rounded-2xl border[\s\S]*px-3 py-3[\s\S]*sm:p-4/u);
-  assert.match(
-    item,
-    /rounded-2xl border border-\[var\(--theme-color-border-subtle\)\] bg-\[var\(--theme-color-control-background\)\]/u,
-  );
-  assert.match(
-    composer,
-    /rounded-2xl border border-\[var\(--theme-color-border-subtle\)\] bg-\[var\(--theme-color-control-background\)\] p-3/u,
-  );
   assert.match(item, /const commentReactions = comment\.reactions \?\? \[\]/u);
   assert.match(item, /const hasDedicatedReactionRow = !isDeleted && commentReactions\.length >= 2/u);
   assert.match(item, /data-comment-action-layout=\{hasDedicatedReactionRow \? "stacked" : "inline"\}/u);
@@ -498,9 +527,6 @@ test("mobile comment threads group roots into wide cards without nesting replies
   );
   assert.match(item, /space-y-0 border-l[\s\S]*pl-3 sm:space-y-3/u);
   assert.match(item, /bg-transparent py-2 first:pt-1 last:pb-0 sm:rounded-xl sm:py-1 sm:last:pb-1/u);
-  assert.doesNotMatch(item, /first:pt-0/u);
-  assert.match(item, /variant="reply"/u);
-  assert.match(composer, /variant === "reply"[\s\S]*bg-transparent[\s\S]*sm:rounded-2xl/u);
   assert.match(item, /hidden sm:inline/u);
   assert.match(item, /size="comment"/u);
 });

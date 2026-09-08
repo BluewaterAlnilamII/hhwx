@@ -49,6 +49,8 @@ English version: [supabase-setup.md](supabase-setup.md)
 
 ## 迁移工作流
 
+评论 UID 发布包含 `20260908145451_add_comment_reaction_public_uid.sql`。先应用迁移再部署应用，回应预览和完整用户列表才能都显示公开 UID。迁移只在现有回应汇总 JSON 中增加 `profiles.public_uid`，不改变仅 service role 可执行的边界、排序、数量限制或 RLS。旧应用会忽略新增字段；新应用也兼容旧 RPC，只是不显示预览中的 UID。回滚应用时无需撤销这份迁移。
+
 使用项目本地安装的 Supabase CLI，不需要全局安装。依赖版本相关行为前，检查对应命令的 `--help` 和当前 [Supabase 官方迁移说明](https://supabase.com/docs/guides/deployment/database-migrations)。
 
 ```powershell

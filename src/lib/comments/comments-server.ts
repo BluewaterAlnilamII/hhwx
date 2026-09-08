@@ -34,6 +34,7 @@ const COMMENT_REACTION_PARTICIPANT_LIMIT = 8;
 
 type CommentProfile = {
   username: string | null;
+  public_uid?: number;
   avatar_card_id: number | null;
   avatar_card_server: number | null;
   avatar_card_train_type: AccountAvatarCardTrainType | null;
@@ -103,7 +104,7 @@ const COMMENT_SELECT = [
   "edited_at",
   "deleted_at",
   "moderation_status",
-  "profiles:profiles!user_id(username, avatar_card_id, avatar_card_server, avatar_card_train_type, display_degree_server, display_degree_id, display_degree_effect_id)",
+  "profiles:profiles!user_id(username, public_uid, avatar_card_id, avatar_card_server, avatar_card_train_type, display_degree_server, display_degree_id, display_degree_effect_id)",
 ].join(", ");
 
 function parseCursor(cursor: string | null | undefined): { createdAt: string; id: string } | null {
@@ -280,6 +281,8 @@ export function parseCommentReactionSummaryRows(
         return {
           userId,
           username,
+          // Older RPC deployments omit this additive display field.
+          publicUid: parseNullableInteger(rawParticipant.public_uid ?? null, "comment reaction public UID"),
           avatar: buildCommentAvatar(profile),
           reactedAt: parseReactionTimestamp(rawParticipant.reacted_at, "comment reaction timestamp"),
         };
@@ -320,6 +323,7 @@ function toCommentNode(
     rootId: row.root_id,
     userId: row.user_id,
     username: row.profiles?.username ?? null,
+    publicUid: row.profiles?.public_uid ?? null,
     avatar: buildCommentAvatar(row.profiles),
     displayDegree: row.profiles
       ? normalizeStoredDisplayDegree(
@@ -815,7 +819,7 @@ export async function listCommentReactionParticipants(options: {
   const client = createServerSupabaseClient();
   let query = client
     .from(COMMENT_REACTIONS_TABLE)
-    .select("comment_id, emoji_key, user_id, created_at, profiles:profiles!user_id(username, avatar_card_id, avatar_card_server, avatar_card_train_type)")
+    .select("comment_id, emoji_key, user_id, created_at, profiles:profiles!user_id(username, public_uid, avatar_card_id, avatar_card_server, avatar_card_train_type)")
     .eq("comment_id", options.commentId)
     .eq("emoji_key", options.emojiKey)
     .order("created_at", { ascending: true })
@@ -844,6 +848,7 @@ export async function listCommentReactionParticipants(options: {
   const users = rows.map((row) => ({
     userId: row.user_id,
     username: row.profiles?.username ?? null,
+    publicUid: row.profiles?.public_uid ?? null,
     avatar: buildCommentAvatar(row.profiles),
     reactedAt: row.created_at,
   }));
