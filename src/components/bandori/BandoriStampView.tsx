@@ -75,13 +75,13 @@ export default function BandoriStampView({
       }}
       className={cn(
         className,
-        "rounded-lg transition hover:bg-[var(--theme-color-control-background-hover)] focus:outline-hidden focus:ring-2 focus:ring-[var(--theme-color-focus-ring)] dark:hover:bg-rose-500/10 dark:focus:ring-rose-500/30",
+        "rounded-lg transition hover:bg-[var(--theme-color-control-background-hover)] focus:outline-hidden focus:ring-2 focus:ring-[var(--theme-color-focus-ring)]",
       )}
       aria-label={`Play ${label}`}
       title={`Play ${label}`}
     >
       {image}
-      <span className="absolute bottom-1 right-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white shadow-xs ring-2 ring-white dark:ring-slate-900">
+      <span className="absolute bottom-1 right-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white shadow-xs ring-2 ring-white dark:ring-[var(--theme-color-control-background)]">
         <Volume2 size={12} aria-hidden="true" />
       </span>
     </button>

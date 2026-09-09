@@ -27,7 +27,7 @@ import { buildCommentDraftStorageKey } from "@/lib/comments/comment-drafts";
 import { CommentComposer } from "./CommentComposer";
 import { CommentItem } from "./CommentItem";
 
-const paginationButtonClassName = "inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--theme-color-text-default)] transition hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-action-secondary-foreground)] active:bg-[var(--theme-color-control-background-pressed)] disabled:pointer-events-none disabled:cursor-not-allowed disabled:text-[var(--theme-color-text-muted)] disabled:opacity-25 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-[var(--theme-color-action-secondary-foreground-on-dark)]";
+const paginationButtonClassName = "inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--theme-color-text-default)] transition hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-action-secondary-foreground)] active:bg-[var(--theme-color-control-background-pressed)] disabled:pointer-events-none disabled:cursor-not-allowed disabled:text-[var(--theme-color-text-muted)] disabled:opacity-25";
 const REFRESH_SUCCESS_DURATION_MS = 2_000;
 const REFRESH_ERROR_DURATION_MS = 4_000;
 
@@ -159,11 +159,11 @@ export default function CommentThread({
   }, []);
 
   return (
-    <section className="hhwx-panel border p-3 sm:p-5 dark:border-slate-800 dark:bg-slate-950">
-      <div className="flex items-center justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] pb-4 dark:border-slate-800">
-        <Heading as="h2" visualRole="section" accentSlot="a" icon={<MessageSquare size={20} />} className="dark:text-[var(--theme-color-text-default-on-dark)]">
+    <section className="hhwx-panel border p-3 sm:p-5">
+      <div className="flex items-center justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] pb-4">
+        <Heading as="h2" visualRole="section" accentSlot="a" icon={<MessageSquare size={20} />}>
           {title}
-          <span className="text-sm font-semibold text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">
+          <span className="text-sm font-semibold text-[var(--theme-color-text-muted)]">
             {t("thread.commentCount", { count: totalCommentCount })}
           </span>
         </Heading>
@@ -174,7 +174,7 @@ export default function CommentThread({
             disabled={apiBase === null || loading || visibleRefreshPhase === "pending"}
             aria-label={t("actions.refresh")}
             title={t("actions.refresh")}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] shadow-xs transition hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] disabled:cursor-not-allowed disabled:opacity-45 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] shadow-xs transition hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] disabled:cursor-not-allowed disabled:opacity-45"
           >
             <RefreshCw
               size={17}
@@ -184,7 +184,7 @@ export default function CommentThread({
           {visibleRefreshPhase === "success" ? (
             <div
               role="status"
-              className="pointer-events-none absolute right-full top-1/2 z-20 mr-2 inline-flex -translate-y-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border border-[var(--theme-color-semantic-success-border)] bg-[var(--theme-color-semantic-success-background)] px-3 py-1.5 text-xs font-semibold text-[var(--theme-color-semantic-success-foreground)] shadow-md dark:text-[var(--theme-color-semantic-success-foreground-on-dark)]"
+              className="pointer-events-none absolute right-full top-1/2 z-20 mr-2 inline-flex -translate-y-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border border-[var(--theme-color-semantic-success-border)] bg-[var(--theme-color-semantic-success-background)] px-3 py-1.5 text-xs font-semibold text-[var(--theme-color-semantic-success-foreground)] shadow-md"
             >
               <CheckCircle2 size={14} aria-hidden="true" />
               {t("states.refreshSuccess")}
@@ -192,7 +192,7 @@ export default function CommentThread({
           ) : visibleRefreshPhase === "error" ? (
             <div
               role="alert"
-              className="pointer-events-none absolute right-full top-1/2 z-20 mr-2 inline-flex -translate-y-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] px-3 py-1.5 text-xs font-semibold text-[var(--theme-color-semantic-danger-foreground)] shadow-md dark:text-[var(--theme-color-semantic-danger-foreground-on-dark)]"
+              className="pointer-events-none absolute right-full top-1/2 z-20 mr-2 inline-flex -translate-y-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] px-3 py-1.5 text-xs font-semibold text-[var(--theme-color-semantic-danger-foreground)] shadow-md"
             >
               <CircleX size={14} aria-hidden="true" />
               {t("states.refreshFailed")}
@@ -203,7 +203,7 @@ export default function CommentThread({
 
       <div className="mt-4">
         {!authReady ? (
-          <div className="rounded-2xl border border-[var(--theme-color-semantic-neutral-border)] bg-[var(--theme-color-semantic-neutral-background)] p-4 text-center text-sm font-semibold text-[var(--theme-color-semantic-neutral-foreground)] dark:border-slate-700 dark:bg-slate-900 dark:text-[var(--theme-color-semantic-neutral-foreground-on-dark)]">
+          <div className="rounded-2xl border border-[var(--theme-color-semantic-neutral-border)] bg-[var(--theme-color-semantic-neutral-background)] p-4 text-center text-sm font-semibold text-[var(--theme-color-semantic-neutral-foreground)]">
             {t("states.loadingAuth")}
           </div>
         ) : userId && emailVerified ? (
@@ -219,7 +219,7 @@ export default function CommentThread({
             {t("states.verificationRequired")}
           </div>
         ) : (
-          <div className="rounded-2xl border border-[var(--theme-color-semantic-neutral-border)] bg-[var(--theme-color-semantic-neutral-background)] p-4 text-center text-sm font-semibold text-[var(--theme-color-semantic-neutral-foreground)] dark:border-slate-700 dark:bg-slate-900 dark:text-[var(--theme-color-semantic-neutral-foreground-on-dark)]">
+          <div className="rounded-2xl border border-[var(--theme-color-semantic-neutral-border)] bg-[var(--theme-color-semantic-neutral-background)] p-4 text-center text-sm font-semibold text-[var(--theme-color-semantic-neutral-foreground)]">
             {signedOutMessage}
           </div>
         )}
@@ -231,7 +231,7 @@ export default function CommentThread({
         </div>
       ) : null}
 
-      <div className="mt-5 divide-y divide-[var(--theme-color-border-subtle)] dark:divide-slate-700">
+      <div className="mt-5 divide-y divide-[var(--theme-color-border-subtle)]">
         {comments.map((comment) => (
           <CommentItem
             key={comment.id}
@@ -258,7 +258,7 @@ export default function CommentThread({
         ))}
 
         {!loading && !error && comments.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[var(--theme-color-semantic-neutral-border)] bg-[var(--theme-color-semantic-neutral-background)] py-10 text-center text-sm font-semibold text-[var(--theme-color-semantic-neutral-foreground)] dark:border-slate-700 dark:bg-slate-900/50 dark:text-[var(--theme-color-semantic-neutral-foreground-on-dark)]">
+          <div className="rounded-2xl border border-dashed border-[var(--theme-color-semantic-neutral-border)] bg-[var(--theme-color-semantic-neutral-background)] py-10 text-center text-sm font-semibold text-[var(--theme-color-semantic-neutral-foreground)]">
             {emptyMessage}
           </div>
         ) : null}
@@ -266,7 +266,7 @@ export default function CommentThread({
 
       {totalCount > COMMENT_PAGE_SIZE ? (
         <div className="mt-5 flex justify-center">
-          <div className="inline-flex max-w-full items-center gap-1 rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-1 shadow-xs dark:border-slate-700 dark:bg-slate-900">
+          <div className="inline-flex max-w-full items-center gap-1 rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-1 shadow-xs">
             <button
               type="button"
               onClick={() => goToCommentPage(1)}
@@ -287,7 +287,7 @@ export default function CommentThread({
             >
               <ChevronLeft size={16} />
             </button>
-            <div className="flex h-8 min-w-28 items-center justify-center rounded-full bg-[var(--theme-color-control-background)] px-3 text-sm font-semibold text-[var(--theme-color-text-default)] shadow-xs ring-1 ring-inset ring-[var(--theme-color-action-secondary-border)] dark:bg-slate-950 dark:text-slate-200 dark:ring-slate-700">
+            <div className="flex h-8 min-w-28 items-center justify-center rounded-full bg-[var(--theme-color-control-background)] px-3 text-sm font-semibold text-[var(--theme-color-text-default)] shadow-xs ring-1 ring-inset ring-[var(--theme-color-action-secondary-border)]">
               <input
                 type="text"
                 inputMode="numeric"
@@ -304,7 +304,7 @@ export default function CommentThread({
                 disabled={loading}
                 aria-label={t("pagination.jumpLabel")}
                 title={t("pagination.jumpHint")}
-                className="h-6 w-10 rounded-md border border-transparent bg-transparent text-center text-sm font-semibold text-[var(--theme-color-text-default)] outline-hidden transition focus:border-[var(--theme-color-action-secondary-border)] focus:bg-[var(--theme-color-control-background)] disabled:cursor-not-allowed disabled:text-[var(--theme-color-text-muted)] dark:text-slate-200 dark:focus:border-slate-600 dark:focus:bg-slate-900"
+                className="h-6 w-10 rounded-md border border-transparent bg-transparent text-center text-sm font-semibold text-[var(--theme-color-text-default)] outline-hidden transition focus:border-[var(--theme-color-focus-ring)] focus:bg-[var(--theme-color-control-background)] disabled:cursor-not-allowed disabled:text-[var(--theme-color-text-muted)]"
               />
               <span className="mx-1 text-[var(--theme-color-text-muted)] opacity-50">/</span>
               <span className="min-w-8 text-center">{totalPages}</span>
@@ -334,7 +334,7 @@ export default function CommentThread({
       ) : null}
 
       {loading && comments.length > 0 ? (
-        <div className="mt-3 text-center text-xs text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">
+        <div className="mt-3 text-center text-xs text-[var(--theme-color-text-muted)]">
           {t("states.loading")}
         </div>
       ) : null}

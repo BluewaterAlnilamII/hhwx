@@ -27,7 +27,7 @@ function LoadingFallback() {
   return (
     <section
       aria-busy="true"
-      className="hhwx-panel border p-4 sm:p-6 dark:border-slate-700 dark:bg-[#111827]"
+      className="hhwx-panel border p-4 sm:p-6"
     >
       <h2 className="text-xl font-black text-[var(--theme-color-text-default)]">
         {t("title")}

@@ -10,7 +10,7 @@
   --smile-patrol-palette-red-ef392b: #ef392b;
   --smile-patrol-palette-red-orange-f35e38: #f35e38;
 
-  /* Cyan and pink remain reserved for stable theme responsibilities. */
+  /* Light content fill; controls, plotting surfaces and inverse ink have separate roles. */
   --smile-patrol-content-surface: #fcfcfc;
 
   /* A visual theme supplies seeds and its own composite effects. */
@@ -28,7 +28,7 @@
   --theme-seed-neutral: #cbd5e1;
   --theme-seed-text-primary: #0f172a;
   --theme-seed-text-secondary: #475569;
-  --theme-seed-semantic-info: #0070a0;
+  --theme-seed-semantic-info: var(--smile-patrol-palette-blue-006699);
   --theme-seed-semantic-success: #008348;
   --theme-seed-semantic-warning: #b14700;
   --theme-seed-semantic-danger: #e0002f;
@@ -39,20 +39,53 @@
   --theme-seed-decoration-b: var(--smile-patrol-palette-purple-aa33cc);
   --theme-seed-decoration-c: var(--smile-patrol-palette-blue-006699);
 
-  /* Smile Patrol's layered canvas treatment stays theme-specific. */
-  --theme-effect-shell-canvas-image:
-    linear-gradient(rgba(255, 255, 228, 0.18), rgba(255, 255, 228, 0.18)),
-    linear-gradient(90deg, rgba(255, 167, 26, 0.12) 0%, rgba(255, 255, 255, 0.26) 32%, rgba(255, 255, 255, 0.18) 58%, rgba(255, 196, 32, 0.12) 100%),
-    radial-gradient(rgba(105, 72, 0, 0.09) 1px, transparent 1.25px),
-    radial-gradient(ellipse 960px 560px at 36% 18%, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.46) 34%, rgba(255, 255, 255, 0) 72%),
-    radial-gradient(ellipse 820px 520px at 76% 34%, rgba(255, 232, 55, 0.46) 0%, rgba(255, 232, 55, 0.24) 42%, rgba(255, 232, 55, 0) 78%),
-    radial-gradient(ellipse 780px 560px at 42% 96%, rgba(255, 255, 255, 0.46) 0%, rgba(255, 246, 151, 0.24) 44%, rgba(255, 246, 151, 0) 80%),
-    repeating-linear-gradient(132deg, transparent 0, transparent 118px, rgba(255, 255, 255, 0.24) 118px, rgba(255, 255, 255, 0.24) 154px, transparent 154px, transparent 252px),
-    linear-gradient(90deg, #ffc33a 0%, #ffe45b 18%, #fff7bc 38%, #fffbe2 55%, #fff05a 76%, #ffd22e 100%);
-  --theme-effect-shell-canvas-size: auto, auto, 40px 40px, auto, auto, auto, auto, auto;
+  --theme-color-shell-canvas-background: #faf8f4;
+  --smile-patrol-canvas-strong: color-mix(in srgb, var(--smile-patrol-palette-yellow-f9e065) 80%, var(--smile-patrol-palette-yellow-ffee22));
+  --smile-patrol-canvas-soft: color-mix(in srgb, var(--theme-seed-shell-tint) 45%, var(--theme-color-shell-canvas-background));
+  --smile-patrol-canvas-pale: color-mix(in srgb, var(--theme-seed-shell-tint) 24%, var(--theme-color-shell-canvas-background));
+  --smile-patrol-canvas-mist: color-mix(in srgb, var(--theme-seed-shell-tint) 8%, var(--theme-color-shell-canvas-background));
+  --smile-patrol-canvas-gap: #ffffff;
+  --smile-patrol-canvas-line: color-mix(in srgb, var(--theme-seed-shell-tint) 72%, var(--theme-seed-brand-primary));
+
+  /* Both schemes share unequal continuous bands and one-pixel softened diagonal edges. */
+  --theme-effect-shell-canvas-image: linear-gradient(132deg,
+    var(--smile-patrol-canvas-strong) 0 6.4%,
+    var(--smile-patrol-canvas-gap) calc(6.4% + 1px) 7.2%,
+    var(--smile-patrol-canvas-soft) calc(7.2% + 1px) 11.6%,
+    var(--smile-patrol-canvas-gap) calc(11.6% + 1px) 12.4%,
+    var(--smile-patrol-canvas-mist) calc(12.4% + 1px) 13%,
+    var(--smile-patrol-canvas-gap) calc(13% + 1px) 14.6%,
+    var(--smile-patrol-canvas-pale) calc(14.6% + 1px) 27.3%,
+    var(--smile-patrol-canvas-gap) calc(27.3% + 1px) 28.2%,
+    var(--smile-patrol-canvas-mist) calc(28.2% + 1px) 32.2%,
+    var(--theme-color-shell-canvas-background) calc(32.2% + 1px) 72.5%,
+    var(--smile-patrol-canvas-mist) calc(72.5% + 1px) 76.8%,
+    var(--smile-patrol-canvas-gap) calc(76.8% + 1px) 77.7%,
+    var(--smile-patrol-canvas-soft) calc(77.7% + 1px) 79.5%,
+    var(--smile-patrol-canvas-gap) calc(79.5% + 1px) 80.8%,
+    var(--smile-patrol-canvas-pale) calc(80.8% + 1px) 86.4%,
+    var(--smile-patrol-canvas-gap) calc(86.4% + 1px) 87.4%,
+    var(--smile-patrol-canvas-strong) calc(87.4% + 1px) 100%);
+  --theme-effect-shell-canvas-size: 100% 100%;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
 
   /* Smile Patrol intentionally lifts controls onto a clean white surface. */
   --theme-color-control-background: #ffffff;
+  /* Information and operations have separate roles; solid fills pair with inverse ink. */
+  --theme-color-action-accent-background: color-mix(in srgb, var(--smile-patrol-palette-cyan-44ddff) 15%, var(--smile-patrol-palette-blue-006699));
+  --theme-color-action-secondary-foreground: var(--smile-patrol-palette-blue-006699);
+  --theme-color-action-secondary-border: var(--theme-color-action-secondary-foreground);
+  --theme-color-action-secondary-background: color-mix(in srgb, var(--theme-color-action-secondary-foreground) 4%, var(--theme-color-control-background));
+  --theme-color-action-secondary-background-hover: color-mix(in srgb, var(--theme-color-action-secondary-foreground) 8%, var(--theme-color-control-background));
+  --theme-color-selection-subtle-foreground: var(--theme-color-action-secondary-foreground);
+  --theme-color-selection-subtle-ring: var(--theme-color-action-secondary-border);
+  --theme-color-selection-strong-background: var(--theme-color-action-accent-background);
+  --theme-color-selection-strong-ring: var(--theme-color-action-secondary-border);
+  --theme-color-tab-foreground-selected: var(--theme-color-action-secondary-foreground);
+  --theme-color-tab-indicator-selected: var(--theme-color-action-secondary-border);
+  --theme-color-focus-ring: var(--theme-color-action-secondary-border);
+  --theme-color-range-track-background: #e5e9ec;
   --theme-color-calendar-event-foreground: #ffffff;
   --theme-color-comment-reaction-background: var(--smile-patrol-content-surface);
   --theme-shadow-panel: none;
@@ -60,98 +93,69 @@
 
 @media (prefers-color-scheme: light) {
   [data-visual-theme="smile-patrol"] {
-    --theme-color-shell-canvas-background: #faf8f4;
-    --smile-patrol-canvas-yellow: color-mix(in srgb, var(--smile-patrol-palette-yellow-f9e065) 80%, var(--smile-patrol-palette-yellow-ffee22));
-    --smile-patrol-canvas-soft: color-mix(in srgb, var(--theme-seed-shell-tint) 45%, var(--theme-color-shell-canvas-background));
-    --smile-patrol-canvas-pale: color-mix(in srgb, var(--theme-seed-shell-tint) 24%, var(--theme-color-shell-canvas-background));
-    --smile-patrol-canvas-mist: color-mix(in srgb, var(--theme-seed-shell-tint) 8%, var(--theme-color-shell-canvas-background));
-    --smile-patrol-canvas-line: color-mix(in srgb, var(--theme-seed-shell-tint) 72%, var(--theme-seed-brand-primary));
-
-    /* Unequal continuous bands frame the quiet center. One-pixel transitions soften diagonal edges. */
-    --theme-effect-shell-canvas-image: linear-gradient(132deg,
-      var(--smile-patrol-canvas-yellow) 0 6.4%,
-      #fff calc(6.4% + 1px) 7.2%,
-      var(--smile-patrol-canvas-soft) calc(7.2% + 1px) 11.6%,
-      #fff calc(11.6% + 1px) 12.4%,
-      var(--smile-patrol-canvas-mist) calc(12.4% + 1px) 13%,
-      #fff calc(13% + 1px) 14.6%,
-      var(--smile-patrol-canvas-pale) calc(14.6% + 1px) 27.3%,
-      #fff calc(27.3% + 1px) 28.2%,
-      var(--smile-patrol-canvas-mist) calc(28.2% + 1px) 32.2%,
-      var(--theme-color-shell-canvas-background) calc(32.2% + 1px) 72.5%,
-      var(--smile-patrol-canvas-mist) calc(72.5% + 1px) 76.8%,
-      #fff calc(76.8% + 1px) 77.7%,
-      var(--smile-patrol-canvas-soft) calc(77.7% + 1px) 79.5%,
-      #fff calc(79.5% + 1px) 80.8%,
-      var(--smile-patrol-canvas-pale) calc(80.8% + 1px) 86.4%,
-      #fff calc(86.4% + 1px) 87.4%,
-      var(--smile-patrol-canvas-yellow) calc(87.4% + 1px) 100%);
-    --theme-effect-shell-canvas-size: 100% 100%;
-    background-attachment: fixed;
-    background-repeat: no-repeat;
-
     --theme-color-panel-background: var(--smile-patrol-content-surface);
     --theme-color-floating-background: var(--smile-patrol-content-surface);
     --theme-color-panel-border: #dddcd5;
     --theme-color-control-placeholder: var(--theme-color-text-muted);
-    --theme-color-tab-foreground-selected: var(--theme-color-semantic-info-foreground);
-    --theme-color-tab-indicator-selected: var(--theme-color-semantic-info-border);
+    --theme-color-action-secondary-background-hover: color-mix(in srgb, var(--theme-color-action-secondary-foreground) 6%, var(--theme-color-control-background));
+    --theme-color-control-background-hover: var(--theme-color-action-secondary-background);
+    --theme-color-control-background-pressed: var(--theme-color-action-secondary-background-hover);
     --theme-color-calendar-rest-day-foreground: color-mix(in srgb, var(--theme-seed-brand-emphasis) 80%, var(--theme-seed-text-primary));
     --theme-color-shell-sidebar-background: var(--theme-color-panel-background);
     --theme-color-shell-sidebar-backdrop: color-mix(in srgb, var(--theme-seed-text-primary) 28%, transparent);
-    --theme-color-shell-navigation-item-background-current: var(--smile-patrol-canvas-yellow);
+    --theme-color-shell-navigation-item-background-current: var(--smile-patrol-canvas-strong);
     --theme-shadow-navigation-current: none;
     --theme-shadow-navigation-hover: none;
     --theme-shadow-toolbar-header: none;
     --theme-shadow-shell-sidebar: none;
   }
-
-  /* Continuous fine lines fade toward the interior; soft edges avoid hard one-pixel strokes. */
-  [data-visual-theme="smile-patrol"]::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    background: linear-gradient(132deg,
-      transparent calc(13.8% - 1px),
-      var(--smile-patrol-canvas-line) 13.8% calc(13.8% + 0.6px),
-      transparent calc(13.8% + 1.6px) calc(21.3% - 1px),
-      var(--smile-patrol-canvas-line) 21.3% calc(21.3% + 0.6px),
-      transparent calc(21.3% + 1.6px) calc(22.1% - 1px),
-      var(--smile-patrol-canvas-line) 22.1% calc(22.1% + 0.6px),
-      transparent calc(22.1% + 1.6px));
-    mask-image: radial-gradient(ellipse at top left, #000a 10%, #0006 30%, transparent 60%);
-  }
-
-  /* Decorative copies of the site's actual logo, derived from src/app/icon.png. */
-  [data-visual-theme="smile-patrol"] body::before,
-  [data-visual-theme="smile-patrol"] body::after {
-    content: "";
-    position: fixed;
-    z-index: -1;
-    pointer-events: none;
-    width: clamp(130px, 9.5vw, 180px);
-    aspect-ratio: 1;
-    background: url('/favicon/smile-patrol-logo-white.png') center / contain no-repeat;
-    filter: drop-shadow(0 0 1px var(--theme-seed-shell-tint));
-  }
-
-  [data-visual-theme="smile-patrol"] body::before {
-    left: 0.5vw;
-    top: 68svh;
-    transform: rotate(-12deg);
-  }
-
-  [data-visual-theme="smile-patrol"] body::after {
-    right: 0.5vw;
-    bottom: -2.5rem;
-    width: clamp(170px, 12vw, 240px);
-    transform: rotate(16deg);
-  }
 }
 
-@media (prefers-color-scheme: light) and (max-width: 767px) {
+/* Continuous fine lines fade toward the interior; soft edges avoid hard one-pixel strokes. */
+[data-visual-theme="smile-patrol"]::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(132deg,
+    transparent calc(13.8% - 1px),
+    var(--smile-patrol-canvas-line) 13.8% calc(13.8% + 0.6px),
+    transparent calc(13.8% + 1.6px) calc(21.3% - 1px),
+    var(--smile-patrol-canvas-line) 21.3% calc(21.3% + 0.6px),
+    transparent calc(21.3% + 1.6px) calc(22.1% - 1px),
+    var(--smile-patrol-canvas-line) 22.1% calc(22.1% + 0.6px),
+    transparent calc(22.1% + 1.6px));
+  mask-image: radial-gradient(ellipse at top left, #000a 10%, #0006 30%, transparent 60%);
+}
+
+/* Decorative copies of the site's actual logo, derived from src/app/icon.png. */
+[data-visual-theme="smile-patrol"] body::before,
+[data-visual-theme="smile-patrol"] body::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  pointer-events: none;
+  width: clamp(130px, 9.5vw, 180px);
+  aspect-ratio: 1;
+  background: url('/favicon/smile-patrol-logo-white.png') center / contain no-repeat;
+  filter: drop-shadow(0 0 1px var(--theme-seed-shell-tint));
+}
+
+[data-visual-theme="smile-patrol"] body::before {
+  left: 0.5vw;
+  top: 68svh;
+  transform: rotate(-12deg);
+}
+
+[data-visual-theme="smile-patrol"] body::after {
+  right: 0.5vw;
+  bottom: -2.5rem;
+  width: clamp(170px, 12vw, 240px);
+  transform: rotate(16deg);
+}
+
+@media (max-width: 767px) {
   [data-visual-theme="smile-patrol"] body::before {
     width: 100px;
     left: -36px;
@@ -167,11 +171,104 @@
 
 @media (prefers-color-scheme: dark) {
   [data-visual-theme="smile-patrol"] {
-    --theme-color-heading-section-accent-a-background: color-mix(in srgb, var(--theme-seed-decoration-a) 18%, #111827);
-    --theme-color-heading-section-accent-a-foreground: color-mix(in srgb, var(--theme-seed-decoration-a) 82%, var(--theme-seed-surface));
-    --theme-color-heading-section-accent-b-background: color-mix(in srgb, var(--theme-seed-decoration-b) 18%, #111827);
-    --theme-color-heading-section-accent-b-foreground: color-mix(in srgb, var(--theme-seed-decoration-b) 82%, var(--theme-seed-surface));
-    --theme-color-heading-section-accent-c-background: color-mix(in srgb, var(--theme-seed-decoration-c) 18%, #111827);
-    --theme-color-heading-section-accent-c-foreground: color-mix(in srgb, var(--theme-seed-decoration-c) 82%, var(--theme-seed-surface));
+    --theme-color-shell-canvas-background: #121c26;
+    --smile-patrol-canvas-strong: #203749;
+    --smile-patrol-canvas-soft: #182b3c;
+    --smile-patrol-canvas-pale: color-mix(in srgb, var(--smile-patrol-canvas-soft) 55%, var(--theme-color-shell-canvas-background));
+    --smile-patrol-canvas-mist: color-mix(in srgb, var(--smile-patrol-canvas-soft) 20%, var(--theme-color-shell-canvas-background));
+    --smile-patrol-canvas-gap: #2e4252;
+    --smile-patrol-canvas-silver: color-mix(in srgb, var(--smile-patrol-palette-blue-006699) 20%, var(--theme-seed-neutral));
+    --smile-patrol-canvas-line: color-mix(in srgb, var(--smile-patrol-canvas-silver) 60%, transparent);
+
+    color-scheme: dark;
+    --theme-color-surface-background: #1c2936;
+    --theme-color-control-background: #283947;
+    --theme-color-control-background-muted: #22313f;
+    --theme-color-control-background-hover: #304250;
+    --theme-color-control-background-pressed: var(--theme-color-control-background-hover);
+    --theme-color-control-placeholder: var(--theme-color-text-muted);
+    --theme-color-floating-background: #304250;
+    --theme-color-comment-reaction-background: var(--theme-color-floating-background);
+    --theme-color-chart-axis-background: #192532;
+    --theme-color-chart-background: var(--theme-color-chart-axis-background);
+    --theme-color-border-subtle: #415568;
+    --theme-color-border-default: var(--theme-color-border-subtle);
+    --theme-color-text-default: #e9f0f5;
+    --theme-color-text-muted: #a9bdca;
+    --theme-color-text-on-emphasis: #e9f0f5;
+    --theme-color-text-muted-on-dark: var(--theme-color-text-muted);
+
+    --theme-color-shell-header-background: #18232e;
+    --theme-color-shell-header-border: var(--theme-color-border-subtle);
+    --theme-color-shell-sidebar-background: var(--theme-color-panel-background);
+    --theme-color-shell-sidebar-border: var(--theme-color-border-subtle);
+    --theme-color-shell-sidebar-backdrop: var(--theme-color-overlay-background);
+    --theme-color-shell-navigation-item-background-hover: var(--theme-color-control-background);
+    --theme-color-shell-navigation-item-background-current: color-mix(in srgb, var(--theme-seed-shell-tint) 10%, var(--theme-color-panel-background));
+    --theme-color-shell-navigation-item-border-current: var(--theme-seed-shell-tint);
+    --theme-color-shell-navigation-item-foreground-current: var(--theme-seed-shell-tint);
+    --theme-color-shell-scrollbar-track: var(--theme-color-shell-header-background);
+    --theme-color-shell-scrollbar-thumb: var(--theme-color-border-subtle);
+    --theme-color-shell-scrollbar-thumb-hover: var(--theme-color-semantic-info-foreground);
+
+    --theme-color-toolbar-control-background: var(--theme-color-control-background);
+    --theme-color-toolbar-control-background-hover: var(--theme-color-control-background-hover);
+    --theme-color-toolbar-control-border: var(--theme-color-border-subtle);
+    --theme-color-toolbar-control-icon-background: var(--theme-color-control-background-muted);
+    --theme-color-toolbar-control-icon-background-hover: var(--theme-color-control-background-hover);
+    --theme-color-toolbar-control-icon-foreground: color-mix(in srgb, var(--theme-seed-brand-detail) 55%, #ffffff);
+    --theme-shadow-toolbar-control: none;
+    --theme-shadow-toolbar-control-hover: none;
+    --theme-shadow-toolbar-control-selected: none;
+    --theme-shadow-toolbar-header: none;
+    --theme-shadow-navigation-current: none;
+    --theme-shadow-navigation-hover: none;
+    --theme-shadow-shell-sidebar: none;
+    --theme-shadow-shell-sidebar-overlay: var(--theme-shadow-floating);
+    --theme-shadow-surface-raised: 0 3px 14px #00000024;
+    --theme-shadow-floating: 0 8px 30px #00000047;
+    --theme-shadow-action-primary: none;
+
+    --theme-color-heading-page-foreground: var(--smile-patrol-palette-pink-f5a4cd);
+    --theme-color-heading-section-accent-a-background: color-mix(in srgb, var(--theme-seed-decoration-a) 14%, var(--theme-color-panel-background));
+    --theme-color-heading-section-accent-a-foreground: color-mix(in srgb, var(--theme-seed-decoration-a) 55%, #ffffff);
+    --theme-color-heading-section-accent-b-background: color-mix(in srgb, var(--theme-seed-decoration-b) 14%, var(--theme-color-panel-background));
+    --theme-color-heading-section-accent-b-foreground: color-mix(in srgb, var(--theme-seed-decoration-b) 50%, #ffffff);
+    --theme-color-heading-section-accent-c-background: color-mix(in srgb, var(--theme-seed-decoration-c) 14%, var(--theme-color-panel-background));
+    --theme-color-heading-section-accent-c-foreground: color-mix(in srgb, var(--theme-seed-decoration-c) 50%, #ffffff);
+
+    /* Readable status ink is independent from solid action and badge fills. */
+    --theme-color-semantic-info-foreground: color-mix(in srgb, var(--smile-patrol-palette-blue-006699) 50%, #ffffff);
+    --theme-color-semantic-success-foreground: color-mix(in srgb, var(--theme-seed-semantic-success) 50%, #ffffff);
+    --theme-color-semantic-warning-foreground: color-mix(in srgb, var(--theme-seed-semantic-warning) 45%, #ffffff);
+    --theme-color-semantic-danger-foreground: color-mix(in srgb, var(--theme-seed-semantic-danger) 40%, #ffffff);
+    --theme-color-semantic-info-border: var(--theme-color-semantic-info-foreground);
+    --theme-color-semantic-success-border: var(--theme-color-semantic-success-foreground);
+    --theme-color-semantic-warning-border: var(--theme-color-semantic-warning-foreground);
+    --theme-color-semantic-danger-border: var(--theme-color-semantic-danger-foreground);
+    --theme-color-semantic-neutral-border: var(--theme-color-border-subtle);
+    --theme-color-semantic-neutral-background: var(--theme-color-control-background-muted);
+    --theme-color-semantic-info-foreground-on-dark: var(--theme-color-semantic-info-foreground);
+    --theme-color-notification-badge-foreground: #ffffff;
+
+    --theme-color-action-secondary-foreground: var(--smile-patrol-palette-cyan-44ddff);
+    --theme-color-action-accent-background: #0070a0;
+    --theme-color-range-track-background: #08111a;
+    --theme-color-focus-ring-on-dark: var(--theme-color-focus-ring);
+    --theme-color-control-border-accent: var(--theme-color-action-secondary-border);
+    --theme-color-action-primary-foreground: var(--theme-seed-text-primary);
+    /* Pure white keeps small labels readable on the saturated status action fills. */
+    --theme-color-action-success-foreground: #ffffff;
+    --theme-color-action-danger-foreground: #ffffff;
+    --theme-color-calendar-rest-day-foreground: color-mix(in srgb, var(--theme-seed-brand-emphasis) 55%, #ffffff);
+    --theme-color-calendar-event-shade: #00000080;
+  }
+
+  [data-visual-theme="smile-patrol"] body::before,
+  [data-visual-theme="smile-patrol"] body::after {
+    background: var(--smile-patrol-canvas-silver);
+    mask: url('/favicon/smile-patrol-logo-white.png') center / contain no-repeat;
+    opacity: 0.12;
+    filter: none;
   }
 }

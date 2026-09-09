@@ -39,7 +39,7 @@
   transition: background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
 }
 
-/* Shared appearance is defined once; utilities retain layout and temporary dark colors. */
+/* Shared appearance follows theme roles; utilities retain component layout. */
 @layer components {
   .hhwx-panel {
     border-radius: 0;
@@ -64,16 +64,12 @@
   }
 
   .hhwx-calendar-event-label {
-    right: 0;
+    right: var(--calendar-label-end);
   }
 
   @media (prefers-color-scheme: light) {
     .hhwx-text-link:hover {
       text-decoration-line: underline;
-    }
-
-    .hhwx-calendar-event-label {
-      right: var(--calendar-label-end);
     }
 
     select.hhwx-control:hover:not(:disabled):not([aria-disabled='true']):not([aria-pressed='true']) {
@@ -83,6 +79,15 @@
 
   .hhwx-calendar-event {
     color: var(--theme-color-calendar-event-foreground);
+  }
+
+  .hhwx-calendar-event::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    background: var(--theme-color-calendar-event-shade);
   }
 
   .hhwx-control:hover:not(:disabled):not([aria-disabled='true']):not([aria-pressed='true']) {
@@ -548,7 +553,7 @@ body {
 .result-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.68);
+  background: var(--theme-color-overlay-background);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -557,24 +562,22 @@ body {
 
 .result-panel,
 .resume-panel {
-  background: linear-gradient(135deg, #1a1a2e, #16213e);
-  border: 2px solid rgba(255, 255, 255, 0.1);
+  background: var(--theme-color-floating-background);
+  border: 2px solid var(--theme-color-border-subtle);
   border-radius: 20px;
   padding: clamp(24px, 5vw, 40px);
   text-align: center;
-  color: white;
+  color: var(--theme-color-text-default);
   min-width: 0;
   width: min(380px, calc(100vw - 2rem));
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--theme-shadow-floating);
 }
-
-/* 滚动条样式 */
 
 /* 续局对话框 */
 .resume-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.68);
+  background: var(--theme-color-overlay-background);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -583,22 +586,6 @@ body {
 
 .resume-panel {
   animation: bubbleIn 0.3s ease-out forwards;
-}
-
-/* Game dialogs share the site surface; legacy dark colors remain until the dark-theme pass. */
-@media (prefers-color-scheme: light) {
-  .result-overlay,
-  .resume-overlay {
-    background: var(--theme-color-overlay-background);
-  }
-
-  .result-panel,
-  .resume-panel {
-    background: var(--theme-color-floating-background);
-    border-color: var(--theme-color-border-subtle);
-    color: var(--theme-color-text-default);
-    box-shadow: var(--theme-shadow-floating);
-  }
 }
 
 .bandori-card-thumbnail-star {

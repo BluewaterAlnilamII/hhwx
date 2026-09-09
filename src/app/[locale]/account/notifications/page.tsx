@@ -402,7 +402,7 @@ export default function AccountNotificationsPage() {
         key={notification.id}
         href={target.href}
         onClick={() => void markRead(notification.id).catch(() => undefined)}
-        className={`${className} transition hover:border-[var(--theme-color-semantic-info-border)] hover:shadow-[0_12px_36px_rgba(14,165,233,0.08)]`}
+        className={`${className} transition hover:border-[var(--theme-color-action-secondary-border)] hover:shadow-[var(--theme-shadow-surface-raised)]`}
       >
         {content}
       </Link>
@@ -494,12 +494,12 @@ export default function AccountNotificationsPage() {
                     className={[
                       "flex h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold transition",
                       isActive
-                        ? "bg-[var(--theme-color-control-background)] text-[var(--theme-color-semantic-info-foreground)] shadow-xs ring-1 ring-[var(--theme-color-border-subtle)]"
+                        ? "bg-[var(--theme-color-control-background)] text-[var(--theme-color-tab-foreground-selected)] shadow-xs ring-1 ring-[var(--theme-color-border-subtle)]"
                         : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)]",
                     ].join(" ")}
                   >
                     <span>{t(getColumnTitleKey(type))}</span>
-                    <span className={isActive ? "text-[var(--theme-color-semantic-info-foreground)]" : "text-[var(--theme-color-text-muted)]"}>
+                    <span className={isActive ? "text-[var(--theme-color-tab-foreground-selected)]" : "text-[var(--theme-color-text-muted)]"}>
                       {tabStats[type].total}
                     </span>
                     {tabStats[type].unread > 0 ? (

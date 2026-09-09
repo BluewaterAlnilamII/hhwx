@@ -57,7 +57,7 @@ export default function FixedYAxis({
 
   return (
     <div
-      className="relative h-full shrink-0 border-r border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-chart-axis-background)]/60 select-none dark:bg-[#111827]/70"
+      className="relative h-full shrink-0 border-r border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-chart-axis-background)]/60 select-none"
       style={{ width: `${axisWidth}px` }}
       aria-hidden="true"
     >
@@ -76,7 +76,7 @@ export default function FixedYAxis({
         return (
           <span
             key={tickValue}
-            className="absolute right-2 -translate-y-1/2 text-[11px] leading-none text-[var(--theme-color-text-muted)] dark:text-gray-300"
+            className="absolute right-2 -translate-y-1/2 text-[11px] leading-none text-[var(--theme-color-text-muted)]"
             style={{ top: `${top}px` }}
           >
             {formatTrackerYAxisTick(tickValue)}

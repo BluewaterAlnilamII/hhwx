@@ -126,7 +126,7 @@ test("simulator seek controls share the music player spacing, color, and borderl
   );
   assert.match(
     controlStyles,
-    /MUSIC_PLAYER_SIDE_BUTTON_BASE_CLASS_NAME =[\s\S]*?h-9 w-9[\s\S]*?text-\[var\(--theme-color-text-muted\)\]/u,
+    /MUSIC_PLAYER_SIDE_BUTTON_BASE_CLASS_NAME =[\s\S]*?h-9 w-9[\s\S]*?text-\[var\(--theme-color-action-secondary-foreground\)\]/u,
   );
   const sideButtonBaseStyle = controlStyles.match(
     /MUSIC_PLAYER_SIDE_BUTTON_BASE_CLASS_NAME =\s*"([^"]+)"/u,
@@ -141,7 +141,7 @@ test("simulator seek controls share the music player spacing, color, and borderl
     runtime,
     /grid-cols-\[2\.5rem_2\.25rem_minmax\(0,5rem\)\][\s\S]*?<label htmlFor=\{inputId\} className="justify-self-end">/u,
   );
-  assert.match(runtime, /className="w-full min-w-0 accent-\[var\(--theme-color-progress-indicator-background\)\]"/u);
+  assert.match(runtime, /className="w-full min-w-0 accent-\[var\(--theme-color-action-accent-background\)\]"/u);
   assert.match(
     runtime,
     /isMuted \? "bg-\[var\(--theme-color-control-background-pressed\)\][\s\S]*hover:bg-\[var\(--theme-color-control-background-pressed\)\]"/u,
@@ -216,7 +216,7 @@ test("mobile simulator settings match the compact transport control rhythm", asy
   assert.match(adjustmentControls, /h-9 min-w-14[\s\S]*text-sm font-bold[\s\S]*sm:h-10 sm:min-w-24[\s\S]*sm:text-base sm:font-black/u);
   assert.match(adjustmentControls, /className\?: string[\s\S]*className=\{cn\(/u);
   assert.match(runtime, /<SimulatorAdjustmentValue\s+ariaLabel=\{currentAriaLabel\}\s+className="min-w-\[4\.5rem\]"/u);
-  assert.match(settingsCard, /p-3 dark:shadow-sm sm:p-5/u);
+  assert.match(settingsCard, /p-3 sm:p-5/u);
   assert.match(settingsCard, /text-\[15px\][^"\n]*sm:text-base/u);
   assert.match(settingsCard, /mt-2[^"\n]*sm:mt-3/u);
   assert.match(skinControls, /mobileLayout\?: "inline" \| "stacked"/u);

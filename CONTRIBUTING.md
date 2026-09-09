@@ -45,6 +45,7 @@ When shipped Rust behavior or its build inputs change, run `npm run build:medley
 
 ## Guidelines
 
+- For UI colors and component styling, follow the current [Theme Guide](documents/theme-guide.md), including paired colors, scheme overrides and domain-color exceptions.
 - Keep secrets and private deployment details out of commits.
 - Use the surface's active locale for product copy. Keep `messages/zh-CN` as the catalog/key baseline and update affected locale catalogs together.
 - Keep internal route names, API paths, and database identifiers stable unless a change explicitly requires a migration.

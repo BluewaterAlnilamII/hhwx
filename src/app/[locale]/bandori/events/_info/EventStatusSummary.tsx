@@ -11,9 +11,9 @@ import { cn } from "@/lib/utils";
 import EventRelativeCountdown from "./EventRelativeCountdown";
 
 const EVENT_STATUS_TONES: Record<BandoriEventStatus, string> = {
-  upcoming: "border border-[var(--theme-color-status-upcoming-border)] bg-[var(--theme-color-status-upcoming-background)] text-[var(--theme-color-status-upcoming-foreground)] dark:text-[var(--theme-color-status-upcoming-foreground-on-dark)]",
-  ongoing: "border border-[var(--theme-color-status-ongoing-border)] bg-[var(--theme-color-status-ongoing-background)] text-[var(--theme-color-status-ongoing-foreground)] dark:text-[var(--theme-color-status-ongoing-foreground-on-dark)]",
-  ended: "border border-[var(--theme-color-status-ended-border)] bg-[var(--theme-color-status-ended-background)] text-[var(--theme-color-status-ended-foreground)] dark:text-[var(--theme-color-status-ended-foreground-on-dark)]",
+  upcoming: "border border-[var(--theme-color-status-upcoming-border)] bg-[var(--theme-color-status-upcoming-background)] text-[var(--theme-color-status-upcoming-foreground)]",
+  ongoing: "border border-[var(--theme-color-status-ongoing-border)] bg-[var(--theme-color-status-ongoing-background)] text-[var(--theme-color-status-ongoing-foreground)]",
+  ended: "border border-[var(--theme-color-status-ended-border)] bg-[var(--theme-color-status-ended-background)] text-[var(--theme-color-status-ended-foreground)]",
 };
 
 type EventStatusSummaryProps = {
@@ -41,12 +41,12 @@ export default function EventStatusSummary({
         {t(status)}
       </span>
       {status === "upcoming" && startAt !== null ? (
-        <span className="text-sm font-semibold text-[var(--theme-color-text-default)] dark:text-slate-100">
+        <span className="text-sm font-semibold text-[var(--theme-color-text-default)]">
           <EventRelativeCountdown target="start" remainingMs={startAt - now} />
         </span>
       ) : null}
       {status === "ongoing" && endAt !== null ? (
-        <span className="text-sm font-semibold text-[var(--theme-color-text-default)] dark:text-slate-100">
+        <span className="text-sm font-semibold text-[var(--theme-color-text-default)]">
           <EventRelativeCountdown target="end" remainingMs={endAt - now} />
         </span>
       ) : null}

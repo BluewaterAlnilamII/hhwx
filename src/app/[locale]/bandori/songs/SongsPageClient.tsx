@@ -139,16 +139,16 @@ export default function SongsPageClient() {
       />
 
       {musicMaster.error ? (
-        <div role="alert" className="hhwx-catalog-error rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm font-bold text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
+        <div role="alert" className="hhwx-catalog-error rounded-2xl border p-5 text-sm font-bold">
           {t("states.loadFailed")}
         </div>
       ) : musicMaster.loading ? (
-        <div className="hhwx-panel flex min-h-64 items-center justify-center gap-3 border text-sm font-bold text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-[#111827]">
+        <div className="hhwx-panel flex min-h-64 items-center justify-center gap-3 border text-sm font-bold text-[var(--theme-color-text-muted)]">
           <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
           {t("states.loading")}
         </div>
       ) : filteredSongs.length === 0 ? (
-        <div className="hhwx-panel flex min-h-64 flex-col items-center justify-center gap-3 border text-center text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-[#111827]">
+        <div className="hhwx-panel flex min-h-64 flex-col items-center justify-center gap-3 border text-center text-[var(--theme-color-text-muted)]">
           <SearchX className="h-9 w-9" aria-hidden="true" />
           <div className="text-sm font-bold">{t("states.empty")}</div>
         </div>
@@ -166,7 +166,7 @@ export default function SongsPageClient() {
             <button
               type="button"
               onClick={() => setVisibleState({ key: filterKey, count: visibleCount + PAGE_SIZE })}
-              className="hhwx-panel hhwx-catalog-action h-12 w-full border text-sm font-black transition dark:border-sky-900 dark:bg-slate-900 dark:text-sky-300 dark:hover:bg-slate-800"
+              className="hhwx-panel hhwx-catalog-action h-12 w-full border text-sm font-black transition"
             >
               {t("page.showMore", { count: Math.min(PAGE_SIZE, remainingCount) })}
             </button>

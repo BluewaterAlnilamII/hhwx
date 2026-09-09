@@ -158,7 +158,7 @@ export default function SongDetailPageClient({
 
   return (
     <BandoriPageShell contentClassName="max-w-6xl">
-      <article className="hhwx-panel border p-4 sm:p-6 dark:border-slate-700 dark:bg-[#111827]">
+      <article className="hhwx-panel border p-4 sm:p-6">
         <div className="grid gap-5 sm:grid-cols-[8rem_minmax(0,1fr)] sm:items-start">
           <div className="flex aspect-square w-32 items-center justify-center overflow-hidden rounded-2xl bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] shadow-[var(--theme-shadow-media)]">
             {artworkUrl ? (
@@ -182,7 +182,7 @@ export default function SongDetailPageClient({
         </div>
       </article>
 
-      <div role="tablist" aria-label={t("detail.view.label")} className="hhwx-panel grid grid-cols-2 overflow-hidden border dark:border-slate-700 dark:bg-[#111827]">
+      <div role="tablist" aria-label={t("detail.view.label")} className="hhwx-panel grid grid-cols-2 overflow-hidden border">
         {(["info", "simulator"] as const).map((view) => {
           const active = view === activeView;
           return (
@@ -193,11 +193,11 @@ export default function SongDetailPageClient({
               aria-selected={active}
               onClick={() => selectView(view)}
               className={cn(
-                "relative h-14 text-base font-black outline-hidden transition focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-control-border-accent)]",
+                "relative h-14 text-base font-black outline-hidden transition focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)]",
                 active
                   ? "text-[var(--theme-color-tab-foreground-selected)]"
-                  : "text-[var(--theme-color-tab-foreground)] hover:bg-[var(--theme-color-tab-background-hover)] hover:text-[var(--theme-color-tab-foreground-hover)] dark:text-slate-300 dark:hover:bg-slate-800",
-                view === "info" && "border-r border-[var(--theme-color-border-subtle)] dark:border-slate-700",
+                  : "text-[var(--theme-color-tab-foreground)] hover:bg-[var(--theme-color-tab-background-hover)] hover:text-[var(--theme-color-tab-foreground-hover)]",
+                view === "info" && "border-r border-[var(--theme-color-border-subtle)]",
               )}
             >
               {t(`detail.view.${view}`)}
@@ -208,7 +208,7 @@ export default function SongDetailPageClient({
       </div>
 
       <div role="tabpanel" hidden={activeView !== "info"}>
-        <section className="hhwx-panel border p-4 sm:p-6 dark:border-slate-700 dark:bg-[#111827]">
+        <section className="hhwx-panel border p-4 sm:p-6">
           <dl className="hhwx-catalog-statistics grid grid-cols-2 sm:grid-cols-4">
           {statistics.map(({ id, value, icon: Icon }) => (
             <div key={id} className="bg-[var(--theme-color-control-background-muted)] p-3">

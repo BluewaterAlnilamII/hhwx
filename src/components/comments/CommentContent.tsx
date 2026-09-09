@@ -181,7 +181,7 @@ export const CommentContent = memo(function CommentContent({
   stampLookup: CommentStampLookup;
 }) {
   const t = useTranslations("comments");
-  const contentClassName = isDeleted ? "text-[var(--theme-color-text-muted)] opacity-70 dark:text-[var(--theme-color-text-muted-on-dark)]" : "text-[var(--theme-color-text-default)] dark:text-slate-200";
+  const contentClassName = isDeleted ? "text-[var(--theme-color-text-muted)] opacity-70" : "text-[var(--theme-color-text-default)]";
   const tokens = useMemo(
     () => (isDeleted ? [] : parseCommentContent(content, stampLookup)),
     [content, isDeleted, stampLookup],

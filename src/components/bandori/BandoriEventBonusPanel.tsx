@@ -293,7 +293,7 @@ function EventBonusInfoRow({
       <LabelElement className={cn(
         "text-sm font-semibold",
         variant === "embedded"
-          ? "leading-5 text-[var(--theme-color-text-muted)] dark:text-slate-400"
+          ? "leading-5 text-[var(--theme-color-text-muted)]"
           : "pt-1 text-[var(--theme-color-text-muted)]",
       )}>
         {label}
@@ -447,13 +447,13 @@ export default function BandoriEventBonusPanel({
       ) : null}
 
       {variant === "embedded" && loading ? (
-        <div className="inline-flex items-center gap-2 py-3 text-sm font-semibold text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">
+        <div className="inline-flex items-center gap-2 py-3 text-sm font-semibold text-[var(--theme-color-text-muted)]">
           <Loader2 className="h-4 w-4 animate-spin" />
           {labelsT("loadBonus")}
         </div>
       ) : null}
       {variant === "embedded" && !eventBonus && !loading ? (
-        <div className="py-3 text-sm font-semibold text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">{statesT("noEventBonusData")}</div>
+        <div className="py-3 text-sm font-semibold text-[var(--theme-color-text-muted)]">{statesT("noEventBonusData")}</div>
       ) : null}
       {variant === "embedded" && error ? (
         <div className="my-3 rounded-xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] px-3 py-2 text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)]">
