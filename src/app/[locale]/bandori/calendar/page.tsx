@@ -605,7 +605,7 @@ export default function CalendarPage() {
                 onClick={handleCopyIcs}
                 className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
                   copied
-                    ? "bg-[var(--theme-color-semantic-success-foreground)] text-[var(--theme-color-text-on-emphasis)]"
+                    ? "bg-[var(--theme-color-action-success-background)] text-[var(--theme-color-action-success-foreground)]"
                     : " hover:opacity-95 bg-[var(--theme-color-action-accent-background)] text-[var(--theme-color-action-accent-foreground)]"
                 }`}
               >

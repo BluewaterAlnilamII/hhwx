@@ -607,7 +607,7 @@ export default function GameProfilesPanel() {
               type="button"
               onClick={verifyChallenge}
               disabled={writeBusy}
-              className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[var(--theme-color-semantic-success-foreground)] px-5 text-sm font-semibold text-[var(--theme-color-text-on-emphasis)] transition hover:bg-[var(--theme-color-semantic-success-foreground)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
+              className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[var(--theme-color-action-success-background)] px-5 text-sm font-semibold text-[var(--theme-color-action-success-foreground)] transition hover:bg-[var(--theme-color-action-success-background)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
             >
               {busyAction?.type === "verify" ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
               {busyAction?.type === "verify" ? t("bind.verifying") : t("bind.verify")}
@@ -671,7 +671,7 @@ export default function GameProfilesPanel() {
                         type="button"
                         onClick={() => syncAutoProfile(binding.gameUid)}
                         disabled={busy || isSyncing || syncLimitReached}
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[var(--theme-color-semantic-success-foreground)] px-4 text-sm font-semibold text-[var(--theme-color-text-on-emphasis)] transition hover:bg-[var(--theme-color-semantic-success-foreground)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[var(--theme-color-action-success-background)] px-4 text-sm font-semibold text-[var(--theme-color-action-success-foreground)] transition hover:bg-[var(--theme-color-action-success-background)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
                       >
                         <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
                         {isSyncing ? t("uidManagement.syncing") : profile ? t("uidManagement.resync") : t("uidManagement.sync")}
@@ -803,7 +803,7 @@ export default function GameProfilesPanel() {
                         type="button"
                         onClick={() => exportProfile(profile)}
                         disabled={writeBusy}
-                        className={`inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] ${profileExported ? "border-[var(--theme-color-semantic-success-border)] bg-[var(--theme-color-semantic-success-background)] text-[var(--theme-color-semantic-success-foreground)]" : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-default)] hover:border-[var(--theme-color-semantic-info-border)] hover:text-[var(--theme-color-semantic-info-foreground)]"}`}
+                        className={`inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] ${profileExported ? "border-[var(--theme-color-semantic-success-border)] bg-[var(--theme-color-semantic-success-background)] text-[var(--theme-color-semantic-success-foreground)]" : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-default)] hover:border-[var(--theme-color-action-secondary-border)] hover:text-[var(--theme-color-action-secondary-foreground)]"}`}
                       >
                         {isExportingProfile ? <RefreshCw className="h-4 w-4 animate-spin" /> : profileExported ? <CheckCircle2 className="h-4 w-4" /> : <Download className="h-4 w-4" />}
                         {isExportingProfile ? t("list.exporting") : profileExported ? t("list.exported") : t("list.export")}

@@ -72,10 +72,10 @@ function DegreeOption({
       onBlur={() => setInteractive(false)}
       aria-pressed={selected}
       className={cn(
-        "flex min-h-14 w-full items-center justify-center rounded-2xl border bg-[var(--theme-color-control-background)] p-2 text-[var(--theme-color-text-muted)] shadow-xs outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-semantic-info-border)]",
+        "flex min-h-14 w-full items-center justify-center rounded-2xl border bg-[var(--theme-color-control-background)] p-2 text-[var(--theme-color-text-muted)] shadow-xs outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]",
         selected
-          ? "border-[var(--theme-color-semantic-info-border)] ring-2 ring-[var(--theme-color-semantic-info-border)]"
-          : "border-[var(--theme-color-border-subtle)] hover:border-[var(--theme-color-semantic-info-border)] hover:shadow-md",
+          ? "border-[var(--theme-color-selection-subtle-ring)] ring-2 ring-[var(--theme-color-selection-subtle-ring)]"
+          : "border-[var(--theme-color-border-subtle)] hover:border-[var(--theme-color-action-secondary-border)] hover:shadow-md",
       )}
     >
       <BandoriDegreeView
@@ -294,8 +294,8 @@ export default function AccountDisplayDegreeControl({
                               onClick={() => setSelectedAccountKey(accountKey)}
                               aria-pressed={selected}
                               className={cn(
-                                "flex min-h-20 items-center gap-3 rounded-2xl border bg-[var(--theme-color-control-background)] px-4 py-3 text-left shadow-xs outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-semantic-info-border)]",
-                                selected ? "border-[var(--theme-color-semantic-info-border)] ring-2 ring-[var(--theme-color-semantic-info-border)]" : "border-[var(--theme-color-border-subtle)] hover:border-[var(--theme-color-semantic-info-border)]",
+                                "flex min-h-20 items-center gap-3 rounded-2xl border bg-[var(--theme-color-control-background)] px-4 py-3 text-left shadow-xs outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]",
+                                selected ? "border-[var(--theme-color-selection-subtle-ring)] ring-2 ring-[var(--theme-color-selection-subtle-ring)]" : "border-[var(--theme-color-border-subtle)] hover:border-[var(--theme-color-action-secondary-border)]",
                                 empty && "bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)]",
                               )}
                             >
@@ -304,7 +304,7 @@ export default function AccountDisplayDegreeControl({
                                 <span className={cn("block truncate text-base font-bold", empty ? "text-[var(--theme-color-text-muted)]" : "text-[var(--theme-color-text-default)]")}>UID {account.gameUid}</span>
                                 {empty && <span className="mt-1 block text-xs font-medium text-[var(--theme-color-text-muted)]">{t("empty")}</span>}
                               </span>
-                              {selected && <BadgeCheck className="h-5 w-5 shrink-0 text-[var(--theme-color-semantic-info-foreground)]" aria-hidden="true" />}
+                              {selected && <BadgeCheck className="h-5 w-5 shrink-0 text-[var(--theme-color-selection-subtle-foreground)]" aria-hidden="true" />}
                             </button>
                           );
                         })}

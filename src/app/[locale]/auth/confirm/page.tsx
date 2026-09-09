@@ -464,7 +464,7 @@ function AuthConfirmPageContent() {
               </Link>
               <Link
                 href={buildAuthPath("login", nextPath, undefined, locale)}
-                className="rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-5 py-2 text-sm font-semibold text-[var(--theme-color-text-default)] transition hover:border-[var(--theme-color-semantic-info-border)] hover:text-[var(--theme-color-action-secondary-foreground)]"
+                className="rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-5 py-2 text-sm font-semibold text-[var(--theme-color-text-default)] transition hover:border-[var(--theme-color-action-secondary-border)] hover:text-[var(--theme-color-action-secondary-foreground)]"
               >
                 {authT("actions.login")}
               </Link>
@@ -490,7 +490,7 @@ function AuthConfirmPageContent() {
 
         {status === "recovery" && (
           <form onSubmit={handlePasswordReset} className="space-y-5">
-            <div className="rounded-2xl bg-[var(--theme-color-semantic-info-background)] p-4 text-sm leading-6 text-[var(--theme-color-action-secondary-foreground)]">
+            <div className="rounded-2xl bg-[var(--theme-color-semantic-info-background)] p-4 text-sm leading-6 text-[var(--theme-color-semantic-info-foreground)]">
               {message}
             </div>
             <label className="block text-sm font-medium text-[var(--theme-color-text-default)]">
@@ -530,7 +530,7 @@ function AuthConfirmPageContent() {
             <div className="flex justify-end gap-3">
               <Link
                 href="/"
-                className="rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-5 py-2 text-sm font-semibold text-[var(--theme-color-text-default)] transition hover:border-[var(--theme-color-semantic-info-border)] hover:text-[var(--theme-color-action-secondary-foreground)]"
+                className="rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-5 py-2 text-sm font-semibold text-[var(--theme-color-text-default)] transition hover:border-[var(--theme-color-action-secondary-border)] hover:text-[var(--theme-color-action-secondary-foreground)]"
               >
                 {authT("actions.backHome")}
               </Link>

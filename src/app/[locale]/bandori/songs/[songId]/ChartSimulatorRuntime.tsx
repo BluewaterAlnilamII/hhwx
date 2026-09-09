@@ -204,7 +204,7 @@ const FULLSCREEN_STAGE_HEIGHT_DVW = BANDORI_NATIVE_STAGE_SIZE.height
 const FULLSCREEN_OVERLAY_BUTTON_CLASS_NAME =
   "pointer-events-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-slate-950/65 text-white shadow-lg outline-hidden backdrop-blur-sm transition hover:bg-slate-950/80 focus-visible:ring-2 focus-visible:ring-white/85 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-slate-950/65";
 const FULLSCREEN_OVERLAY_ACTIVE_BUTTON_CLASS_NAME =
-  "bg-[var(--theme-color-progress-indicator-background)] text-white hover:bg-[var(--theme-color-progress-indicator-background)]";
+  "bg-[var(--theme-color-selection-strong-background)] text-[var(--theme-color-selection-strong-foreground)] hover:bg-[var(--theme-color-selection-strong-background)]";
 // Frame stepping follows a stable simulator clock instead of the display's
 // variable refresh rate, while hold repetition stays slow enough for inspection.
 const FRAME_STEP_HOLD_DELAY_MS = 350;
@@ -515,7 +515,7 @@ function SimulatorVolumeControl({
         onClick={onMuteToggle}
         aria-label={isMuted ? unmuteLabel : muteLabel}
         aria-pressed={isMuted}
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${isMuted ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-selection-subtle-foreground)]" : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-pressed)]"}`}
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${isMuted ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-selection-subtle-foreground)]" : "text-[var(--theme-color-action-secondary-foreground)] hover:bg-[var(--theme-color-control-background-pressed)]"}`}
       >
         {isMuted ? <VolumeX className="h-4 w-4" aria-hidden="true" /> : <Volume2 className="h-4 w-4" aria-hidden="true" />}
       </button>
@@ -527,7 +527,7 @@ function SimulatorVolumeControl({
         step={BANDORI_NATIVE_VOLUME_STEP}
         value={value}
         onChange={(event) => onChange(Number(event.currentTarget.value))}
-        className="w-full min-w-0 accent-[var(--theme-color-progress-indicator-background)]"
+        className="w-full min-w-0 accent-[var(--theme-color-action-accent-background)]"
       />
     </div>
   );
@@ -2569,7 +2569,7 @@ export default function ChartSimulatorRuntime({
     return (
       <section
         aria-busy="true"
-        className="hhwx-panel border p-4 sm:p-6 dark:border-slate-700 dark:bg-[#111827]"
+        className="hhwx-panel border p-4 sm:p-6"
       >
         <h2 className="text-xl font-black text-[var(--theme-color-text-default)]">
           {t("title")}
@@ -2604,7 +2604,7 @@ export default function ChartSimulatorRuntime({
     fps: stageRenderFpsText,
   });
   return (
-    <section className="hhwx-panel border p-4 sm:p-6 dark:border-slate-700 dark:bg-[#111827]">
+    <section className="hhwx-panel border p-4 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-black text-[var(--theme-color-text-default)]">{t("title")}</h2>
@@ -3009,7 +3009,7 @@ export default function ChartSimulatorRuntime({
         <div className="relative h-8">
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 overflow-visible rounded-full bg-[var(--theme-color-control-background-disabled)]"
+            className="pointer-events-none absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 overflow-visible rounded-full bg-[var(--theme-color-range-track-background)]"
           >
             {/* The native 16px range thumb travels between centers inset 8px
                 from each edge. Keep every time-based overlay on that axis. */}
@@ -3024,7 +3024,7 @@ export default function ChartSimulatorRuntime({
                 />
               ) : null}
               <span
-                className="absolute inset-y-0 left-0 rounded-full bg-[var(--theme-color-progress-indicator-background)]"
+                className="absolute inset-y-0 left-0 rounded-full bg-[var(--theme-color-action-accent-background)]"
                 style={{ width: `${playbackPercentage}%` }}
               />
               {loopStartPercentage !== null ? (
@@ -3054,7 +3054,7 @@ export default function ChartSimulatorRuntime({
             onChange={(event) => previewScrub(Number(event.currentTarget.value))}
             onPointerUp={commitScrub}
             onBlur={commitScrub}
-            className="absolute inset-0 z-10 h-8 w-full cursor-pointer appearance-none rounded-full bg-transparent outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-[var(--theme-color-selection-strong-background)] [&::-moz-range-thumb]:shadow-md [&::-moz-range-track]:h-2 [&::-moz-range-track]:bg-transparent [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:-mt-1 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-[var(--theme-color-selection-strong-background)] [&::-webkit-slider-thumb]:shadow-md"
+            className="absolute inset-0 z-10 h-8 w-full cursor-pointer appearance-none rounded-full bg-transparent outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-[var(--theme-color-action-accent-background)] [&::-moz-range-thumb]:shadow-md [&::-moz-range-track]:h-2 [&::-moz-range-track]:bg-transparent [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:-mt-1 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-[var(--theme-color-action-accent-background)] [&::-webkit-slider-thumb]:shadow-md"
           />
         </div>
         <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">

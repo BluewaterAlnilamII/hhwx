@@ -206,8 +206,8 @@ function ReactionChip({ reaction, disabled, onToggle, onViewAll }: ReactionChipP
         className={cn(
           "inline-flex h-8 items-center gap-1 rounded-full border px-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 sm:h-7",
           reaction.reactedByViewer
-            ? "border-[var(--theme-color-selection-subtle-ring)] bg-[var(--theme-color-selection-subtle-background)] text-[var(--theme-color-selection-subtle-foreground)] hover:brightness-95 dark:border-sky-500/50 dark:bg-sky-500/15 dark:text-sky-200 dark:hover:bg-sky-500/25"
-            : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800",
+            ? "border-[var(--theme-color-selection-subtle-ring)] bg-[var(--theme-color-selection-subtle-background)] text-[var(--theme-color-selection-subtle-foreground)] hover:brightness-95"
+            : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)]",
         )}
       >
         <CommentReactionEmoji emojiKey={reaction.emojiKey} size={18} />
@@ -224,7 +224,7 @@ function ReactionChip({ reaction, disabled, onToggle, onViewAll }: ReactionChipP
           })}
           style={tooltipStyle ?? undefined}
           className={cn(
-            "fixed inset-auto z-30 m-0 w-64 overflow-y-auto overscroll-contain rounded-lg border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-comment-reaction-background)] p-2.5 text-left text-xs text-[var(--theme-color-text-muted)] shadow-2xl dark:border-slate-200 dark:text-slate-700",
+            "fixed inset-auto z-30 m-0 w-64 overflow-y-auto overscroll-contain rounded-lg border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-comment-reaction-background)] p-2.5 text-left text-xs text-[var(--theme-color-text-muted)] shadow-2xl",
             !tooltipStyle && "invisible",
           )}
         >
@@ -247,7 +247,7 @@ function ReactionChip({ reaction, disabled, onToggle, onViewAll }: ReactionChipP
                   <span className="truncate font-semibold text-[var(--theme-color-text-default)]">
                     {user.username ?? t("states.anonymous")}
                   </span>
-                  <CommentPublicUid publicUid={user.publicUid} className="dark:text-[var(--theme-color-text-muted)]" />
+                  <CommentPublicUid publicUid={user.publicUid} />
                 </div>
               </div>
             ))}
@@ -494,7 +494,7 @@ export const CommentItem = memo(function CommentItem({
           ? "bg-transparent py-2 first:pt-1 last:pb-0 sm:rounded-xl sm:py-1 sm:last:pb-1"
           : "py-5 first:pt-0 last:pb-0",
         isHighlighted
-          ? "rounded-lg bg-[var(--theme-color-semantic-info-background)] ring-2 ring-[var(--theme-color-semantic-info-border)] dark:bg-sky-500/10 dark:ring-sky-500/25"
+          ? "rounded-lg bg-[var(--theme-color-semantic-info-background)] ring-2 ring-[var(--theme-color-semantic-info-border)]"
           : null,
       )}
     >
@@ -505,17 +505,17 @@ export const CommentItem = memo(function CommentItem({
           entityServer={comment.avatar.entityServer}
           trainType={comment.avatar.trainType}
           size="comment"
-          className="ring-1 ring-[var(--theme-color-action-secondary-border)] dark:ring-slate-700"
+          className="ring-1 ring-[var(--theme-color-action-secondary-border)]"
         />
         <div className="flex min-h-11 min-w-0 flex-col items-start justify-center">
           <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-2 gap-y-0.5">
             <div className="flex min-w-0 max-w-full items-center gap-2">
-              <span className="truncate text-sm font-semibold text-[var(--theme-color-text-default)] dark:text-slate-100">
+              <span className="truncate text-sm font-semibold text-[var(--theme-color-text-default)]">
                 {comment.username ?? t("states.anonymous")}
               </span>
               <CommentPublicUid publicUid={comment.publicUid} />
             </div>
-            <span className="whitespace-nowrap text-xs text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">
+            <span className="whitespace-nowrap text-xs text-[var(--theme-color-text-muted)]">
               {localDateTimeFormatter.format(new Date(comment.createdAt))}
             </span>
             {comment.replyToUsername ? (
@@ -523,18 +523,18 @@ export const CommentItem = memo(function CommentItem({
                 <a
                   href={replyToPermalink}
                   onClick={handleReplyToClick}
-                  className="rounded-full text-xs font-medium text-[var(--theme-color-action-secondary-foreground)] underline-offset-2 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] dark:text-sky-300 dark:hover:text-sky-200"
+                  className="rounded-full text-xs font-medium text-[var(--theme-color-action-secondary-foreground)] underline-offset-2 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]"
                 >
                   {t("thread.replyTo", { username: comment.replyToUsername })}
                 </a>
               ) : (
-                <span className="text-xs font-medium text-[var(--theme-color-action-secondary-foreground)] dark:text-sky-300">
+                <span className="text-xs font-medium text-[var(--theme-color-action-secondary-foreground)]">
                   {t("thread.replyTo", { username: comment.replyToUsername })}
                 </span>
               )
             ) : null}
             {comment.editedAt && !isDeleted ? (
-              <span className="text-xs text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">{t("states.edited")}</span>
+              <span className="text-xs text-[var(--theme-color-text-muted)]">{t("states.edited")}</span>
             ) : null}
           </div>
           {comment.displayDegree ? (
@@ -558,17 +558,17 @@ export const CommentItem = memo(function CommentItem({
               <fieldset
                 disabled={isSaving}
                 aria-busy={isSaving}
-                className="m-0 min-w-0 rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-0 transition focus-within:border-[var(--theme-color-focus-ring)] focus-within:ring-2 focus-within:ring-[var(--theme-color-focus-ring)] disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:focus-within:border-sky-400 dark:focus-within:ring-sky-500/25"
+                className="m-0 min-w-0 rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-0 transition focus-within:border-[var(--theme-color-focus-ring)] focus-within:ring-2 focus-within:ring-[var(--theme-color-focus-ring)] disabled:cursor-wait disabled:opacity-60"
               >
                 <textarea
                   ref={editTextareaRef}
                   value={editValue}
                   onChange={(event) => setEditValue(truncateCommentContent(event.target.value))}
-                  className="block min-h-20 max-h-60 w-full resize-y overflow-y-hidden rounded-t-xl border-0 bg-transparent px-3 py-2 text-[15px] leading-[26px] text-[var(--theme-color-text-default)] outline-hidden placeholder:text-[var(--theme-color-text-muted)] selection:bg-[var(--theme-color-selection-strong-background)] selection:text-[var(--theme-color-selection-strong-foreground)] dark:text-slate-100 dark:placeholder:text-slate-400 dark:selection:bg-sky-500/40 dark:selection:text-white"
+                  className="block min-h-20 max-h-60 w-full resize-y overflow-y-hidden rounded-t-xl border-0 bg-transparent px-3 py-2 text-[15px] leading-[26px] text-[var(--theme-color-text-default)] outline-hidden placeholder:text-[var(--theme-color-text-muted)] selection:bg-[var(--theme-color-selection-strong-background)] selection:text-[var(--theme-color-selection-strong-foreground)]"
                 />
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--theme-color-border-subtle)] px-3 py-2 dark:border-slate-700">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--theme-color-border-subtle)] px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <span className={cn("text-xs", editValueLength > COMMENT_LENGTH_WARNING_THRESHOLD ? "text-[var(--theme-color-semantic-warning-foreground)]" : "text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]")}>
+                    <span className={cn("text-xs", editValueLength > COMMENT_LENGTH_WARNING_THRESHOLD ? "text-[var(--theme-color-semantic-warning-foreground)]" : "text-[var(--theme-color-text-muted)]")}>
                       {editValueLength}/{MAX_COMMENT_LENGTH}
                     </span>
                     <EmojiPickerButton
@@ -598,7 +598,7 @@ export const CommentItem = memo(function CommentItem({
                         setEditEmojiOpen(false);
                         setEditStampOpen(false);
                       }}
-                      className="rounded-full px-3 py-1.5 text-xs font-semibold text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] dark:hover:bg-slate-800"
+                      className="rounded-full px-3 py-1.5 text-xs font-semibold text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)]"
                     >
                       {t("actions.cancel")}
                     </button>
@@ -671,7 +671,7 @@ export const CommentItem = memo(function CommentItem({
                     setReactionPickerOpen(false);
                     setReplying((value) => !value);
                   }}
-                  className="inline-flex h-8 items-center gap-1 rounded-full px-2 text-xs font-semibold text-[var(--theme-color-action-secondary-foreground)] hover:bg-[var(--theme-color-action-secondary-background-hover)] sm:h-7 dark:text-sky-300 dark:hover:bg-sky-500/10"
+                  className="inline-flex h-8 items-center gap-1 rounded-full px-2 text-xs font-semibold text-[var(--theme-color-action-secondary-foreground)] hover:bg-[var(--theme-color-action-secondary-background-hover)] sm:h-7"
                 >
                   <Reply size={13} />
                   {t("actions.reply")}
@@ -682,7 +682,7 @@ export const CommentItem = memo(function CommentItem({
               onClick={handleCopyLink}
               aria-label={t("actions.copyLink")}
               title={t("actions.copyLink")}
-              className="inline-flex h-8 items-center gap-1 rounded-full px-2 text-xs font-semibold text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] sm:h-7 dark:text-slate-400 dark:hover:bg-slate-800"
+              className="inline-flex h-8 items-center gap-1 rounded-full px-2 text-xs font-semibold text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] sm:h-7"
             >
               <Link2 size={13} />
               <span className="hidden sm:inline">{t("actions.copyLink")}</span>
@@ -701,7 +701,7 @@ export const CommentItem = memo(function CommentItem({
                 }}
                 aria-label={t("actions.edit")}
                 title={t("actions.edit")}
-                className="inline-flex h-8 items-center gap-1 rounded-full px-2 text-xs font-semibold text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] disabled:cursor-not-allowed disabled:opacity-60 sm:h-7 dark:text-slate-400 dark:hover:bg-slate-800"
+                className="inline-flex h-8 items-center gap-1 rounded-full px-2 text-xs font-semibold text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] disabled:cursor-not-allowed disabled:opacity-60 sm:h-7"
               >
                 <Edit3 size={13} />
                 <span className="hidden sm:inline">{t("actions.edit")}</span>
@@ -723,7 +723,7 @@ export const CommentItem = memo(function CommentItem({
                     disabled={isSaving}
                     aria-label={t("actions.delete")}
                     title={t("actions.delete")}
-                    className="inline-flex h-8 items-center gap-1 rounded-full px-2 text-xs font-semibold text-[var(--theme-color-action-destructive-foreground)] hover:bg-[var(--theme-color-action-destructive-background-hover)] disabled:cursor-not-allowed disabled:opacity-60 sm:h-7 dark:text-[var(--theme-color-semantic-danger-foreground-on-dark)] dark:hover:bg-red-500/10"
+                    className="inline-flex h-8 items-center gap-1 rounded-full px-2 text-xs font-semibold text-[var(--theme-color-action-destructive-foreground)] hover:bg-[var(--theme-color-action-destructive-background-hover)] disabled:cursor-not-allowed disabled:opacity-60 sm:h-7"
                   >
                     <Trash2 size={13} />
                     <span className="hidden sm:inline">{t("actions.delete")}</span>
@@ -731,16 +731,16 @@ export const CommentItem = memo(function CommentItem({
                 </Dialog.Trigger>
                 <Dialog.Portal>
                   <Dialog.Overlay className="fixed inset-0 z-120 bg-black/35 backdrop-blur-[1px] data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:animate-in data-[state=open]:fade-in" />
-                  <Dialog.Content className="fixed left-1/2 top-1/2 z-121 w-[min(18rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[18px] border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-default)] shadow-2xl outline-hidden data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in data-[state=open]:zoom-in-95 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50">
+                  <Dialog.Content className="fixed left-1/2 top-1/2 z-121 w-[min(18rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[18px] border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-floating-background)] text-[var(--theme-color-text-default)] shadow-2xl outline-hidden data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in data-[state=open]:zoom-in-95">
                     <Dialog.Title className="px-5 py-5 text-center text-base font-semibold">
                       {t("dialogs.deleteTitle")}
                     </Dialog.Title>
-                    <div className="grid grid-cols-2 border-t border-[var(--theme-color-border-subtle)] dark:border-slate-700">
+                    <div className="grid grid-cols-2 border-t border-[var(--theme-color-border-subtle)]">
                       <button
                         type="button"
                         onClick={handleDelete}
                         disabled={deleting}
-                        className="h-11 border-r border-[var(--theme-color-border-subtle)] text-sm font-semibold text-[var(--theme-color-action-destructive-foreground)] transition hover:bg-[var(--theme-color-action-destructive-background-hover)] disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-[var(--theme-color-semantic-danger-foreground-on-dark)] dark:hover:bg-red-500/10"
+                        className="h-11 border-r border-[var(--theme-color-border-subtle)] text-sm font-semibold text-[var(--theme-color-action-destructive-foreground)] transition hover:bg-[var(--theme-color-action-destructive-background-hover)] disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {t("actions.delete")}
                       </button>
@@ -748,7 +748,7 @@ export const CommentItem = memo(function CommentItem({
                         <button
                           type="button"
                           disabled={deleting}
-                          className="h-11 text-sm font-semibold text-[var(--theme-color-text-muted)] transition hover:bg-[var(--theme-color-control-background-hover)] disabled:cursor-not-allowed disabled:opacity-60 dark:text-slate-200 dark:hover:bg-slate-800"
+                          className="h-11 text-sm font-semibold text-[var(--theme-color-text-muted)] transition hover:bg-[var(--theme-color-control-background-hover)] disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {t("actions.cancel")}
                         </button>
@@ -761,7 +761,7 @@ export const CommentItem = memo(function CommentItem({
             </div>
           </div>
 
-          {actionError ? <div className="mt-2 text-xs text-[var(--theme-color-semantic-danger-foreground)] dark:text-[var(--theme-color-semantic-danger-foreground-on-dark)]">{actionError}</div> : null}
+          {actionError ? <div className="mt-2 text-xs text-[var(--theme-color-semantic-danger-foreground)]">{actionError}</div> : null}
 
           {replying ? (
             <div className="mt-3">
@@ -780,7 +780,7 @@ export const CommentItem = memo(function CommentItem({
           ) : null}
 
           {visibleReplies.length > 0 ? (
-            <div className="mt-3 space-y-0 border-l border-[var(--theme-color-border-subtle)] pl-3 sm:space-y-3 dark:border-slate-700">
+            <div className="mt-3 space-y-0 border-l border-[var(--theme-color-border-subtle)] pl-3 sm:space-y-3">
               {visibleReplies.map((reply) => (
                 <CommentItem
                   key={reply.id}
@@ -815,7 +815,7 @@ export const CommentItem = memo(function CommentItem({
               type="button"
               onClick={() => onLoadReplies(threadRootId, loadedReplies?.nextCursor)}
               disabled={loadingReplies[threadRootId]}
-              className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] px-3 text-xs font-semibold text-[var(--theme-color-action-secondary-foreground)] shadow-xs transition hover:bg-[var(--theme-color-action-secondary-background-hover)] disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-sky-300"
+              className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] px-3 text-xs font-semibold text-[var(--theme-color-action-secondary-foreground)] shadow-xs transition hover:bg-[var(--theme-color-action-secondary-background-hover)] disabled:opacity-60"
             >
               <MoreHorizontal size={14} />
               {loadingReplies[threadRootId]

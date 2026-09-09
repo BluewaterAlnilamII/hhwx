@@ -101,9 +101,9 @@ export function CommentReactionsDialog({
             event.preventDefault();
             contentRef.current?.focus();
           }}
-          className="fixed inset-x-0 bottom-0 z-131 flex h-[min(42rem,88dvh)] flex-col overflow-hidden rounded-t-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-comment-reaction-background)] text-[var(--theme-color-text-default)] shadow-2xl outline-hidden data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom-4 data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom-4 sm:left-1/2 sm:right-auto sm:top-1/2 sm:bottom-auto sm:h-[min(38rem,calc(100dvh-3rem))] sm:w-[min(34rem,calc(100vw-2rem))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:data-[state=closed]:fade-out sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:fade-in sm:data-[state=open]:zoom-in-95 dark:border-slate-700 dark:bg-[#232428] dark:text-slate-50"
+          className="fixed inset-x-0 bottom-0 z-131 flex h-[min(42rem,88dvh)] flex-col overflow-hidden rounded-t-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-comment-reaction-background)] text-[var(--theme-color-text-default)] shadow-2xl outline-hidden data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom-4 data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom-4 sm:left-1/2 sm:right-auto sm:top-1/2 sm:bottom-auto sm:h-[min(38rem,calc(100dvh-3rem))] sm:w-[min(34rem,calc(100vw-2rem))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:data-[state=closed]:fade-out sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:fade-in sm:data-[state=open]:zoom-in-95"
         >
-          <div className="flex h-16 shrink-0 items-center justify-between border-b border-[var(--theme-color-border-subtle)] px-5 dark:border-white/10">
+          <div className="flex h-16 shrink-0 items-center justify-between border-b border-[var(--theme-color-border-subtle)] px-5">
             <Dialog.Title className="text-lg font-bold tracking-tight">
               {t("dialogs.reactionsTitle")}
             </Dialog.Title>
@@ -111,7 +111,7 @@ export function CommentReactionsDialog({
               <button
                 type="button"
                 aria-label={t("actions.close")}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[var(--theme-color-text-muted)] transition hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[var(--theme-color-text-muted)] transition hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]"
               >
                 <X size={20} aria-hidden="true" />
               </button>
@@ -121,7 +121,7 @@ export function CommentReactionsDialog({
           <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
             <div
               aria-label={t("reactions.filtersLabel")}
-              className="shrink-0 overflow-x-auto border-b border-[var(--theme-color-border-subtle)] p-2 sm:w-[98px] sm:overflow-x-hidden sm:overflow-y-auto sm:border-r sm:border-b-0 dark:border-white/10"
+              className="shrink-0 overflow-x-auto border-b border-[var(--theme-color-border-subtle)] p-2 sm:w-[98px] sm:overflow-x-hidden sm:overflow-y-auto sm:border-r sm:border-b-0"
             >
               <div className="flex min-w-max gap-1 sm:min-w-0 sm:flex-col">
                 {orderedReactions.map((reaction) => {
@@ -140,8 +140,8 @@ export function CommentReactionsDialog({
                       className={cn(
                         "inline-flex h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-bold transition focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] sm:w-full sm:justify-between sm:gap-1.5 sm:px-2",
                         isSelected
-                          ? "bg-[var(--theme-color-control-background-hover)] text-[var(--theme-color-text-default)] dark:bg-white/10 dark:text-white"
-                          : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white",
+                          ? "bg-[var(--theme-color-control-background-hover)] text-[var(--theme-color-text-default)]"
+                          : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)]",
                       )}
                     >
                       <CommentReactionEmoji emojiKey={reaction.emojiKey} size={21} />
@@ -166,7 +166,7 @@ export function CommentReactionsDialog({
                 <div
                   key={`${selectedEmojiKey}-${user.userId}`}
                   data-testid="reaction-participant-row"
-                  className="flex min-h-13 items-center gap-3 rounded-xl px-2.5 py-2 text-sm [contain-intrinsic-size:auto_52px] [content-visibility:auto] hover:bg-[var(--theme-color-control-background-hover)] dark:hover:bg-white/5"
+                  className="flex min-h-13 items-center gap-3 rounded-xl px-2.5 py-2 text-sm [contain-intrinsic-size:auto_52px] [content-visibility:auto] hover:bg-[var(--theme-color-control-background-hover)]"
                 >
                   <AccountCardAvatar
                     username={user.username}
@@ -174,10 +174,10 @@ export function CommentReactionsDialog({
                     entityServer={user.avatar.entityServer}
                     trainType={user.avatar.trainType}
                     size="toolbar"
-                    className="h-9 w-9 ring-1 ring-[var(--theme-color-border-subtle)] dark:ring-white/15"
+                    className="h-9 w-9 ring-1 ring-[var(--theme-color-border-subtle)]"
                   />
                   <div className="flex min-w-0 items-center gap-2">
-                    <span className="truncate font-semibold text-[var(--theme-color-text-default)] dark:text-slate-100">
+                    <span className="truncate font-semibold text-[var(--theme-color-text-default)]">
                       {user.username ?? t("states.anonymous")}
                     </span>
                     <CommentPublicUid publicUid={user.publicUid} />
@@ -188,7 +188,7 @@ export function CommentReactionsDialog({
               {selectedPage?.isLoading ? (
                 <div
                   aria-live="polite"
-                  className="flex h-12 items-center justify-center gap-2 text-xs font-semibold text-[var(--theme-color-text-muted)] dark:text-slate-400"
+                  className="flex h-12 items-center justify-center gap-2 text-xs font-semibold text-[var(--theme-color-text-muted)]"
                 >
                   <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />
                   {t("reactions.loadingMore")}
@@ -200,7 +200,7 @@ export function CommentReactionsDialog({
                   <button
                     type="button"
                     onClick={retry}
-                    className="rounded-full border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] px-4 py-2 text-xs font-semibold text-[var(--theme-color-semantic-danger-foreground)] transition hover:brightness-95 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-200"
+                    className="rounded-full border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] px-4 py-2 text-xs font-semibold text-[var(--theme-color-semantic-danger-foreground)] transition hover:brightness-95 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]"
                   >
                     {t("reactions.loadFailedRetry")}
                   </button>
@@ -211,7 +211,7 @@ export function CommentReactionsDialog({
                 && !selectedPage.isLoading
                 && !selectedPage.hasError
                 && selectedPage.users.length === 0 ? (
-                  <div className="flex h-28 items-center justify-center text-sm text-[var(--theme-color-text-muted)] dark:text-slate-400">
+                  <div className="flex h-28 items-center justify-center text-sm text-[var(--theme-color-text-muted)]">
                     {t("reactions.empty")}
                   </div>
                 ) : null}

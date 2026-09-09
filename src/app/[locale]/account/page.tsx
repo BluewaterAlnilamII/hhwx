@@ -43,13 +43,13 @@ function AccountEntryLink({ href, titleKey, descriptionKey }: AccountEntry) {
   return (
     <Link
       href={href}
-      className="hhwx-control group flex items-start justify-between gap-3 rounded-2xl border p-4 shadow-xs transition hover:shadow-[0_12px_36px_rgba(14,165,233,0.08)] sm:gap-4 sm:rounded-3xl sm:p-6"
+      className="hhwx-control group flex items-start justify-between gap-3 rounded-2xl border p-4 shadow-xs transition hover:shadow-[var(--theme-shadow-surface-raised)] sm:gap-4 sm:rounded-3xl sm:p-6"
     >
       <div className="min-w-0">
         <h2 className="text-lg font-semibold text-[var(--theme-color-text-default)] sm:text-xl">{t(titleKey)}</h2>
         <p className="mt-2 text-sm leading-6 text-[var(--theme-color-text-muted)]">{t(descriptionKey)}</p>
       </div>
-      <span className="shrink-0 rounded-full border border-[var(--theme-color-border-subtle)] px-4 py-2 text-sm font-semibold text-[var(--theme-color-text-default)] transition group-hover:border-[var(--theme-color-semantic-info-border)] group-hover:text-[var(--theme-color-semantic-info-foreground)]">
+      <span className="shrink-0 rounded-full border border-[var(--theme-color-border-subtle)] px-4 py-2 text-sm font-semibold text-[var(--theme-color-text-default)] transition group-hover:border-[var(--theme-color-action-secondary-border)] group-hover:text-[var(--theme-color-action-secondary-foreground)]">
         {commonT("actions.enter")}
       </span>
     </Link>
@@ -84,7 +84,7 @@ export default function AccountPage() {
                 <div className="mt-1 break-all text-sm text-[var(--theme-color-profile-banner-foreground)]/80">{profile.email || userEmail || "-"}</div>
                 <Link
                   href={`/u/${profile.publicUid}`}
-                  className="mt-2 inline-flex rounded-full bg-[var(--theme-color-control-background)] px-3 py-1 text-xs font-semibold text-[var(--theme-color-semantic-info-foreground)] transition hover:bg-[var(--theme-color-control-background-hover)]"
+                  className="mt-2 inline-flex rounded-full bg-[var(--theme-color-control-background)] px-3 py-1 text-xs font-semibold text-[var(--theme-color-action-secondary-foreground)] transition hover:bg-[var(--theme-color-control-background-hover)]"
                 >
                   UID {profile.publicUid}
                 </Link>

@@ -46,7 +46,7 @@ export default function BandoriSongDetailedRow({
   return (
     <Link
       href={href}
-      className="hhwx-panel hhwx-catalog-row group block border p-3 transition sm:p-4 dark:border-slate-700 dark:bg-[#111827]"
+      className="hhwx-panel hhwx-catalog-row group block border p-3 transition sm:p-4"
     >
       <article className="grid min-h-24 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 sm:gap-5">
         <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] shadow-[var(--theme-shadow-media)] sm:h-24 sm:w-24">
@@ -64,17 +64,17 @@ export default function BandoriSongDetailedRow({
 
         <div className="min-w-0 self-stretch py-0.5">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-            <h2 className="min-w-0 truncate text-base font-black text-[var(--theme-color-text-default)] sm:text-lg dark:text-slate-100">
+            <h2 className="min-w-0 truncate text-base font-black text-[var(--theme-color-text-default)] sm:text-lg">
               {entry.title}
             </h2>
-            <span className="text-xs font-bold tabular-nums text-[var(--theme-color-text-muted)] dark:text-slate-400">
+            <span className="text-xs font-bold tabular-nums text-[var(--theme-color-text-muted)]">
               #{entry.songId}
             </span>
           </div>
-          <div className="mt-0.5 truncate text-sm font-bold text-[var(--theme-color-text-muted)] dark:text-slate-300">
+          <div className="mt-0.5 truncate text-sm font-bold text-[var(--theme-color-text-muted)]">
             {entry.bandName}
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-[var(--theme-color-text-muted)] dark:text-slate-400">
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-[var(--theme-color-text-muted)]">
             <span>{t(`filters.types.${entry.type}`)}</span>
             <span className="inline-flex items-center gap-1 tabular-nums">
               <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
@@ -93,7 +93,7 @@ export default function BandoriSongDetailedRow({
           </div>
         </div>
 
-        <ChevronRight className="h-5 w-5 shrink-0 text-[var(--theme-color-text-muted)] transition group-hover:translate-x-0.5 group-hover:text-[var(--theme-color-semantic-info-foreground)] dark:text-slate-600" aria-hidden="true" />
+        <ChevronRight className="h-5 w-5 shrink-0 text-[var(--theme-color-text-muted)] transition group-hover:translate-x-0.5 group-hover:text-[var(--theme-color-action-secondary-foreground)]" aria-hidden="true" />
       </article>
     </Link>
   );

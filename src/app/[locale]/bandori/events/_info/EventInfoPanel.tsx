@@ -121,16 +121,16 @@ type OverviewRowProps = {
 function OverviewRow({ label, children, mobileLayout = "inline", alignment = "baseline" }: OverviewRowProps) {
   return (
     <div className={cn(
-      "grid border-b border-[var(--theme-color-border-subtle)] py-3 last:border-b-0 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-5 dark:border-slate-700",
+      "grid border-b border-[var(--theme-color-border-subtle)] py-3 last:border-b-0 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-5",
       alignment === "center" ? "items-center" : alignment === "start" ? "items-start" : "items-baseline",
       mobileLayout === "inline"
         ? "grid-cols-[7rem_minmax(0,1fr)] gap-3"
         : "grid-cols-1 gap-1",
     )}>
-      <dt className="text-sm font-semibold leading-5 text-[var(--theme-color-text-muted)] dark:text-slate-400">
+      <dt className="text-sm font-semibold leading-5 text-[var(--theme-color-text-muted)]">
         {label}
       </dt>
-      <dd className="flex min-w-0 flex-col items-end text-right text-sm font-semibold leading-5 text-[var(--theme-color-text-default)] dark:text-slate-100">{children}</dd>
+      <dd className="flex min-w-0 flex-col items-end text-right text-sm font-semibold leading-5 text-[var(--theme-color-text-default)]">{children}</dd>
     </div>
   );
 }
@@ -317,25 +317,25 @@ export default function EventInfoPanel({
 
   if (loading && !model) {
     return (
-      <div className="hhwx-panel border p-8 text-center dark:border-slate-700 dark:bg-[#111827]">
+      <div className="hhwx-panel border p-8 text-center">
         <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-[var(--theme-color-action-primary-background)] border-t-transparent" />
-        <p className="mt-4 text-sm font-semibold text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">{t("loading")}</p>
+        <p className="mt-4 text-sm font-semibold text-[var(--theme-color-text-muted)]">{t("loading")}</p>
       </div>
     );
   }
 
   if (!model || eventId === null) {
     return (
-      <div className="hhwx-panel border border-dashed p-10 text-center text-sm font-semibold text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-slate-900/60 dark:text-[var(--theme-color-text-muted-on-dark)]">
+      <div className="hhwx-panel border border-dashed p-10 text-center text-sm font-semibold text-[var(--theme-color-text-muted)]">
         {t("unavailable")}
       </div>
     );
   }
 
   return (
-    <article className="hhwx-panel border p-4 sm:p-6 dark:border-slate-700/80 dark:bg-[#111827]">
+    <article className="hhwx-panel border p-4 sm:p-6">
       <section className="@container">
-        <Heading as="h2" visualRole="section" accentSlot="a" icon={<ClipboardList className="h-5 w-5" />} className="dark:text-[var(--theme-color-text-default-on-dark)]">{t("overviewTitle")}</Heading>
+        <Heading as="h2" visualRole="section" accentSlot="a" icon={<ClipboardList className="h-5 w-5" />}>{t("overviewTitle")}</Heading>
         <div className="mt-4 grid min-w-0 items-stretch gap-y-0 @min-[54rem]:grid-cols-2 @min-[54rem]:gap-x-0">
           <dl className="min-w-0 @min-[54rem]:pr-8">
             <OverviewRow label={t("eventId")}>{eventId}</OverviewRow>
@@ -379,7 +379,7 @@ export default function EventInfoPanel({
             </OverviewRow>
           </dl>
 
-          <div className="min-w-0 border-t border-[var(--theme-color-border-subtle)] @min-[54rem]:border-l @min-[54rem]:border-t-0 @min-[54rem]:pl-8 dark:border-slate-700">
+          <div className="min-w-0 border-t border-[var(--theme-color-border-subtle)] @min-[54rem]:border-l @min-[54rem]:border-t-0 @min-[54rem]:pl-8">
             <BandoriEventBonusPanel
               variant="embedded"
               eventTypeLabel={eventTypeLabel}
@@ -395,8 +395,8 @@ export default function EventInfoPanel({
         </div>
       </section>
 
-      <section className="@container mt-6 border-t border-[var(--theme-color-border-subtle)] pt-6 dark:border-slate-700">
-        <Heading as="h2" visualRole="section" accentSlot="b" icon={<Gift className="h-5 w-5" />} className="dark:text-[var(--theme-color-text-default-on-dark)]">{t("rewardsTitle")}</Heading>
+      <section className="@container mt-6 border-t border-[var(--theme-color-border-subtle)] pt-6">
+        <Heading as="h2" visualRole="section" accentSlot="b" icon={<Gift className="h-5 w-5" />}>{t("rewardsTitle")}</Heading>
         <div className="mt-4 grid min-w-0 items-stretch gap-y-0 @min-[54rem]:grid-cols-2 @min-[54rem]:gap-x-0">
           <dl className="min-w-0 @min-[54rem]:pr-8">
             <OverviewRow label={t("rewardStamps", { server: SERVER_LABELS[rewardStampSelection.server] })} mobileLayout="stacked" alignment="start">
@@ -419,7 +419,7 @@ export default function EventInfoPanel({
             </OverviewRow>
           </dl>
 
-          <dl className="mt-2 min-w-0 border-t border-[var(--theme-color-border-subtle)] pt-2 @min-[54rem]:mt-0 @min-[54rem]:border-l @min-[54rem]:border-t-0 @min-[54rem]:pl-8 @min-[54rem]:pt-0 dark:border-slate-700">
+          <dl className="mt-2 min-w-0 border-t border-[var(--theme-color-border-subtle)] pt-2 @min-[54rem]:mt-0 @min-[54rem]:border-l @min-[54rem]:border-t-0 @min-[54rem]:pl-8 @min-[54rem]:pt-0">
             <OverviewRow label={t("rewardCards")} mobileLayout="stacked" alignment="start">
               {model.rewardCardIds.length > 0 ? (
                 <div className="flex min-h-16 flex-wrap items-start justify-end gap-3">
@@ -444,8 +444,8 @@ export default function EventInfoPanel({
         </div>
       </section>
 
-      <section className="mt-6 border-t border-[var(--theme-color-border-subtle)] pt-6 dark:border-slate-700">
-        <Heading as="h2" visualRole="section" accentSlot="c" icon={<Music2 className="h-5 w-5" />} className="dark:text-[var(--theme-color-text-default-on-dark)]">
+      <section className="mt-6 border-t border-[var(--theme-color-border-subtle)] pt-6">
+        <Heading as="h2" visualRole="section" accentSlot="c" icon={<Music2 className="h-5 w-5" />}>
           {t("songsTitle", { server: SERVER_LABELS[songSelection?.sourceServer ?? server] })}
         </Heading>
         <div className="mt-4 max-w-3xl space-y-3">
@@ -453,8 +453,8 @@ export default function EventInfoPanel({
             const thumbnailUrl = buildBandoriPublicAssetUrl(musicAssetIndex?.songs[String(song.id)]?.files.thumb);
             const playableSongIndex = playableSongIndexById.get(String(song.id));
             return (
-              <div key={song.id} data-music-id={song.id} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-3 shadow-sm transition hover:border-[var(--theme-color-action-secondary-border)] hover:shadow-md sm:grid-cols-[4.5rem_minmax(0,1fr)_auto] sm:items-center dark:border-slate-700 dark:bg-slate-950/50">
-                <div className="flex h-18 w-18 items-center justify-center overflow-hidden rounded-xl bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-action-secondary-foreground)] dark:bg-slate-800 dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]">
+              <div key={song.id} data-music-id={song.id} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-3 shadow-sm transition hover:border-[var(--theme-color-action-secondary-border)] hover:shadow-md sm:grid-cols-[4.5rem_minmax(0,1fr)_auto] sm:items-center">
+                <div className="flex h-18 w-18 items-center justify-center overflow-hidden rounded-xl bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-action-secondary-foreground)]">
                   {thumbnailUrl ? (
                     <MusicArtwork
                       src={thumbnailUrl}
@@ -465,8 +465,8 @@ export default function EventInfoPanel({
                   ) : <ImageOff className="h-6 w-6" />}
                 </div>
                 <div className="min-w-0">
-                  <div className="truncate text-base font-black text-[var(--theme-color-text-default)] dark:text-[var(--theme-color-text-default-on-dark)]">{song.title}</div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]">
+                  <div className="truncate text-base font-black text-[var(--theme-color-text-default)]">{song.title}</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-[var(--theme-color-text-muted)]">
                     <span>#{song.id}</span>
                     {song.bandName ? <span>{song.bandName}</span> : null}
                     <span>{t("publishedAt", {
@@ -481,7 +481,7 @@ export default function EventInfoPanel({
                 </div>
                 <div className="col-start-2 flex flex-wrap gap-1.5 sm:col-start-auto sm:justify-end">
                   {song.difficultyLevels.map((level, index) => (
-                    <span key={`${level}-${index}`} className="inline-flex h-7 min-w-7 items-center justify-center rounded-lg bg-[var(--theme-color-control-background-muted)] px-1.5 text-[11px] font-black text-[var(--theme-color-text-muted)] dark:bg-slate-800 dark:text-slate-300">{level}</span>
+                    <span key={`${level}-${index}`} className="inline-flex h-7 min-w-7 items-center justify-center rounded-lg bg-[var(--theme-color-control-background-muted)] px-1.5 text-[11px] font-black text-[var(--theme-color-text-muted)]">{level}</span>
                   ))}
                   <button
                     type="button"
@@ -504,7 +504,7 @@ export default function EventInfoPanel({
             );
           })}
           {songs.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] px-5 py-8 text-center text-sm font-semibold text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-slate-950/30 dark:text-[var(--theme-color-text-muted-on-dark)]">
+            <div className="rounded-2xl border border-dashed border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] px-5 py-8 text-center text-sm font-semibold text-[var(--theme-color-text-muted)]">
               {songSelection?.startAt === null || songSelection?.endAt === null
                 ? t("songWindowUnavailable")
                 : t("noSongs")}

@@ -51,11 +51,11 @@ export default function CardDetailPreferredServerResolver({
     <BandoriPageShell contentClassName="max-w-6xl">
       <article
         aria-busy="true"
-        className="hhwx-panel min-h-96 animate-pulse border p-4 sm:p-6 dark:border-slate-700 dark:bg-[#111827]"
+        className="hhwx-panel min-h-96 animate-pulse border p-4 sm:p-6"
       >
-        <div className="h-5 w-32 rounded-lg bg-slate-100 dark:bg-slate-800" />
-        <div className="mt-7 h-9 w-full max-w-xl rounded-xl bg-slate-200 dark:bg-slate-700" />
-        <div className="mt-8 h-64 rounded-2xl bg-slate-100 dark:bg-slate-800" />
+        <div className="h-5 w-32 rounded-lg bg-[var(--theme-color-control-background-muted)]" />
+        <div className="mt-7 h-9 w-full max-w-xl rounded-xl bg-[var(--theme-color-control-background)]" />
+        <div className="mt-8 h-64 rounded-2xl bg-[var(--theme-color-control-background-muted)]" />
       </article>
     </BandoriPageShell>
   );

@@ -83,21 +83,21 @@ export const ComparisonControls = memo(function ComparisonControls({
   }
 
   return (
-    <div className="border-t border-[var(--theme-color-border-subtle)] px-1 pt-4 sm:px-2 dark:border-slate-800/80">
+    <div className="border-t border-[var(--theme-color-border-subtle)] px-1 pt-4 sm:px-2">
       <div className="flex flex-col items-center gap-3">
         {status === "ongoing" && (
-          <div className="flex flex-wrap items-center justify-center gap-2 rounded-[18px] bg-[var(--theme-color-panel-background)]/85 px-2 py-1.5 sm:gap-3 dark:bg-slate-900/55">
+          <div className="flex flex-wrap items-center justify-center gap-2 rounded-[18px] bg-[var(--theme-color-panel-background)]/85 px-2 py-1.5 sm:gap-3">
             <button
               type="button"
               aria-pressed={showInstantProjection}
               onClick={() => setShowInstantProjection((prev) => !prev)}
               className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all ${
                 showInstantProjection
-                  ? "border-red-300 bg-[var(--theme-color-control-background)] text-red-600 shadow-xs dark:border-red-500/40 dark:bg-red-500/15 dark:text-red-300"
-                  : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400"
+                  ? "border-red-300 bg-[var(--theme-color-control-background)] text-red-600 shadow-xs dark:text-red-300"
+                  : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)]"
               }`}
             >
-              <span className={`h-2.5 w-2.5 rounded-full ${showInstantProjection ? "bg-red-500" : "bg-[var(--theme-color-border-subtle)] dark:bg-gray-600"}`} />
+              <span className={`h-2.5 w-2.5 rounded-full ${showInstantProjection ? "bg-red-500" : "bg-[var(--theme-color-border-subtle)]"}`} />
               {t("instantProjection")}
             </button>
 
@@ -107,11 +107,11 @@ export const ComparisonControls = memo(function ComparisonControls({
               onClick={() => setShowDayProjection((prev) => !prev)}
               className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all ${
                 showDayProjection
-                  ? "border-blue-300 bg-[var(--theme-color-control-background)] text-blue-600 shadow-xs dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-300"
-                  : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400"
+                  ? "border-blue-300 bg-[var(--theme-color-control-background)] text-blue-600 shadow-xs dark:text-blue-300"
+                  : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)]"
               }`}
             >
-              <span className={`h-2.5 w-2.5 rounded-full ${showDayProjection ? "bg-blue-500" : "bg-[var(--theme-color-border-subtle)] dark:bg-gray-600"}`} />
+              <span className={`h-2.5 w-2.5 rounded-full ${showDayProjection ? "bg-blue-500" : "bg-[var(--theme-color-border-subtle)]"}`} />
               {t("dayProjection")}
             </button>
 
@@ -122,15 +122,15 @@ export const ComparisonControls = memo(function ComparisonControls({
                 onClick={() => setShowBestdoriPrediction((prev) => !prev)}
                 className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs sm:text-sm font-semibold transition-all ${
                   showBestdoriPrediction
-                    ? "border-[var(--eventtracker-bestdori-color)] bg-[var(--theme-color-control-background)] text-[var(--eventtracker-bestdori-color)] shadow-xs dark:border-slate-400/50 dark:bg-slate-400/15 dark:text-slate-100"
-                    : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400"
+                    ? "border-[var(--eventtracker-bestdori-color)] bg-[var(--theme-color-control-background)] text-[var(--eventtracker-bestdori-color)] shadow-xs"
+                    : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)]"
                 }`}
                 title={showBestdoriPrediction && bestdoriPrediction.status === "no-data"
                   ? t("predictionUnavailable")
                   : t("showPrediction")}
               >
                 <span
-                  className={`h-2.5 w-2.5 rounded-full ${showBestdoriPrediction ? "" : "bg-[var(--theme-color-border-subtle)] dark:bg-gray-600"}`}
+                  className={`h-2.5 w-2.5 rounded-full ${showBestdoriPrediction ? "" : "bg-[var(--theme-color-border-subtle)]"}`}
                   style={showBestdoriPrediction ? { backgroundColor: BESTDORI_PREDICTION_COLOR } : undefined}
                 />
                 {t("prediction")}
@@ -140,7 +140,7 @@ export const ComparisonControls = memo(function ComparisonControls({
         )}
 
         {resolvedComparisonConfigs.length > 0 && (
-          <div className="flex max-w-full flex-wrap items-center justify-center gap-2 rounded-[18px] bg-[var(--theme-color-panel-background)]/85 px-2 py-1.5 sm:gap-3 dark:bg-slate-900/45">
+          <div className="flex max-w-full flex-wrap items-center justify-center gap-2 rounded-[18px] bg-[var(--theme-color-panel-background)]/85 px-2 py-1.5 sm:gap-3">
             {resolvedComparisonConfigs.map((config) => {
               const line = comparisonLineById.get(config.id);
               const color = line?.color ?? COMPARISON_LINE_COLORS[(config.colorIndex ?? 0) % COMPARISON_LINE_COLORS.length];
@@ -159,8 +159,8 @@ export const ComparisonControls = memo(function ComparisonControls({
                   onClick={() => onToggleComparison(config.id)}
                   className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all sm:text-sm ${
                     config.enabled
-                      ? "text-[var(--theme-color-text-default)] dark:text-gray-200"
-                      : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] opacity-60 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-500"
+                      ? "text-[var(--theme-color-text-default)]"
+                      : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] opacity-60"
                   }`}
                   style={config.enabled ? {
                     borderColor: `${color}66`,
@@ -177,7 +177,7 @@ export const ComparisonControls = memo(function ComparisonControls({
               );
             })}
 
-            <div className="inline-flex overflow-hidden rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-xs font-semibold shadow-xs sm:text-sm dark:border-gray-700 dark:bg-[#131A2B]">
+            <div className="inline-flex overflow-hidden rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-xs font-semibold shadow-xs sm:text-sm">
               <button
                 type="button"
                 aria-pressed={comparisonAlignment === "start"}
@@ -185,7 +185,7 @@ export const ComparisonControls = memo(function ComparisonControls({
                 className={`rounded-full px-3 py-1.5 outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)] ${
                   comparisonAlignment === "start"
                     ? "bg-[var(--theme-color-selection-strong-background)] text-[var(--theme-color-selection-strong-foreground)] ring-2 ring-inset ring-[var(--theme-color-selection-strong-ring)]"
-                    : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] dark:text-gray-400 dark:hover:bg-blue-500/10"
+                    : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)]"
                 }`}
               >
                 {t("alignLeft")}
@@ -197,7 +197,7 @@ export const ComparisonControls = memo(function ComparisonControls({
                 className={`rounded-full px-3 py-1.5 outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)] ${
                   comparisonAlignment === "end"
                     ? "bg-[var(--theme-color-selection-strong-background)] text-[var(--theme-color-selection-strong-foreground)] ring-2 ring-inset ring-[var(--theme-color-selection-strong-ring)]"
-                    : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] dark:text-gray-400 dark:hover:bg-blue-500/10"
+                    : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)]"
                 }`}
               >
                 {t("alignRight")}
@@ -206,14 +206,14 @@ export const ComparisonControls = memo(function ComparisonControls({
           </div>
         )}
 
-        <div className="flex w-full flex-col items-center gap-2 border-t border-[var(--theme-color-border-subtle)] pt-3 pb-3 sm:pb-4 dark:border-slate-800/80">
+        <div className="flex w-full flex-col items-center gap-2 border-t border-[var(--theme-color-border-subtle)] pt-3 pb-3 sm:pb-4">
           {comparisonConfigs.map((config) => {
             const rowTierOptions = comparisonTierOptionsByConfigId.get(config.id) ?? comparisonTierOptions;
 
             return (
               <div key={config.id} className="flex w-full max-w-184 flex-wrap items-center justify-center gap-2">
               <select
-                className={`h-8 max-w-full rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-text-muted)] outline-hidden transition-colors hover:border-[var(--theme-color-action-secondary-border)] focus:ring-2 focus:ring-[var(--theme-color-focus-ring)] sm:h-9 sm:text-sm dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-300 ${
+                className={`h-8 max-w-full rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-text-muted)] outline-hidden transition-colors hover:border-[var(--theme-color-action-secondary-border)] focus:ring-2 focus:ring-[var(--theme-color-focus-ring)] sm:h-9 sm:text-sm ${
                   comparisonTargetType === "monthly" ? "w-30" : "min-w-52"
                 }`}
                 value={config.targetId ?? ""}
@@ -226,7 +226,7 @@ export const ComparisonControls = memo(function ComparisonControls({
                   <option
                     key={option.id}
                     value={option.id}
-                    className={option.isSameEventType ? "font-semibold text-[var(--theme-color-selection-subtle-foreground)] dark:text-red-300" : undefined}
+                    className={option.isSameEventType ? "font-semibold text-[var(--theme-color-selection-subtle-foreground)]" : undefined}
                   >
                     {option.label}
                   </option>
@@ -234,7 +234,7 @@ export const ComparisonControls = memo(function ComparisonControls({
               </select>
 
               <select
-                className="h-8 rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-text-muted)] outline-hidden transition-colors hover:border-[var(--theme-color-action-secondary-border)] focus:ring-2 focus:ring-[var(--theme-color-focus-ring)] sm:h-9 sm:text-sm dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-300"
+                className="h-8 rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-text-muted)] outline-hidden transition-colors hover:border-[var(--theme-color-action-secondary-border)] focus:ring-2 focus:ring-[var(--theme-color-focus-ring)] sm:h-9 sm:text-sm"
                 value={config.tier ?? ""}
                 onChange={(event) => {
                   const nextTier = event.target.value ? Number(event.target.value) : null;
@@ -251,7 +251,7 @@ export const ComparisonControls = memo(function ComparisonControls({
               <button
                 type="button"
                 onClick={() => onRemoveComparison(config.id)}
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-text-muted)] transition-colors hover:border-[var(--theme-color-semantic-danger-border)] hover:bg-[var(--theme-color-semantic-danger-background)] hover:text-[var(--theme-color-semantic-danger-foreground)] sm:h-9 sm:text-sm dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-400 dark:hover:text-red-300"
+                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-text-muted)] transition-colors hover:border-[var(--theme-color-semantic-danger-border)] hover:bg-[var(--theme-color-semantic-danger-background)] hover:text-[var(--theme-color-semantic-danger-foreground)] sm:h-9 sm:text-sm"
                 aria-label={t("removeLine")}
               >
                 <X size={13} />
@@ -269,7 +269,7 @@ export const ComparisonControls = memo(function ComparisonControls({
               title={comparisonConfigs.length >= MAX_COMPARISON_LINES
                 ? t("maxLines", { count: MAX_COMPARISON_LINES })
                 : t("addLine")}
-              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-semantic-success-border)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-semantic-success-foreground)] transition-colors hover:bg-[var(--theme-color-semantic-success-background)] disabled:cursor-not-allowed disabled:border-[var(--theme-color-control-border-disabled)] disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] disabled:opacity-60 disabled:hover:bg-[var(--theme-color-control-background-disabled)] sm:h-9 sm:text-sm dark:text-[var(--theme-color-semantic-success-foreground-on-dark)] dark:disabled:border-gray-700 dark:disabled:bg-[#131A2B] dark:disabled:text-gray-500"
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-semantic-success-border)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-semantic-success-foreground)] transition-colors hover:bg-[var(--theme-color-semantic-success-background)] disabled:cursor-not-allowed disabled:border-[var(--theme-color-control-border-disabled)] disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] disabled:opacity-60 disabled:hover:bg-[var(--theme-color-control-background-disabled)] sm:h-9 sm:text-sm"
             >
               <Plus size={15} />
               {t("addComparison")}
@@ -278,7 +278,7 @@ export const ComparisonControls = memo(function ComparisonControls({
               <button
                 type="button"
                 onClick={onRemoveAllComparisons}
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-action-destructive-border)] bg-[var(--theme-color-action-destructive-background)] px-3 text-xs font-semibold text-[var(--theme-color-action-destructive-foreground)] transition-colors hover:bg-[var(--theme-color-action-destructive-background-hover)] sm:h-9 sm:text-sm dark:text-red-300"
+                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-action-destructive-border)] bg-[var(--theme-color-action-destructive-background)] px-3 text-xs font-semibold text-[var(--theme-color-action-destructive-foreground)] transition-colors hover:bg-[var(--theme-color-action-destructive-background-hover)] sm:h-9 sm:text-sm"
                 aria-label={t("removeAllLines")}
                 title={t("removeAllLines")}
               >

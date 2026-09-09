@@ -73,7 +73,7 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
 
           <Link
             href="/"
-            className="inline-flex w-full items-center justify-center rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-5 py-2 text-sm font-semibold text-[var(--theme-color-text-default)] transition hover:border-[var(--theme-color-semantic-info-border)] hover:text-[var(--theme-color-action-secondary-foreground)] sm:w-auto"
+            className="inline-flex w-full items-center justify-center rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-5 py-2 text-sm font-semibold text-[var(--theme-color-text-default)] transition hover:border-[var(--theme-color-action-secondary-border)] hover:text-[var(--theme-color-action-secondary-foreground)] sm:w-auto"
           >
             {t("backHome")}
           </Link>

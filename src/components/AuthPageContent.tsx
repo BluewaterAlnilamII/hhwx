@@ -360,7 +360,7 @@ export default function AuthPageContent() {
             </div>
             <Link
               href="/"
-              className="inline-flex items-center justify-center rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-2 text-sm font-semibold text-[var(--theme-color-text-default)] transition hover:border-[var(--theme-color-semantic-info-border)] hover:text-[var(--theme-color-action-secondary-foreground)]"
+              className="inline-flex items-center justify-center rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-2 text-sm font-semibold text-[var(--theme-color-text-default)] transition hover:border-[var(--theme-color-action-secondary-border)] hover:text-[var(--theme-color-action-secondary-foreground)]"
             >
               {t("actions.backHome")}
             </Link>
@@ -403,7 +403,7 @@ export default function AuthPageContent() {
           )}
 
           {notice && (
-            <div className="mt-6 rounded-2xl bg-[var(--theme-color-semantic-info-background)] p-4 text-sm leading-6 text-[var(--theme-color-action-secondary-foreground)]">
+            <div className="mt-6 rounded-2xl bg-[var(--theme-color-semantic-info-background)] p-4 text-sm leading-6 text-[var(--theme-color-semantic-info-foreground)]">
               {notice}
             </div>
           )}

@@ -58,7 +58,7 @@ function formatThumbnailPower(power: number | null | undefined): string | null {
 
 function BrokenImageFallback({ label }: { label: string }) {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-white/70 text-center text-[10px] font-semibold text-slate-400">
+    <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-[var(--theme-color-control-background-muted)] text-center text-[10px] font-semibold text-[var(--theme-color-text-muted)]">
       <ImageOff className="h-5 w-5" aria-hidden="true" />
       <span>{label}</span>
     </div>
@@ -91,7 +91,7 @@ function CardAssetImage({
         role="status"
         aria-busy="true"
         aria-label={loadingLabel}
-        className="h-full w-full animate-pulse bg-slate-100"
+        className="h-full w-full animate-pulse bg-[var(--theme-color-control-background-muted)]"
       />
     );
   }
@@ -182,7 +182,7 @@ export default function BandoriCardThumbnail({
 
   return (
     <div
-      className="bandori-card-thumbnail relative h-full w-full rounded-[5px] bg-white @container"
+      className="bandori-card-thumbnail relative h-full w-full rounded-[5px] bg-[var(--theme-color-control-background)] @container"
       data-size={size}
       style={starStyle as CSSProperties}
     >

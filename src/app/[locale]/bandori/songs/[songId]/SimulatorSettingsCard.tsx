@@ -12,7 +12,7 @@ export default function SimulatorSettingsCard({
   return (
     <section
       aria-label={title}
-      className="rounded-2xl border border-[var(--theme-color-panel-border)] bg-[var(--theme-color-panel-background)] p-3 dark:shadow-sm sm:p-5"
+      className="rounded-2xl border border-[var(--theme-color-panel-border)] bg-[var(--theme-color-panel-background)] p-3 sm:p-5"
     >
       <h3 className="text-[15px] font-black text-[var(--theme-color-heading-section-foreground)] sm:text-base">
         {title}

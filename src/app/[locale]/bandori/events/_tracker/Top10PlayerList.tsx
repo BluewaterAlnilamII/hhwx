@@ -26,14 +26,14 @@ export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
 
   return (
     <section className="mt-7" aria-label={t("ranking")}>
-      <div className="grid grid-cols-[2.25rem_4rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-[var(--theme-color-border-subtle)] px-2 pb-2 text-xs font-bold tracking-[0.08em] text-[var(--theme-color-text-muted)] sm:grid-cols-[3rem_5rem_minmax(0,1fr)_minmax(9rem,auto)] sm:px-3 dark:border-slate-700 dark:text-slate-400">
+      <div className="grid grid-cols-[2.25rem_4rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-[var(--theme-color-border-subtle)] px-2 pb-2 text-xs font-bold tracking-[0.08em] text-[var(--theme-color-text-muted)] sm:grid-cols-[3rem_5rem_minmax(0,1fr)_minmax(9rem,auto)] sm:px-3">
         <span className="text-center">{t("rank")}</span>
         <span className="sr-only">{t("avatar")}</span>
         <span>{t("player")}</span>
         <span className="text-right">{t("score")}</span>
       </div>
 
-      <div className="divide-y divide-[var(--theme-color-border-subtle)] dark:divide-slate-700/80">
+      <div className="divide-y divide-[var(--theme-color-border-subtle)]">
         {players.map((player) => {
           const metadata = cards?.[String(player.avatarCardId)];
           const bandId = resolveBandoriCardBandId(metadata, characters ?? {});
@@ -44,7 +44,7 @@ export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
               className="grid grid-cols-[2.25rem_4rem_minmax(0,1fr)_auto] items-center gap-3 px-2 py-3 sm:grid-cols-[3rem_5rem_minmax(0,1fr)_minmax(9rem,auto)] sm:px-3 sm:py-4"
             >
               <div className="flex items-center justify-center">
-                <span className="text-lg font-black tabular-nums text-[var(--theme-color-text-default)] dark:text-slate-100">
+                <span className="text-lg font-black tabular-nums text-[var(--theme-color-text-default)]">
                   {player.position}
                 </span>
               </div>
@@ -70,7 +70,7 @@ export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
                     showPower={false}
                   />
                 ) : (
-                  <div className="flex h-14 w-14 flex-col items-center justify-center gap-1 overflow-hidden rounded-[5px] bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] shadow-[var(--theme-shadow-media)] outline-solid outline-1 outline-[color:var(--theme-color-border-subtle)] sm:h-[76px] sm:w-[76px] dark:bg-slate-800 dark:text-slate-500">
+                  <div className="flex h-14 w-14 flex-col items-center justify-center gap-1 overflow-hidden rounded-[5px] bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] shadow-[var(--theme-shadow-media)] outline-solid outline-1 outline-[color:var(--theme-color-border-subtle)] sm:h-[76px] sm:w-[76px]">
                     <ImageOff className="h-5 w-5" aria-hidden="true" />
                     <span className="text-[10px] font-semibold">{t("noAvatar")}</span>
                   </div>
@@ -78,16 +78,16 @@ export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
               </div>
 
               <div className="min-w-0">
-                <div className="min-w-0 whitespace-pre-line break-words text-sm font-bold leading-5 text-[var(--theme-color-text-default)] sm:text-base dark:text-slate-100">
+                <div className="min-w-0 whitespace-pre-line break-words text-sm font-bold leading-5 text-[var(--theme-color-text-default)] sm:text-base">
                   {player.name || "—"}
                 </div>
-                <div className="mt-1 whitespace-nowrap text-[10px] font-medium tabular-nums text-[var(--theme-color-text-muted)] sm:text-xs dark:text-slate-400">
+                <div className="mt-1 whitespace-nowrap text-[10px] font-medium tabular-nums text-[var(--theme-color-text-muted)] sm:text-xs">
                   {player.uid}
                 </div>
               </div>
 
               <div className="text-right">
-                <span className="block text-sm font-black tabular-nums text-[var(--theme-color-text-default)] sm:text-lg dark:text-slate-100">
+                <span className="block text-sm font-black tabular-nums text-[var(--theme-color-text-default)] sm:text-lg">
                   {scoreFormatter.format(player.score)}
                 </span>
                 <span className="text-[10px] font-semibold text-[var(--theme-color-text-muted)] opacity-70 sm:text-xs">P</span>

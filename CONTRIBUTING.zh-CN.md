@@ -45,6 +45,7 @@ npm run check:medley-foundation:wasm
 
 ## 基本准则
 
+- UI 配色与组件样式遵循当前[主题指南](documents/theme-guide.zh-CN.md)，包括成对颜色、浅深模式覆盖方式和业务专属颜色的例外范围。
 - 不要提交密钥和私有部署细节。
 - 产品文案使用当前界面的语言。以 `messages/zh-CN` 为消息目录和键的基准，同步更新受影响的其他语言目录。
 - 除非变更明确需要迁移，不要随意改内部 route 名称、API path 或数据库标识符。

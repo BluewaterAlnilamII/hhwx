@@ -72,7 +72,7 @@ function SegmentedControl<T extends string | number | boolean>({
             aria-checked={Object.is(option.value, value)}
             onClick={() => onChange(option.value)}
             className={cn(
-              "min-w-9 border-r border-[var(--theme-color-border-subtle)] px-3 py-1.5 text-sm font-semibold text-[var(--theme-color-text-muted)] transition last:border-r-0 hover:bg-[var(--theme-color-semantic-info-background)] hover:text-[var(--theme-color-semantic-info-foreground)] sm:min-w-10 sm:px-4 sm:py-2",
+              "min-w-9 border-r border-[var(--theme-color-border-subtle)] px-3 py-1.5 text-sm font-semibold text-[var(--theme-color-text-muted)] transition last:border-r-0 hover:bg-[var(--theme-color-action-secondary-background-hover)] hover:text-[var(--theme-color-action-secondary-foreground)] sm:min-w-10 sm:px-4 sm:py-2",
               Object.is(option.value, value) && "bg-[var(--theme-color-selection-strong-background)] text-[var(--theme-color-selection-strong-foreground)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.45)] hover:bg-[var(--theme-color-selection-strong-background)] hover:text-[var(--theme-color-selection-strong-foreground)]",
             )}
           >

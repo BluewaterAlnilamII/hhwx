@@ -8,7 +8,7 @@ export function CommentPublicUid({ publicUid, className }: {
   if (publicUid == null) return null;
 
   return (
-    <span className={cn("inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap text-xs font-normal text-[var(--theme-color-text-muted)] dark:text-[var(--theme-color-text-muted-on-dark)]", className)}>
+    <span className={cn("inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap text-xs font-normal text-[var(--theme-color-text-muted)]", className)}>
       <IdCard size={14} aria-hidden="true" />
       <span className="sr-only">UID </span>
       <span className="tabular-nums">{publicUid}</span>

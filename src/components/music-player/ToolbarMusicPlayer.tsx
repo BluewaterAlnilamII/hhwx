@@ -248,9 +248,9 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
           <span>{formatPlaybackTime(safeDuration)}</span>
         </div>
         <div className={`relative h-5 ${isError ? "cursor-not-allowed" : ""}`}>
-          <div className={`absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 overflow-hidden rounded-full ${isError ? "bg-[var(--theme-color-semantic-danger-background)]" : "bg-[var(--theme-color-progress-track-background)]"}`}>
+          <div className={`absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 overflow-hidden rounded-full ${isError ? "bg-[var(--theme-color-semantic-danger-background)]" : "bg-[var(--theme-color-range-track-background)]"}`}>
             <div
-              className={`h-full rounded-full bg-[var(--theme-color-progress-indicator-background)] ${seekPreviewTime === null ? "transition-[width] duration-150" : ""}`}
+              className={`h-full rounded-full bg-[var(--theme-color-action-accent-background)] ${seekPreviewTime === null ? "transition-[width] duration-150" : ""}`}
               style={{ width: isError ? "0%" : `${progressPercent}%` }}
             />
           </div>
@@ -288,7 +288,7 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
             aria-label={repeatModeLabel}
             aria-pressed={repeatMode !== "off"}
             data-repeat-mode={repeatMode}
-            className={`flex h-9 w-9 items-center justify-center rounded-[14px] outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${repeatMode !== "off" ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-selection-subtle-foreground)]" : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-pressed)]"}`}
+            className={`flex h-9 w-9 items-center justify-center rounded-[14px] outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${repeatMode !== "off" ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-selection-subtle-foreground)]" : "text-[var(--theme-color-action-secondary-foreground)] hover:bg-[var(--theme-color-control-background-pressed)]"}`}
           >
             {repeatMode === "one" ? (
               <Repeat1 className="h-4 w-4" aria-hidden="true" />
@@ -335,7 +335,7 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
             onClick={toggleMuted}
             aria-label={muted ? t("unmute") : t("mute")}
             aria-pressed={muted}
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${muted ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-selection-subtle-foreground)]" : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-pressed)]"}`}
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${muted ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-selection-subtle-foreground)]" : "text-[var(--theme-color-action-secondary-foreground)] hover:bg-[var(--theme-color-control-background-pressed)]"}`}
           >
             {muted ? <VolumeX className="h-4 w-4" aria-hidden="true" /> : <Volume2 className="h-4 w-4" aria-hidden="true" />}
           </button>
@@ -346,7 +346,7 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
             step={0.01}
             value={volume}
             onChange={(event) => setVolume(Number(event.currentTarget.value))}
-            className="hidden w-12 accent-[var(--theme-color-progress-indicator-background)] sm:block"
+            className="hidden w-12 accent-[var(--theme-color-action-accent-background)] sm:block"
             aria-label={t("volume")}
           />
         </div>

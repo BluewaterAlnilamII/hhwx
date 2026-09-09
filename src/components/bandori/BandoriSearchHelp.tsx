@@ -77,7 +77,7 @@ export default function BandoriSearchHelp({ kind }: { kind: keyof typeof EXAMPLE
         aria-expanded={open}
         aria-controls={id}
         aria-haspopup="dialog"
-        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-lg font-semibold text-[var(--theme-color-text-default)] transition hover:border-[var(--theme-color-semantic-info-border)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--theme-color-semantic-info-border)]"
+        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-lg font-semibold text-[var(--theme-color-text-default)] transition hover:border-[var(--theme-color-action-secondary-border)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--theme-color-focus-ring)]"
         onPointerEnter={(event) => {
           if (event.pointerType === "mouse") setOpen(true);
         }}
@@ -98,7 +98,7 @@ export default function BandoriSearchHelp({ kind }: { kind: keyof typeof EXAMPLE
         role="dialog"
         aria-labelledby={`${id}-title`}
         tabIndex={0}
-        className="hhwx-floating-surface fixed inset-auto m-0 max-h-[calc(100dvh-24px)] w-max max-w-[calc(100vw-24px)] overflow-auto rounded-xl border p-4 text-sm leading-7 focus-visible:outline-2 focus-visible:outline-[color:var(--theme-color-semantic-info-border)]"
+        className="hhwx-floating-surface fixed inset-auto m-0 max-h-[calc(100dvh-24px)] w-max max-w-[calc(100vw-24px)] overflow-auto rounded-xl border p-4 text-sm leading-7 focus-visible:outline-2 focus-visible:outline-[color:var(--theme-color-focus-ring)]"
         onToggle={(event) => {
           if (event.newState === "closed") {
             pinnedRef.current = false;
