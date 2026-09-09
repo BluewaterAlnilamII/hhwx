@@ -2,6 +2,12 @@
 
 Date: 2026-09-09 (Asia/Shanghai). Base: `85b88e3a` (PR #200). The user accepted the initial unification and neutral content, then chose to restore the original button treatment and blue selection after comparing alternatives. Only the tracker mode container's gold border changes to neutral gray. The four initial audit findings are corrected. Verification below records the local checks completed before PR publication; remote CI and merge status are recorded on the PR. No production deployment is included. The dev server is left running at `http://localhost:3000`.
 
+## PR dependency prerequisite
+
+PR #201's initial CI stopped at the production dependency audit: the existing `sharp` override was pinned to `0.35.3`, affected by [GHSA-rgj7-g3m4-5g8c](https://github.com/advisories/GHSA-rgj7-g3m4-5g8c). The merge prerequisite updates only that override to patched `0.35.4` and refreshes its lockfile entries. Next.js and the other direct dependencies remain unchanged. The local UI checks below preceded this dependency patch; the PR records the subsequent audit/build results for the final dependency set.
+
+Local verification of the updated dependency set: `npm audit --omit=dev --audit-level=moderate` reported zero vulnerabilities. A native image smoke check verified `sharp 0.35.4` / `libheif 1.23.2`, encoded PNG/WebP/AVIF inputs, and decoded/resized each to an 8 x 6 PNG successfully. The lockfile changes are limited to sharp and its platform/libvips/runtime dependencies.
+
 ## Design contract and implementation
 
 - Preserve the decisions in #121 (theme ownership), #187 (card/popover interaction), #191 (light baseline), #192 (catalog/search behavior), #196/#198 (homepage and immutable artwork), and #200 (continuous comment rows and reaction previews).
