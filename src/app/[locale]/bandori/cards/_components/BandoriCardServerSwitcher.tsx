@@ -32,20 +32,20 @@ export default function BandoriCardServerSwitcher({
 
   return (
     <div className={cn("flex flex-wrap items-center gap-3", className)}>
-      <span className="text-sm font-black text-[var(--theme-color-text-default)] dark:text-slate-200">
+      <span className="text-sm font-black text-[var(--theme-color-text-default)]">
         {label}
       </span>
-      <div className="inline-grid grid-cols-4 overflow-hidden rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] shadow-xs dark:border-slate-700 dark:bg-slate-950/60">
+      <div className="inline-grid grid-cols-4 overflow-hidden rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] shadow-xs">
         {BANDORI_SERVERS.map((server) => {
           const isAvailable = availableSet.has(server);
           const isActive = selectedServer === server;
           const code = getBandoriServerCode(server).toUpperCase();
           const controlClassName = cn(
-            "group flex h-11 w-12 items-center justify-center gap-1 border-r border-[var(--theme-color-border-subtle)] text-[10px] font-black transition last:border-r-0 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)] dark:border-slate-700",
+            "group flex h-11 w-12 items-center justify-center gap-1 border-r border-[var(--theme-color-border-subtle)] text-[10px] font-black transition last:border-r-0 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)]",
             isActive
               ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-control-foreground-pressed)]"
-              : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] dark:text-slate-300 dark:hover:bg-slate-800",
-            !isAvailable && "cursor-not-allowed opacity-35 hover:bg-transparent dark:hover:bg-transparent",
+              : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)]",
+            !isAvailable && "cursor-not-allowed opacity-35 hover:bg-transparent",
           );
           const content = (
             <>

@@ -130,7 +130,7 @@ export default function AccountAvatarCardControl({
           displayName={selectedCardDisplayName}
           size={size}
         />
-        <span className="absolute -bottom-1 -right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-semantic-info-foreground)] shadow-xs transition group-hover:scale-105">
+        <span className="absolute -bottom-1 -right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-action-secondary-foreground)] shadow-xs transition group-hover:scale-105">
           <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
         </span>
       </button>

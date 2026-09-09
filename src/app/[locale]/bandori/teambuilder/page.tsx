@@ -3139,7 +3139,7 @@ function TeamBuilderPanel() {
                         className={`min-h-28 rounded-2xl border p-4 text-left transition ${
                           active
                             ? "border-[var(--theme-color-selection-subtle-ring)] bg-[var(--theme-color-selection-subtle-background)] ring-2 ring-[var(--theme-color-selection-subtle-ring)]"
-                            : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] hover:border-[var(--theme-color-semantic-info-border)]"
+                            : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] hover:border-[var(--theme-color-action-secondary-border)]"
                         }`}
                       >
                         <div className="flex items-center justify-between gap-3">
@@ -3250,7 +3250,7 @@ function TeamBuilderPanel() {
                   key={`${profile.type}:${profile.id}`}
                   onClick={() => setProfileChoice({ source: profile.type, id: profile.id })}
                   className={`rounded-2xl border bg-[var(--theme-color-control-background)] p-4 text-left shadow-xs transition ${
-                    selected ? "border-[var(--theme-color-selection-subtle-ring)] ring-2 ring-[var(--theme-color-selection-subtle-ring)]" : "border-[var(--theme-color-border-subtle)] hover:border-[var(--theme-color-semantic-info-border)]"
+                    selected ? "border-[var(--theme-color-selection-subtle-ring)] ring-2 ring-[var(--theme-color-selection-subtle-ring)]" : "border-[var(--theme-color-border-subtle)] hover:border-[var(--theme-color-action-secondary-border)]"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-3">

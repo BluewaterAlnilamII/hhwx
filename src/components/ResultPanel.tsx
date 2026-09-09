@@ -41,13 +41,13 @@ export default function ResultPanel({
 
                 <div className="flex justify-center gap-8 mb-8">
                     <div className="text-center">
-                        <div className="text-sm text-[var(--theme-color-text-muted)] dark:text-gray-400 mb-1">{playerName}</div>
-                        <div className="text-4xl font-bold text-[var(--theme-color-semantic-info-foreground)] dark:text-blue-400">{playerScore}</div>
+                        <div className="text-sm text-[var(--theme-color-text-muted)] mb-1">{playerName}</div>
+                        <div className="text-4xl font-bold text-[var(--theme-color-semantic-info-foreground)]">{playerScore}</div>
                     </div>
-                    <div className="text-[var(--theme-color-text-muted)] dark:text-gray-500 text-2xl font-light self-end mb-1">:</div>
+                    <div className="text-[var(--theme-color-text-muted)] text-2xl font-light self-end mb-1">:</div>
                     <div className="text-center">
-                        <div className="text-sm text-[var(--theme-color-text-muted)] dark:text-gray-400 mb-1">{aiName}</div>
-                        <div className="text-4xl font-bold text-[var(--theme-color-semantic-danger-foreground)] dark:text-red-400">{aiScore}</div>
+                        <div className="text-sm text-[var(--theme-color-text-muted)] mb-1">{aiName}</div>
+                        <div className="text-4xl font-bold text-[var(--theme-color-semantic-danger-foreground)]">{aiScore}</div>
                     </div>
                 </div>
 

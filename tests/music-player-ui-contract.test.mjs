@@ -32,7 +32,7 @@ test("player UI uses semantic theme tokens without fixed palette classes", async
     ),
   ]);
 
-  assert.match(player, /--theme-color-progress-indicator-background/u);
+  assert.match(player, /--theme-color-action-accent-background/u);
   assert.match(player, /--theme-color-semantic-danger/u);
   assert.doesNotMatch(player, /#[0-9a-f]{3,8}|\b(?:slate|red|orange|yellow|pink)-\d/u);
   assert.match(player, /motion-reduce:animate-none/u);

@@ -41,7 +41,7 @@ export function BandoriCardArtImage({
         role="status"
         aria-busy="true"
         aria-label={t("imageLoading")}
-        className={cn("h-full w-full animate-pulse bg-slate-100", className)}
+        className={cn("h-full w-full animate-pulse bg-[var(--theme-color-control-background-muted)]", className)}
       />
     );
   }
@@ -50,7 +50,7 @@ export function BandoriCardArtImage({
     return (
       <div
         data-card-id={cardId}
-        className={cn("flex h-full w-full flex-col items-center justify-center gap-1 bg-slate-100 text-slate-400", className)}
+        className={cn("flex h-full w-full flex-col items-center justify-center gap-1 bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)]", className)}
       >
         <ImageOff className="h-5 w-5" aria-hidden="true" />
         <span className="text-[10px] font-semibold">{t("imageUnavailable")}</span>

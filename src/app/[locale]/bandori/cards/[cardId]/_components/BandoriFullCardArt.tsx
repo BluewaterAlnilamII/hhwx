@@ -249,7 +249,7 @@ export function BandoriFullCardArt({
           <Maximize2 className="h-4 w-4" aria-hidden="true" />
         </span>
       </button>
-      <figcaption className="mt-3 text-center text-sm font-black text-[var(--theme-color-text-default)] dark:text-slate-200">
+      <figcaption className="mt-3 text-center text-sm font-black text-[var(--theme-color-text-default)]">
         {item.label}
       </figcaption>
     </figure>

@@ -472,7 +472,7 @@ export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-4 py-1.5 rounded-lg bg-[var(--theme-color-semantic-success-foreground)] text-[var(--theme-color-text-on-emphasis)] font-medium hover:bg-[var(--theme-color-semantic-success-foreground)] disabled:opacity-50 transition-colors text-sm"
+            className="px-4 py-1.5 rounded-lg bg-[var(--theme-color-action-success-background)] text-[var(--theme-color-action-success-foreground)] font-medium hover:bg-[var(--theme-color-action-success-background)] disabled:opacity-50 transition-colors text-sm"
           >
             {saving ? "提交中..." : "提交"}
           </button>

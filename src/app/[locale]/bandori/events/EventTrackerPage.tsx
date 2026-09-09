@@ -179,7 +179,7 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
   );
 
   return (
-    <div className="hhwx-panel border p-6 dark:border-slate-700/80 dark:bg-[#111827]">
+    <div className="hhwx-panel border p-6">
       <div className="mb-2 flex items-start justify-between gap-3 text-sm font-semibold">
         <span className="shrink-0 whitespace-nowrap font-bold text-[var(--theme-color-progress-foreground)]">{t("title")}</span>
         <span className="min-w-0 flex flex-col items-end gap-0.5 text-right leading-tight">
@@ -187,7 +187,7 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
           <span className="inline-flex justify-end">{subSummaryContent}</span>
         </span>
       </div>
-      <div className="h-3 w-full overflow-hidden rounded-full bg-[var(--theme-color-progress-track-background)] dark:bg-slate-950/70">
+      <div className="h-3 w-full overflow-hidden rounded-full bg-[var(--theme-color-progress-track-background)]">
         <div
           className="h-full rounded-full bg-[var(--theme-color-progress-indicator-background)] transition-all duration-1000 ease-out"
           style={{ width: `${progress}%` }}
@@ -1140,7 +1140,7 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
           recommendedEventId={recommendedEventId !== null ? String(recommendedEventId) : null}
         />
 
-        <div role="tablist" aria-label={viewT("label")} className="hhwx-panel grid grid-cols-2 overflow-hidden border dark:border-slate-700 dark:bg-[#111827]">
+        <div role="tablist" aria-label={viewT("label")} className="hhwx-panel grid grid-cols-2 overflow-hidden border">
           {(["tracker", "info"] as const).map((view) => {
             const active = view === activeView;
             return (
@@ -1151,11 +1151,11 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
                 aria-selected={active}
                 onClick={() => handleViewChange(view)}
                 className={cn(
-                  "relative h-14 text-base font-black outline-hidden transition focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-control-border-accent)]",
+                  "relative h-14 text-base font-black outline-hidden transition focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)]",
                   active
                     ? "text-[var(--theme-color-tab-foreground-selected)]"
-                    : "text-[var(--theme-color-tab-foreground)] hover:bg-[var(--theme-color-tab-background-hover)] hover:text-[var(--theme-color-tab-foreground-hover)] dark:text-slate-300 dark:hover:bg-slate-800",
-                  view === "tracker" && "border-r border-[var(--theme-color-border-subtle)] dark:border-slate-700",
+                    : "text-[var(--theme-color-tab-foreground)] hover:bg-[var(--theme-color-tab-background-hover)] hover:text-[var(--theme-color-tab-foreground-hover)]",
+                  view === "tracker" && "border-r border-[var(--theme-color-border-subtle)]",
                 )}
               >
                 {viewT(view)}
@@ -1173,7 +1173,7 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
             ) : null}
 
             {/* ========== 导航与控制区 ========== */}
-            <div className="hhwx-panel border p-3 sm:p-5 dark:border-slate-700/80 dark:bg-[#111827]">
+            <div className="hhwx-panel border p-3 sm:p-5">
           <Tabs.Root
             value={trackingMode}
             onValueChange={handleTrackingModeChange}
@@ -1199,10 +1199,10 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
 
             {/* ========== 图表区域 ========== */}
             <Tabs.Content value={trackingMode} className="outline-hidden focus:outline-hidden w-full animate-in fade-in zoom-in-95 duration-500">
-              <div className="mt-3 relative rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-2 shadow-[var(--theme-shadow-surface-raised)] sm:p-4 dark:border-slate-800/80 dark:bg-[#0C111C] dark:shadow-[0_24px_60px_rgba(0,0,0,0.28)]">
+              <div className="mt-3 relative rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-2 shadow-[var(--theme-shadow-surface-raised)] sm:p-4">
 
                 {!isTop10Selected && loading && (
-                  <div className="absolute inset-0 z-30 flex items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--theme-color-panel-background)_75%,transparent)] dark:bg-[#0C111C]/75">
+                  <div className="absolute inset-0 z-30 flex items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--theme-color-panel-background)_75%,transparent)]">
                     <div className="flex flex-col items-center">
                       <div className="w-10 h-10 border-4 border-[var(--theme-color-semantic-info-border)] border-t-transparent rounded-full animate-spin" />
                       <p className="mt-4 text-sm font-semibold text-[var(--theme-color-semantic-info-foreground)] animate-pulse">{commonT("loadingLatestData")}</p>

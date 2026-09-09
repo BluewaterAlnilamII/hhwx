@@ -20,6 +20,7 @@
   --theme-color-surface-background: var(--theme-seed-surface);
   --theme-color-floating-background: var(--theme-color-surface-background);
   --theme-color-chart-axis-background: var(--theme-seed-surface);
+  --theme-color-chart-background: var(--theme-color-control-background);
   --theme-color-overlay-background: color-mix(in srgb, var(--theme-seed-text-primary) 55%, transparent);
   /* Page panels and nested content containers share a fill, independent of chart ink and controls. */
   --theme-color-panel-background: var(--theme-color-surface-background);
@@ -28,7 +29,6 @@
   --theme-shadow-panel: var(--theme-shadow-surface-raised);
   --theme-color-text-default: var(--theme-seed-text-primary);
   --theme-color-text-muted: var(--theme-seed-text-secondary);
-  --theme-color-text-default-on-dark: var(--theme-color-text-on-emphasis);
   --theme-color-text-muted-on-dark: var(--theme-seed-neutral);
   --theme-color-border-subtle: var(--theme-seed-neutral);
   --theme-color-border-default: var(--theme-seed-shell-tint);
@@ -95,8 +95,8 @@
   --theme-color-heading-section-accent-c-foreground: var(--theme-seed-decoration-c);
 
   /*
-   * Functional semantics expose a border, quiet background, foreground, and
-   * lifted dark-surface foreground. Every quiet background uses the same
+   * Functional semantics expose a border, quiet background and foreground.
+   * Solid actions have separate foreground/background pairs. Quiet backgrounds use a
    * restrained tint over the clean control surface, keeping the recipe
    * theme-agnostic while preserving readable semantic text.
    */
@@ -107,33 +107,26 @@
   --theme-color-semantic-success-border: var(--theme-seed-semantic-success);
   --theme-color-semantic-success-background: color-mix(in srgb, var(--theme-seed-semantic-success) 4%, var(--theme-color-control-background));
   --theme-color-semantic-success-foreground: var(--theme-seed-semantic-success);
-  --theme-color-semantic-success-foreground-on-dark: color-mix(in srgb, var(--theme-seed-semantic-success) 82%, var(--theme-seed-surface));
   --theme-color-semantic-warning-border: var(--theme-seed-semantic-warning);
   --theme-color-semantic-warning-background: color-mix(in srgb, var(--theme-seed-semantic-warning) 4%, var(--theme-color-control-background));
   --theme-color-semantic-warning-foreground: var(--theme-seed-semantic-warning);
-  --theme-color-semantic-warning-foreground-on-dark: color-mix(in srgb, var(--theme-seed-semantic-warning) 82%, var(--theme-seed-surface));
   --theme-color-semantic-danger-border: var(--theme-seed-semantic-danger);
   --theme-color-semantic-danger-background: color-mix(in srgb, var(--theme-seed-semantic-danger) 4%, var(--theme-color-control-background));
   --theme-color-semantic-danger-foreground: var(--theme-seed-semantic-danger);
-  --theme-color-semantic-danger-foreground-on-dark: color-mix(in srgb, var(--theme-seed-semantic-danger) 82%, var(--theme-seed-surface));
   --theme-color-semantic-neutral-border: var(--theme-seed-neutral);
   --theme-color-semantic-neutral-background: color-mix(in srgb, var(--theme-seed-neutral) 28%, var(--theme-color-control-background));
   --theme-color-semantic-neutral-foreground: var(--theme-color-text-muted);
-  --theme-color-semantic-neutral-foreground-on-dark: var(--theme-seed-neutral);
 
   /* Lifecycle aliases keep domain components independent from color names. */
   --theme-color-status-upcoming-border: var(--theme-color-semantic-neutral-border);
   --theme-color-status-upcoming-background: var(--theme-color-semantic-neutral-background);
   --theme-color-status-upcoming-foreground: var(--theme-color-semantic-neutral-foreground);
-  --theme-color-status-upcoming-foreground-on-dark: var(--theme-color-semantic-neutral-foreground-on-dark);
   --theme-color-status-ongoing-border: var(--theme-color-semantic-success-border);
   --theme-color-status-ongoing-background: var(--theme-color-semantic-success-background);
   --theme-color-status-ongoing-foreground: var(--theme-color-semantic-success-foreground);
-  --theme-color-status-ongoing-foreground-on-dark: var(--theme-color-semantic-success-foreground-on-dark);
   --theme-color-status-ended-border: var(--theme-color-semantic-neutral-border);
   --theme-color-status-ended-background: var(--theme-color-semantic-neutral-background);
   --theme-color-status-ended-foreground: var(--theme-color-semantic-neutral-foreground);
-  --theme-color-status-ended-foreground-on-dark: var(--theme-color-semantic-neutral-foreground-on-dark);
 
   /* Themes can override selection independently from information, actions and keyboard focus. */
   --theme-color-control-background-hover: var(--theme-color-semantic-info-background);
@@ -153,7 +146,7 @@
   --theme-color-selection-subtle-background: var(--theme-color-control-background);
   --theme-color-selection-subtle-foreground: var(--theme-color-semantic-info-foreground);
   --theme-color-selection-subtle-ring: var(--theme-color-semantic-info-border);
-  --theme-color-selection-strong-background: var(--theme-color-semantic-info-foreground);
+  --theme-color-selection-strong-background: var(--theme-seed-semantic-info);
   --theme-color-selection-strong-foreground: var(--theme-color-text-on-emphasis);
   --theme-color-selection-strong-ring: var(--theme-color-semantic-info-border);
   --theme-shadow-selection-subtle: 0 8px 18px color-mix(in srgb, var(--theme-color-selection-subtle-ring) 14%, transparent);
@@ -165,7 +158,7 @@
   --theme-color-tab-foreground-selected: var(--theme-seed-brand-emphasis);
   --theme-color-tab-indicator-selected: var(--theme-seed-brand-emphasis);
 
-  /* General actions consume the same functional semantics. */
+  /* Solid action fills stay independent from status text and progress indicators. */
   --theme-color-action-primary-background: var(--theme-seed-brand-primary);
   --theme-color-action-primary-background-hover: color-mix(in srgb, var(--theme-color-action-primary-background) 92%, var(--theme-color-control-background));
   --theme-color-action-primary-foreground: var(--theme-color-text-default);
@@ -173,11 +166,14 @@
   --theme-color-action-secondary-background: var(--theme-color-semantic-info-background);
   --theme-color-action-secondary-background-hover: color-mix(in srgb, var(--theme-seed-semantic-info) 8%, var(--theme-color-control-background));
   --theme-color-action-secondary-foreground: var(--theme-color-semantic-info-foreground);
-  --theme-color-action-secondary-foreground-on-dark: var(--theme-color-semantic-info-foreground-on-dark);
   --theme-color-action-secondary-border: var(--theme-color-semantic-info-border);
-  --theme-color-action-accent-background: var(--theme-color-semantic-info-foreground);
-  --theme-color-action-accent-background-hover: color-mix(in srgb, var(--theme-color-semantic-info-foreground) 88%, var(--theme-seed-text-primary));
+  --theme-color-action-accent-background: var(--theme-seed-semantic-info);
+  --theme-color-action-accent-background-hover: color-mix(in srgb, var(--theme-color-action-accent-background) 88%, var(--theme-seed-text-primary));
   --theme-color-action-accent-foreground: var(--theme-color-text-on-emphasis);
+  --theme-color-action-success-background: var(--theme-seed-semantic-success);
+  --theme-color-action-success-foreground: var(--theme-color-text-on-emphasis);
+  --theme-color-action-danger-background: var(--theme-seed-semantic-danger);
+  --theme-color-action-danger-foreground: var(--theme-color-text-on-emphasis);
   --theme-color-profile-banner-background: var(--theme-color-action-accent-background);
   --theme-color-profile-banner-foreground: var(--theme-color-text-on-emphasis);
   --theme-color-action-destructive-background: var(--theme-color-control-background);
@@ -189,13 +185,16 @@
   --theme-color-progress-foreground: var(--theme-color-semantic-info-foreground);
   --theme-color-progress-track-background: color-mix(in srgb, var(--theme-color-text-muted) 10%, var(--theme-color-surface-background));
   --theme-color-progress-indicator-background: var(--theme-color-semantic-info-foreground);
+  /* Interactive ranges use action-accent fill; passive progress keeps information ink. */
+  --theme-color-range-track-background: var(--theme-color-progress-track-background);
 
   --theme-color-status-warning-indicator: var(--theme-color-semantic-warning-border);
-  --theme-color-notification-badge-background: var(--theme-color-semantic-danger-border);
+  --theme-color-notification-badge-background: var(--theme-seed-semantic-danger);
   --theme-color-notification-badge-foreground: var(--theme-color-text-on-emphasis);
   --theme-color-notification-badge-ring: var(--theme-color-shell-header-background);
 
   --theme-color-calendar-rest-day-foreground: var(--theme-seed-brand-emphasis);
   --theme-color-calendar-rest-day-background: color-mix(in srgb, var(--theme-seed-brand-emphasis) 4%, var(--theme-color-panel-background));
   --theme-color-calendar-event-foreground: var(--theme-color-text-on-emphasis);
+  --theme-color-calendar-event-shade: transparent;
 }

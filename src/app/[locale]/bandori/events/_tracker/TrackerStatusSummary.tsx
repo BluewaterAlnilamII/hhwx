@@ -31,14 +31,14 @@ type TrackerStatusSummaryProps = {
 
 function getStatusColorClass(status: BandoriEventStatus): string {
   if (status === "ongoing") {
-    return "text-[var(--theme-color-status-ongoing-foreground)] dark:text-[var(--theme-color-status-ongoing-foreground-on-dark)]";
+    return "text-[var(--theme-color-status-ongoing-foreground)]";
   }
 
   if (status === "ended") {
-    return "text-[var(--theme-color-status-ended-foreground)] dark:text-[var(--theme-color-status-ended-foreground-on-dark)]";
+    return "text-[var(--theme-color-status-ended-foreground)]";
   }
 
-  return "text-[var(--theme-color-status-upcoming-foreground)] dark:text-[var(--theme-color-status-upcoming-foreground-on-dark)]";
+  return "text-[var(--theme-color-status-upcoming-foreground)]";
 }
 
 function TimeAgo({ timestamp }: { timestamp: number }) {
@@ -58,11 +58,11 @@ function TimeAgo({ timestamp }: { timestamp: number }) {
     : t("minutesAgo", { count: elapsedMinutes });
 
   return isStale ? (
-    <span className="inline-flex items-center rounded-full border border-[var(--theme-color-semantic-warning-border)] bg-[var(--theme-color-semantic-warning-background)] px-1 py-0.5 text-xs font-semibold tabular-nums text-[var(--theme-color-semantic-warning-foreground)] dark:text-[var(--theme-color-semantic-warning-foreground-on-dark)]">
+    <span className="inline-flex items-center rounded-full border border-[var(--theme-color-semantic-warning-border)] bg-[var(--theme-color-semantic-warning-background)] px-1 py-0.5 text-xs font-semibold tabular-nums text-[var(--theme-color-semantic-warning-foreground)]">
       {label}
     </span>
   ) : (
-    <span className="text-[13px] font-medium tabular-nums text-[var(--theme-color-text-muted)] dark:text-slate-400">
+    <span className="text-[13px] font-medium tabular-nums text-[var(--theme-color-text-muted)]">
       {label}
     </span>
   );
@@ -83,9 +83,9 @@ export const TrackerStatusSummary = memo(function TrackerStatusSummary({
   const numberFormatter = useMemo(() => new Intl.NumberFormat(locale), [locale]);
 
   return (
-    <div className="mb-3 flex flex-col gap-2.5 border-b border-[var(--theme-color-border-subtle)] px-1.5 pb-3.5 pt-0.5 sm:flex-row sm:items-center sm:justify-between sm:px-0 sm:pb-3 sm:pt-0 dark:border-slate-800/80">
+    <div className="mb-3 flex flex-col gap-2.5 border-b border-[var(--theme-color-border-subtle)] px-1.5 pb-3.5 pt-0.5 sm:flex-row sm:items-center sm:justify-between sm:px-0 sm:pb-3 sm:pt-0">
       <div className="flex items-center gap-1.5 px-0.5 text-[13px] leading-5 sm:gap-2 sm:px-0 sm:text-sm">
-        <span className="font-medium text-[var(--theme-color-text-muted)] dark:text-slate-400">{t("eventStatus")}</span>
+        <span className="font-medium text-[var(--theme-color-text-muted)]">{t("eventStatus")}</span>
         <span className={`font-bold ${getStatusColorClass(status)}`}>
           {statusT(status)}
         </span>
@@ -96,26 +96,26 @@ export const TrackerStatusSummary = memo(function TrackerStatusSummary({
           <>
             {showScoreValues ? (
               <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="font-medium text-[var(--theme-color-text-muted)] dark:text-slate-400">{t("latestScore")}</span>
-                <span className="font-bold text-[var(--theme-color-semantic-info-foreground)] dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]">
+                <span className="font-medium text-[var(--theme-color-text-muted)]">{t("latestScore")}</span>
+                <span className="font-bold text-[var(--theme-color-semantic-info-foreground)]">
                   {scoreSummary.latestScore !== null ? numberFormatter.format(scoreSummary.latestScore) : "-"}
                 </span>
               </div>
             ) : null}
             <div className="flex items-center gap-1.5 sm:gap-2">
-              <span className="font-medium text-[var(--theme-color-text-muted)] dark:text-slate-400">{t("updateTime")}</span>
+              <span className="font-medium text-[var(--theme-color-text-muted)]">{t("updateTime")}</span>
               <span
                 className="grid w-19.5 shrink-0 grid-cols-[3.75rem_0.875rem] items-center gap-1"
                 data-testid="tracker-update-status"
               >
                 {scoreSummary.latestUpdateTime !== null
                   ? <TimeAgo timestamp={scoreSummary.latestUpdateTime} />
-                  : <span className="text-[13px] font-medium text-[var(--theme-color-text-muted)] opacity-60 dark:text-slate-500">-</span>
+                  : <span className="text-[13px] font-medium text-[var(--theme-color-text-muted)] opacity-60">-</span>
                 }
                 <Loader2
                   aria-hidden={!isRefreshing}
                   aria-label={isRefreshing ? t("updatingScore") : undefined}
-                  className={`h-3.5 w-3.5 text-[var(--theme-color-semantic-info-foreground)] transition-opacity dark:text-[var(--theme-color-action-secondary-foreground-on-dark)] ${
+                  className={`h-3.5 w-3.5 text-[var(--theme-color-semantic-info-foreground)] transition-opacity ${
                     isRefreshing
                       ? "animate-spin opacity-100 motion-reduce:animate-none"
                       : "opacity-0"
@@ -125,7 +125,7 @@ export const TrackerStatusSummary = memo(function TrackerStatusSummary({
             </div>
             {trackingMode === "event" && showBestdoriPrediction && (
               <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="font-medium text-[var(--theme-color-text-muted)] dark:text-slate-400">{t("prediction")}</span>
+                <span className="font-medium text-[var(--theme-color-text-muted)]">{t("prediction")}</span>
                 <span className="font-bold" style={{ color: BESTDORI_PREDICTION_COLOR }}>
                   {bestdoriPrediction.status === "loading"
                     ? t("loading")
@@ -140,14 +140,14 @@ export const TrackerStatusSummary = memo(function TrackerStatusSummary({
         {status === "ended" && showScoreValues && (
           <>
             <div className="flex items-center gap-1.5 sm:gap-2">
-              <span className="text-[var(--theme-color-text-muted)] dark:text-slate-400">{t("endScore")}</span>
-              <span className="font-bold text-[var(--theme-color-text-default)] dark:text-slate-200">
+              <span className="text-[var(--theme-color-text-muted)]">{t("endScore")}</span>
+              <span className="font-bold text-[var(--theme-color-text-default)]">
                 {scoreSummary.endScore !== null ? numberFormatter.format(scoreSummary.endScore) : t("settling")}
               </span>
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2">
-              <span className="text-[var(--theme-color-text-muted)] dark:text-slate-400">{t("finalScore")}</span>
-              <span className="font-bold text-[var(--theme-color-text-default)] dark:text-slate-200">
+              <span className="text-[var(--theme-color-text-muted)]">{t("finalScore")}</span>
+              <span className="font-bold text-[var(--theme-color-text-default)]">
                 {scoreSummary.finalScore !== null ? numberFormatter.format(scoreSummary.finalScore) : t("settling")}
               </span>
               {scoreSummary.finalScore !== null && scoreSummary.endScore !== null && scoreSummary.finalScore < scoreSummary.endScore && (

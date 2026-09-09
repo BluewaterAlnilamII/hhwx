@@ -1,4 +1,8 @@
-# Component and light-theme unification
+# Historical design and QA records
+
+The current light/dark configuration and component contract are maintained in the [Theme Guide](documents/theme-guide.md) ([中文](documents/theme-guide.zh-CN.md)). The records below describe earlier iterations, including rejected alternatives and the pre-dark-theme state. Their palette values, migration status and coverage claims apply only to the named iteration; they are not the current theme specification.
+
+## Component and light-theme unification (PR #201)
 
 Date: 2026-09-09 (Asia/Shanghai). Base: `85b88e3a` (PR #200). The user accepted the initial unification and neutral content, then chose to restore the original button treatment and blue selection after comparing alternatives. Only the tracker mode container's gold border changes to neutral gray. The four initial audit findings are corrected. Verification below records the local checks completed before PR publication; remote CI and merge status are recorded on the PR. No production deployment is included. The dev server is left running at `http://localhost:3000`.
 

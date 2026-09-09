@@ -41,7 +41,7 @@ function ComparisonPointRows({
   if (points.length === 0) return null;
 
   return (
-    <div className="mt-3 border-t border-[var(--theme-color-border-subtle)] pt-2 dark:border-gray-700/50">
+    <div className="mt-3 border-t border-[var(--theme-color-border-subtle)] pt-2">
       {points.map((point) => (
         <div key={`${point.targetType}-${point.targetId}-${point.tier}-${point.shiftedTime}`} className="mt-1.5">
           <div className="flex items-center justify-between gap-5">
@@ -53,7 +53,7 @@ function ComparisonPointRows({
               {numberFormatter.format(point.ep)} {unit}
             </span>
           </div>
-          <p className="mt-0.5 text-[10px] font-semibold text-[var(--theme-color-text-muted)] opacity-70 dark:text-gray-500">
+          <p className="mt-0.5 text-[10px] font-semibold text-[var(--theme-color-text-muted)]">
             {dateFormatter.format(point.originalTime)}
           </p>
         </div>
@@ -111,8 +111,8 @@ export function TrackerTooltip({
     if (projectionLabelTime === undefined) return null;
 
     return (
-      <div className="min-w-[210px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-4 shadow-[var(--theme-shadow-floating)] dark:border-gray-800 dark:bg-[#131A2B]/95">
-        <p className="mb-2 text-xs font-semibold text-[var(--theme-color-text-muted)] dark:text-gray-400">
+      <div className="min-w-[210px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-floating-background)] p-4 shadow-[var(--theme-shadow-floating)]">
+        <p className="mb-2 text-xs font-semibold text-[var(--theme-color-text-muted)]">
           {dateFormatter.format(projectionLabelTime)}
         </p>
 
@@ -159,11 +159,11 @@ export function TrackerTooltip({
     if (comparisonPoints.length === 0) return null;
 
     return (
-      <div className="min-w-[220px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-4 shadow-[var(--theme-shadow-floating)] dark:border-gray-800 dark:bg-[#131A2B]/95">
-        <p className="text-xs font-semibold text-[var(--theme-color-text-muted)] dark:text-gray-400">
+      <div className="min-w-[220px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-floating-background)] p-4 shadow-[var(--theme-shadow-floating)]">
+        <p className="text-xs font-semibold text-[var(--theme-color-text-muted)]">
           {dateFormatter.format(label)}
         </p>
-        <p className="mt-1 text-[11px] font-semibold text-[var(--theme-color-text-muted)] opacity-70 dark:text-gray-500">
+        <p className="mt-1 text-[11px] font-semibold text-[var(--theme-color-text-muted)]">
           {t("comparisonReference")}
         </p>
         <ComparisonPointRows
@@ -183,8 +183,8 @@ export function TrackerTooltip({
 
   if (currentPoint.speed !== undefined) {
     speedRender = (
-      <div className="mt-2 flex items-center justify-between border-t border-[var(--theme-color-border-subtle)] pt-2 dark:border-gray-700/50">
-        <span className="text-xs font-bold text-[var(--theme-color-text-muted)] opacity-70">{t("instantSpeed")}</span>
+      <div className="mt-2 flex items-center justify-between border-t border-[var(--theme-color-border-subtle)] pt-2">
+        <span className="text-xs font-bold text-[var(--theme-color-text-muted)]">{t("instantSpeed")}</span>
         <span className="text-[#f43f5e] font-bold text-sm">
           +{numberFormatter.format(currentPoint.speed)} {unit}/h
         </span>
@@ -209,7 +209,7 @@ export function TrackerTooltip({
     speed24Render = (
       <div>
         <div className="mt-1 flex justify-between items-center">
-          <span className="text-xs font-bold text-[var(--theme-color-text-muted)] opacity-70">{t("daySpeed")}</span>
+          <span className="text-xs font-bold text-[var(--theme-color-text-muted)]">{t("daySpeed")}</span>
           <span className="text-blue-500 font-bold text-sm">
             +{numberFormatter.format(currentPoint.speed24)} {unit}/d
           </span>
@@ -220,8 +220,8 @@ export function TrackerTooltip({
   }
 
   return (
-    <div className="min-w-[180px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-4 shadow-[var(--theme-shadow-floating)] dark:border-gray-800 dark:bg-[#131A2B]/95">
-      <p className="mb-2 text-xs font-semibold text-[var(--theme-color-text-muted)] dark:text-gray-400">
+    <div className="min-w-[180px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-floating-background)] p-4 shadow-[var(--theme-shadow-floating)]">
+      <p className="mb-2 text-xs font-semibold text-[var(--theme-color-text-muted)]">
         {dateFormatter.format(label)}
       </p>
       <div className="flex items-end gap-2">

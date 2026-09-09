@@ -111,7 +111,7 @@ function RegionalDetailRow({
     <SingleDetailRow label={label}>
       <span className="block">{currentValue}</span>
       {jpValue ? (
-        <span className="mt-1 block font-medium text-[var(--theme-color-text-muted)] opacity-70 dark:text-slate-400">
+        <span className="mt-1 block font-medium text-[var(--theme-color-text-muted)] opacity-70">
           {jpValue}
         </span>
       ) : null}
@@ -121,9 +121,9 @@ function RegionalDetailRow({
 
 function SingleDetailRow({ label, children, alignment = "baseline" }: { label: string; children: ReactNode; alignment?: "baseline" | "center" }) {
   return (
-    <div className={`grid grid-cols-[7rem_minmax(0,1fr)] ${alignment === "center" ? "items-center" : "items-baseline"} gap-3 border-b border-[var(--theme-color-border-subtle)] py-3 last:border-b-0 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-5 dark:border-slate-700`}>
-      <dt className="text-sm font-semibold leading-5 text-[var(--theme-color-text-muted)] dark:text-slate-400">{label}</dt>
-      <dd className="flex min-w-0 flex-col items-end wrap-break-word text-right text-sm font-semibold leading-5 text-[var(--theme-color-text-default)] dark:text-slate-100">{children}</dd>
+    <div className={`grid grid-cols-[7rem_minmax(0,1fr)] ${alignment === "center" ? "items-center" : "items-baseline"} gap-3 border-b border-[var(--theme-color-border-subtle)] py-3 last:border-b-0 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-5`}>
+      <dt className="text-sm font-semibold leading-5 text-[var(--theme-color-text-muted)]">{label}</dt>
+      <dd className="flex min-w-0 flex-col items-end wrap-break-word text-right text-sm font-semibold leading-5 text-[var(--theme-color-text-default)]">{children}</dd>
     </div>
   );
 }
@@ -300,17 +300,17 @@ export default function CardDetailPageClient({
 
   return (
     <BandoriPageShell contentClassName="max-w-6xl">
-      <article className="hhwx-panel border p-4 sm:p-6 dark:border-slate-700 dark:bg-[#111827]">
-        <Link href={cardsListHref} className="hhwx-text-link inline-flex items-center gap-2 text-sm font-black transition dark:text-sky-300">
+      <article className="hhwx-panel border p-4 sm:p-6">
+        <Link href={cardsListHref} className="hhwx-text-link inline-flex items-center gap-2 text-sm font-black transition">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           {t("detail.back")}
         </Link>
         <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
-            <Heading as="h1" visualRole="page" className="wrap-break-word tracking-tight dark:font-black dark:text-slate-100">
+            <Heading as="h1" visualRole="page" className="wrap-break-word tracking-tight">
               {characterName} - {cardName}
             </Heading>
-            <div className="mt-2 flex min-h-5 flex-wrap items-baseline gap-x-3 gap-y-1 text-sm leading-5 text-[var(--theme-color-text-muted)] dark:text-slate-400">
+            <div className="mt-2 flex min-h-5 flex-wrap items-baseline gap-x-3 gap-y-1 text-sm leading-5 text-[var(--theme-color-text-muted)]">
               <span className="font-black uppercase tracking-[0.18em]">#{cardId}</span>
               {jpReferenceName ? (
                 <span lang="ja" className="font-semibold">{jpReferenceName}</span>
@@ -325,7 +325,7 @@ export default function CardDetailPageClient({
           />
         </div>
 
-        <section className="@container mt-6 border-t border-[var(--theme-color-border-subtle)] pt-6 dark:border-slate-700">
+        <section className="@container mt-6 border-t border-[var(--theme-color-border-subtle)] pt-6">
           <Heading as="h2" visualRole="section" accentSlot="c" icon={<Images className="h-5 w-5" />}>
             {t("detail.artworkTitle")}
           </Heading>
@@ -354,7 +354,7 @@ export default function CardDetailPageClient({
           </div>
         </section>
 
-        <section className="@container mt-6 border-t border-[var(--theme-color-border-subtle)] pt-6 dark:border-slate-700">
+        <section className="@container mt-6 border-t border-[var(--theme-color-border-subtle)] pt-6">
           <Heading as="h2" visualRole="section" accentSlot="a" icon={<ClipboardList className="h-5 w-5" />}>
             {t("detail.informationTitle")}
           </Heading>
@@ -375,7 +375,7 @@ export default function CardDetailPageClient({
                       src={characterIconUrl}
                       alt=""
                       aria-hidden="true"
-                      className="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-[var(--theme-color-border-subtle)] dark:ring-slate-700"
+                      className="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-[var(--theme-color-border-subtle)]"
                     />
                   ) : null}
                   <span>{characterName}</span>
@@ -428,7 +428,7 @@ export default function CardDetailPageClient({
               </SingleDetailRow>
             </dl>
 
-            <dl className="mt-2 min-w-0 border-t border-[var(--theme-color-border-subtle)] pt-2 @min-[54rem]:mt-0 @min-[54rem]:border-l @min-[54rem]:border-t-0 @min-[54rem]:pl-8 @min-[54rem]:pt-0 dark:border-slate-700">
+            <dl className="mt-2 min-w-0 border-t border-[var(--theme-color-border-subtle)] pt-2 @min-[54rem]:mt-0 @min-[54rem]:border-l @min-[54rem]:border-t-0 @min-[54rem]:pl-8 @min-[54rem]:pt-0">
               <SingleDetailRow label={t("detail.type")}>{t(`types.${type as BandoriCardCatalogType}`)}</SingleDetailRow>
               <RegionalDetailRow
                 label={t("detail.releaseDate")}
@@ -463,7 +463,7 @@ export default function CardDetailPageClient({
             </dl>
           </div>
 
-          <div className="mt-6 border-t border-[var(--theme-color-border-subtle)] pt-5 dark:border-slate-700">
+          <div className="mt-6 border-t border-[var(--theme-color-border-subtle)] pt-5">
             <div className="grid grid-cols-2 sm:grid-cols-4">
               {[
                 ["performance", stats?.parameters[0]],
@@ -473,10 +473,10 @@ export default function CardDetailPageClient({
               ].map(([key, value], index) => (
                 <div
                   key={String(key)}
-                  className={`border-[var(--theme-color-border-subtle)] px-3 py-3 text-center dark:border-slate-700 ${index % 2 === 1 ? "border-l" : ""} ${index >= 2 ? "border-t sm:border-t-0" : ""} ${index > 0 ? "sm:border-l" : "sm:border-l-0"}`}
+                  className={`border-[var(--theme-color-border-subtle)] px-3 py-3 text-center ${index % 2 === 1 ? "border-l" : ""} ${index >= 2 ? "border-t sm:border-t-0" : ""} ${index > 0 ? "sm:border-l" : "sm:border-l-0"}`}
                 >
-                  <div className="text-xs font-bold text-[var(--theme-color-text-muted)] dark:text-slate-400">{t(`detail.${key}`)}</div>
-                  <div className="mt-1 text-xl font-black tabular-nums text-[var(--theme-color-text-default)] dark:text-slate-100">
+                  <div className="text-xs font-bold text-[var(--theme-color-text-muted)]">{t(`detail.${key}`)}</div>
+                  <div className="mt-1 text-xl font-black tabular-nums text-[var(--theme-color-text-default)]">
                     {typeof value === "number" ? value.toLocaleString(locale) : noInformation}
                   </div>
                 </div>
