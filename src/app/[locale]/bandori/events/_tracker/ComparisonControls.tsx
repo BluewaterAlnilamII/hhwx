@@ -86,7 +86,7 @@ export const ComparisonControls = memo(function ComparisonControls({
     <div className="border-t border-[var(--theme-color-border-subtle)] px-1 pt-4 sm:px-2 dark:border-slate-800/80">
       <div className="flex flex-col items-center gap-3">
         {status === "ongoing" && (
-          <div className="flex flex-wrap items-center justify-center gap-2 rounded-[18px] bg-[var(--theme-color-surface-background)]/85 px-2 py-1.5 sm:gap-3 dark:bg-slate-900/55">
+          <div className="flex flex-wrap items-center justify-center gap-2 rounded-[18px] bg-[var(--theme-color-panel-background)]/85 px-2 py-1.5 sm:gap-3 dark:bg-slate-900/55">
             <button
               type="button"
               aria-pressed={showInstantProjection}
@@ -140,7 +140,7 @@ export const ComparisonControls = memo(function ComparisonControls({
         )}
 
         {resolvedComparisonConfigs.length > 0 && (
-          <div className="flex max-w-full flex-wrap items-center justify-center gap-2 rounded-[18px] bg-[var(--theme-color-surface-background)]/85 px-2 py-1.5 sm:gap-3 dark:bg-slate-900/45">
+          <div className="flex max-w-full flex-wrap items-center justify-center gap-2 rounded-[18px] bg-[var(--theme-color-panel-background)]/85 px-2 py-1.5 sm:gap-3 dark:bg-slate-900/45">
             {resolvedComparisonConfigs.map((config) => {
               const line = comparisonLineById.get(config.id);
               const color = line?.color ?? COMPARISON_LINE_COLORS[(config.colorIndex ?? 0) % COMPARISON_LINE_COLORS.length];
@@ -160,7 +160,7 @@ export const ComparisonControls = memo(function ComparisonControls({
                   className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all sm:text-sm ${
                     config.enabled
                       ? "text-[var(--theme-color-text-default)] dark:text-gray-200"
-                      : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] text-[var(--theme-color-text-muted)] opacity-60 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-500"
+                      : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] opacity-60 dark:border-gray-700 dark:bg-[#131A2B] dark:text-gray-500"
                   }`}
                   style={config.enabled ? {
                     borderColor: `${color}66`,

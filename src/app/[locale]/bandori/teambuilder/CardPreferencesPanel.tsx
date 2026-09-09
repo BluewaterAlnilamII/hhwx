@@ -183,11 +183,11 @@ export default function TeamBuilderCardPreferencesPanel({
   const isProfileCardEntryCollectionRefreshing = !isProfileCardEntryCollectionReady && profileCardEntries.length > 0;
 
   return (
-    <div className="hhwx-panel space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+    <div className="hhwx-panel space-y-4 border p-4">
       <div>
         <div>
-          <h3 className="text-lg font-bold text-slate-900">{t("title")}</h3>
-          <p className="mt-1 text-sm font-semibold text-slate-500">
+          <h3 className="text-lg font-bold text-[var(--theme-color-text-default)]">{t("title")}</h3>
+          <p className="mt-1 text-sm font-semibold text-[var(--theme-color-text-muted)]">
             {t("summary", {
               temporaryCount: preferences.temporaryCards.length,
               excludedCount: preferences.excludedCardIds.length,
@@ -196,28 +196,28 @@ export default function TeamBuilderCardPreferencesPanel({
         </div>
       </div>
 
-      <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
+      <div className="space-y-2 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-3">
         <div>
-          <div className="text-sm font-bold text-slate-700">{t("ownedNormalization")}</div>
-          <div className="mt-1 text-xs font-semibold text-slate-500">{t("ownedNormalizationDescription")}</div>
+          <div className="text-sm font-bold text-[var(--theme-color-text-default)]">{t("ownedNormalization")}</div>
+          <div className="mt-1 text-xs font-semibold text-[var(--theme-color-text-muted)]">{t("ownedNormalizationDescription")}</div>
         </div>
-        <label className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 rounded-xl bg-white p-2 text-sm font-semibold text-slate-700 shadow-xs">
+        <label className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 rounded-xl bg-[var(--theme-color-panel-background)] p-2 text-sm font-semibold text-[var(--theme-color-text-default)] shadow-xs">
           <input
             type="checkbox"
             checked={preferences.ownedCardParameters.maxLevelEpisodeTraining}
             onChange={(event) => onUpdateOwnedCardParameters({ maxLevelEpisodeTraining: event.target.checked })}
-            className="mt-0.5 h-4 w-4 rounded-sm border-slate-300 text-sky-600 focus:ring-sky-500"
+            className="mt-0.5 h-4 w-4 rounded-sm border-[var(--theme-color-border-subtle)] accent-[var(--theme-color-selection-strong-background)] focus:ring-[var(--theme-color-focus-ring)]"
           />
           <span className="min-w-0 leading-5">
             {t("maxOwnedCards")}
           </span>
         </label>
-        <label className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 rounded-xl bg-white p-2 text-sm font-semibold text-slate-700 shadow-xs">
+        <label className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 rounded-xl bg-[var(--theme-color-panel-background)] p-2 text-sm font-semibold text-[var(--theme-color-text-default)] shadow-xs">
           <input
             type="checkbox"
             checked={preferences.ownedCardParameters.maxMasterRank}
             onChange={(event) => onUpdateOwnedCardParameters({ maxMasterRank: event.target.checked })}
-            className="mt-0.5 h-4 w-4 rounded-sm border-slate-300 text-sky-600 focus:ring-sky-500"
+            className="mt-0.5 h-4 w-4 rounded-sm border-[var(--theme-color-border-subtle)] accent-[var(--theme-color-selection-strong-background)] focus:ring-[var(--theme-color-focus-ring)]"
           />
           <span className="flex min-w-0 flex-wrap items-center gap-2 leading-5">
             <span>{t("maxMasterRank")}</span>
@@ -227,7 +227,7 @@ export default function TeamBuilderCardPreferencesPanel({
                 maxMasterRankRarityThreshold: normalizeRarityThreshold(event.target.value, 4),
               })}
               disabled={!preferences.ownedCardParameters.maxMasterRank}
-              className="h-7 rounded-md border border-slate-200 bg-white px-2 text-sm font-bold text-slate-700 outline-hidden transition focus:border-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+              className="hhwx-control h-7 rounded-md border px-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
             >
               {CARD_PARAMETER_RARITY_THRESHOLD_OPTIONS.map((rarity) => (
                 <option key={rarity} value={rarity}>{t("rarityAndBelow", { rarity })}</option>
@@ -235,12 +235,12 @@ export default function TeamBuilderCardPreferencesPanel({
             </select>
           </span>
         </label>
-        <label className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 rounded-xl bg-white p-2 text-sm font-semibold text-slate-700 shadow-xs">
+        <label className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 rounded-xl bg-[var(--theme-color-panel-background)] p-2 text-sm font-semibold text-[var(--theme-color-text-default)] shadow-xs">
           <input
             type="checkbox"
             checked={preferences.ownedCardParameters.maxSkillLevel}
             onChange={(event) => onUpdateOwnedCardParameters({ maxSkillLevel: event.target.checked })}
-            className="mt-0.5 h-4 w-4 rounded-sm border-slate-300 text-sky-600 focus:ring-sky-500"
+            className="mt-0.5 h-4 w-4 rounded-sm border-[var(--theme-color-border-subtle)] accent-[var(--theme-color-selection-strong-background)] focus:ring-[var(--theme-color-focus-ring)]"
           />
           <span className="flex min-w-0 flex-wrap items-center gap-2 leading-5">
             <span>{t("maxSkillLevel")}</span>
@@ -253,7 +253,7 @@ export default function TeamBuilderCardPreferencesPanel({
                 ),
               })}
               disabled={!preferences.ownedCardParameters.maxSkillLevel}
-              className="h-7 rounded-md border border-slate-200 bg-white px-2 text-sm font-bold text-slate-700 outline-hidden transition focus:border-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+              className="hhwx-control h-7 rounded-md border px-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
             >
               {CARD_PARAMETER_RARITY_THRESHOLD_OPTIONS.map((rarity) => (
                 <option key={rarity} value={rarity}>{t("rarityAndBelow", { rarity })}</option>
@@ -265,9 +265,9 @@ export default function TeamBuilderCardPreferencesPanel({
 
       <div className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="shrink-0 whitespace-nowrap text-lg font-bold text-slate-900">{t("temporaryCards")}</h3>
+          <h3 className="shrink-0 whitespace-nowrap text-lg font-bold text-[var(--theme-color-text-default)]">{t("temporaryCards")}</h3>
           <div className="flex min-w-0 flex-1 flex-wrap gap-2 sm:justify-end">
-            <button type="button" onClick={onAddTemporary} className="inline-flex h-10 items-center gap-2 rounded-2xl bg-sky-600 px-4 text-sm font-bold text-white transition hover:bg-sky-500">
+            <button type="button" onClick={onAddTemporary} className="hhwx-action-accent inline-flex h-10 items-center gap-2 rounded-2xl px-4 text-sm font-bold transition ">
               <Plus className="h-4 w-4" aria-hidden="true" />
               {t("addTemporary")}
             </button>
@@ -275,19 +275,19 @@ export default function TeamBuilderCardPreferencesPanel({
               type="button"
               onClick={onAddCurrentEventCards}
               disabled={currentEventBonusCardCount === 0}
-              className="inline-flex h-10 items-center gap-2 rounded-2xl border border-amber-200 bg-white px-4 text-sm font-bold text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-10 items-center gap-2 rounded-2xl border border-[var(--theme-color-semantic-warning-border)] bg-[var(--theme-color-control-background)] px-4 text-sm font-bold text-[var(--theme-color-semantic-warning-foreground)] transition hover:bg-[var(--theme-color-semantic-warning-background)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Sparkles className="h-4 w-4" aria-hidden="true" />
               {t("addCurrentEventCards")}
             </button>
-            <button type="button" onClick={onClearTemporaryCards} disabled={preferences.temporaryCards.length === 0} className="inline-flex h-10 items-center gap-2 rounded-2xl border border-rose-200 bg-white px-4 text-sm font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="button" onClick={onClearTemporaryCards} disabled={preferences.temporaryCards.length === 0} className="inline-flex h-10 items-center gap-2 rounded-2xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-control-background)] px-4 text-sm font-bold text-[var(--theme-color-semantic-danger-foreground)] transition hover:bg-[var(--theme-color-semantic-danger-background)] disabled:cursor-not-allowed disabled:opacity-50">
               <Trash2 className="h-4 w-4" aria-hidden="true" />
               {t("clearTemporary")}
             </button>
           </div>
         </div>
         {temporaryCardActionNotice ? (
-          <div role="status" aria-live="polite" className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-700">{temporaryCardActionNotice}</div>
+          <div role="status" aria-live="polite" className="rounded-xl bg-[var(--theme-color-semantic-warning-background)] p-3 text-sm font-semibold text-[var(--theme-color-semantic-warning-foreground)]">{temporaryCardActionNotice}</div>
         ) : null}
         {temporaryCardEntries.length > 0 ? (
           <div className="grid justify-center gap-[6px] grid-cols-[repeat(auto-fill,56px)] sm:grid-cols-[repeat(auto-fill,76px)]">
@@ -311,21 +311,21 @@ export default function TeamBuilderCardPreferencesPanel({
             ))}
           </div>
         ) : (
-          <div className="hhwx-card-picker-surface rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">{t("emptyTemporary")}</div>
+          <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3 text-sm font-semibold text-[var(--theme-color-text-muted)]">{t("emptyTemporary")}</div>
         )}
       </div>
 
       <div className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">{t("excludedCards")}</h3>
+            <h3 className="text-lg font-bold text-[var(--theme-color-text-default)]">{t("excludedCards")}</h3>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => onBulkSetExcludedCards(filteredProfileCardIds, false)}
               disabled={filteredProfileCardIds.length === 0}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-200 bg-white px-3 text-sm font-bold text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-[var(--theme-color-semantic-success-border)] bg-[var(--theme-color-control-background)] px-3 text-sm font-bold text-[var(--theme-color-semantic-success-foreground)] transition hover:bg-[var(--theme-color-semantic-success-background)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {t("keepAll")}
             </button>
@@ -333,7 +333,7 @@ export default function TeamBuilderCardPreferencesPanel({
               type="button"
               onClick={() => onBulkSetExcludedCards(filteredProfileCardIds, true)}
               disabled={filteredProfileCardIds.length === 0}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-rose-200 bg-white px-3 text-sm font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-control-background)] px-3 text-sm font-bold text-[var(--theme-color-semantic-danger-foreground)] transition hover:bg-[var(--theme-color-semantic-danger-background)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {t("excludeAll")}
             </button>
@@ -341,7 +341,7 @@ export default function TeamBuilderCardPreferencesPanel({
               type="button"
               onClick={() => setIsExcludedFilterPanelOpen((current) => !current)}
               aria-expanded={isExcludedFilterPanelOpen}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
+              className="hhwx-control inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-bold transition"
             >
               <ListFilter className="h-4 w-4" aria-hidden="true" />
               {isExcludedFilterPanelOpen ? t("closeFilters") : t("openFilters")}
@@ -371,11 +371,11 @@ export default function TeamBuilderCardPreferencesPanel({
         ) : null}
         {profileCards.length > 0 ? (
           isInitialProfileCardEntryLoad ? (
-            <div className="hhwx-card-picker-surface rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">{t("preparingCards")}</div>
+            <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3 text-sm font-semibold text-[var(--theme-color-text-muted)]">{t("preparingCards")}</div>
           ) : (
           <>
             {isProfileCardEntryCollectionRefreshing ? (
-              <div role="status" aria-live="polite" className="hhwx-card-picker-surface rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">
+              <div role="status" aria-live="polite" className="rounded-xl bg-[var(--theme-color-panel-background)] p-3 text-sm font-semibold text-[var(--theme-color-text-muted)]">
                 {t("updatingCards")}
               </div>
             ) : null}
@@ -418,7 +418,7 @@ export default function TeamBuilderCardPreferencesPanel({
                       filteredProfileCardEntries.length,
                     ),
                   }))}
-                  className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-xs transition hover:border-blue-300 hover:text-blue-600"
+                  className="hhwx-control inline-flex h-10 items-center justify-center rounded-xl border px-4 text-sm font-bold shadow-xs transition"
                 >
                   {t("showMore", { count: Math.min(EXCLUDED_PROFILE_CARD_VISIBLE_INCREMENT, hiddenExcludedProfileCardCount) })}
                 </button>
@@ -428,21 +428,21 @@ export default function TeamBuilderCardPreferencesPanel({
                     key: excludedCardFilterKey,
                     count: filteredProfileCardEntries.length,
                   })}
-                  className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-xs transition hover:border-blue-300 hover:text-blue-600"
+                  className="hhwx-control inline-flex h-10 items-center justify-center rounded-xl border px-4 text-sm font-bold shadow-xs transition"
                 >
                   {t("showAll")}
                 </button>
               </div>
             ) : null}
             {filteredProfileCardEntries.length === 0 ? (
-              <div className="rounded-xl bg-white/80 p-3 text-center text-sm font-semibold text-slate-500">
+              <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3 text-center text-sm font-semibold text-[var(--theme-color-text-muted)]">
                 {t("emptyFiltered")}
               </div>
             ) : null}
           </>
           )
         ) : (
-          <div className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">{t("profileCardsNotLoaded")}</div>
+          <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3 text-sm font-semibold text-[var(--theme-color-text-muted)]">{t("profileCardsNotLoaded")}</div>
         )}
       </div>
     </div>

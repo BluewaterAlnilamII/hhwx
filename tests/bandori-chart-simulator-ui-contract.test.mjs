@@ -821,7 +821,7 @@ test("the Pixi stage loads the selected stage, point-note atlases, and bounded h
   assert.match(settingsCard, /theme-color-panel-background/u);
   assert.match(switchControl, /role="switch"/u);
   assert.match(switchControl, /aria-checked=\{checked\}/u);
-  assert.match(switchControl, /theme-color-semantic-info-foreground/u);
+  assert.match(switchControl, /theme-color-selection-strong-background/u);
   assert.match(skinControls, /BANDORI_NATIVE_DIRECTIONAL_FLICK_SKINS\.map/u);
   assert.match(skinControls, /BANDORI_NATIVE_TAP_SE_SKINS\.map/u);
   assert.match(skinControls, /onTapSeSkinChange\(skin\)/u);

@@ -39,8 +39,8 @@
   transition: background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
 }
 
-/* Opt-in page chrome: component layout and existing dark appearances stay local. */
-@media (prefers-color-scheme: light) {
+/* Shared appearance is defined once; utilities retain layout and temporary dark colors. */
+@layer components {
   .hhwx-panel {
     border-radius: 0;
     border-color: var(--theme-color-panel-border);
@@ -48,14 +48,92 @@
     box-shadow: var(--theme-shadow-panel);
   }
 
+  .hhwx-control {
+    border-color: var(--theme-color-border-subtle);
+    background-color: var(--theme-color-control-background);
+    color: var(--theme-color-text-default);
+  }
+
+  .hhwx-control::placeholder {
+    color: var(--theme-color-control-placeholder);
+  }
+
+  .hhwx-text-link {
+    color: var(--theme-color-action-secondary-foreground);
+    text-underline-offset: 3px;
+  }
+
+  .hhwx-calendar-event-label {
+    right: 0;
+  }
+
+  @media (prefers-color-scheme: light) {
+    .hhwx-text-link:hover {
+      text-decoration-line: underline;
+    }
+
+    .hhwx-calendar-event-label {
+      right: var(--calendar-label-end);
+    }
+
+    select.hhwx-control:hover:not(:disabled):not([aria-disabled='true']):not([aria-pressed='true']) {
+      background-color: var(--theme-color-control-background);
+    }
+  }
+
+  .hhwx-calendar-event {
+    color: var(--theme-color-calendar-event-foreground);
+  }
+
+  .hhwx-control:hover:not(:disabled):not([aria-disabled='true']):not([aria-pressed='true']) {
+    border-color: var(--theme-color-action-secondary-border);
+    background-color: var(--theme-color-control-background-hover);
+  }
+
+  .hhwx-control[aria-pressed='true'] {
+    border-color: var(--theme-color-selection-subtle-ring);
+    background-color: var(--theme-color-selection-subtle-background);
+    color: var(--theme-color-selection-subtle-foreground);
+    box-shadow: inset 0 0 0 1px var(--theme-color-selection-subtle-ring);
+  }
+
+  .hhwx-action-accent {
+    background-color: var(--theme-color-action-accent-background);
+    color: var(--theme-color-action-accent-foreground);
+  }
+
+  .hhwx-action-accent:hover:not(:disabled):not([aria-disabled='true']) {
+    background-color: var(--theme-color-action-accent-background-hover);
+  }
+
+  .hhwx-control:focus-visible,
+  .hhwx-text-link:focus-visible,
+  .hhwx-action-accent:focus-visible {
+    outline: 2px solid var(--theme-color-focus-ring);
+    outline-offset: 3px;
+  }
+
+  .hhwx-control:disabled,
+  .hhwx-control[aria-disabled='true'],
+  .hhwx-action-accent:disabled,
+  .hhwx-action-accent[aria-disabled='true'] {
+    border-color: var(--theme-color-control-border-disabled);
+    background-color: var(--theme-color-control-background-disabled);
+    color: var(--theme-color-control-foreground-disabled);
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+
+  .hhwx-floating-surface {
+    border-color: var(--theme-color-border-subtle);
+    background-color: var(--theme-color-floating-background);
+    color: var(--theme-color-text-default);
+    box-shadow: var(--theme-shadow-floating);
+  }
+
   .hhwx-panel-media {
     border-radius: 0;
     box-shadow: 0 0 0 1px var(--theme-color-panel-border);
-  }
-
-  .hhwx-card-picker-surface {
-    border-color: var(--theme-color-panel-border);
-    background-color: var(--theme-color-panel-background);
   }
 
   /* Catalog rows and shared card controls use the same theme semantics. */
@@ -82,44 +160,7 @@
     box-shadow: none;
   }
 
-  .hhwx-catalog-filters :is(input, select, button) {
-    border-color: var(--theme-color-border-subtle);
-    background-color: var(--theme-color-control-background);
-    color: var(--theme-color-text-default);
-    --tw-ring-color: var(--theme-color-focus-ring);
-  }
-
-  .hhwx-catalog-filters button:hover {
-    border-color: var(--theme-color-action-secondary-border);
-    background-color: var(--theme-color-control-background-hover);
-    color: var(--theme-color-text-default);
-  }
-
-  .hhwx-catalog-filters button[aria-pressed="true"] {
-    border-color: var(--theme-color-selection-subtle-ring);
-    background-color: var(--theme-color-semantic-info-background);
-    color: var(--theme-color-control-foreground-pressed);
-    --tw-ring-color: var(--theme-color-selection-subtle-ring);
-    box-shadow: inset 0 0 0 1px var(--theme-color-selection-subtle-ring);
-  }
-
-  .hhwx-catalog-filters :is(input, select):focus {
-    border-color: var(--theme-color-focus-ring);
-    box-shadow: none;
-  }
-
-  .hhwx-catalog-filters :is(.hhwx-filter-label, label, .hhwx-filter-search-icon) {
-    color: var(--theme-color-text-muted);
-  }
-
-  .hhwx-catalog-filters .hhwx-filter-count {
-    border-color: var(--theme-color-action-secondary-border);
-    background-color: var(--theme-color-panel-background);
-    color: var(--theme-color-action-secondary-foreground);
-  }
-
-  :is(.hhwx-catalog-row, .hhwx-catalog-action):focus-visible,
-  .hhwx-catalog-filters :is(input, select, button):focus-visible {
+  :is(.hhwx-catalog-row, .hhwx-catalog-action):focus-visible {
     outline: 2px solid var(--theme-color-focus-ring);
     outline-offset: 3px;
     box-shadow: none;
@@ -135,6 +176,12 @@
   .hhwx-card-art-toggle button {
     border: 1px solid var(--theme-color-border-subtle);
     border-radius: 1rem;
+    background-color: var(--theme-color-control-background);
+    color: var(--theme-color-text-default);
+  }
+
+  .hhwx-card-art-toggle button:hover {
+    background-color: var(--theme-color-control-background-hover);
   }
 
   .hhwx-card-art-toggle button[aria-pressed="true"] {
@@ -151,7 +198,6 @@
   .hhwx-catalog-statistics > div {
     border: 0 solid var(--theme-color-border-subtle);
     border-radius: 0;
-    background-color: var(--theme-color-panel-background);
     text-align: center;
   }
 
@@ -185,6 +231,7 @@
   .hhwx-navigation-item {
     position: relative;
     border-radius: 0;
+    font-weight: 500;
   }
 
   .hhwx-navigation-item[aria-current='page'] {
@@ -198,6 +245,12 @@
     inset-inline-start: 0;
     width: 3px;
     background: var(--theme-color-shell-navigation-item-border-current);
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  .hhwx-catalog-statistics > div {
+    background-color: var(--theme-color-panel-background);
   }
 
   .hhwx-desktop-sidebar {
@@ -502,14 +555,16 @@ body {
   z-index: 200;
 }
 
-.result-panel {
+.result-panel,
+.resume-panel {
   background: linear-gradient(135deg, #1a1a2e, #16213e);
   border: 2px solid rgba(255, 255, 255, 0.1);
   border-radius: 20px;
-  padding: 40px;
+  padding: clamp(24px, 5vw, 40px);
   text-align: center;
   color: white;
-  min-width: 360px;
+  min-width: 0;
+  width: min(380px, calc(100vw - 2rem));
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
@@ -527,15 +582,23 @@ body {
 }
 
 .resume-panel {
-  background: linear-gradient(135deg, #1a1a2e, #16213e);
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  padding: 36px 40px;
-  text-align: center;
-  color: white;
-  min-width: 380px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   animation: bubbleIn 0.3s ease-out forwards;
+}
+
+/* Game dialogs share the site surface; legacy dark colors remain until the dark-theme pass. */
+@media (prefers-color-scheme: light) {
+  .result-overlay,
+  .resume-overlay {
+    background: var(--theme-color-overlay-background);
+  }
+
+  .result-panel,
+  .resume-panel {
+    background: var(--theme-color-floating-background);
+    border-color: var(--theme-color-border-subtle);
+    color: var(--theme-color-text-default);
+    box-shadow: var(--theme-shadow-floating);
+  }
 }
 
 .bandori-card-thumbnail-star {

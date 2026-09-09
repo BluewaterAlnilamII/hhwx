@@ -515,7 +515,7 @@ function SimulatorVolumeControl({
         onClick={onMuteToggle}
         aria-label={isMuted ? unmuteLabel : muteLabel}
         aria-pressed={isMuted}
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${isMuted ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-progress-foreground)]" : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-pressed)]"}`}
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${isMuted ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-selection-subtle-foreground)]" : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-pressed)]"}`}
       >
         {isMuted ? <VolumeX className="h-4 w-4" aria-hidden="true" /> : <Volume2 className="h-4 w-4" aria-hidden="true" />}
       </button>
@@ -2569,7 +2569,7 @@ export default function ChartSimulatorRuntime({
     return (
       <section
         aria-busy="true"
-        className="hhwx-panel rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700 dark:bg-[#111827]"
+        className="hhwx-panel border p-4 sm:p-6 dark:border-slate-700 dark:bg-[#111827]"
       >
         <h2 className="text-xl font-black text-[var(--theme-color-text-default)]">
           {t("title")}
@@ -2604,7 +2604,7 @@ export default function ChartSimulatorRuntime({
     fps: stageRenderFpsText,
   });
   return (
-    <section className="hhwx-panel rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700 dark:bg-[#111827]">
+    <section className="hhwx-panel border p-4 sm:p-6 dark:border-slate-700 dark:bg-[#111827]">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-black text-[var(--theme-color-text-default)]">{t("title")}</h2>
@@ -2638,7 +2638,7 @@ export default function ChartSimulatorRuntime({
                 type="button"
                 aria-pressed={selected}
                 onClick={() => changeDifficulty(option.difficulty)}
-                className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${selected ? "border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-control-foreground-pressed)]" : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)]"}`}
+                className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${selected ? "border-[var(--theme-color-selection-subtle-ring)] bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-control-foreground-pressed)]" : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)]"}`}
               >
                 {songsT(`difficulties.${option.difficulty}`)}
               </button>
@@ -2731,7 +2731,7 @@ export default function ChartSimulatorRuntime({
             {chartLoadingError || audioLoadingError ? (
               <div
                 className={cn(
-                  "absolute inset-0 z-20 flex items-center justify-center bg-[color-mix(in_srgb,var(--theme-color-surface-background)_94%,transparent)] p-6 text-center backdrop-blur-sm",
+                  "absolute inset-0 z-20 flex items-center justify-center bg-[color-mix(in_srgb,var(--theme-color-panel-background)_94%,transparent)] p-6 text-center backdrop-blur-sm",
                   isStageFullscreen ? null : "rounded-2xl",
                 )}
               >
@@ -2754,7 +2754,7 @@ export default function ChartSimulatorRuntime({
             ) : simulatorLoadingLabel ? (
               <div
                 className={cn(
-                  "pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-[color-mix(in_srgb,var(--theme-color-surface-background)_90%,transparent)] p-6 backdrop-blur-sm",
+                  "pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-[color-mix(in_srgb,var(--theme-color-panel-background)_90%,transparent)] p-6 backdrop-blur-sm",
                   isStageFullscreen ? null : "rounded-2xl",
                 )}
               >
@@ -3016,7 +3016,7 @@ export default function ChartSimulatorRuntime({
             <div className="absolute inset-y-0 left-2 right-2">
               {loopStartPercentage !== null && loopEndPercentage !== null ? (
                 <span
-                  className="absolute inset-y-0 rounded-full bg-[color-mix(in_srgb,var(--theme-color-semantic-info-foreground)_18%,transparent)]"
+                  className="absolute inset-y-0 rounded-full bg-[color-mix(in_srgb,var(--theme-color-selection-strong-background)_18%,transparent)]"
                   style={{
                     left: `${loopStartPercentage}%`,
                     width: `${Math.max(0, loopEndPercentage - loopStartPercentage)}%`,
@@ -3029,13 +3029,13 @@ export default function ChartSimulatorRuntime({
               />
               {loopStartPercentage !== null ? (
                 <span
-                  className="absolute top-1/2 h-5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--theme-color-semantic-info-foreground)] ring-2 ring-[var(--theme-color-surface-background)]"
+                  className="absolute top-1/2 h-5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--theme-color-selection-strong-background)] ring-2 ring-[var(--theme-color-panel-background)]"
                   style={{ left: `${loopStartPercentage}%` }}
                 />
               ) : null}
               {loopEndPercentage !== null ? (
                 <span
-                  className="absolute top-1/2 h-5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--theme-color-semantic-info-foreground)] ring-2 ring-[var(--theme-color-surface-background)]"
+                  className="absolute top-1/2 h-5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--theme-color-selection-strong-background)] ring-2 ring-[var(--theme-color-panel-background)]"
                   style={{ left: `${loopEndPercentage}%` }}
                 />
               ) : null}
@@ -3054,7 +3054,7 @@ export default function ChartSimulatorRuntime({
             onChange={(event) => previewScrub(Number(event.currentTarget.value))}
             onPointerUp={commitScrub}
             onBlur={commitScrub}
-            className="absolute inset-0 z-10 h-8 w-full cursor-pointer appearance-none rounded-full bg-transparent outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-[var(--theme-color-semantic-info-foreground)] [&::-moz-range-thumb]:shadow-md [&::-moz-range-track]:h-2 [&::-moz-range-track]:bg-transparent [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:-mt-1 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-[var(--theme-color-semantic-info-foreground)] [&::-webkit-slider-thumb]:shadow-md"
+            className="absolute inset-0 z-10 h-8 w-full cursor-pointer appearance-none rounded-full bg-transparent outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-[var(--theme-color-selection-strong-background)] [&::-moz-range-thumb]:shadow-md [&::-moz-range-track]:h-2 [&::-moz-range-track]:bg-transparent [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:-mt-1 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-[var(--theme-color-selection-strong-background)] [&::-webkit-slider-thumb]:shadow-md"
           />
         </div>
         <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">

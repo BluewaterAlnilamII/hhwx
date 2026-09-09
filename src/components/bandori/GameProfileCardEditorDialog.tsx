@@ -62,8 +62,8 @@ function SegmentedControl<T extends string | number | boolean>({
 }) {
   return (
     <div className="grid gap-1.5 sm:grid-cols-[128px_minmax(0,1fr)] sm:items-center sm:gap-2">
-      <div className="text-sm font-semibold text-slate-600 sm:text-right">{label}</div>
-      <div className="inline-flex w-fit overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs" role="radiogroup" aria-label={label}>
+      <div className="text-sm font-semibold text-[var(--theme-color-text-muted)] sm:text-right">{label}</div>
+      <div className="inline-flex w-fit overflow-hidden rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] shadow-xs" role="radiogroup" aria-label={label}>
         {options.map((option) => (
           <button
             key={String(option.value)}
@@ -72,8 +72,8 @@ function SegmentedControl<T extends string | number | boolean>({
             aria-checked={Object.is(option.value, value)}
             onClick={() => onChange(option.value)}
             className={cn(
-              "min-w-9 border-r border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 transition last:border-r-0 hover:bg-sky-50 hover:text-sky-700 sm:min-w-10 sm:px-4 sm:py-2",
-              Object.is(option.value, value) && "bg-sky-600 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.45)] hover:bg-sky-600 hover:text-white",
+              "min-w-9 border-r border-[var(--theme-color-border-subtle)] px-3 py-1.5 text-sm font-semibold text-[var(--theme-color-text-muted)] transition last:border-r-0 hover:bg-[var(--theme-color-semantic-info-background)] hover:text-[var(--theme-color-semantic-info-foreground)] sm:min-w-10 sm:px-4 sm:py-2",
+              Object.is(option.value, value) && "bg-[var(--theme-color-selection-strong-background)] text-[var(--theme-color-selection-strong-foreground)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.45)] hover:bg-[var(--theme-color-selection-strong-background)] hover:text-[var(--theme-color-selection-strong-foreground)]",
             )}
           >
             {option.label}
@@ -198,14 +198,14 @@ export default function GameProfileCardEditorDialog({
   return (
     <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-1100 bg-slate-950/55" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-1100 flex max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-3xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-white/90 bg-white shadow-[0_30px_100px_rgba(15,23,42,0.42)] focus:outline-hidden sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100%-3rem)] sm:rounded-[28px]">
-        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-3 sm:px-6 sm:py-4">
+        <Dialog.Overlay className="fixed inset-0 z-1100 bg-[var(--theme-color-overlay-background)]" />
+        <Dialog.Content className="hhwx-floating-surface fixed left-1/2 top-1/2 z-1100 flex max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-3xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border focus:outline-hidden sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100%-3rem)] sm:rounded-[28px]">
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-5 py-3 sm:px-6 sm:py-4">
           <div>
-            <Dialog.Title className="text-lg font-bold text-slate-900 sm:text-xl">{effectiveTitle}</Dialog.Title>
-            <Dialog.Description className="mt-1 text-xs font-semibold text-slate-500">{cardIdLabel}</Dialog.Description>
+            <Dialog.Title className="text-lg font-bold text-[var(--theme-color-text-default)] sm:text-xl">{effectiveTitle}</Dialog.Title>
+            <Dialog.Description className="mt-1 text-xs font-semibold text-[var(--theme-color-text-muted)]">{cardIdLabel}</Dialog.Description>
           </div>
-          <button type="button" onClick={onClose} className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:border-rose-200 hover:text-rose-500" aria-label={t("actions.close")}>
+          <button type="button" onClick={onClose} className="hhwx-control inline-flex h-10 w-10 items-center justify-center rounded-2xl border transition" aria-label={t("actions.close")}>
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </header>
@@ -213,7 +213,7 @@ export default function GameProfileCardEditorDialog({
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-6 sm:py-5">
           <div className="grid gap-3 sm:gap-5 lg:grid-cols-[132px_minmax(0,1fr)]">
             <div className="mx-auto flex w-full max-w-[104px] flex-col items-center sm:max-w-[132px]">
-              <div className="h-[104px] w-[104px] overflow-visible rounded-[5px] bg-white shadow-[0_2px_7px_rgba(15,23,42,0.22)] sm:h-[132px] sm:w-[132px]">
+              <div className="h-[104px] w-[104px] overflow-visible rounded-[5px] bg-[var(--theme-color-panel-background)] shadow-[0_2px_7px_rgba(15,23,42,0.22)] sm:h-[132px] sm:w-[132px]">
                 <SharedBandoriCardThumbnail
                   card={draft}
                   metadata={metadata}
@@ -226,14 +226,14 @@ export default function GameProfileCardEditorDialog({
             </div>
 
             <div className="min-w-0">
-              <div className="rounded-2xl border border-sky-100 bg-linear-to-br from-white via-sky-50/80 to-rose-50/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] sm:rounded-3xl sm:p-4">
+              <div className="rounded-2xl border border-[var(--theme-color-semantic-info-border)] p-3 sm:rounded-3xl sm:p-4 bg-[var(--theme-color-panel-background)]">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h3 className="truncate text-xl font-bold text-slate-900 sm:text-2xl">{cardName}</h3>
-                    <p className="mt-1 text-sm font-semibold text-slate-600">{characterName}</p>
+                    <h3 className="truncate text-xl font-bold text-[var(--theme-color-text-default)] sm:text-2xl">{cardName}</h3>
+                    <p className="mt-1 text-sm font-semibold text-[var(--theme-color-text-muted)]">{characterName}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {metadata?.rarity ? <span className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-bold text-amber-600">★{metadata.rarity}</span> : null}
+                    {metadata?.rarity ? <span className="rounded-full border border-[var(--theme-color-semantic-warning-border)] bg-[var(--theme-color-control-background)] px-3 py-1 text-xs font-bold text-[var(--theme-color-semantic-warning-foreground)]">★{metadata.rarity}</span> : null}
                     {isBandoriCardAttribute(attribute) ? (
                       <span className={cn("rounded-full border px-3 py-1 text-xs font-bold", ATTRIBUTE_CLASSES[attribute])}>
                         {ATTRIBUTE_LABELS[attribute]}
@@ -245,11 +245,11 @@ export default function GameProfileCardEditorDialog({
 
               <div className="mt-3 grid gap-3 sm:mt-5 sm:gap-4">
                 <label className="grid gap-2 sm:grid-cols-[128px_minmax(0,1fr)] sm:items-center">
-                  <span className="text-sm font-semibold text-slate-600 sm:text-right">{t("fields.level")}</span>
+                  <span className="text-sm font-semibold text-[var(--theme-color-text-muted)] sm:text-right">{t("fields.level")}</span>
                   <select
                     value={draft.level}
                     onChange={(event) => updateDraft("level", Number(event.target.value))}
-                    className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-hidden transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100 sm:h-11"
+                    className="hhwx-control h-10 w-full rounded-2xl border px-4 text-sm font-semibold transition sm:h-11"
                   >
                     {Array.from({ length: levelLimit }, (_, index) => index + 1).map((level) => (
                       <option key={level} value={level}>{level}</option>
@@ -270,16 +270,16 @@ export default function GameProfileCardEditorDialog({
         </div>
 
         <footer className={cn(
-          "grid shrink-0 gap-2 border-t border-slate-200 bg-white/82 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:flex sm:flex-row sm:items-center sm:justify-end sm:gap-3 sm:px-6 sm:py-4",
+          "grid shrink-0 gap-2 border-t border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:flex sm:flex-row sm:items-center sm:justify-end sm:gap-3 sm:px-6 sm:py-4",
           showDeleteButton ? "grid-cols-3" : "grid-cols-2",
         )}>
           {showDeleteButton ? (
-            <button type="button" onClick={onDelete} disabled={isBusy} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-2xl border border-rose-200 bg-white px-2 text-sm font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 sm:h-11 sm:gap-2 sm:px-4">
+            <button type="button" onClick={onDelete} disabled={isBusy} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-2xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-control-background)] px-2 text-sm font-bold text-[var(--theme-color-semantic-danger-foreground)] transition hover:bg-[var(--theme-color-semantic-danger-background)] disabled:cursor-not-allowed disabled:opacity-60 sm:h-11 sm:gap-2 sm:px-4">
               <Trash2 className="h-4 w-4" aria-hidden="true" />
               {effectiveDeleteLabel}
             </button>
           ) : null}
-          <button type="button" onClick={onClose} disabled={isBusy} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 sm:h-11 sm:gap-2 sm:px-4">
+          <button type="button" onClick={onClose} disabled={isBusy} className="hhwx-control inline-flex h-10 items-center justify-center gap-1.5 rounded-2xl border px-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 sm:h-11 sm:gap-2 sm:px-4">
             <X className="h-4 w-4" aria-hidden="true" />
             {t("actions.cancel")}
           </button>
@@ -294,7 +294,7 @@ export default function GameProfileCardEditorDialog({
               type="button"
               onClick={() => onApply(draft)}
               disabled={isApplyDisabled}
-              className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-2xl bg-sky-600 px-2 text-sm font-bold text-white shadow-[0_12px_28px_rgba(37,99,235,0.26)] transition hover:bg-sky-500 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none sm:h-11 sm:gap-2 sm:px-5"
+              className="hhwx-action-accent inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-2xl px-2 text-sm font-bold transition disabled:pointer-events-none sm:h-11 sm:gap-2 sm:px-5"
             >
               <Save className="h-4 w-4" aria-hidden="true" />
               {isBusy ? t("actions.applying") : applyLabel}

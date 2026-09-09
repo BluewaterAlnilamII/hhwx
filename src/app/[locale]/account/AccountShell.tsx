@@ -47,7 +47,7 @@ export default function AccountShell({
       )}
     >
       <div className={`mx-auto w-full ${containerClassName}`}>
-        <div className="w-full max-w-full border-y border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] px-4 py-6 shadow-[0_12px_42px_rgba(15,23,42,0.08)] sm:rounded-[32px] sm:border sm:p-8 sm:shadow-[0_20px_80px_rgba(15,23,42,0.12)]">
+        <div className="hhwx-panel w-full max-w-full border-y px-4 py-6 sm:border sm:p-8">
           <div className="flex flex-col gap-4 border-b border-[var(--theme-color-border-subtle)] pb-5 sm:flex-row sm:items-end sm:justify-between sm:gap-3 sm:pb-6">
             <div className="min-w-0">
               {!hideEyebrow ? (

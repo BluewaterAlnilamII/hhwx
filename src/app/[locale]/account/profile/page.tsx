@@ -116,39 +116,39 @@ export default function AccountProfilePage() {
         <AccountErrorState message={profileError} />
       ) : profile ? (
         <div className="space-y-6">
-          <div className="rounded-3xl border border-slate-200 bg-[#006699] p-6 text-white shadow-lg">
+          <div className="rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-profile-banner-background)] p-6 text-[var(--theme-color-profile-banner-foreground)] shadow-lg">
             <div className="flex flex-wrap items-center gap-4">
               <AccountAvatarCardControl profile={profile} onProfileChange={setProfile} />
               <div>
                 <div className="text-2xl font-bold">{profile.username}</div>
-                <div className="mt-1 text-sm text-slate-300">{profile.email || userEmail || "-"}</div>
+                <div className="mt-1 text-sm text-[var(--theme-color-profile-banner-foreground)]/80">{profile.email || userEmail || "-"}</div>
               </div>
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
-            <h2 className="text-xl font-semibold text-slate-900">{t("usernameLabel")}</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
+          <form onSubmit={handleSubmit} className="rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-6 shadow-xs">
+            <h2 className="text-xl font-semibold text-[var(--theme-color-text-default)]">{t("usernameLabel")}</h2>
+            <p className="mt-2 text-sm leading-6 text-[var(--theme-color-text-muted)]">
               {t("usernameDescription")}
             </p>
 
-            <label className="mt-5 block text-sm font-medium text-slate-700">
+            <label className="mt-5 block text-sm font-medium text-[var(--theme-color-text-default)]">
               {t("usernameLabel")}
               <input
                 type="text"
                 value={usernameInput}
                 onChange={(event) => setUsernameInput(event.target.value)}
                 {...usernameValidationProps}
-                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-hidden transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                className="hhwx-control mt-2 w-full rounded-2xl border px-4 py-3 transition"
                 placeholder={t("usernamePlaceholder")}
               />
-              <span className="mt-2 block text-xs leading-5 text-slate-500">
+              <span className="mt-2 block text-xs leading-5 text-[var(--theme-color-text-muted)]">
                 {usernameHint}
               </span>
             </label>
 
             {message && (
-              <div className={`mt-4 text-sm ${message === t("saveSuccess") ? "text-emerald-600" : "text-red-500"}`}>
+              <div className={`mt-4 text-sm ${message === t("saveSuccess") ? "text-[var(--theme-color-semantic-success-foreground)]" : "text-[var(--theme-color-semantic-danger-foreground)]"}`}>
                 {message}
               </div>
             )}

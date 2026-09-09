@@ -107,8 +107,8 @@ type CardEditorState = {
 function CardPickerLoading() {
   const t = useTranslations("bandori.gameProfiles.cards");
   return (
-    <div className="fixed inset-0 z-1000 flex h-dvh items-center justify-center bg-slate-950/55 p-4">
-      <div className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-slate-600 shadow-2xl">
+    <div className="fixed inset-0 z-1000 flex h-dvh items-center justify-center bg-[var(--theme-color-overlay-background)] p-4">
+      <div className="inline-flex items-center gap-2 rounded-2xl bg-[var(--theme-color-panel-background)] px-4 py-3 text-sm font-bold text-[var(--theme-color-text-muted)] shadow-2xl">
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
         {t("picker.loading")}
       </div>
@@ -568,12 +568,12 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
       ) : isPageLoading ? (
         <AccountLoadingState message={t("loadingCards")} />
       ) : (
-        <section className="mx-auto w-full max-w-[960px] overflow-visible rounded-[28px] border border-slate-200 bg-white p-4 shadow-[0_18px_55px_rgba(15,23,42,0.09)] sm:p-5">
+        <section className="mx-auto w-full max-w-[960px] overflow-visible rounded-[28px] border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-4 shadow-[0_18px_55px_rgba(15,23,42,0.09)] sm:p-5">
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <h2 className="text-xl font-black text-slate-900">{t("heading")}</h2>
-                <p className="mt-1 text-sm font-semibold text-slate-500">
+                <h2 className="text-xl font-black text-[var(--theme-color-text-default)]">{t("heading")}</h2>
+                <p className="mt-1 text-sm font-semibold text-[var(--theme-color-text-muted)]">
                   {t("collectionSummary", {
                     total: draftCards.length,
                     matched: filteredEntries.length,
@@ -587,7 +587,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                     type="button"
                     onClick={openCardPicker}
                     disabled={isSavingChanges}
-                    className="inline-flex h-10 items-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-bold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="hhwx-action-accent inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-bold transition disabled:opacity-50"
                   >
                     <Plus className="h-4 w-4" aria-hidden="true" />
                     {t("draftActions.addCard")}
@@ -597,7 +597,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                   type="button"
                   onClick={() => setIsFilterPanelOpen((current) => !current)}
                   aria-expanded={isFilterPanelOpen}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 transition hover:border-sky-300 hover:text-sky-600"
+                  className="hhwx-control inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-bold transition"
                 >
                   <ListFilter className="h-4 w-4" aria-hidden="true" />
                   {isFilterPanelOpen ? t("draftActions.closeFilters") : t("draftActions.openFilters")}
@@ -607,14 +607,14 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
             </div>
 
             {!canEditProfile ? (
-              <div className="rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-700">
+              <div className="rounded-xl border border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)] px-4 py-3 text-sm font-semibold text-[var(--theme-color-semantic-info-foreground)]">
                 {t("collectionStates.readOnly")}
               </div>
             ) : null}
 
             {canEditProfile && hasUnsavedChanges ? (
-              <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-sm font-bold text-amber-800">
+              <div className="flex flex-col gap-3 rounded-2xl border border-[var(--theme-color-semantic-warning-border)] bg-[var(--theme-color-semantic-warning-background)] p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm font-bold text-[var(--theme-color-semantic-warning-foreground)]">
                   {t("pendingChanges", {
                     added: pendingChanges.added,
                     updated: pendingChanges.updated,
@@ -626,7 +626,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                     type="button"
                     onClick={handleDiscardChanges}
                     disabled={isSavingChanges}
-                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-amber-300 bg-white px-3 text-sm font-bold text-amber-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--theme-color-semantic-warning-border)] bg-[var(--theme-color-control-background)] px-3 text-sm font-bold text-[var(--theme-color-semantic-warning-foreground)] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <RotateCcw className="h-4 w-4" aria-hidden="true" />
                     {t("draftActions.discardChanges")}
@@ -635,7 +635,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                     type="button"
                     onClick={() => void handleSaveChanges()}
                     disabled={isSavingChanges || saveState === "conflict"}
-                    className="inline-flex h-10 items-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+                    className="hhwx-action-accent inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-bold "
                   >
                     {isSavingChanges ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}
                     {isSavingChanges ? t("draftActions.saving") : t("draftActions.saveAll")}
@@ -645,16 +645,16 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
             ) : null}
 
             {saveNotice ? (
-              <div role="status" aria-live="polite" className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700">
+              <div role="status" aria-live="polite" className="inline-flex items-center gap-2 rounded-xl border border-[var(--theme-color-semantic-success-border)] bg-[var(--theme-color-semantic-success-background)] px-3 py-2 text-sm font-bold text-[var(--theme-color-semantic-success-foreground)]">
                 <Check className="h-4 w-4" aria-hidden="true" />
                 {saveNotice}
               </div>
             ) : null}
             {saveError ? (
-              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">
+              <div className="rounded-xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] p-3 text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)]">
                 <div role="alert">{saveError}</div>
                 {saveState === "conflict" ? (
-                  <button type="button" onClick={handleReloadLatest} className="mt-2 rounded-xl border border-rose-300 bg-white px-3 py-2 font-bold text-rose-700">
+                  <button type="button" onClick={handleReloadLatest} className="mt-2 rounded-xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-control-background)] px-3 py-2 font-bold text-[var(--theme-color-semantic-danger-foreground)]">
                     {t("draftActions.reloadLatest")}
                   </button>
                 ) : null}
@@ -676,12 +676,12 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
               />
             ) : null}
 
-            <div className="hhwx-panel min-h-[420px] overflow-visible rounded-2xl border border-slate-100 bg-[#fffdf1]/72 p-3 shadow-inner">
+            <div className="hhwx-panel min-h-[420px] overflow-visible border p-3">
               {!areEntriesReady && entries.length > 0 ? (
-                <div role="status" className="hhwx-card-picker-surface mb-3 rounded-xl bg-white p-3 text-sm font-semibold text-slate-500">{t("collectionStates.updatingCards")}</div>
+                <div role="status" className="mb-3 rounded-xl bg-[var(--theme-color-panel-background)] p-3 text-sm font-semibold text-[var(--theme-color-text-muted)]">{t("collectionStates.updatingCards")}</div>
               ) : null}
               {filteredEntries.length === 0 ? (
-                <div className="flex min-h-[360px] flex-col items-center justify-center gap-3 text-center text-slate-500">
+                <div className="flex min-h-[360px] flex-col items-center justify-center gap-3 text-center text-[var(--theme-color-text-muted)]">
                   <Filter className="h-9 w-9" aria-hidden="true" />
                   <div className="text-sm font-bold">{t("states.empty")}</div>
                 </div>
@@ -723,14 +723,14 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                           key: filterKey,
                           count: Math.min(visibleCount + CARD_PAGE_SIZE, filteredEntries.length),
                         })}
-                        className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 hover:border-sky-300 hover:text-sky-600"
+                        className="hhwx-control inline-flex h-10 items-center justify-center rounded-xl border px-4 text-sm font-bold"
                       >
                         {t("actions.showMore", { count: Math.min(CARD_PAGE_SIZE, remainingCards) })}
                       </button>
                       <button
                         type="button"
                         onClick={() => setVisibleState({ key: filterKey, count: filteredEntries.length })}
-                        className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 hover:border-sky-300 hover:text-sky-600"
+                        className="hhwx-control inline-flex h-10 items-center justify-center rounded-xl border px-4 text-sm font-bold"
                       >
                         {t("actions.showAll")}
                       </button>

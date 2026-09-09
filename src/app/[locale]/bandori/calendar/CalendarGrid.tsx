@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { type CSSProperties, useMemo, useState } from "react";
 import { CalendarEvent, CalendarHolidayData, filterEventsForMonth } from "./useCalendarData";
 import { buildChinaMainlandHolidayLookup, isChinaMainlandRestDay } from "@/lib/bandori-china-mainland-holiday-calendar";
 
@@ -152,11 +152,6 @@ function getOuterSegmentRadiusStyle(segments: EventSegment[], segmentIndex: numb
     borderTopRightRadius: nextSegment ? "0px" : "12px",
     borderBottomRightRadius: nextSegment ? "0px" : "12px",
   };
-}
-
-function getFirstCurrentMonthStartCol(segments: EventSegment[], fallbackStartCol: number): number {
-  const firstCurrentMonthSegment = segments.find((segment) => segment.isCurrentMonth);
-  return firstCurrentMonthSegment?.startCol ?? fallbackStartCol;
 }
 
 function computeEventRows(
@@ -366,28 +361,28 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
   return (
     <div className="w-full max-w-5xl mx-auto">
       {/* 导航栏 */}
-      <div className="mb-5 flex items-center justify-center rounded-[22px] border border-white/70 bg-white/65 px-2 py-2 shadow-[0_12px_30px_rgba(15,23,42,0.08)] ring-1 ring-white/50 md:mb-6 md:px-3 md:py-3">
+      <div className="hhwx-panel mb-5 flex items-center justify-center border px-2 py-2 md:mb-6 md:px-3 md:py-3">
         <div className="flex min-w-0 items-center justify-center gap-2 sm:gap-2.5 md:gap-3.5">
           <button
             onClick={goToPrevMonth}
             disabled={isPrevDisabled}
-            className="rounded-xl border border-gray-200/80 bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-700 shadow-xs transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-white md:px-4 md:py-2"
+            className="hhwx-control rounded-xl border px-2.5 py-1.5 text-sm font-semibold shadow-xs transition-colors disabled:cursor-not-allowed disabled:opacity-35 md:px-4 md:py-2"
           >
             ◀
           </button>
-          <h2 className="min-w-0 text-center text-base font-black tracking-[0.02em] text-gray-800 sm:text-lg md:text-2xl md:tracking-[0.08em]">
+          <h2 className="min-w-0 text-center text-base font-black tracking-[0.02em] text-[var(--theme-color-text-default)] sm:text-lg md:text-2xl md:tracking-[0.08em]">
             {displayYear}年 {displayMonth + 1}月
           </h2>
           <button
             onClick={goToNextMonth}
             disabled={isNextDisabled}
-            className="rounded-xl border border-gray-200/80 bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-700 shadow-xs transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-white md:px-4 md:py-2"
+            className="hhwx-control rounded-xl border px-2.5 py-1.5 text-sm font-semibold shadow-xs transition-colors disabled:cursor-not-allowed disabled:opacity-35 md:px-4 md:py-2"
           >
             ▶
           </button>
           <button
             onClick={goToToday}
-            className="ml-1.5 shrink-0 rounded-xl bg-linear-to-r from-gray-900 to-gray-700 px-2.5 py-1.5 text-sm font-semibold text-white shadow-xs ring-1 ring-black/10 transition-opacity hover:opacity-95 sm:ml-2 md:ml-2.5 md:px-4 md:py-2"
+            className="ml-1.5 shrink-0 rounded-xl px-2.5 py-1.5 text-sm font-semibold shadow-xs transition-opacity hover:opacity-95 sm:ml-2 md:ml-2.5 md:px-4 md:py-2 bg-[var(--theme-color-action-accent-background)] text-[var(--theme-color-action-accent-foreground)]"
           >
             今天
           </button>
@@ -395,14 +390,14 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
       </div>
 
       {/* 日历网格 */}
-      <div className="overflow-hidden rounded-[24px] border border-white/70 bg-[#fffef4] shadow-[0_22px_60px_rgba(15,23,42,0.12)] ring-1 ring-white/60">
+      <div className="hhwx-panel overflow-hidden border">
         {/* 星期头 */}
-        <div className="grid grid-cols-7 border-b border-gray-200/70 bg-linear-to-r from-white/90 via-white/75 to-white/90">
+        <div className="grid grid-cols-7 border-b border-[var(--theme-color-border-subtle)]  bg-[var(--theme-color-panel-background)]">
           {WEEKDAY_LABELS.map((label, i) => (
             <div
               key={label}
               className={`py-3 text-center text-sm font-bold tracking-[0.2em] ${
-                i >= 5 ? "text-red-500" : "text-gray-700"
+                i >= 5 ? "text-[var(--theme-color-calendar-rest-day-foreground)]" : "text-[var(--theme-color-text-default)]"
               }`}
             >
               {label}
@@ -418,7 +413,7 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
           return (
             <div
               key={weekIdx}
-              className="relative border-b border-gray-200/50 last:border-b-0 bg-linear-to-b from-white/65 via-white/42 to-white/30"
+              className="relative border-b border-[var(--theme-color-border-subtle)] last:border-b-0  bg-[var(--theme-color-panel-background)]"
               style={{ minHeight: `${Math.max(36 + lanes * 24 + 14, 102)}px` }}
             >
               <div className="grid grid-cols-7">
@@ -430,31 +425,28 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
                   return (
                     <div
                       key={colIdx}
-                      className={`relative min-h-[102px] border-r border-gray-200/40 last:border-r-0 p-1.5 sm:p-2 md:min-h-[120px] ${
+                      className={`relative min-h-[102px] border-r border-[var(--theme-color-border-subtle)] last:border-r-0 p-1.5 sm:p-2 md:min-h-[120px] ${
                         !cell.isCurrentMonth
-                          ? "bg-slate-50/72"
+                          ? "bg-[var(--theme-color-control-background-muted)]"
                           : isRestDay
-                            ? "bg-[#fff7f7]/50"
+                            ? "bg-[var(--theme-color-calendar-rest-day-background)]"
                             : ""
                       }`}
                     >
-                      {!cell.isCurrentMonth && (
-                        <div className="pointer-events-none absolute inset-0 bg-white/22" />
-                      )}
                       {today && (
-                        <div className="pointer-events-none absolute inset-x-1.5 inset-y-1.5 rounded-2xl border border-blue-200/80 bg-blue-50/45 md:inset-x-2 md:inset-y-2" />
+                        <div className="pointer-events-none absolute inset-x-1.5 inset-y-1.5 rounded-2xl border border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)] md:inset-x-2 md:inset-y-2" />
                       )}
                       <span
                         className={`relative z-1 inline-flex text-sm leading-none ${
                           today
-                            ? "h-7 w-7 items-center justify-center rounded-full bg-blue-600 font-bold text-white shadow-xs"
+                            ? "h-7 w-7 items-center justify-center rounded-full bg-[var(--theme-color-action-accent-background)] font-bold text-[var(--theme-color-text-on-emphasis)] shadow-xs"
                             : !cell.isCurrentMonth
                               ? isRestDay
-                                ? "font-medium text-red-300"
-                                : "font-medium text-slate-400"
+                                ? "font-medium text-[var(--theme-color-calendar-rest-day-foreground)]"
+                                : "font-medium text-[var(--theme-color-text-muted)]"
                               : isRestDay
-                                ? "font-semibold text-red-500"
-                                : "font-semibold text-gray-700"
+                                ? "font-semibold text-[var(--theme-color-calendar-rest-day-foreground)]"
+                                : "font-semibold text-[var(--theme-color-text-default)]"
                         }`}
                       >
                         {cell.dayNumber}
@@ -472,13 +464,16 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
                   const topPx = 30 + row.lane * 24;
                   const leftPercent = (row.startCol / 7) * 100;
                   const widthPercent = (row.colSpan / 7) * 100;
-                  const textStartCol = getFirstCurrentMonthStartCol(segments, row.startCol);
+                  const textSegment = segments.find((segment) => segment.isCurrentMonth);
+                  const textStartCol = textSegment?.startCol ?? row.startCol;
+                  const textEndCol = textSegment ? textSegment.startCol + textSegment.colSpan : row.startCol + row.colSpan;
                   const textInsetPercent = ((textStartCol - row.startCol) / row.colSpan) * 100;
+                  const textEndInsetPercent = ((row.startCol + row.colSpan - textEndCol) / row.colSpan) * 100;
 
                   return (
                     <div
                       key={`${row.event.eventId}-${row.weekRow}-${i}`}
-                      className="absolute overflow-hidden whitespace-nowrap rounded-xl px-2 py-0.5 text-[11px] font-semibold leading-tight text-white shadow-[0_8px_18px_rgba(0,0,0,0.16)] ring-1 ring-white/25 md:py-1 md:text-xs"
+                      className="hhwx-calendar-event absolute overflow-hidden whitespace-nowrap rounded-xl px-2 py-0.5 text-[11px] font-semibold leading-tight shadow-[0_8px_18px_rgba(0,0,0,0.16)] ring-1 ring-white/25 md:py-1 md:text-xs"
                       style={{
                         backgroundColor: row.event.primaryColor,
                         backgroundImage: row.event.secondaryColor
@@ -515,8 +510,11 @@ export default function CalendarGrid({ events, holidayData }: CalendarGridProps)
                         );
                       })}
                       <span
-                        className="absolute inset-y-0 right-0 z-2 flex items-center overflow-hidden whitespace-nowrap pr-1"
-                        style={{ left: textInsetPercent > 0 ? `calc(${textInsetPercent}% + 0.35rem)` : "0.5rem" }}
+                        className="hhwx-calendar-event-label absolute inset-y-0 z-2 flex items-center overflow-hidden whitespace-nowrap pr-1"
+                        style={{
+                          left: textInsetPercent > 0 ? `calc(${textInsetPercent}% + 0.35rem)` : "0.5rem",
+                          "--calendar-label-end": `${textEndInsetPercent}%`,
+                        } as CSSProperties}
                       >
                         {row.event.name}
                       </span>

@@ -104,15 +104,15 @@ export default function AccountPasswordPage() {
       ) : profileError ? (
         <AccountErrorState message={profileError} />
       ) : profile ? (
-        <form onSubmit={handleSubmit} className="space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
+        <form onSubmit={handleSubmit} className="space-y-6 rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-6 shadow-xs">
           <div>
-            <h2 className="text-xl font-semibold text-slate-900">{t("sectionTitle")}</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
+            <h2 className="text-xl font-semibold text-[var(--theme-color-text-default)]">{t("sectionTitle")}</h2>
+            <p className="mt-2 text-sm leading-6 text-[var(--theme-color-text-muted)]">
               {t("sectionDescription")}
             </p>
           </div>
 
-          <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+          <div className="rounded-2xl bg-[var(--theme-color-panel-background)] p-4 text-sm text-[var(--theme-color-text-muted)]">
             {t("currentEmail", { email: profile.email || userEmail || "-" })}
           </div>
 
@@ -131,7 +131,7 @@ export default function AccountPasswordPage() {
           )}
 
           {message && (
-            <div className={`text-sm ${message === t("emailSent") ? "text-emerald-600" : "text-red-500"}`}>
+            <div className={`text-sm ${message === t("emailSent") ? "text-[var(--theme-color-semantic-success-foreground)]" : "text-[var(--theme-color-semantic-danger-foreground)]"}`}>
               {message}
             </div>
           )}

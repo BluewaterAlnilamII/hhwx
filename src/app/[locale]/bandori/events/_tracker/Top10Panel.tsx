@@ -173,7 +173,7 @@ export function Top10Panel({
   return (
     <div className="relative">
       {isBlockingLoading && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center rounded-xl bg-[var(--theme-color-surface-background)]/75 dark:bg-[#0C111C]/75">
+        <div className="absolute inset-0 z-30 flex items-center justify-center rounded-xl bg-[var(--theme-color-panel-background)]/75 dark:bg-[#0C111C]/75">
           <div className="flex flex-col items-center">
             <div className="h-10 w-10 animate-spin rounded-full border-4 border-[var(--theme-color-semantic-info-border)] border-t-transparent" />
             <p className="mt-4 text-sm font-semibold text-[var(--theme-color-semantic-info-foreground)] dark:text-[var(--theme-color-action-secondary-foreground-on-dark)]">{t("loading")}</p>

@@ -18,6 +18,9 @@
   --theme-color-shell-scrollbar-thumb-hover: var(--theme-seed-shell-scrollbar);
 
   --theme-color-surface-background: var(--theme-seed-surface);
+  --theme-color-floating-background: var(--theme-color-surface-background);
+  --theme-color-chart-axis-background: var(--theme-seed-surface);
+  --theme-color-overlay-background: color-mix(in srgb, var(--theme-seed-text-primary) 55%, transparent);
   /* Page panels and nested content containers share a fill, independent of chart ink and controls. */
   --theme-color-panel-background: var(--theme-color-surface-background);
   --theme-color-comment-reaction-background: var(--theme-color-surface-background);
@@ -25,7 +28,7 @@
   --theme-shadow-panel: var(--theme-shadow-surface-raised);
   --theme-color-text-default: var(--theme-seed-text-primary);
   --theme-color-text-muted: var(--theme-seed-text-secondary);
-  --theme-color-text-default-on-dark: var(--theme-color-surface-background);
+  --theme-color-text-default-on-dark: var(--theme-color-text-on-emphasis);
   --theme-color-text-muted-on-dark: var(--theme-seed-neutral);
   --theme-color-border-subtle: var(--theme-seed-neutral);
   --theme-color-border-default: var(--theme-seed-shell-tint);
@@ -132,8 +135,9 @@
   --theme-color-status-ended-foreground: var(--theme-color-semantic-neutral-foreground);
   --theme-color-status-ended-foreground-on-dark: var(--theme-color-semantic-neutral-foreground-on-dark);
 
-  /* Controls and selection reuse the information semantic instead of adding colors. */
+  /* Themes can override selection independently from information, actions and keyboard focus. */
   --theme-color-control-background-hover: var(--theme-color-semantic-info-background);
+  --theme-color-control-placeholder: color-mix(in oklab, currentcolor 50%, transparent);
   --theme-color-control-background-pressed: color-mix(in srgb, var(--theme-seed-semantic-info) 8%, var(--theme-color-control-background));
   --theme-color-control-foreground-pressed: var(--theme-color-text-default);
   --theme-color-control-background-disabled: var(--theme-color-semantic-neutral-background);
@@ -141,16 +145,16 @@
   --theme-color-control-foreground-disabled: var(--theme-color-semantic-neutral-foreground);
   --theme-color-focus-ring: var(--theme-color-semantic-info-border);
   --theme-color-focus-ring-on-dark: var(--theme-color-semantic-info-foreground-on-dark);
-  --theme-color-control-ring-pressed: var(--theme-color-semantic-info-border);
+  --theme-color-control-ring-pressed: var(--theme-color-selection-subtle-ring);
   --theme-color-menu-item-background-current: var(--theme-color-control-background-pressed);
   --theme-color-menu-item-foreground-current: var(--theme-color-control-foreground-pressed);
-  --theme-color-menu-item-indicator-background-current: var(--theme-color-semantic-info-border);
+  --theme-color-menu-item-indicator-background-current: var(--theme-color-selection-strong-background);
   --theme-color-menu-item-indicator-foreground-current: var(--theme-color-selection-strong-foreground);
   --theme-color-selection-subtle-background: var(--theme-color-control-background);
   --theme-color-selection-subtle-foreground: var(--theme-color-semantic-info-foreground);
   --theme-color-selection-subtle-ring: var(--theme-color-semantic-info-border);
   --theme-color-selection-strong-background: var(--theme-color-semantic-info-foreground);
-  --theme-color-selection-strong-foreground: var(--theme-color-surface-background);
+  --theme-color-selection-strong-foreground: var(--theme-color-text-on-emphasis);
   --theme-color-selection-strong-ring: var(--theme-color-semantic-info-border);
   --theme-shadow-selection-subtle: 0 8px 18px color-mix(in srgb, var(--theme-color-selection-subtle-ring) 14%, transparent);
 
@@ -167,13 +171,15 @@
   --theme-color-action-primary-foreground: var(--theme-color-text-default);
   --theme-shadow-action-primary: 0 10px 24px color-mix(in srgb, var(--theme-color-action-primary-background) 28%, transparent);
   --theme-color-action-secondary-background: var(--theme-color-semantic-info-background);
-  --theme-color-action-secondary-background-hover: var(--theme-color-control-background-pressed);
+  --theme-color-action-secondary-background-hover: color-mix(in srgb, var(--theme-seed-semantic-info) 8%, var(--theme-color-control-background));
   --theme-color-action-secondary-foreground: var(--theme-color-semantic-info-foreground);
   --theme-color-action-secondary-foreground-on-dark: var(--theme-color-semantic-info-foreground-on-dark);
   --theme-color-action-secondary-border: var(--theme-color-semantic-info-border);
   --theme-color-action-accent-background: var(--theme-color-semantic-info-foreground);
   --theme-color-action-accent-background-hover: color-mix(in srgb, var(--theme-color-semantic-info-foreground) 88%, var(--theme-seed-text-primary));
-  --theme-color-action-accent-foreground: var(--theme-color-surface-background);
+  --theme-color-action-accent-foreground: var(--theme-color-text-on-emphasis);
+  --theme-color-profile-banner-background: var(--theme-color-action-accent-background);
+  --theme-color-profile-banner-foreground: var(--theme-color-text-on-emphasis);
   --theme-color-action-destructive-background: var(--theme-color-control-background);
   --theme-color-action-destructive-background-hover: var(--theme-color-semantic-danger-background);
   --theme-color-action-destructive-border: var(--theme-color-semantic-danger-border);
@@ -186,6 +192,10 @@
 
   --theme-color-status-warning-indicator: var(--theme-color-semantic-warning-border);
   --theme-color-notification-badge-background: var(--theme-color-semantic-danger-border);
-  --theme-color-notification-badge-foreground: var(--theme-color-surface-background);
+  --theme-color-notification-badge-foreground: var(--theme-color-text-on-emphasis);
   --theme-color-notification-badge-ring: var(--theme-color-shell-header-background);
+
+  --theme-color-calendar-rest-day-foreground: var(--theme-seed-brand-emphasis);
+  --theme-color-calendar-rest-day-background: color-mix(in srgb, var(--theme-seed-brand-emphasis) 4%, var(--theme-color-panel-background));
+  --theme-color-calendar-event-foreground: var(--theme-color-text-on-emphasis);
 }

@@ -10,7 +10,8 @@
   --smile-patrol-palette-red-ef392b: #ef392b;
   --smile-patrol-palette-red-orange-f35e38: #f35e38;
 
-  /* Bright yellow, cyan, and pink remain source swatches until they have stable theme responsibilities. */
+  /* Cyan and pink remain reserved for stable theme responsibilities. */
+  --smile-patrol-content-surface: #fcfcfc;
 
   /* A visual theme supplies seeds and its own composite effects. */
   --theme-seed-shell-canvas: #ffea2f;
@@ -21,6 +22,9 @@
   --theme-seed-shell-tint: var(--smile-patrol-palette-yellow-f9e065);
   --theme-seed-shell-scrollbar: var(--smile-patrol-palette-blue-006699);
   --theme-seed-surface: #fffef4;
+  /* Inverse ink is independent from surfaces that may change with the color scheme. */
+  --theme-color-text-on-emphasis: #fffef4;
+  --theme-color-profile-banner-background: var(--smile-patrol-palette-blue-006699);
   --theme-seed-neutral: #cbd5e1;
   --theme-seed-text-primary: #0f172a;
   --theme-seed-text-secondary: #475569;
@@ -49,7 +53,9 @@
 
   /* Smile Patrol intentionally lifts controls onto a clean white surface. */
   --theme-color-control-background: #ffffff;
-  --theme-color-comment-reaction-background: #fffefa;
+  --theme-color-calendar-event-foreground: #ffffff;
+  --theme-color-comment-reaction-background: var(--smile-patrol-content-surface);
+  --theme-shadow-panel: none;
 }
 
 @media (prefers-color-scheme: light) {
@@ -84,9 +90,13 @@
     background-attachment: fixed;
     background-repeat: no-repeat;
 
-    --theme-color-panel-background: #fffefa;
+    --theme-color-panel-background: var(--smile-patrol-content-surface);
+    --theme-color-floating-background: var(--smile-patrol-content-surface);
     --theme-color-panel-border: #dddcd5;
-    --theme-shadow-panel: none;
+    --theme-color-control-placeholder: var(--theme-color-text-muted);
+    --theme-color-tab-foreground-selected: var(--theme-color-semantic-info-foreground);
+    --theme-color-tab-indicator-selected: var(--theme-color-semantic-info-border);
+    --theme-color-calendar-rest-day-foreground: color-mix(in srgb, var(--theme-seed-brand-emphasis) 80%, var(--theme-seed-text-primary));
     --theme-color-shell-sidebar-background: var(--theme-color-panel-background);
     --theme-color-shell-sidebar-backdrop: color-mix(in srgb, var(--theme-seed-text-primary) 28%, transparent);
     --theme-color-shell-navigation-item-background-current: var(--smile-patrol-canvas-yellow);

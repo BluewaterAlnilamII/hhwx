@@ -48,7 +48,7 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
 
   return (
     <div className="flex flex-col gap-3.5 items-stretch xl:flex-row xl:items-start xl:gap-4">
-      <Tabs.List className="relative flex w-full flex-row justify-center gap-1 overflow-x-auto rounded-[20px] border border-[var(--theme-color-border-default)] bg-[var(--theme-color-panel-background)] p-1 shadow-[var(--theme-shadow-control-inset-highlight)] xl:w-[7.1rem] xl:flex-none xl:flex-col xl:self-start xl:overflow-visible dark:border-slate-700/80 dark:bg-slate-950/70 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+      <Tabs.List className="relative flex w-full flex-row justify-center gap-1 overflow-x-auto rounded-[20px] border border-[var(--theme-color-panel-border)] bg-[var(--theme-color-panel-background)] p-1 shadow-[var(--theme-shadow-control-inset-highlight)] xl:w-[7.1rem] xl:flex-none xl:flex-col xl:self-start xl:overflow-visible dark:border-slate-700/80 dark:bg-slate-950/70 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
         {TRACKING_MODE_OPTIONS.map((mode) => {
           const disabled = mode === "song" && isSongModeDisabled;
           const toneClassName = disabled

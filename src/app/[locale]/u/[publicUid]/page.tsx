@@ -1,3 +1,4 @@
+import Heading from "@/components/Heading";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
@@ -57,35 +58,35 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
 
   return (
     <main className="mx-auto flex min-h-full w-full max-w-4xl items-center px-0 py-4 sm:px-6 sm:py-10 lg:px-8">
-      <section className="w-full overflow-hidden border-y border-white/55 bg-[#fffef4] px-4 py-6 shadow-[0_12px_42px_rgba(15,23,42,0.08)] sm:rounded-[32px] sm:border sm:p-8 sm:shadow-[0_20px_80px_rgba(15,23,42,0.12)]">
+      <section className="hhwx-panel w-full overflow-hidden border-y px-4 py-6 sm:border sm:p-8">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-4">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-sky-400 to-indigo-500 text-2xl font-bold text-white shadow-lg sm:h-20 sm:w-20 sm:text-3xl">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-2xl font-bold shadow-lg sm:h-20 sm:w-20 sm:text-3xl bg-[var(--theme-color-action-accent-background)] text-[var(--theme-color-action-accent-foreground)]">
               {getUsernameAvatarLabel(profile.username)}
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-500">{t("eyebrow")}</p>
-              <h1 className="mt-2 wrap-break-word text-2xl font-bold text-slate-900 sm:text-4xl">{profile.username}</h1>
-              <p className="mt-2 text-sm font-semibold text-slate-500">UID {profile.publicUid}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--theme-color-action-secondary-foreground)]">{t("eyebrow")}</p>
+              <Heading as="h1" visualRole="page" className="mt-2 wrap-break-word">{profile.username}</Heading>
+              <p className="mt-2 text-sm font-semibold text-[var(--theme-color-text-muted)]">UID {profile.publicUid}</p>
             </div>
           </div>
 
           <Link
             href="/"
-            className="inline-flex w-full items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 sm:w-auto"
+            className="inline-flex w-full items-center justify-center rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-5 py-2 text-sm font-semibold text-[var(--theme-color-text-default)] transition hover:border-[var(--theme-color-semantic-info-border)] hover:text-[var(--theme-color-action-secondary-foreground)] sm:w-auto"
           >
             {t("backHome")}
           </Link>
         </div>
 
         <div className="mt-8 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">UID</p>
-            <p className="mt-2 text-lg font-bold text-slate-900">{profile.publicUid}</p>
+          <div className="rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-4 shadow-xs">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--theme-color-text-muted)]">UID</p>
+            <p className="mt-2 text-lg font-bold text-[var(--theme-color-text-default)]">{profile.publicUid}</p>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">{t("joinedAt")}</p>
-            <p className="mt-2 text-lg font-bold text-slate-900">
+          <div className="rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-4 shadow-xs">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--theme-color-text-muted)]">{t("joinedAt")}</p>
+            <p className="mt-2 text-lg font-bold text-[var(--theme-color-text-default)]">
               {formatJoinedAt(profile.createdAt, locale, commonT("states.unknown"))}
             </p>
           </div>

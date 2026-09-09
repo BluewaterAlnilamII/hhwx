@@ -1,5 +1,6 @@
 "use client";
 
+import Heading from "@/components/Heading";
 import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { Link, useRouter } from "@/i18n/navigation";
@@ -350,23 +351,23 @@ export default function AuthPageContent() {
   return (
     <main className="relative min-h-full px-4 py-10 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-xl">
-        <section className="rounded-[32px] border border-white/60 bg-[#fffef4] p-8 shadow-[0_24px_80px_rgba(15,23,42,0.12)]">
-          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5">
+        <section className="hhwx-panel border p-8">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] pb-5">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-500">{t("section")}</p>
-              <h1 className="mt-2 text-3xl font-bold text-slate-900">{t(`mode.${modeMessageKey}.title`)}</h1>
-              <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">{t(`mode.${modeMessageKey}.description`)}</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[var(--theme-color-action-secondary-foreground)]">{t("section")}</p>
+              <Heading as="h1" visualRole="page" className="mt-2">{t(`mode.${modeMessageKey}.title`)}</Heading>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--theme-color-text-muted)]">{t(`mode.${modeMessageKey}.description`)}</p>
             </div>
             <Link
               href="/"
-              className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600"
+              className="inline-flex items-center justify-center rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-2 text-sm font-semibold text-[var(--theme-color-text-default)] transition hover:border-[var(--theme-color-semantic-info-border)] hover:text-[var(--theme-color-action-secondary-foreground)]"
             >
               {t("actions.backHome")}
             </Link>
           </div>
 
           {authReady && userId && (
-            <div className="mt-6 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            <div className="mt-6 rounded-2xl bg-[var(--theme-color-semantic-success-background)] px-4 py-3 text-sm text-[var(--theme-color-semantic-success-foreground)]">
               {t("messages.alreadySignedIn", { username: username || t("messages.currentAccount") })}
             </div>
           )}
@@ -375,79 +376,79 @@ export default function AuthPageContent() {
             <button
               type="button"
               onClick={() => switchMode("login")}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${mode === "login" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${mode === "login" ? "bg-[var(--theme-color-action-accent-background)] text-[var(--theme-color-text-on-emphasis)]" : "bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-muted)]"}`}
             >
               {t("actions.login")}
             </button>
             <button
               type="button"
               onClick={() => switchMode("register")}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${mode === "register" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${mode === "register" ? "bg-[var(--theme-color-action-accent-background)] text-[var(--theme-color-text-on-emphasis)]" : "bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-muted)]"}`}
             >
               {t("actions.register")}
             </button>
             <button
               type="button"
               onClick={() => switchMode("forgot-password")}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${mode === "forgot-password" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${mode === "forgot-password" ? "bg-[var(--theme-color-action-accent-background)] text-[var(--theme-color-text-on-emphasis)]" : "bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-muted)]"}`}
             >
               {t("actions.forgotPassword")}
             </button>
           </div>
 
           {error && (
-            <div className="mt-6 rounded-2xl bg-red-50 p-4 text-sm leading-6 text-red-600">
+            <div className="mt-6 rounded-2xl bg-[var(--theme-color-semantic-danger-background)] p-4 text-sm leading-6 text-[var(--theme-color-semantic-danger-foreground)]">
               {error}
             </div>
           )}
 
           {notice && (
-            <div className="mt-6 rounded-2xl bg-sky-50 p-4 text-sm leading-6 text-sky-700">
+            <div className="mt-6 rounded-2xl bg-[var(--theme-color-semantic-info-background)] p-4 text-sm leading-6 text-[var(--theme-color-action-secondary-foreground)]">
               {notice}
             </div>
           )}
 
           <form onSubmit={mode === "login" ? handleLogin : mode === "register" ? handleRegister : handleForgotPassword} className="mt-6 space-y-5">
               {mode === "register" && (
-                <label className="block text-sm font-medium text-slate-700">
+                <label className="block text-sm font-medium text-[var(--theme-color-text-default)]">
                   {t("fields.username")}
                   <input
                     type="text"
                     value={usernameInput}
                     onChange={(event) => setUsernameInput(event.target.value)}
                     {...usernameValidationProps}
-                    className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-hidden transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                    className="hhwx-control mt-2 w-full rounded-2xl border px-4 py-3 transition"
                     placeholder={t("validation.usernamePlaceholder")}
                     required
                   />
-                  <span className="mt-2 block text-xs leading-5 text-slate-500">
+                  <span className="mt-2 block text-xs leading-5 text-[var(--theme-color-text-muted)]">
                     {usernameHint}
                   </span>
                 </label>
               )}
 
-              <label className="block text-sm font-medium text-slate-700">
+              <label className="block text-sm font-medium text-[var(--theme-color-text-default)]">
                 {t("fields.email")}
                 <input
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   {...emailValidationProps}
-                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-hidden transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                  className="hhwx-control mt-2 w-full rounded-2xl border px-4 py-3 transition"
                   placeholder={t("placeholders.email")}
                   required
                 />
               </label>
 
               {mode !== "forgot-password" && (
-                <label className="block text-sm font-medium text-slate-700">
+                <label className="block text-sm font-medium text-[var(--theme-color-text-default)]">
                   {t("fields.password")}
                   <input
                     type="password"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     {...passwordValidationProps}
-                    className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-hidden transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                    className="hhwx-control mt-2 w-full rounded-2xl border px-4 py-3 transition"
                     placeholder={t("placeholders.password")}
                     minLength={PASSWORD_MIN_LENGTH}
                     maxLength={PASSWORD_MAX_LENGTH}
@@ -455,7 +456,7 @@ export default function AuthPageContent() {
                     required
                   />
                   {mode === "register" && (
-                    <span className="mt-2 block text-xs leading-5 text-slate-500">
+                    <span className="mt-2 block text-xs leading-5 text-[var(--theme-color-text-muted)]">
                       {passwordPolicyMessage}
                     </span>
                   )}
@@ -463,14 +464,14 @@ export default function AuthPageContent() {
               )}
 
               {mode === "register" && (
-                <label className="block text-sm font-medium text-slate-700">
+                <label className="block text-sm font-medium text-[var(--theme-color-text-default)]">
                   {t("fields.confirmPassword")}
                   <input
                     type="password"
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     {...confirmPasswordValidationProps}
-                    className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-hidden transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                    className="hhwx-control mt-2 w-full rounded-2xl border px-4 py-3 transition"
                     placeholder={t("placeholders.confirmPassword")}
                     minLength={PASSWORD_MIN_LENGTH}
                     maxLength={PASSWORD_MAX_LENGTH}
@@ -495,7 +496,7 @@ export default function AuthPageContent() {
               )}
 
               <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                <div className="text-sm text-slate-500">
+                <div className="text-sm text-[var(--theme-color-text-muted)]">
                   {t(`mode.${modeMessageKey}.footerDescription`)}
                 </div>
                 <button
@@ -515,7 +516,7 @@ export default function AuthPageContent() {
 
               {authReady && userId && (
                 <div className="pt-3 text-right">
-                  <Link href="/account" className="text-sm font-semibold text-sky-600 transition hover:text-sky-500">
+                  <Link href="/account" className="text-sm font-semibold text-[var(--theme-color-action-secondary-foreground)] transition hover:text-[var(--theme-color-action-secondary-foreground)]">
                     {t("messages.accountCenter")}
                   </Link>
                 </div>

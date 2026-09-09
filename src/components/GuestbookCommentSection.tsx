@@ -96,18 +96,18 @@ export default function GuestbookCommentSection() {
 
     return (
         <div className="w-full max-w-2xl mx-auto mt-8 mb-12 px-4">
-            <h3 className="text-lg font-bold text-gray-800 mb-4">{t("title")}</h3>
+            <h3 className="text-lg font-bold text-[var(--theme-color-text-default)] mb-4">{t("title")}</h3>
 
             {/* Comment input */}
             {!authReady ? (
-                <div className="mb-6 p-4 bg-[#fffef4] rounded-xl text-center text-gray-500 text-sm">
+                <div className="mb-6 p-4 bg-[var(--theme-color-panel-background)] rounded-xl text-center text-[var(--theme-color-text-muted)] text-sm">
                     {t("loadingAuth")}
                 </div>
             ) : userId ? (
                 emailVerified ? (
                 <form onSubmit={handleSubmit} className="mb-6">
                     <div className="flex gap-3">
-                        <div className="w-8 h-8 rounded-full bg-linear-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold shrink-0 mt-1">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-1 bg-[var(--theme-color-action-accent-background)] text-[var(--theme-color-action-accent-foreground)]">
                             {getUsernameAvatarLabel(username)}
                         </div>
                         <div className="flex-1">
@@ -115,31 +115,31 @@ export default function GuestbookCommentSection() {
                                 value={newComment}
                                 onChange={(e) => setNewComment(e.target.value)}
                                 placeholder={t("placeholder")}
-                                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 outline-hidden transition resize-none text-gray-800 bg-[#fffef4] text-sm"
+                                className="hhwx-control w-full px-4 py-3 rounded-xl border transition resize-none text-sm"
                                 rows={2}
                             />
                             <div className="flex justify-end mt-2">
                                 <button
                                     type="submit"
                                     disabled={loading || !newComment.trim()}
-                                    className="px-5 py-1.5 bg-linear-to-r from-blue-500 to-purple-600 text-white text-sm font-medium rounded-full hover:opacity-90 transition disabled:opacity-40"
+                                    className="px-5 py-1.5 text-sm font-medium rounded-full hover:opacity-90 transition disabled:opacity-40 bg-[var(--theme-color-action-accent-background)] text-[var(--theme-color-action-accent-foreground)]"
                                 >
                                     {loading ? t("submitting") : t("submit")}
                                 </button>
                             </div>
                             {submitError && (
-                                <div className="mt-2 text-sm text-red-500">{submitError}</div>
+                                <div className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{submitError}</div>
                             )}
                         </div>
                     </div>
                 </form>
                 ) : (
-                    <div className="mb-6 p-4 bg-amber-50 rounded-xl text-center text-amber-700 text-sm">
+                    <div className="mb-6 p-4 bg-[var(--theme-color-semantic-warning-background)] rounded-xl text-center text-[var(--theme-color-semantic-warning-foreground)] text-sm">
                         {t("verifyRequired")}
                     </div>
                 )
             ) : (
-                <div className="mb-6 p-4 bg-[#fffef4] rounded-xl text-center text-gray-500 text-sm">
+                <div className="mb-6 p-4 bg-[var(--theme-color-panel-background)] rounded-xl text-center text-[var(--theme-color-text-muted)] text-sm">
                     {t("loginRequired")}
                 </div>
             )}
@@ -147,27 +147,27 @@ export default function GuestbookCommentSection() {
             {/* Comment list */}
             <div className="space-y-3">
                 {comments.length === 0 && (
-                    <div className="text-center text-gray-400 text-sm py-8">
+                    <div className="text-center text-[var(--theme-color-text-muted)] text-sm py-8">
                         {t("empty")}
                     </div>
                 )}
                 {comments.map((c) => (
                     <div
                         key={c.id}
-                        className="bg-[#fffef4] rounded-xl p-4 shadow-xs"
+                        className="bg-[var(--theme-color-panel-background)] rounded-xl p-4 shadow-xs"
                     >
                         <div className="flex items-center gap-2 mb-2">
-                            <div className="w-6 h-6 rounded-full bg-linear-to-br from-gray-300 to-gray-400 flex items-center justify-center text-white text-[10px] font-bold">
+                            <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold bg-[var(--theme-color-action-accent-background)] text-[var(--theme-color-action-accent-foreground)]">
                                 {getUsernameAvatarLabel(c.profiles?.username, "?")}
                             </div>
-                            <span className="text-sm font-semibold text-gray-700">
+                            <span className="text-sm font-semibold text-[var(--theme-color-text-default)]">
                                 {c.profiles?.username || t("anonymous")}
                             </span>
-                            <span className="text-xs text-gray-400 ml-auto">
+                            <span className="text-xs text-[var(--theme-color-text-muted)] ml-auto">
                                 {formatTime(c.created_at)}
                             </span>
                         </div>
-                        <p className="text-sm text-gray-600 leading-relaxed">{c.content}</p>
+                        <p className="text-sm text-[var(--theme-color-text-muted)] leading-relaxed">{c.content}</p>
                     </div>
                 ))}
             </div>

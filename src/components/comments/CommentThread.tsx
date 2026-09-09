@@ -27,7 +27,7 @@ import { buildCommentDraftStorageKey } from "@/lib/comments/comment-drafts";
 import { CommentComposer } from "./CommentComposer";
 import { CommentItem } from "./CommentItem";
 
-const paginationButtonClassName = "inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--theme-color-text-default)] transition hover:bg-[var(--theme-color-surface-background)] hover:text-[var(--theme-color-action-secondary-foreground)] active:bg-[var(--theme-color-surface-background)] disabled:pointer-events-none disabled:cursor-not-allowed disabled:text-[var(--theme-color-text-muted)] disabled:opacity-25 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-[var(--theme-color-action-secondary-foreground-on-dark)]";
+const paginationButtonClassName = "inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--theme-color-text-default)] transition hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-action-secondary-foreground)] active:bg-[var(--theme-color-control-background-pressed)] disabled:pointer-events-none disabled:cursor-not-allowed disabled:text-[var(--theme-color-text-muted)] disabled:opacity-25 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-[var(--theme-color-action-secondary-foreground-on-dark)]";
 const REFRESH_SUCCESS_DURATION_MS = 2_000;
 const REFRESH_ERROR_DURATION_MS = 4_000;
 
@@ -159,7 +159,7 @@ export default function CommentThread({
   }, []);
 
   return (
-    <section className="hhwx-panel rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-3 shadow-[var(--theme-shadow-surface-raised)] sm:p-5 dark:border-slate-800 dark:bg-slate-950">
+    <section className="hhwx-panel border p-3 sm:p-5 dark:border-slate-800 dark:bg-slate-950">
       <div className="flex items-center justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] pb-4 dark:border-slate-800">
         <Heading as="h2" visualRole="section" accentSlot="a" icon={<MessageSquare size={20} />} className="dark:text-[var(--theme-color-text-default-on-dark)]">
           {title}
@@ -304,7 +304,7 @@ export default function CommentThread({
                 disabled={loading}
                 aria-label={t("pagination.jumpLabel")}
                 title={t("pagination.jumpHint")}
-                className="h-6 w-10 rounded-md border border-transparent bg-transparent text-center text-sm font-semibold text-[var(--theme-color-text-default)] outline-hidden transition focus:border-[var(--theme-color-action-secondary-border)] focus:bg-[var(--theme-color-surface-background)] disabled:cursor-not-allowed disabled:text-[var(--theme-color-text-muted)] dark:text-slate-200 dark:focus:border-slate-600 dark:focus:bg-slate-900"
+                className="h-6 w-10 rounded-md border border-transparent bg-transparent text-center text-sm font-semibold text-[var(--theme-color-text-default)] outline-hidden transition focus:border-[var(--theme-color-action-secondary-border)] focus:bg-[var(--theme-color-control-background)] disabled:cursor-not-allowed disabled:text-[var(--theme-color-text-muted)] dark:text-slate-200 dark:focus:border-slate-600 dark:focus:bg-slate-900"
               />
               <span className="mx-1 text-[var(--theme-color-text-muted)] opacity-50">/</span>
               <span className="min-w-8 text-center">{totalPages}</span>

@@ -69,10 +69,10 @@ export default function OthelloPage() {
                       className="h-full w-full object-cover"
                     />
                   </div>
-                  <div className="text-sm font-bold text-blue-300">{t("you")}</div>
-                  <div className="text-xs text-gray-300">{playerCharInfo.nameJp}</div>
+                  <div className="text-sm font-bold text-[var(--theme-color-semantic-info-foreground)] dark:text-blue-300">{t("you")}</div>
+                  <div className="text-xs text-[var(--theme-color-text-muted)] dark:text-gray-300">{playerCharInfo.nameJp}</div>
                 </div>
-                <div className="self-center text-lg font-light text-gray-400">VS</div>
+                <div className="self-center text-lg font-light text-[var(--theme-color-text-muted)] dark:text-gray-400">VS</div>
                 <div className="text-center">
                   <div className="mx-auto mb-1 h-14 w-14 overflow-hidden rounded-full border-2"
                     style={{ borderColor: aiCharInfo.color }}>
@@ -82,8 +82,8 @@ export default function OthelloPage() {
                       className="h-full w-full object-cover"
                     />
                   </div>
-                  <div className="text-sm font-bold text-red-300">{t("opponent")}</div>
-                  <div className="text-xs text-gray-300">{aiCharInfo.nameJp}</div>
+                  <div className="text-sm font-bold text-[var(--theme-color-semantic-danger-foreground)] dark:text-red-300">{t("opponent")}</div>
+                  <div className="text-xs text-[var(--theme-color-text-muted)] dark:text-gray-300">{aiCharInfo.nameJp}</div>
                 </div>
               </div>
             )}
@@ -92,12 +92,12 @@ export default function OthelloPage() {
               <div className="mb-6 flex justify-center gap-6">
                 <div className="flex items-center gap-2">
                   <div className="h-4 w-4 rounded-full bg-linear-to-br from-gray-700 to-black" />
-                  <span className="text-lg font-bold text-white">{savedPieces.black}</span>
+                  <span className="text-lg font-bold text-[var(--theme-color-text-default)] dark:text-white">{savedPieces.black}</span>
                 </div>
-                <span className="font-light text-gray-400">:</span>
+                <span className="font-light text-[var(--theme-color-text-muted)] dark:text-gray-400">:</span>
                 <div className="flex items-center gap-2">
                   <div className="h-4 w-4 rounded-full border border-gray-400 bg-linear-to-br from-white to-gray-200" />
-                  <span className="text-lg font-bold text-white">{savedPieces.white}</span>
+                  <span className="text-lg font-bold text-[var(--theme-color-text-default)] dark:text-white">{savedPieces.white}</span>
                 </div>
               </div>
             )}
@@ -105,13 +105,13 @@ export default function OthelloPage() {
             <div className="flex justify-center gap-3">
               <button
                 onClick={handleResume}
-                className="rounded-xl bg-linear-to-r from-blue-500 to-purple-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+                className="rounded-xl bg-[var(--theme-color-action-accent-background)] px-6 py-2.5 text-sm font-semibold text-[var(--theme-color-action-accent-foreground)] transition hover:opacity-90"
               >
                 {t("accept")}
               </button>
               <button
                 onClick={handleDecline}
-                className="rounded-xl border border-white/20 bg-white/10 px-6 py-2.5 text-sm font-medium text-white transition hover:bg-white/20"
+                className="hhwx-control rounded-xl border px-6 py-2.5 text-sm font-medium transition "
               >
                 {t("decline")}
               </button>

@@ -43,7 +43,7 @@ test("player UI uses semantic theme tokens without fixed palette classes", async
   assert.match(player, /aria-pressed=\{muted\}/u);
   assert.match(
     player,
-    /muted\s*\?\s*"bg-\[var\(--theme-color-control-background-pressed\)\] text-\[var\(--theme-color-progress-foreground\)\]"/u,
+    /muted\s*\?\s*"bg-\[var\(--theme-color-control-background-pressed\)\] text-\[var\(--theme-color-selection-subtle-foreground\)\]"/u,
   );
   assert.match(
     player,

@@ -56,11 +56,7 @@ function SelectionButton({
       aria-label={title}
       aria-pressed={isSelected}
       onClick={onClick}
-      className={`inline-flex h-9 min-w-9 items-center justify-center rounded-full border bg-white px-2 text-sm font-semibold text-slate-700 shadow-xs transition ${
-        isSelected
-          ? "border-blue-500 ring-2 ring-blue-400/70"
-          : "border-slate-200 hover:border-blue-300 hover:ring-2 hover:ring-blue-100"
-      } ${className}`}
+      className={`hhwx-control inline-flex h-9 min-w-9 items-center justify-center rounded-full border px-2 text-sm font-semibold transition ${className}`}
     >
       {children}
     </button>
@@ -92,7 +88,7 @@ function ToggleAllButton({
 function FilterRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid gap-2 sm:grid-cols-[5.5rem_1fr] sm:items-start">
-      <div className="hhwx-filter-label pt-2 text-sm font-medium text-slate-600">{label}</div>
+      <div className="hhwx-filter-label pt-2 text-sm font-medium text-[var(--theme-color-text-muted)]">{label}</div>
       <div className="flex min-w-0 flex-wrap items-center gap-2">{children}</div>
     </div>
   );
@@ -117,7 +113,7 @@ function LevelInput({ label, value, onCommit, inputRef }: { label: string; value
     if (next !== value) onCommit(next);
   };
   return (
-    <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+    <label className="flex items-center gap-2 text-xs font-semibold text-[var(--theme-color-text-muted)]">
       {label}
       <input
         ref={inputRef}
@@ -132,7 +128,7 @@ function LevelInput({ label, value, onCommit, inputRef }: { label: string; value
             commit();
           }
         }}
-        className="h-10 w-20 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-hidden transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+        className="hhwx-control h-10 w-20 rounded-xl border px-3 text-sm transition"
       />
     </label>
   );
@@ -157,7 +153,7 @@ export default function BandoriSongFilterControls({
   const serverLabel = t("rows.serverAvailability");
 
   return (
-    <div className="hhwx-panel hhwx-catalog-filters rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+    <div className="hhwx-panel border p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <form
           role="search"
@@ -170,7 +166,7 @@ export default function BandoriSongFilterControls({
           }}
         >
           <div className="relative min-w-0 flex-1">
-            <Search className="hhwx-filter-search-icon pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+            <Search className="hhwx-filter-search-icon pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--theme-color-text-muted)]" aria-hidden="true" />
             <input
               ref={searchInputRef}
               type="search"
@@ -188,13 +184,13 @@ export default function BandoriSongFilterControls({
               enterKeyHint="search"
               aria-label={t("searchPlaceholder")}
               placeholder={t("searchPlaceholder")}
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-hidden transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+              className="hhwx-control h-10 w-full rounded-xl border pl-9 pr-3 text-sm transition"
             />
           </div>
           <button
             type="submit"
             aria-label={searchT("search")}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
+            className="hhwx-control inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition"
           >
             <Search className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -210,7 +206,7 @@ export default function BandoriSongFilterControls({
               }
               onClearFilter();
             }}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
+            className="hhwx-control inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition"
           >
             <X className="h-4 w-4" aria-hidden="true" />
             {t("actions.clear")}
@@ -339,7 +335,7 @@ export default function BandoriSongFilterControls({
 
         <FilterRow label={t("rows.level")}>
           <LevelInput inputRef={minLevelInputRef} label={t("levelMin")} value={filter.minLevel} onCommit={(minLevel) => onFilterChange({ minLevel })} />
-          <span className="text-slate-400" aria-hidden="true">–</span>
+          <span className="text-[var(--theme-color-text-muted)]" aria-hidden="true">–</span>
           <LevelInput inputRef={maxLevelInputRef} label={t("levelMax")} value={filter.maxLevel} onCommit={(maxLevel) => onFilterChange({ maxLevel })} />
         </FilterRow>
 
@@ -350,7 +346,7 @@ export default function BandoriSongFilterControls({
               sortBy: event.target.value as BandoriSongsPageFilter["sortBy"],
             })}
             aria-label={t("rows.sort")}
-            className="h-10 min-w-64 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-hidden transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+            className="hhwx-control h-10 min-w-64 rounded-xl border px-3 text-sm transition"
           >
             {BANDORI_SONG_SORTS.map((sort) => (
               <option key={sort} value={sort}>{t(`sort.${sort}`)}</option>
@@ -361,7 +357,7 @@ export default function BandoriSongFilterControls({
             onClick={() => onFilterChange({
               sortDirection: filter.sortDirection === "desc" ? "asc" : "desc",
             })}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
+            className="hhwx-control inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition"
             title={t(`sortDirection.${filter.sortDirection}Title`)}
             aria-label={t(`sortDirection.${filter.sortDirection}Aria`)}
           >

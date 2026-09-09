@@ -101,7 +101,7 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
           "inline-flex items-center justify-center rounded-full border text-[var(--theme-color-text-muted)] transition hover:bg-[var(--theme-color-action-secondary-background-hover)] hover:text-[var(--theme-color-action-secondary-foreground)] disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-sky-500/10 dark:hover:text-sky-300",
           compact ? "h-8 w-8 sm:h-7 sm:w-7" : "h-8 w-8",
           open
-            ? "border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)] text-[var(--theme-color-semantic-info-foreground)] dark:border-sky-500/50 dark:bg-sky-500/10 dark:text-sky-300"
+            ? "border-[var(--theme-color-selection-subtle-ring)] bg-[var(--theme-color-selection-subtle-background)] text-[var(--theme-color-selection-subtle-foreground)] hover:bg-[var(--theme-color-selection-subtle-background)] hover:text-[var(--theme-color-selection-subtle-foreground)] dark:border-sky-500/50 dark:bg-sky-500/10 dark:text-sky-300"
             : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] dark:border-slate-700 dark:bg-slate-900",
         )}
         aria-haspopup="dialog"

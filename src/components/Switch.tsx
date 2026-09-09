@@ -34,7 +34,7 @@ export default function Switch({
       aria-checked={checked}
       aria-label={`${label}: ${stateLabel}`}
       className={cn(
-        "inline-flex min-h-11 items-center gap-2.5 rounded-xl px-1.5 pr-3 text-sm font-semibold text-[var(--theme-color-text-default)] outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-color-surface-background)] disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex min-h-11 items-center gap-2.5 rounded-xl px-1.5 pr-3 text-sm font-semibold text-[var(--theme-color-text-default)] outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-color-panel-background)] disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}
       disabled={disabled}
@@ -45,7 +45,7 @@ export default function Switch({
         className={cn(
           "relative inline-flex h-7 w-12 shrink-0 rounded-full shadow-[var(--theme-shadow-control-inset-highlight)] ring-1 ring-inset transition-colors",
           checked
-            ? "bg-[var(--theme-color-semantic-info-foreground)] ring-[var(--theme-color-semantic-info-border)]"
+            ? "bg-[var(--theme-color-selection-strong-background)] ring-[var(--theme-color-selection-strong-ring)]"
             : "bg-[var(--theme-color-control-background-disabled)] ring-[var(--theme-color-control-border-disabled)]",
         )}
       >

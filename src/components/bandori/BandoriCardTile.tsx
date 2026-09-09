@@ -7,6 +7,7 @@ import BandoriCardThumbnail, {
 } from "@/components/bandori/BandoriCardThumbnail";
 import { BandoriCardHoverPopover } from "@/components/bandori/BandoriCardHoverTooltip";
 import { useBandoriCardHoverTooltip } from "@/hooks/useBandoriCardHoverTooltip";
+import { cn } from "@/lib/utils";
 import {
   getBandoriServerCode,
   type BandoriServer,
@@ -60,13 +61,18 @@ function getBandoriCardTileClassName(
   isActive = false,
 ) {
   const interactionClassName = isInteractive
-    ? "transition hover:z-40 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400"
+    ? "transition hover:z-40 hover:outline-2 hover:outline-[color:var(--theme-color-focus-ring)] focus-within:z-40 focus-within:outline-2 focus-within:outline-[color:var(--theme-color-focus-ring)]"
     : "";
   const activeClassName = isActive
-    ? "z-40 outline-2 outline-sky-500 ring-2 ring-sky-300/70"
+    ? "z-40 outline-2 outline-[color:var(--theme-color-selection-subtle-ring)] ring-2 ring-[var(--theme-color-selection-subtle-ring)]"
     : "";
 
-  return `group relative ${size === "compact" ? "h-[56px] w-[56px]" : "h-[74px] w-[74px]"} overflow-visible rounded-[5px] outline-solid outline-1 outline-white/80 sm:h-[76px] sm:w-[76px] ${interactionClassName} ${activeClassName}`;
+  return cn(
+    "group relative overflow-visible rounded-[5px] outline-solid outline-1 outline-white/80 sm:h-[76px] sm:w-[76px]",
+    size === "compact" ? "h-[56px] w-[56px]" : "h-[74px] w-[74px]",
+    interactionClassName,
+    activeClassName,
+  );
 }
 
 function BandoriCardTileContent({
@@ -112,7 +118,7 @@ function BandoriCardTileContent({
           aria-haspopup={trigger.tooltipId ? "dialog" : undefined}
           disabled={trigger.disabled}
           onClick={trigger.onClick}
-          className={`h-full w-full overflow-visible rounded-[5px] bg-white text-left shadow-[0_2px_7px_rgba(15,23,42,0.22)] disabled:cursor-not-allowed disabled:opacity-70 ${isMuted ? BANDORI_MUTED_CARD_CLASS_NAME : ""}`}
+          className={`h-full w-full overflow-visible rounded-[5px] bg-[var(--theme-color-control-background)] text-left shadow-[0_2px_7px_rgba(15,23,42,0.22)] disabled:cursor-not-allowed disabled:opacity-70 ${isMuted ? BANDORI_MUTED_CARD_CLASS_NAME : ""}`}
         >
           {thumbnail}
         </button>
@@ -122,12 +128,12 @@ function BandoriCardTileContent({
         </div>
       )}
       {badge ? (
-        <span className="absolute -right-2 -top-2 z-30 rounded-full border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[11px] font-black leading-none text-rose-600 shadow-xs">
+        <span className="absolute -right-2 -top-2 z-30 rounded-full border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] px-1.5 py-0.5 text-[11px] font-black leading-none text-[var(--theme-color-semantic-danger-foreground)] shadow-xs">
           {badge}
         </span>
       ) : null}
       {leaderLabel ? (
-        <span className="absolute -left-1.5 -top-1.5 z-30 rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-black leading-none text-sky-600 shadow-xs">
+        <span className="absolute -left-1.5 -top-1.5 z-30 rounded-full border border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)] px-1.5 py-0.5 text-[10px] font-black leading-none text-[var(--theme-color-semantic-info-foreground)] shadow-xs">
           {leaderLabel}
         </span>
       ) : null}
@@ -198,7 +204,7 @@ function InteractiveBandoriCardTile(props: BandoriCardTileInteractiveProps) {
           detailHref={`/bandori/cards/${props.card.cardId}?server=${getBandoriServerCode(props.server)}`}
           {...tooltipInteractionProps}
         >
-          <span className="hhwx-card-picker-surface block w-full whitespace-normal wrap-break-word rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
+          <span className="block w-full whitespace-normal wrap-break-word rounded-xl bg-[var(--theme-color-panel-background)] px-2 py-1 text-[var(--theme-color-text-default)]">
             {skillEffectLabel}
           </span>
         </BandoriCardHoverPopover>
