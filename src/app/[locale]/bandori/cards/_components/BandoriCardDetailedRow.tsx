@@ -78,7 +78,7 @@ export default function BandoriCardDetailedRow({
   return (
     <Link
       href={href}
-      className="hhwx-panel hhwx-catalog-row group block rounded-2xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-3 shadow-[var(--theme-shadow-surface-raised)] outline-hidden transition hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-[0_16px_34px_rgba(15,23,42,0.11)] focus-visible:ring-2 focus-visible:ring-sky-400 sm:p-4 dark:border-slate-700 dark:bg-[#111827]"
+      className="hhwx-panel hhwx-catalog-row group block border p-3 transition sm:p-4 dark:border-slate-700 dark:bg-[#111827]"
     >
       <article className="grid min-h-24 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 sm:gap-5">
         <div className="flex items-center gap-1.5 sm:gap-2">
@@ -106,12 +106,12 @@ export default function BandoriCardDetailedRow({
               {releaseDate}
             </span>
           </div>
-          <p className="mt-1.5 line-clamp-2 text-xs font-medium leading-5 text-slate-700 sm:text-sm dark:text-slate-300">
+          <p className="mt-1.5 line-clamp-2 text-xs font-medium leading-5 text-[var(--theme-color-text-default)] sm:text-sm dark:text-slate-300">
             {entry.skillEffectLabel || t("common.noInformation")}
           </p>
         </div>
 
-        <ChevronRight className="h-5 w-5 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-sky-500 dark:text-slate-600" aria-hidden="true" />
+        <ChevronRight className="h-5 w-5 shrink-0 text-[var(--theme-color-text-muted)] transition group-hover:translate-x-0.5 group-hover:text-[var(--theme-color-semantic-info-foreground)] dark:text-slate-600" aria-hidden="true" />
       </article>
     </Link>
   );

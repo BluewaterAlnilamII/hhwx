@@ -1,5 +1,6 @@
 "use client";
 
+import Heading from "@/components/Heading";
 import { useState, useCallback, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { useCalendarData, useCalendarPermission, BAND_COLORS } from "./useCalendarData";
@@ -94,7 +95,7 @@ function TimeSelector({
       <select
         value={hour}
         onChange={(event) => onChange(`${event.target.value}:${minute}`)}
-        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 disabled:bg-gray-100"
+        className="hhwx-control w-full rounded-lg border px-3 py-2 text-sm disabled:bg-[var(--theme-color-control-background-muted)]"
         disabled={disabled}
       >
         {REMINDER_HOURS.map((option) => (
@@ -103,11 +104,11 @@ function TimeSelector({
           </option>
         ))}
       </select>
-      <span className="text-sm font-semibold text-gray-500">:</span>
+      <span className="text-sm font-semibold text-[var(--theme-color-text-muted)]">:</span>
       <select
         value={minute}
         onChange={(event) => onChange(`${hour}:${event.target.value}`)}
-        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 disabled:bg-gray-100"
+        className="hhwx-control w-full rounded-lg border px-3 py-2 text-sm disabled:bg-[var(--theme-color-control-background-muted)]"
         disabled={disabled}
       >
         {REMINDER_MINUTES.map((option) => (
@@ -137,15 +138,15 @@ function getReadableTextColor(hexColor: string): string {
 function CalendarPageSkeleton({ showEditorPlaceholder }: { showEditorPlaceholder: boolean }) {
   return (
     <div className="w-full max-w-5xl mx-auto animate-pulse" aria-hidden="true">
-      <div className="mb-5 flex items-center justify-center rounded-[22px] border border-white/70 bg-white/65 px-3 py-3 shadow-[0_12px_30px_rgba(15,23,42,0.08)] ring-1 ring-white/50 md:mb-6">
-        <div className="h-8 w-60 rounded-full bg-white/90 md:h-10 md:w-[18rem]" />
+      <div className="hhwx-panel mb-5 flex items-center justify-center border px-3 py-3 md:mb-6">
+        <div className="h-8 w-60 rounded-full bg-[var(--theme-color-control-background-muted)] md:h-10 md:w-[18rem]" />
       </div>
 
-      <div className="overflow-hidden rounded-[24px] border border-white/70 bg-[#fffef4] shadow-[0_22px_60px_rgba(15,23,42,0.12)] ring-1 ring-white/60">
-        <div className="grid grid-cols-7 border-b border-gray-200/70 bg-linear-to-r from-white/90 via-white/75 to-white/90">
+      <div className="hhwx-panel overflow-hidden border">
+        <div className="grid grid-cols-7 border-b border-[var(--theme-color-border-subtle)]  bg-[var(--theme-color-panel-background)]">
           {Array.from({ length: 7 }, (_, index) => (
             <div key={`skeleton-weekday-${index}`} className="py-3 text-center">
-              <div className="mx-auto h-4 w-7 rounded-full bg-white/95" />
+              <div className="mx-auto h-4 w-7 rounded-full bg-[var(--theme-color-control-background-muted)]" />
             </div>
           ))}
         </div>
@@ -153,16 +154,16 @@ function CalendarPageSkeleton({ showEditorPlaceholder }: { showEditorPlaceholder
         {Array.from({ length: 5 }, (_, rowIndex) => (
           <div
             key={`skeleton-week-${rowIndex}`}
-            className="grid grid-cols-7 border-b border-gray-200/50 bg-linear-to-b from-white/65 via-white/42 to-white/30 last:border-b-0"
+            className="grid grid-cols-7 border-b border-[var(--theme-color-border-subtle)] last:border-b-0 bg-[var(--theme-color-panel-background)]"
           >
             {Array.from({ length: 7 }, (_, columnIndex) => (
               <div
                 key={`skeleton-week-${rowIndex}-day-${columnIndex}`}
-                className="min-h-[102px] border-r border-gray-200/40 p-1.5 last:border-r-0 md:min-h-[120px] md:p-2"
+                className="min-h-[102px] border-r border-[var(--theme-color-border-subtle)] p-1.5 last:border-r-0 md:min-h-[120px] md:p-2"
               >
-                <div className="h-6 w-6 rounded-full bg-white/90" />
-                <div className="mt-6 h-3 w-full rounded-full bg-white/80" />
-                <div className="mt-2 h-3 w-4/5 rounded-full bg-white/65" />
+                <div className="h-6 w-6 rounded-full bg-[var(--theme-color-control-background-muted)]" />
+                <div className="mt-6 h-3 w-full rounded-full bg-[var(--theme-color-control-background-muted)]" />
+                <div className="mt-2 h-3 w-4/5 rounded-full bg-[var(--theme-color-control-background-muted)]" />
               </div>
             ))}
           </div>
@@ -170,11 +171,11 @@ function CalendarPageSkeleton({ showEditorPlaceholder }: { showEditorPlaceholder
       </div>
 
       {showEditorPlaceholder && (
-        <div className="mt-6 rounded-[24px] border border-white/70 bg-white/65 p-4 shadow-[0_12px_30px_rgba(15,23,42,0.08)] ring-1 ring-white/50">
-          <div className="h-6 w-40 rounded-full bg-white/90" />
+        <div className="hhwx-panel mt-6 border p-4">
+          <div className="h-6 w-40 rounded-full bg-[var(--theme-color-control-background-muted)]" />
           <div className="mt-4 space-y-3">
             {Array.from({ length: 3 }, (_, index) => (
-              <div key={`skeleton-editor-row-${index}`} className="h-12 rounded-xl bg-white/85" />
+              <div key={`skeleton-editor-row-${index}`} className="h-12 rounded-xl bg-[var(--theme-color-control-background-muted)]" />
             ))}
           </div>
         </div>
@@ -394,10 +395,10 @@ export default function CalendarPage() {
         {/* 页面标题 */}
         <div className="mb-8 pt-4 md:pt-8">
           <div className="px-2 py-4 text-center md:px-4">
-            <h1 className="mb-2 text-3xl font-black tracking-[0.08em] text-[#38bdf8] md:text-5xl">
+            <Heading as="h1" visualRole="page" className="mb-2 tracking-[0.08em]">
               BanGDream 国服活动日历
-            </h1>
-            <p className="mx-auto max-w-2xl text-sm leading-6 text-[#24506d] md:text-base">
+            </Heading>
+            <p className="mx-auto max-w-2xl text-sm leading-6 text-[var(--theme-color-text-muted)] md:text-base">
               查看国服活动时间安排，并生成可自动更新的日历订阅链接
             </p>
             <BandoriCnExclusiveNotice
@@ -412,7 +413,7 @@ export default function CalendarPage() {
         <div className="flex justify-end mb-5 gap-2">
           <button
             onClick={() => setShowIcsModal(!showIcsModal)}
-            className="flex items-center gap-2 rounded-xl border border-[#ffd36a] bg-linear-to-r from-[#ffe97a] via-[#ffd95c] to-[#ffc94f] px-4 py-2 text-sm font-semibold text-[#6f3d00] shadow-[0_10px_24px_rgba(255,196,79,0.28)] transition-opacity hover:opacity-95"
+            className="flex items-center gap-2 rounded-xl border border-[var(--theme-color-border-subtle)] px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-95 bg-[var(--theme-color-action-primary-background)] text-[var(--theme-color-action-primary-foreground)]"
           >
             📅 订阅日历
           </button>
@@ -420,23 +421,23 @@ export default function CalendarPage() {
 
         {/* ICS 订阅弹窗 */}
         {showIcsModal && (
-          <div className="mb-6 rounded-2xl border border-white/75 bg-linear-to-br from-[#fffef4] via-[#fff8d8] to-[#eef9ff] p-5 shadow-[0_14px_40px_rgba(255,184,0,0.16)] ring-1 ring-white/65">
-            <p className="mb-3 text-sm font-bold text-[#7a4a00]">BanGDream 国服活动</p>
+          <div className="hhwx-panel mb-6 border p-5">
+            <p className="mb-3 text-sm font-bold text-[var(--theme-color-text-default)]">BanGDream 国服活动</p>
             <div className="mb-4">
               <div className="flex items-center justify-between gap-3 mb-2">
-                <p className="text-xs md:text-sm text-gray-700 font-medium">选择要订阅的乐队</p>
+                <p className="text-xs md:text-sm text-[var(--theme-color-text-default)] font-medium">选择要订阅的乐队</p>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={handleSelectAllBands}
-                    className="rounded-full bg-linear-to-r from-[#ff7a59] to-[#ff9b45] px-3 py-1 text-xs font-semibold text-white shadow-xs transition-opacity hover:opacity-95"
+                    className="rounded-full px-3 py-1 text-xs font-semibold shadow-xs transition-opacity hover:opacity-95 bg-[var(--theme-color-action-accent-background)] text-[var(--theme-color-action-accent-foreground)]"
                   >
                     全选
                   </button>
                   <button
                     type="button"
                     onClick={handleClearBands}
-                    className="rounded-full border border-[#ffd89c] bg-white text-[#8a5a10] px-3 py-1 text-xs font-semibold transition-colors hover:bg-[#fff8ec]"
+                    className="hhwx-control rounded-full border px-3 py-1 text-xs font-semibold transition-colors"
                   >
                     全部取消
                   </button>
@@ -452,7 +453,7 @@ export default function CalendarPage() {
                       className={`px-3 py-1.5 rounded-full text-xs md:text-sm cursor-pointer transition-colors border ${
                         checked
                           ? "shadow-xs"
-                          : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                          : "bg-[var(--theme-color-panel-background)] text-[var(--theme-color-text-default)] border-[var(--theme-color-border-subtle)] hover:bg-[var(--theme-color-control-background-muted)]"
                       }`}
                       style={checked ? {
                         backgroundColor: bandColor,
@@ -473,12 +474,12 @@ export default function CalendarPage() {
               </div>
               <div className="mt-4">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs md:text-sm text-gray-700 font-medium">选择要订阅的角色表情</p>
-                  <p className="text-[11px] md:text-xs text-gray-500">
+                  <p className="text-xs md:text-sm text-[var(--theme-color-text-default)] font-medium">选择要订阅的角色表情</p>
+                  <p className="text-[11px] md:text-xs text-[var(--theme-color-text-muted)]">
                     已选 {selectedBands.length} 个乐队 / {selectedCharacterIds.length} 个角色
                   </p>
                 </div>
-                <div className="mt-3 rounded-2xl border border-white/70 bg-white/65 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
+                <div className="mt-3 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-3 shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
                   <div className="flex flex-wrap gap-2">
                     {characterCards.map((character) => {
                       const checked = selectedCharacterSet.has(character.id);
@@ -489,10 +490,10 @@ export default function CalendarPage() {
                           key={character.id}
                           type="button"
                           onClick={() => toggleCharacter(character.id, character.bandType)}
-                          className={`flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border bg-white transition-all ${
+                          className={`hhwx-control flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border transition-all ${
                             checked
                               ? "scale-[1.05] shadow-lg"
-                              : "border-gray-200 hover:-translate-y-0.5 hover:border-gray-400 hover:shadow-xs"
+                              : "border-[var(--theme-color-border-subtle)] hover:-translate-y-0.5 hover:border-[var(--theme-color-border-subtle)] hover:shadow-xs"
                           }`}
                           style={checked ? {
                             borderColor: bandColor,
@@ -520,17 +521,17 @@ export default function CalendarPage() {
             </div>
 
             <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <label className="rounded-xl border border-gray-200 bg-white/70 px-3 py-3 text-sm text-gray-700">
-                <span className="flex items-center gap-2 font-semibold text-gray-900">
+              <label className="rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-3 py-3 text-sm text-[var(--theme-color-text-default)]">
+                <span className="flex items-center gap-2 font-semibold text-[var(--theme-color-text-default)]">
                   <input
                     type="checkbox"
-                    className="accent-[#ff8a3d]"
+                    className="accent-[var(--theme-color-selection-strong-background)]"
                     checked={enableStartPreviousDayReminder}
                     onChange={(event) => setEnableStartPreviousDayReminder(event.target.checked)}
                   />
                   启用活动开始前一天提醒
                 </span>
-                <span className="mt-2 block text-xs text-gray-600">在活动开始前一天的以下时间提醒我</span>
+                <span className="mt-2 block text-xs text-[var(--theme-color-text-muted)]">在活动开始前一天的以下时间提醒我</span>
                 <TimeSelector
                   value={startPreviousDayReminderTime}
                   onChange={setStartPreviousDayReminderTime}
@@ -538,17 +539,17 @@ export default function CalendarPage() {
                 />
               </label>
 
-              <label className="rounded-xl border border-gray-200 bg-white/70 px-3 py-3 text-sm text-gray-700">
-                <span className="flex items-center gap-2 font-semibold text-gray-900">
+              <label className="rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-3 py-3 text-sm text-[var(--theme-color-text-default)]">
+                <span className="flex items-center gap-2 font-semibold text-[var(--theme-color-text-default)]">
                   <input
                     type="checkbox"
-                    className="accent-[#ff8a3d]"
+                    className="accent-[var(--theme-color-selection-strong-background)]"
                     checked={enableStartSameDayReminder}
                     onChange={(event) => setEnableStartSameDayReminder(event.target.checked)}
                   />
                   启用活动开始当天提醒
                 </span>
-                <span className="mt-2 block text-xs text-gray-600">在活动开始当天的以下时间提醒我</span>
+                <span className="mt-2 block text-xs text-[var(--theme-color-text-muted)]">在活动开始当天的以下时间提醒我</span>
                 <TimeSelector
                   value={startSameDayReminderTime}
                   onChange={setStartSameDayReminderTime}
@@ -556,17 +557,17 @@ export default function CalendarPage() {
                 />
               </label>
 
-              <label className="rounded-xl border border-gray-200 bg-white/70 px-3 py-3 text-sm text-gray-700">
-                <span className="flex items-center gap-2 font-semibold text-gray-900">
+              <label className="rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-3 py-3 text-sm text-[var(--theme-color-text-default)]">
+                <span className="flex items-center gap-2 font-semibold text-[var(--theme-color-text-default)]">
                   <input
                     type="checkbox"
-                    className="accent-[#ff8a3d]"
+                    className="accent-[var(--theme-color-selection-strong-background)]"
                     checked={enableEndPreviousDayReminder}
                     onChange={(event) => setEnableEndPreviousDayReminder(event.target.checked)}
                   />
                   启用活动结束前一天提醒
                 </span>
-                <span className="mt-2 block text-xs text-gray-600">在活动结束前一天的以下时间提醒我</span>
+                <span className="mt-2 block text-xs text-[var(--theme-color-text-muted)]">在活动结束前一天的以下时间提醒我</span>
                 <TimeSelector
                   value={endPreviousDayReminderTime}
                   onChange={setEndPreviousDayReminderTime}
@@ -574,17 +575,17 @@ export default function CalendarPage() {
                 />
               </label>
 
-              <label className="rounded-xl border border-gray-200 bg-white/70 px-3 py-3 text-sm text-gray-700">
-                <span className="flex items-center gap-2 font-semibold text-gray-900">
+              <label className="rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-3 py-3 text-sm text-[var(--theme-color-text-default)]">
+                <span className="flex items-center gap-2 font-semibold text-[var(--theme-color-text-default)]">
                   <input
                     type="checkbox"
-                    className="accent-[#ff8a3d]"
+                    className="accent-[var(--theme-color-selection-strong-background)]"
                     checked={enableEndSameDayReminder}
                     onChange={(event) => setEnableEndSameDayReminder(event.target.checked)}
                   />
                   启用活动结束当天提醒
                 </span>
-                <span className="mt-2 block text-xs text-gray-600">在活动结束当天的以下时间提醒我</span>
+                <span className="mt-2 block text-xs text-[var(--theme-color-text-muted)]">在活动结束当天的以下时间提醒我</span>
                 <TimeSelector
                   value={endSameDayReminderTime}
                   onChange={setEndSameDayReminderTime}
@@ -598,26 +599,26 @@ export default function CalendarPage() {
                 type="text"
                 value={icsUrl}
                 readOnly
-                className="flex-1 text-xs md:text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white/90 text-gray-700"
+                className="hhwx-control flex-1 text-xs md:text-sm border rounded-xl px-3 py-2"
               />
               <button
                 onClick={handleCopyIcs}
                 className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
                   copied
-                    ? "bg-green-500 text-white"
-                    : "bg-linear-to-r from-[#ff7b57] to-[#ffb11f] text-white hover:opacity-95"
+                    ? "bg-[var(--theme-color-semantic-success-foreground)] text-[var(--theme-color-text-on-emphasis)]"
+                    : " hover:opacity-95 bg-[var(--theme-color-action-accent-background)] text-[var(--theme-color-action-accent-foreground)]"
                 }`}
               >
                 {copied ? "已复制" : "复制"}
               </button>
             </div>
-            <p className="text-xs md:text-sm text-gray-600 leading-6">
+            <p className="text-xs md:text-sm text-[var(--theme-color-text-muted)] leading-6">
               将此链接添加到您的日历应用以自动同步活动日程，活动将以全天事件形式显示，所有时间均采用 UTC+8 时区
             </p>
-            <p className="text-xs md:text-sm text-gray-600 leading-6">
+            <p className="text-xs md:text-sm text-[var(--theme-color-text-muted)] leading-6">
               若启用提醒，系统会额外按需分别生成位于活动开始或结束时间点的独立事件，并通过该事件配置定时提醒
             </p>
-            <p className="text-xs font-semibold md:text-sm text-red-600 leading-6">
+            <p className="text-xs font-semibold md:text-sm text-[var(--theme-color-semantic-danger-foreground)] leading-6">
               注意：部分日历应用（如Apple Calendar）可能会默认选择移除由服务器端配置的提醒，请确保订阅时已关闭应用的相关功能，以保证提醒正常生效
             </p>
           </div>

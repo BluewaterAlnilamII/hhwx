@@ -431,7 +431,7 @@ export default function BandoriEventBonusPanel({
   return (
     <section className={cn(
       variant === "card"
-        ? "rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-5"
+        ? "hhwx-panel border p-4 sm:p-5"
         : "min-w-0",
     )}>
       {variant === "card" ? (

@@ -145,9 +145,9 @@ const BandoriCardHoverTooltip = forwardRef<HTMLDivElement, BandoriCardHoverToolt
           )}
         />
       ) : null}
-      <div className="hhwx-card-picker-surface max-h-[calc(100vh-24px)] overflow-y-auto rounded-[18px] border border-white/90 bg-white p-3 text-center shadow-[0_18px_48px_rgba(15,23,42,0.22)] ring-1 ring-slate-950/5">
-        <div className="whitespace-normal wrap-break-word text-sm font-black leading-snug text-slate-900">{cardName}</div>
-        <div className="mt-1 whitespace-normal wrap-break-word text-xs font-semibold leading-snug text-slate-500">
+      <div className="hhwx-floating-surface max-h-[calc(100vh-24px)] overflow-y-auto rounded-[18px] border p-3 text-center">
+        <div className="whitespace-normal wrap-break-word text-sm font-black leading-snug text-[var(--theme-color-text-default)]">{cardName}</div>
+        <div className="mt-1 whitespace-normal wrap-break-word text-xs font-semibold leading-snug text-[var(--theme-color-text-muted)]">
           {characterName}
         </div>
         {children ? (
@@ -160,7 +160,7 @@ const BandoriCardHoverTooltip = forwardRef<HTMLDivElement, BandoriCardHoverToolt
             href={detailHref}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-2 inline-flex rounded-sm text-xs font-black text-sky-700 underline decoration-sky-300 underline-offset-4 transition hover:text-sky-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
+            className="mt-2 inline-flex rounded-sm text-xs font-black text-[var(--theme-color-action-secondary-foreground)] underline decoration-current underline-offset-4 transition hover:text-[var(--theme-color-action-secondary-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--theme-color-focus-ring)]"
           >
             {t("cardDetails")}
           </Link>

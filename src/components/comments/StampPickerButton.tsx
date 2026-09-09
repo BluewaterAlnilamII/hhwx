@@ -170,7 +170,7 @@ export const StampPickerButton = memo(function StampPickerButton({
         className={cn(
           "inline-flex h-8 w-8 items-center justify-center rounded-full border text-[var(--theme-color-text-muted)] transition hover:bg-[var(--theme-color-action-secondary-background-hover)] hover:text-[var(--theme-color-action-secondary-foreground)] dark:hover:bg-rose-500/10 dark:hover:text-rose-300",
           open
-            ? "border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)] text-[var(--theme-color-semantic-info-foreground)] dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-300"
+            ? "border-[var(--theme-color-selection-subtle-ring)] bg-[var(--theme-color-selection-subtle-background)] text-[var(--theme-color-selection-subtle-foreground)] hover:bg-[var(--theme-color-selection-subtle-background)] hover:text-[var(--theme-color-selection-subtle-foreground)] dark:border-rose-500/50 dark:bg-rose-500/10 dark:text-rose-300"
             : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] dark:border-slate-700 dark:bg-slate-900",
         )}
         aria-haspopup="dialog"

@@ -145,8 +145,8 @@ type MedleyResultInputSnapshot = {
 };
 function DynamicTemporaryCardDialogLoading({ message }: { message: string }) {
   return (
-    <div className="fixed inset-0 z-1000 flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true">
-      <div className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-slate-600 shadow-2xl">
+    <div className="fixed inset-0 z-1000 flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-[var(--theme-color-overlay-background)] p-3 sm:p-6" role="dialog" aria-modal="true">
+      <div className="inline-flex items-center gap-2 rounded-2xl bg-[var(--theme-color-panel-background)] px-4 py-3 text-sm font-bold text-[var(--theme-color-text-muted)] shadow-2xl">
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
         {message}
       </div>
@@ -1099,8 +1099,8 @@ function StepButton({
       onClick={onClick}
       className={`flex min-w-max items-center gap-2 border-b-2 px-3 py-3 text-sm font-semibold transition ${
         active
-          ? "border-sky-500 text-sky-600"
-          : "border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-900"
+          ? "border-[var(--theme-color-selection-subtle-ring)] text-[var(--theme-color-selection-subtle-foreground)]"
+          : "border-transparent text-[var(--theme-color-text-muted)] hover:border-[var(--theme-color-border-subtle)] hover:text-[var(--theme-color-text-default)]"
       }`}
     >
       <Icon className="h-4 w-4" />
@@ -1121,14 +1121,14 @@ function Segment<T extends string>({
   labels?: Partial<Record<T, string>>;
 }) {
   return (
-    <div className="inline-flex max-w-full gap-1 rounded-full border border-slate-200 bg-slate-50 p-1">
+    <div className="inline-flex max-w-full gap-1 rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-1">
       {options.map((option) => (
         <button
           type="button"
           key={option}
           onClick={() => onChange(option)}
           className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${
-            value === option ? "bg-white text-sky-700 shadow-xs ring-1 ring-inset ring-sky-300" : "text-slate-600 hover:bg-white/80"
+            value === option ? "bg-[var(--theme-color-selection-subtle-background)] text-[var(--theme-color-selection-subtle-foreground)] shadow-xs ring-1 ring-inset ring-[var(--theme-color-selection-subtle-ring)]" : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)]"
           }`}
         >
           {labels?.[option] ?? option}
@@ -1147,7 +1147,7 @@ function ResultOptionControl({
 }) {
   return (
     <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:flex-row sm:items-center">
-      <span className="whitespace-nowrap font-semibold text-slate-600">{label}</span>
+      <span className="whitespace-nowrap font-semibold text-[var(--theme-color-text-muted)]">{label}</span>
       {children}
     </div>
   );
@@ -1216,7 +1216,7 @@ function SongDifficultyPicker({
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="grid gap-2 text-sm sm:grid-cols-[9rem_1fr] sm:items-center">
-      <span className="font-semibold text-slate-600">{label}</span>
+      <span className="font-semibold text-[var(--theme-color-text-muted)]">{label}</span>
       {children}
     </label>
   );
@@ -1226,7 +1226,7 @@ function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-hidden transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100 ${props.className ?? ""}`}
+      className={`hhwx-control w-full rounded-xl border px-3 py-2 text-sm transition ${props.className ?? ""}`}
     />
   );
 }
@@ -1236,9 +1236,9 @@ function SelectInput(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
     <div className="relative">
       <select
         {...props}
-        className={`w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-2 pr-9 text-sm text-slate-900 outline-hidden transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100 ${props.className ?? ""}`}
+        className={`hhwx-control w-full appearance-none rounded-xl border px-3 py-2 pr-9 text-sm transition ${props.className ?? ""}`}
       />
-      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--theme-color-text-muted)]" />
     </div>
   );
 }
@@ -1272,14 +1272,14 @@ function SongOptionList({
 
   if (options.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 px-4 py-6 text-sm font-semibold text-slate-500">
+      <div className="rounded-2xl border border-dashed border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-6 text-sm font-semibold text-[var(--theme-color-text-muted)]">
         {t("noMatchingSongs")}
       </div>
     );
   }
 
   return (
-    <div ref={containerRef} className="max-h-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-xs">
+    <div ref={containerRef} className="max-h-72 overflow-y-auto rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-1 shadow-xs">
       {options.map((option) => {
         const selected = option.id === selectedSongId;
         return (
@@ -1289,11 +1289,11 @@ function SongOptionList({
             ref={selected ? selectedOptionRef : null}
             onClick={() => onSelect(option.id)}
             className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition ${
-              selected ? "bg-sky-50 text-sky-800 ring-1 ring-inset ring-sky-300" : "text-slate-700 hover:bg-slate-50"
+              selected ? "bg-[var(--theme-color-selection-subtle-background)] text-[var(--theme-color-selection-subtle-foreground)] ring-1 ring-inset ring-[var(--theme-color-selection-subtle-ring)]" : "text-[var(--theme-color-text-default)] hover:bg-[var(--theme-color-control-background-hover)]"
             }`}
           >
             <span className="min-w-0 truncate font-semibold">{option.title}</span>
-            <span className="shrink-0 text-xs font-semibold text-slate-400">#{option.id}</span>
+            <span className="shrink-0 text-xs font-semibold text-[var(--theme-color-text-muted)]">#{option.id}</span>
           </button>
         );
       })}
@@ -1315,7 +1315,7 @@ function QuickPickerPanel({
   }
 
   return (
-    <div className="rounded-2xl border border-sky-100 bg-sky-50/60 p-3">
+    <div className="rounded-2xl border border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)] p-3">
       <div className="flex flex-wrap gap-2">
         {options.map((option) => {
           const selected = option.id === selectedId;
@@ -1326,13 +1326,13 @@ function QuickPickerPanel({
               onClick={() => onSelect(option.id)}
               className={`inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
                 selected
-                  ? "border-sky-300 bg-white text-sky-800 shadow-xs"
-                  : "border-sky-100 bg-white/70 text-slate-700 hover:border-sky-200 hover:bg-white"
+                  ? "border-[var(--theme-color-selection-subtle-ring)] bg-[var(--theme-color-selection-subtle-background)] text-[var(--theme-color-selection-subtle-foreground)] shadow-xs"
+                  : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-default)] hover:border-[var(--theme-color-focus-ring)] hover:bg-[var(--theme-color-control-background-hover)]"
               }`}
             >
               <span className="max-w-56 truncate">{option.title}</span>
               {(option.badges ?? []).map((badge) => (
-                <span key={badge} className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{badge}</span>
+                <span key={badge} className="shrink-0 rounded-full bg-[var(--theme-color-panel-background)] px-1.5 py-0.5 text-[10px] text-[var(--theme-color-text-muted)]">{badge}</span>
               ))}
             </button>
           );
@@ -1513,7 +1513,7 @@ function MultiLiveSettingsPanel({
   };
 
   return (
-    <div className="space-y-4 rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-xs">
+    <div className="space-y-4 rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-4 shadow-xs">
       <FieldRow label={labelsT("averagePower")}>
         <TextInput
           value={averagePower}
@@ -1532,8 +1532,8 @@ function MultiLiveSettingsPanel({
 
       <div className="space-y-3">
         {otherPlayers.map((player, index) => (
-          <div key={index} className="grid gap-2 rounded-2xl bg-slate-50 p-3 lg:grid-cols-[5rem_1fr_auto] lg:items-center">
-            <div className="text-sm font-semibold text-slate-600">{labelsT("leaderWithIndex", { index: index + 1 })}</div>
+          <div key={index} className="grid gap-2 rounded-2xl bg-[var(--theme-color-panel-background)] p-3 lg:grid-cols-[5rem_1fr_auto] lg:items-center">
+            <div className="text-sm font-semibold text-[var(--theme-color-text-muted)]">{labelsT("leaderWithIndex", { index: index + 1 })}</div>
             <SelectInput
               value={player.skillId}
               onChange={(event) => updatePlayer(index, { skillId: event.target.value })}
@@ -1616,37 +1616,37 @@ function ResultCard({
     : targetsT(result.target);
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+    <article className="rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-4 shadow-xs">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-center gap-4">
-          <div className="w-12 text-right text-lg font-bold text-slate-700">#{result.rank}</div>
+          <div className="w-12 text-right text-lg font-bold text-[var(--theme-color-text-default)]">#{result.rank}</div>
           <div>
-            <div className="text-xl font-bold text-slate-900">{formatNumber(displayedTargetValue, locale)}</div>
-            <div className="mt-1 text-xs font-semibold text-slate-500">
+            <div className="text-xl font-bold text-[var(--theme-color-text-default)]">{formatNumber(displayedTargetValue, locale)}</div>
+            <div className="mt-1 text-xs font-semibold text-[var(--theme-color-text-muted)]">
               {targetLabel} / {eventTypesT(result.eventType)} / {getLiveLabel(result.liveType, result.eventType, liveLabels)}
             </div>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center text-xs sm:grid-cols-5">
-          <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <div className="font-semibold text-slate-500">{labelsT("averageScore")}</div>
-            <div className="mt-1 font-bold text-slate-900">{formatNumber(result.averageScore, locale)}</div>
+          <div className="rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2">
+            <div className="font-semibold text-[var(--theme-color-text-muted)]">{labelsT("averageScore")}</div>
+            <div className="mt-1 font-bold text-[var(--theme-color-text-default)]">{formatNumber(result.averageScore, locale)}</div>
           </div>
-          <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <div className="font-semibold text-slate-500">{labelsT("eventPoint")}</div>
-            <div className="mt-1 font-bold text-slate-900">{formatNumber(displayedEventPoint, locale)}</div>
+          <div className="rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2">
+            <div className="font-semibold text-[var(--theme-color-text-muted)]">{labelsT("eventPoint")}</div>
+            <div className="mt-1 font-bold text-[var(--theme-color-text-default)]">{formatNumber(displayedEventPoint, locale)}</div>
           </div>
-          <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <div className="font-semibold text-slate-500">{labelsT("totalPower")}</div>
-            <div className="mt-1 font-bold text-slate-900">{formatNumber(result.totalPower, locale)}</div>
+          <div className="rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2">
+            <div className="font-semibold text-[var(--theme-color-text-muted)]">{labelsT("totalPower")}</div>
+            <div className="mt-1 font-bold text-[var(--theme-color-text-default)]">{formatNumber(result.totalPower, locale)}</div>
           </div>
-          <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <div className="font-semibold text-slate-500">{labelsT("roomScore")}</div>
-            <div className="mt-1 font-bold text-slate-900">{formatNumber(result.roomScore, locale)}</div>
+          <div className="rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2">
+            <div className="font-semibold text-[var(--theme-color-text-muted)]">{labelsT("roomScore")}</div>
+            <div className="mt-1 font-bold text-[var(--theme-color-text-default)]">{formatNumber(result.roomScore, locale)}</div>
           </div>
-          <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <div className="font-semibold text-slate-500">{labelsT("bonus")}</div>
-            <div className="mt-1 font-bold text-slate-900">{formatPercent(result.pointBonusRate * 100)}</div>
+          <div className="rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2">
+            <div className="font-semibold text-[var(--theme-color-text-muted)]">{labelsT("bonus")}</div>
+            <div className="mt-1 font-bold text-[var(--theme-color-text-default)]">{formatPercent(result.pointBonusRate * 100)}</div>
           </div>
         </div>
       </div>
@@ -1665,33 +1665,33 @@ function ResultCard({
         ))}
       </div>
 
-      <div className="mt-4 grid gap-3 text-sm text-slate-600 lg:grid-cols-2">
-        <div className="rounded-xl bg-slate-50 p-3">
-          <div className="font-semibold text-slate-800">{labelsT("scoreRange")}</div>
+      <div className="mt-4 grid gap-3 text-sm text-[var(--theme-color-text-muted)] lg:grid-cols-2">
+        <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3">
+          <div className="font-semibold text-[var(--theme-color-text-default)]">{labelsT("scoreRange")}</div>
           <div className="mt-1">
             {formatNumber(result.minScore, locale)} / {formatNumber(result.averageScore, locale)} / {formatNumber(result.maxScore, locale)}
           </div>
         </div>
-        <div className="rounded-xl bg-slate-50 p-3">
-          <div className="font-semibold text-slate-800">{labelsT("areaItemConfiguration")}</div>
+        <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3">
+          <div className="font-semibold text-[var(--theme-color-text-default)]">{labelsT("areaItemConfiguration")}</div>
           <div className="mt-1">
             {result.areaItemConfiguration.bandKey ?? "-"} / {formatAreaItemAttribute(result.areaItemConfiguration.attribute)} /{" "}
             {formatAreaItemParameter(result.areaItemConfiguration.parameter, areaItemParameterLabels)}
           </div>
         </div>
-        <div className="rounded-xl bg-slate-50 p-3">
-          <div className="font-semibold text-slate-800">{labelsT("bestSkillOrder")}</div>
+        <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3">
+          <div className="font-semibold text-[var(--theme-color-text-default)]">{labelsT("bestSkillOrder")}</div>
           <div className="mt-1 break-all">{skillOrderDisplay}</div>
         </div>
-        <div className="rounded-xl bg-slate-50 p-3">
-          <div className="font-semibold text-slate-800">{labelsT("bestOrderProbability")}</div>
+        <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3">
+          <div className="font-semibold text-[var(--theme-color-text-default)]">{labelsT("bestOrderProbability")}</div>
           <div className="mt-1">
             {result.maxScoreOrderCount}/{result.maxScoreOrderTotal}
           </div>
         </div>
         {result.supportBandPower !== null ? (
-          <div className="rounded-xl bg-slate-50 p-3">
-            <div className="font-semibold text-slate-800">{labelsT("supportTeam")}</div>
+          <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3">
+            <div className="font-semibold text-[var(--theme-color-text-default)]">{labelsT("supportTeam")}</div>
             <div className="mt-1">
               {formatNumber(result.supportBandPower, locale)} / {result.supportCards.map((card) => card.cardId).join(", ")}
             </div>
@@ -1721,8 +1721,8 @@ function MedleyProgressCard({
   const preferredServer = useBandoriPreferredServer();
   const labelsT = useTranslations("bandori.teamBuilder.labels");
   return (
-    <article className="rounded-2xl border border-sky-200 bg-sky-50/60 p-4 shadow-xs">
-      <div className="text-xl font-bold text-slate-900">
+    <article className="rounded-2xl border border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)] p-4 shadow-xs">
+      <div className="text-xl font-bold text-[var(--theme-color-text-default)]">
         {formatNumber(progress.bestSoFar.totalAverageScore, locale)}
       </div>
       <div className="mt-4 space-y-4">
@@ -1738,11 +1738,11 @@ function MedleyProgressCard({
             labelsT("firstSong", { index: team.slot + 1 }),
           );
           return (
-            <section key={team.slot} className="rounded-2xl border border-sky-100 bg-white/80 p-3">
-              <div className="text-sm font-bold text-slate-900">
+            <section key={team.slot} className="rounded-2xl border border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-panel-background)] p-3">
+              <div className="text-sm font-bold text-[var(--theme-color-text-default)]">
                 {labelsT("firstSong", { index: team.slot + 1 })} / {songTitle}
               </div>
-              <div className="mt-1 text-xs font-semibold text-slate-500">
+              <div className="mt-1 text-xs font-semibold text-[var(--theme-color-text-muted)]">
                 {labelsT("averageScore")} {formatNumber(team.averageScore, locale)}
               </div>
               <div className="mt-3 flex flex-wrap items-start gap-2 overflow-visible">
@@ -1803,13 +1803,13 @@ function MedleyResultCard({
     visual: labelsT("visual"),
   }), [labelsT]);
   const articleClassName = variant === "max-score-candidate"
-    ? "rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-xs"
+    ? "rounded-2xl border border-[var(--theme-color-semantic-success-border)] bg-[var(--theme-color-semantic-success-background)] p-4 shadow-xs"
     : variant === "candidate"
-    ? "rounded-2xl border border-amber-200 bg-amber-50/70 p-4 shadow-xs"
-    : "rounded-2xl border border-slate-200 bg-white p-4 shadow-xs";
+    ? "rounded-2xl border border-[var(--theme-color-semantic-warning-border)] bg-[var(--theme-color-semantic-warning-background)] p-4 shadow-xs"
+    : "rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-4 shadow-xs";
   const badgeClassName = variant === "max-score-candidate"
-    ? "rounded-full border border-emerald-200 bg-white px-2 py-0.5 font-bold text-emerald-700"
-    : "rounded-full border border-amber-200 bg-white px-2 py-0.5 font-bold text-amber-700";
+    ? "rounded-full border border-[var(--theme-color-semantic-success-border)] bg-[var(--theme-color-panel-background)] px-2 py-0.5 font-bold text-[var(--theme-color-semantic-success-foreground)]"
+    : "rounded-full border border-[var(--theme-color-semantic-warning-border)] bg-[var(--theme-color-panel-background)] px-2 py-0.5 font-bold text-[var(--theme-color-semantic-warning-foreground)]";
   const sharedAreaItemConfiguration = result.areaItemConfiguration;
   const totalPower = result.songResults.reduce((sum, songResult) => sum + songResult.totalPower, 0);
   const eventPoint = calculateMedleyEventPoint(result.averageScore, liveBoostCount);
@@ -1817,9 +1817,9 @@ function MedleyResultCard({
     <article className={articleClassName}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-center gap-4">
-          <div className="min-w-12 shrink-0 text-right text-lg font-bold text-slate-700">{rankLabel ?? `#${result.rank}`}</div>
+          <div className="min-w-12 shrink-0 text-right text-lg font-bold text-[var(--theme-color-text-default)]">{rankLabel ?? `#${result.rank}`}</div>
           <div>
-            <div className="text-xl font-bold text-slate-900">{formatNumber(result.score, locale)}</div>
+            <div className="text-xl font-bold text-[var(--theme-color-text-default)]">{formatNumber(result.score, locale)}</div>
             {badgeLabel || description ? (
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                 {badgeLabel ? (
@@ -1828,41 +1828,41 @@ function MedleyResultCard({
                   </span>
                 ) : null}
                 {description ? (
-                  <span className="font-semibold text-slate-500">{description}</span>
+                  <span className="font-semibold text-[var(--theme-color-text-muted)]">{description}</span>
                 ) : null}
               </div>
             ) : null}
-            <div className="mt-1 text-xs font-semibold text-slate-500">
+            <div className="mt-1 text-xs font-semibold text-[var(--theme-color-text-muted)]">
               {labelsT("scoreAndEventPoint")} / {eventTypesT("medley")} / {liveLabelsT("medley")}
             </div>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center text-xs">
-          <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <div className="font-semibold text-slate-500">{labelsT("averageScore")}</div>
-            <div className="mt-1 font-bold text-slate-900">{formatNumber(result.averageScore, locale)}</div>
+          <div className="rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2">
+            <div className="font-semibold text-[var(--theme-color-text-muted)]">{labelsT("averageScore")}</div>
+            <div className="mt-1 font-bold text-[var(--theme-color-text-default)]">{formatNumber(result.averageScore, locale)}</div>
           </div>
-          <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <div className="font-semibold text-slate-500">{labelsT("eventPoint")}</div>
-            <div className="mt-1 font-bold text-slate-900">{formatNumber(eventPoint, locale)}</div>
+          <div className="rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2">
+            <div className="font-semibold text-[var(--theme-color-text-muted)]">{labelsT("eventPoint")}</div>
+            <div className="mt-1 font-bold text-[var(--theme-color-text-default)]">{formatNumber(eventPoint, locale)}</div>
           </div>
-          <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <div className="font-semibold text-slate-500">{labelsT("totalPower")}</div>
-            <div className="mt-1 font-bold text-slate-900">{formatNumber(totalPower, locale)}</div>
+          <div className="rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2">
+            <div className="font-semibold text-[var(--theme-color-text-muted)]">{labelsT("totalPower")}</div>
+            <div className="mt-1 font-bold text-[var(--theme-color-text-default)]">{formatNumber(totalPower, locale)}</div>
           </div>
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 text-sm text-slate-600 lg:grid-cols-2">
-        <div className="rounded-xl bg-slate-50 p-3">
-          <div className="font-semibold text-slate-800">{labelsT("scoreRange")}</div>
+      <div className="mt-4 grid gap-3 text-sm text-[var(--theme-color-text-muted)] lg:grid-cols-2">
+        <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3">
+          <div className="font-semibold text-[var(--theme-color-text-default)]">{labelsT("scoreRange")}</div>
           <div className="mt-1">
             {formatNumber(result.minScore, locale)} / {formatNumber(result.averageScore, locale)} / {formatNumber(result.maxScore, locale)}
           </div>
         </div>
         {sharedAreaItemConfiguration ? (
-          <div className="rounded-xl bg-slate-50 p-3">
-            <div className="font-semibold text-slate-800">{labelsT("areaItemConfiguration")}</div>
+          <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3">
+            <div className="font-semibold text-[var(--theme-color-text-default)]">{labelsT("areaItemConfiguration")}</div>
             <div className="mt-1">
               {sharedAreaItemConfiguration.bandKey ?? "-"} / {formatAreaItemAttribute(sharedAreaItemConfiguration.attribute)} /{" "}
               {formatAreaItemParameter(sharedAreaItemConfiguration.parameter, areaItemParameterLabels)}
@@ -1881,23 +1881,23 @@ function MedleyResultCard({
           );
           const skillOrderDisplay = buildSkillOrderDisplay(songResult.skillOrderCardIds, displayedCards, actorT, songResult.skillOrderActors, songResult.skillOrderCardInstanceKeys);
           return (
-            <section key={songResult.songIndex} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+            <section key={songResult.songIndex} className="rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-3">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <div className="text-sm font-bold text-slate-900">{labelsT("firstSong", { index: songResult.songIndex + 1 })} / {songTitle}</div>
-                  <div className="mt-1 text-xs font-semibold text-slate-500">
+                  <div className="text-sm font-bold text-[var(--theme-color-text-default)]">{labelsT("firstSong", { index: songResult.songIndex + 1 })} / {songTitle}</div>
+                  <div className="mt-1 text-xs font-semibold text-[var(--theme-color-text-muted)]">
                     {labelsT("startCombo", { combo: songResult.startCombo })} / {labelsT("scoreRange")}{" "}
                     {formatNumber(songResult.minScore, locale)} / {formatNumber(songResult.averageScore, locale)} / {formatNumber(songResult.maxScore, locale)}
                   </div>
                 </div>
                 <div className="grid w-full grid-cols-2 gap-2 text-center text-xs sm:w-auto sm:min-w-56">
-                  <div className="rounded-xl bg-slate-50 px-3 py-2">
-                    <div className="font-semibold text-slate-500">{labelsT("averageScore")}</div>
-                    <div className="mt-1 font-bold text-slate-900">{formatNumber(songResult.averageScore, locale)}</div>
+                  <div className="rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2">
+                    <div className="font-semibold text-[var(--theme-color-text-muted)]">{labelsT("averageScore")}</div>
+                    <div className="mt-1 font-bold text-[var(--theme-color-text-default)]">{formatNumber(songResult.averageScore, locale)}</div>
                   </div>
-                  <div className="rounded-xl bg-slate-50 px-3 py-2">
-                    <div className="font-semibold text-slate-500">{labelsT("totalPower")}</div>
-                    <div className="mt-1 font-bold text-slate-900">{formatNumber(songResult.totalPower, locale)}</div>
+                  <div className="rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2">
+                    <div className="font-semibold text-[var(--theme-color-text-muted)]">{labelsT("totalPower")}</div>
+                    <div className="mt-1 font-bold text-[var(--theme-color-text-default)]">{formatNumber(songResult.totalPower, locale)}</div>
                   </div>
                 </div>
               </div>
@@ -1914,13 +1914,13 @@ function MedleyResultCard({
                   />
                 ))}
               </div>
-              <div className="mt-3 grid gap-3 text-sm text-slate-600 lg:grid-cols-2">
-                <div className="rounded-xl bg-white p-3">
-                  <div className="font-semibold text-slate-800">{labelsT("bestSkillOrder")}</div>
+              <div className="mt-3 grid gap-3 text-sm text-[var(--theme-color-text-muted)] lg:grid-cols-2">
+                <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3">
+                  <div className="font-semibold text-[var(--theme-color-text-default)]">{labelsT("bestSkillOrder")}</div>
                   <div className="mt-1 break-all">{skillOrderDisplay}</div>
                 </div>
-                <div className="rounded-xl bg-white p-3">
-                  <div className="font-semibold text-slate-800">{labelsT("bestOrderProbability")}</div>
+                <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3">
+                  <div className="font-semibold text-[var(--theme-color-text-default)]">{labelsT("bestOrderProbability")}</div>
                   <div className="mt-1">
                     {songResult.maxScoreOrderCount}/{songResult.maxScoreOrderTotal}
                   </div>
@@ -3063,7 +3063,7 @@ function TeamBuilderPanel() {
 
   return (
     <div className="space-y-6">
-      <div className="overflow-x-auto border-b border-slate-200">
+      <div className="overflow-x-auto border-b border-[var(--theme-color-border-subtle)]">
         <div className="flex min-w-max justify-end gap-1">
           {STEPS.map((step) => (
             <StepButton key={step.id} step={step} active={activeStep === step.id} onClick={() => setActiveStep(step.id)} />
@@ -3126,7 +3126,7 @@ function TeamBuilderPanel() {
         <section className="space-y-5">
           {isMedleyEvent ? (
             <>
-              <div className="rounded-2xl border border-sky-100 bg-white p-4 shadow-xs">
+              <div className="rounded-2xl border border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-panel-background)] p-4 shadow-xs">
                 <div className="grid gap-3 lg:grid-cols-3">
                   {medleySongIds.map((slotSongId, index) => {
                     const slotSong = data.songs[slotSongId] ?? null;
@@ -3138,16 +3138,16 @@ function TeamBuilderPanel() {
                         onClick={() => setActiveMedleySongSlot(index)}
                         className={`min-h-28 rounded-2xl border p-4 text-left transition ${
                           active
-                            ? "border-sky-400 bg-sky-50 ring-2 ring-sky-100"
-                            : "border-slate-200 bg-white hover:border-sky-200"
+                            ? "border-[var(--theme-color-selection-subtle-ring)] bg-[var(--theme-color-selection-subtle-background)] ring-2 ring-[var(--theme-color-selection-subtle-ring)]"
+                            : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] hover:border-[var(--theme-color-semantic-info-border)]"
                         }`}
                       >
                         <div className="flex items-center justify-between gap-3">
-                          <div className="text-xs font-bold text-slate-500">{labelsT("firstSong", { index: index + 1 })}</div>
+                          <div className="text-xs font-bold text-[var(--theme-color-text-muted)]">{labelsT("firstSong", { index: index + 1 })}</div>
                           <SongDifficultyLevelBadge difficulty={medleyDifficulties[index]} song={slotSong} className="h-6 w-6 text-xs" />
                         </div>
                         <div className="mt-2 flex min-w-0 items-start gap-2">
-                          <div className="line-clamp-2 min-w-0 text-base font-bold text-slate-900">
+                          <div className="line-clamp-2 min-w-0 text-base font-bold text-[var(--theme-color-text-default)]">
                             {slotSong
                               ? pickLocalizedName(
                                   slotSong.musicTitle,
@@ -3157,14 +3157,14 @@ function TeamBuilderPanel() {
                               : labelsT("unselectedSong")}
                           </div>
                         </div>
-                        <div className="mt-2 text-xs font-semibold text-slate-400">#{slotSongId}</div>
+                        <div className="mt-2 text-xs font-semibold text-[var(--theme-color-text-muted)]">#{slotSongId}</div>
                       </button>
                     );
                   })}
                 </div>
                 <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_16rem] lg:items-end">
                   <div className="space-y-2">
-                    <div className="text-xs font-semibold text-slate-500">{labelsT("difficulty")}</div>
+                    <div className="text-xs font-semibold text-[var(--theme-color-text-muted)]">{labelsT("difficulty")}</div>
                     <SongDifficultyPicker
                       value={activeMedleyDifficulty}
                       options={activeMedleySongDifficulties.length ? activeMedleySongDifficulties : DIFFICULTIES}
@@ -3173,7 +3173,7 @@ function TeamBuilderPanel() {
                     />
                   </div>
                   <label className="space-y-2">
-                    <span className="block text-xs font-semibold text-slate-500">{labelsT("perfectRate")}</span>
+                    <span className="block text-xs font-semibold text-[var(--theme-color-text-muted)]">{labelsT("perfectRate")}</span>
                     <TextInput value={perfectRate} onChange={(event) => updatePerfectRate(event.target.value)} inputMode="decimal" />
                   </label>
                 </div>
@@ -3191,7 +3191,7 @@ function TeamBuilderPanel() {
                 </FieldRow>
               ) : null}
               <div className="grid gap-2 text-sm sm:grid-cols-[9rem_1fr] sm:items-start">
-                <span className="font-semibold text-slate-600">{labelsT("song")}</span>
+                <span className="font-semibold text-[var(--theme-color-text-muted)]">{labelsT("song")}</span>
                 <SongOptionList
                   options={songOptions}
                   selectedSongId={medleySongIds[activeMedleySongSlot]}
@@ -3201,14 +3201,14 @@ function TeamBuilderPanel() {
             </>
           ) : (
             <>
-              <div className="rounded-2xl border border-sky-100 bg-white p-4 shadow-xs">
-                <div className="text-lg font-bold text-slate-900">{selectedSong ? pickLocalizedName(selectedSong.musicTitle, preferredServer, `#${songId}`) : labelsT("unselectedSong")}</div>
+              <div className="rounded-2xl border border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-panel-background)] p-4 shadow-xs">
+                <div className="text-lg font-bold text-[var(--theme-color-text-default)]">{selectedSong ? pickLocalizedName(selectedSong.musicTitle, preferredServer, `#${songId}`) : labelsT("unselectedSong")}</div>
                 {selectedSong && pickLocalizedName(selectedSong.bandName, preferredServer) ? (
-                  <div className="mt-1 text-sm text-slate-500">{pickLocalizedName(selectedSong.bandName, preferredServer)}</div>
+                  <div className="mt-1 text-sm text-[var(--theme-color-text-muted)]">{pickLocalizedName(selectedSong.bandName, preferredServer)}</div>
                 ) : null}
                 <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_16rem] lg:items-end">
                   <div className="space-y-2">
-                    <div className="text-xs font-semibold text-slate-500">{labelsT("difficulty")}</div>
+                    <div className="text-xs font-semibold text-[var(--theme-color-text-muted)]">{labelsT("difficulty")}</div>
                     <SongDifficultyPicker
                       value={difficulty}
                       options={selectedSongDifficulties.length ? selectedSongDifficulties : DIFFICULTIES}
@@ -3217,7 +3217,7 @@ function TeamBuilderPanel() {
                     />
                   </div>
                   <label className="space-y-2">
-                    <span className="block text-xs font-semibold text-slate-500">{labelsT("perfectRate")}</span>
+                    <span className="block text-xs font-semibold text-[var(--theme-color-text-muted)]">{labelsT("perfectRate")}</span>
                     <TextInput value={perfectRate} onChange={(event) => updatePerfectRate(event.target.value)} inputMode="decimal" />
                   </label>
                 </div>
@@ -3231,7 +3231,7 @@ function TeamBuilderPanel() {
                 </FieldRow>
               ) : null}
               <div className="grid gap-2 text-sm sm:grid-cols-[9rem_1fr] sm:items-start">
-                <span className="font-semibold text-slate-600">{labelsT("song")}</span>
+                <span className="font-semibold text-[var(--theme-color-text-muted)]">{labelsT("song")}</span>
                 <SongOptionList options={songOptions} selectedSongId={songId} onSelect={updateSongId} />
               </div>
             </>
@@ -3249,23 +3249,23 @@ function TeamBuilderPanel() {
                   type="button"
                   key={`${profile.type}:${profile.id}`}
                   onClick={() => setProfileChoice({ source: profile.type, id: profile.id })}
-                  className={`rounded-2xl border bg-white p-4 text-left shadow-xs transition ${
-                    selected ? "border-sky-400 ring-2 ring-sky-100" : "border-slate-200 hover:border-sky-200"
+                  className={`rounded-2xl border bg-[var(--theme-color-control-background)] p-4 text-left shadow-xs transition ${
+                    selected ? "border-[var(--theme-color-selection-subtle-ring)] ring-2 ring-[var(--theme-color-selection-subtle-ring)]" : "border-[var(--theme-color-border-subtle)] hover:border-[var(--theme-color-semantic-info-border)]"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-2 font-bold text-slate-900">
+                    <div className="flex min-w-0 items-center gap-2 font-bold text-[var(--theme-color-text-default)]">
                       <BandoriServerIcon
                         server={profile.server}
                         className="h-5 w-5 shadow-[0_1px_3px_rgba(15,23,42,0.18)]"
                       />
                       <span className="min-w-0 wrap-break-word">{profile.name}</span>
                     </div>
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                    <span className="rounded-full bg-[var(--theme-color-panel-background)] px-3 py-1 text-xs font-semibold text-[var(--theme-color-text-muted)]">
                       {profile.type === "cloud" ? labelsT("cloud") : labelsT("local")}
                     </span>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-slate-500">
+                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-[var(--theme-color-text-muted)]">
                     <span>{labelsT("cardCount", { count: profile.cardCount })}</span>
                     <span>{labelsT("lastSynced", { date: formatProfileSyncDate(profile.syncedAt ?? profile.updatedAt, locale, statesT("none")) })}</span>
                   </div>
@@ -3305,18 +3305,18 @@ function TeamBuilderPanel() {
       {activeStep === "calculate" ? (
         <section className="space-y-5">
           <div className="grid gap-3 lg:grid-cols-3">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="text-xs font-semibold text-slate-500">{labelsT("event")}</div>
-              <div className="mt-1 font-bold text-slate-900">{selectedEvent ? pickEventDisplayName(selectedEvent, locale) : statesT("noEvent")}</div>
+            <div className="rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-4">
+              <div className="text-xs font-semibold text-[var(--theme-color-text-muted)]">{labelsT("event")}</div>
+              <div className="mt-1 font-bold text-[var(--theme-color-text-default)]">{selectedEvent ? pickEventDisplayName(selectedEvent, locale) : statesT("noEvent")}</div>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="text-xs font-semibold text-slate-500">{isMedleyEvent ? liveLabelsT("medley") : labelsT("song")}</div>
+            <div className="rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-4">
+              <div className="text-xs font-semibold text-[var(--theme-color-text-muted)]">{isMedleyEvent ? liveLabelsT("medley") : labelsT("song")}</div>
               {isMedleyEvent ? (
                 <div className="mt-2 space-y-1">
                   {medleySongIds.map((slotSongId, index) => (
                     <div key={index} className="flex min-w-0 items-center gap-2 text-sm">
-                      <span className="shrink-0 font-bold text-slate-400">{index + 1}</span>
-                      <span className="min-w-0 truncate font-bold text-slate-900">
+                      <span className="shrink-0 font-bold text-[var(--theme-color-text-muted)]">{index + 1}</span>
+                      <span className="min-w-0 truncate font-bold text-[var(--theme-color-text-default)]">
                         {pickLocalizedName(
                           data.songs[slotSongId]?.musicTitle,
                           preferredServer,
@@ -3333,16 +3333,16 @@ function TeamBuilderPanel() {
                 </div>
               ) : (
                 <div className="mt-1 flex min-w-0 items-center gap-2">
-                  <div className="min-w-0 truncate font-bold text-slate-900">{selectedSong ? pickLocalizedName(selectedSong.musicTitle, preferredServer, `#${songId}`) : labelsT("unselected")}</div>
+                  <div className="min-w-0 truncate font-bold text-[var(--theme-color-text-default)]">{selectedSong ? pickLocalizedName(selectedSong.musicTitle, preferredServer, `#${songId}`) : labelsT("unselected")}</div>
                   {selectedSong ? (
                     <SongDifficultyLevelBadge difficulty={difficulty} song={selectedSong} className="h-6 w-6" />
                   ) : null}
                 </div>
               )}
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="text-xs font-semibold text-slate-500">{labelsT("profile")}</div>
-              <div className="mt-1 flex min-w-0 items-center gap-2 font-bold text-slate-900">
+            <div className="rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-4">
+              <div className="text-xs font-semibold text-[var(--theme-color-text-muted)]">{labelsT("profile")}</div>
+              <div className="mt-1 flex min-w-0 items-center gap-2 font-bold text-[var(--theme-color-text-default)]">
                 {selectedProfile ? (
                   <BandoriServerIcon
                     server={selectedProfile.server}
@@ -3353,7 +3353,7 @@ function TeamBuilderPanel() {
               </div>
             </div>
           </div>
-          <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="grid gap-4 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-4">
             <FieldRow label={labelsT("mode")}>
               {isMedleyEvent ? (
                 <Segment
@@ -3388,7 +3388,7 @@ function TeamBuilderPanel() {
                   step={1}
                   disabled={submitting}
                 />
-                <span className="shrink-0 text-sm font-semibold text-slate-500">{termsT("seconds")}</span>
+                <span className="shrink-0 text-sm font-semibold text-[var(--theme-color-text-muted)]">{termsT("seconds")}</span>
               </div>
             </FieldRow>
             {!isMedleyEvent ? (
@@ -3402,7 +3402,7 @@ function TeamBuilderPanel() {
                       placeholder={labelsT("unlimited")}
                       aria-label={labelsT("minLeaderScoreUp")}
                     />
-                    <span className="shrink-0 text-sm font-semibold text-slate-500">%</span>
+                    <span className="shrink-0 text-sm font-semibold text-[var(--theme-color-text-muted)]">%</span>
                   </div>
                 </FieldRow>
                 <FieldRow label={labelsT("minTotalPower")}>
@@ -3421,33 +3421,33 @@ function TeamBuilderPanel() {
                 type="button"
                 onClick={handleCalculate}
                 disabled={submitting || !isPreloadReady}
-                className="inline-flex items-center gap-2 rounded-full bg-sky-500 px-6 py-3 text-sm font-bold text-white shadow-xs transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+                className="hhwx-action-accent inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-bold shadow-xs transition "
               >
                 {submitting || isPreloadLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
                 {isPreloadReady ? actionsT("calculate") : actionsT("preparing")}
               </button>
             </div>
             {submitting ? (
-              <div className="rounded-xl bg-slate-50 p-3 text-center text-sm font-semibold text-slate-600">
+              <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3 text-center text-sm font-semibold text-[var(--theme-color-text-muted)]">
                 {actionsT("calculating", { elapsed: calculationElapsedLabel })}
                 {isMedleyEvent ? ` / ${medleySearchDurationLabel}` : ""}
               </div>
             ) : null}
             {!isPreloadReady && preloadStatusMessage ? (
               <div className={`rounded-xl p-3 text-center text-sm font-semibold ${
-                preloadState.message ? "bg-amber-50 text-amber-700" : "bg-slate-50 text-slate-500"
+                preloadState.message ? "bg-[var(--theme-color-semantic-warning-background)] text-[var(--theme-color-semantic-warning-foreground)]" : "bg-[var(--theme-color-panel-background)] text-[var(--theme-color-text-muted)]"
               }`}>
                 {preloadStatusMessage}
               </div>
             ) : null}
-            {resultError ? <div className="whitespace-pre-line rounded-xl bg-red-50 p-3 text-center text-sm font-semibold text-red-600">{resultError}</div> : null}
+            {resultError ? <div className="whitespace-pre-line rounded-xl bg-[var(--theme-color-semantic-danger-background)] p-3 text-center text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)]">{resultError}</div> : null}
             {medleyProgress ? (
-              <div className="whitespace-pre-line rounded-xl bg-sky-50 p-3 text-center text-sm font-semibold leading-6 text-sky-700">
+              <div className="whitespace-pre-line rounded-xl bg-[var(--theme-color-semantic-info-background)] p-3 text-center text-sm font-semibold leading-6 text-[var(--theme-color-semantic-info-foreground)]">
                 <Loader2 className="mr-1 inline h-4 w-4 animate-spin" />
                 {buildSearchProgressSummary(medleyProgress, proofT)}
               </div>
             ) : result ? (
-              <div className="whitespace-pre-line rounded-xl bg-emerald-50 p-3 text-center text-sm font-semibold leading-6 text-emerald-600">
+              <div className="whitespace-pre-line rounded-xl bg-[var(--theme-color-semantic-success-background)] p-3 text-center text-sm font-semibold leading-6 text-[var(--theme-color-semantic-success-foreground)]">
                 <CheckCircle2 className="mr-1 inline h-4 w-4" />
                 {buildSearchCompletionSummary(
                   result,
@@ -3460,7 +3460,7 @@ function TeamBuilderPanel() {
           </div>
           {medleyProgress ? (
             <div className="space-y-4">
-              <h2 className="text-xl font-bold text-slate-900">{labelsT("results")}</h2>
+              <h2 className="text-xl font-bold text-[var(--theme-color-text-default)]">{labelsT("results")}</h2>
               <MedleyProgressCard
                 progress={medleyProgress}
                 cardMetadata={profileCardMetadata}
@@ -3474,10 +3474,10 @@ function TeamBuilderPanel() {
           {result ? (
             <div className="space-y-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <h2 className="text-xl font-bold text-slate-900">{labelsT("results")}</h2>
+                <h2 className="text-xl font-bold text-[var(--theme-color-text-default)]">{labelsT("results")}</h2>
               </div>
               {resultIsMedley || resultEventPointMode !== "none" ? (
-                <div className="flex flex-wrap items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm sm:items-center">
+                <div className="flex flex-wrap items-start gap-3 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-4 text-sm sm:items-center">
                   {resultIsMedley ? (
                     <ResultOptionControl label="Live Boost">
                       <Segment value={resultLiveBoostCount} options={LIVE_BOOST_OPTIONS} onChange={setResultLiveBoostCount} labels={MEDLEY_LIVE_BOOST_LABELS} />
@@ -3508,8 +3508,8 @@ function TeamBuilderPanel() {
                 {isMedleySearchResponse(result) && (result.maximumScoreCandidate || additionalMedleyCandidates.length > 0) ? (
                   <div className="order-2 space-y-3">
                     <div>
-                      <div className="text-sm font-bold text-slate-900">{labelsT("evaluatedCandidates")}</div>
-                      <div className="mt-1 text-xs font-semibold text-slate-500">
+                      <div className="text-sm font-bold text-[var(--theme-color-text-default)]">{labelsT("evaluatedCandidates")}</div>
+                      <div className="mt-1 text-xs font-semibold text-[var(--theme-color-text-muted)]">
                         {labelsT("evaluatedCandidatesDescription")}
                       </div>
                     </div>
@@ -3575,7 +3575,7 @@ function TeamBuilderPanel() {
                   )
                 ))}
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              <div className="rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-4 text-sm text-[var(--theme-color-text-muted)]">
                 <ListFilter className="mr-2 inline h-4 w-4" />
                 {isMedleySearchResponse(result)
                   ? `${labelsT("evaluatedCandidates")}: ${formatNumber(result.candidates.length, locale)}`
@@ -3632,7 +3632,7 @@ function TeamBuilderPanel() {
         />
       ) : null}
 
-      <div className="flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-end">
+      <div className="flex flex-col gap-3 border-t border-[var(--theme-color-border-subtle)] pt-5 sm:flex-row sm:items-center sm:justify-end">
         <div className="flex w-full justify-end gap-2">
           {STEPS.map((step, index) => (
             activeStep === step.id && STEPS[index + 1] ? (
@@ -3640,7 +3640,7 @@ function TeamBuilderPanel() {
                 key={step.id}
                 type="button"
                 onClick={() => setActiveStep(STEPS[index + 1].id)}
-                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:text-sky-600"
+                className="hhwx-control rounded-full border px-4 py-2 text-sm font-semibold"
               >
                 {labelsT("nextStep", { step: stepsT(STEPS[index + 1].id) })}
               </button>
@@ -3673,9 +3673,9 @@ export default function BandoriTeamBuilderPage() {
       ) : profile?.emailVerified ? (
         <TeamBuilderPanel />
       ) : (
-        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-xs">
-          <h2 className="text-xl font-semibold text-amber-900">{t("verifyTitle")}</h2>
-          <p className="mt-2 text-sm leading-6 text-amber-700">{t("verifyDescription")}</p>
+        <section className="rounded-2xl border border-[var(--theme-color-semantic-warning-border)] bg-[var(--theme-color-semantic-warning-background)] p-6 shadow-xs">
+          <h2 className="text-xl font-semibold text-[var(--theme-color-semantic-warning-foreground)]">{t("verifyTitle")}</h2>
+          <p className="mt-2 text-sm leading-6 text-[var(--theme-color-semantic-warning-foreground)]">{t("verifyDescription")}</p>
           <div className="mt-5">
             <Link href="/account/email" className="hhwx-accent-button">
               {t("verifyAction")}

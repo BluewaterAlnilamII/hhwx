@@ -43,13 +43,13 @@ function AccountEntryLink({ href, titleKey, descriptionKey }: AccountEntry) {
   return (
     <Link
       href={href}
-      className="group flex items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs transition hover:border-sky-200 hover:shadow-[0_12px_36px_rgba(14,165,233,0.08)] sm:gap-4 sm:rounded-3xl sm:p-6"
+      className="hhwx-control group flex items-start justify-between gap-3 rounded-2xl border p-4 shadow-xs transition hover:shadow-[0_12px_36px_rgba(14,165,233,0.08)] sm:gap-4 sm:rounded-3xl sm:p-6"
     >
       <div className="min-w-0">
-        <h2 className="text-lg font-semibold text-slate-900 sm:text-xl">{t(titleKey)}</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-600">{t(descriptionKey)}</p>
+        <h2 className="text-lg font-semibold text-[var(--theme-color-text-default)] sm:text-xl">{t(titleKey)}</h2>
+        <p className="mt-2 text-sm leading-6 text-[var(--theme-color-text-muted)]">{t(descriptionKey)}</p>
       </div>
-      <span className="shrink-0 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition group-hover:border-sky-200 group-hover:text-sky-600">
+      <span className="shrink-0 rounded-full border border-[var(--theme-color-border-subtle)] px-4 py-2 text-sm font-semibold text-[var(--theme-color-text-default)] transition group-hover:border-[var(--theme-color-semantic-info-border)] group-hover:text-[var(--theme-color-semantic-info-foreground)]">
         {commonT("actions.enter")}
       </span>
     </Link>
@@ -76,27 +76,27 @@ export default function AccountPage() {
         <AccountErrorState message={profileError} />
       ) : profile ? (
         <div className="space-y-4 sm:space-y-6">
-          <section className="rounded-2xl bg-[#006699] p-4 text-white shadow-lg sm:rounded-3xl sm:p-6">
+          <section className="rounded-2xl bg-[var(--theme-color-profile-banner-background)] p-4 text-[var(--theme-color-profile-banner-foreground)] shadow-lg sm:rounded-3xl sm:p-6">
             <div className="flex flex-wrap items-center gap-3 sm:gap-4">
               <AccountAvatarCardControl profile={profile} onProfileChange={setProfile} />
               <div className="min-w-0 flex-1">
                 <div className="wrap-break-word text-xl font-bold sm:text-2xl">{profile.username}</div>
-                <div className="mt-1 break-all text-sm text-slate-300">{profile.email || userEmail || "-"}</div>
+                <div className="mt-1 break-all text-sm text-[var(--theme-color-profile-banner-foreground)]/80">{profile.email || userEmail || "-"}</div>
                 <Link
                   href={`/u/${profile.publicUid}`}
-                  className="mt-2 inline-flex rounded-full bg-white/12 px-3 py-1 text-xs font-semibold text-sky-100 transition hover:bg-white/20"
+                  className="mt-2 inline-flex rounded-full bg-[var(--theme-color-control-background)] px-3 py-1 text-xs font-semibold text-[var(--theme-color-semantic-info-foreground)] transition hover:bg-[var(--theme-color-control-background-hover)]"
                 >
                   UID {profile.publicUid}
                 </Link>
                 <AccountDisplayDegreeControl profile={profile} onProfileChange={setProfile} />
               </div>
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold sm:ml-auto ${profile.emailVerified ? "bg-emerald-500/20 text-emerald-200" : "bg-amber-500/20 text-amber-200"}`}>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold sm:ml-auto ${profile.emailVerified ? "bg-[var(--theme-color-semantic-success-background)] text-[var(--theme-color-semantic-success-foreground)]" : "bg-[var(--theme-color-semantic-warning-background)] text-[var(--theme-color-semantic-warning-foreground)]"}`}>
                 {profile.emailVerified ? t("home.emailVerified") : t("home.emailUnverified")}
               </span>
             </div>
 
             {!profile.emailVerified && (
-              <div className="mt-4 rounded-2xl bg-amber-400/15 px-4 py-3 text-sm leading-6 text-amber-100 sm:mt-5">
+              <div className="mt-4 rounded-2xl bg-[var(--theme-color-semantic-warning-background)] px-4 py-3 text-sm leading-6 text-[var(--theme-color-semantic-warning-foreground)] sm:mt-5">
                 {t("home.emailWarning")}
               </div>
             )}

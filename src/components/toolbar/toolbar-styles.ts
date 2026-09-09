@@ -2,7 +2,7 @@ export const toolbarIconButtonClassName = "group relative flex h-9 w-9 items-cen
 
 export const toolbarIconInnerClassName = "relative flex h-7 w-7 items-center justify-center rounded-[13px] bg-[var(--theme-color-toolbar-control-icon-background)] text-[var(--theme-color-toolbar-control-icon-foreground)] transition duration-200 group-hover:scale-105 group-hover:bg-[var(--theme-color-toolbar-control-icon-background-hover)]";
 
-export const toolbarMenuAppearanceClassName = "z-10 overflow-hidden rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] shadow-[var(--theme-shadow-toolbar-menu)]";
+export const toolbarMenuAppearanceClassName = "z-10 overflow-hidden rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-floating-background)] shadow-[var(--theme-shadow-toolbar-menu)]";
 
 export const toolbarMenuSurfaceClassName = `absolute right-0 top-full mt-3 ${toolbarMenuAppearanceClassName}`;
 

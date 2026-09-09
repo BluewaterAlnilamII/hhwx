@@ -180,19 +180,19 @@ function SortableRow({
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-1.5 py-2 px-2 rounded-lg bg-[#fffef4] mb-1.5"
+      className="flex items-center gap-1.5 py-2 px-2 rounded-lg bg-[var(--theme-color-panel-background)] mb-1.5"
     >
       {draggable ? (
         <button
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 text-sm shrink-0 touch-none"
+          className="cursor-grab active:cursor-grabbing text-[var(--theme-color-text-muted)] hover:text-[var(--theme-color-text-muted)] text-sm shrink-0 touch-none"
           type="button"
         >
           ☰
         </button>
       ) : (
-        <span className="text-gray-300 text-sm shrink-0" aria-hidden="true">
+        <span className="text-[var(--theme-color-text-muted)] text-sm shrink-0" aria-hidden="true">
           ☰
         </span>
       )}
@@ -203,12 +203,12 @@ function SortableRow({
         aria-hidden="true"
       />
 
-      <span className="w-[52px] shrink-0 text-xs font-semibold text-gray-600 text-center">
+      <span className="w-[52px] shrink-0 text-xs font-semibold text-[var(--theme-color-text-muted)] text-center">
         {item.eventId}
       </span>
 
       <span
-        className="text-sm truncate min-w-[240px] w-[240px] md:min-w-[280px] md:w-[280px] shrink-0 font-medium text-gray-900"
+        className="text-sm truncate min-w-[240px] w-[240px] md:min-w-[280px] md:w-[280px] shrink-0 font-medium text-[var(--theme-color-text-default)]"
         title={item.title}
       >
         {item.title}
@@ -221,7 +221,7 @@ function SortableRow({
           value={item.predictedStart}
           onChange={(event) => onChangeStart(item.eventId, event.target.value)}
           min={minDate}
-          className="text-xs border border-gray-200 rounded-sm px-1.5 py-1 bg-white/70 w-[110px] shrink-0"
+          className="hhwx-control text-xs border rounded-sm px-1.5 py-1 w-[110px] shrink-0"
         />
 
         <input
@@ -230,7 +230,7 @@ function SortableRow({
           value={item.predictedEnd}
           onChange={(event) => onChangeEnd(item.eventId, event.target.value)}
           min={item.predictedStart || minDate}
-          className="text-xs border border-gray-200 rounded-sm px-1.5 py-1 bg-white/70 w-[110px] shrink-0"
+          className="hhwx-control text-xs border rounded-sm px-1.5 py-1 w-[110px] shrink-0"
         />
 
         <div className="flex items-center gap-1 w-[64px] shrink-0 justify-end">
@@ -241,9 +241,9 @@ function SortableRow({
             step={1}
             value={item.durationDays}
             onChange={(event) => onChangeDuration(item.eventId, event.target.value)}
-            className="text-xs border border-gray-200 rounded-sm px-1.5 py-1 bg-white/70 w-[42px] text-center"
+            className="hhwx-control text-xs border rounded-sm px-1.5 py-1 w-[42px] text-center"
           />
-          <span className="text-xs text-gray-500">天</span>
+          <span className="text-xs text-[var(--theme-color-text-muted)]">天</span>
         </div>
 
         <label className="flex items-center gap-1 shrink-0 cursor-pointer w-[72px] justify-end">
@@ -252,16 +252,16 @@ function SortableRow({
             type="checkbox"
             checked={item.hasRestDay}
             onChange={() => onToggleRestDay(item.eventId)}
-            className="accent-blue-500"
+            className="accent-[var(--theme-color-selection-strong-background)]"
           />
-          <span className="text-xs text-gray-500">无邦日</span>
+          <span className="text-xs text-[var(--theme-color-text-muted)]">无邦日</span>
         </label>
 
         <button
           {...stopDragPropagation}
           type="button"
           onClick={() => onClearSchedule(item.eventId)}
-          className="text-xs text-gray-500 hover:text-red-500 transition-colors w-[44px] shrink-0 text-right"
+          className="text-xs text-[var(--theme-color-text-muted)] hover:text-[var(--theme-color-semantic-danger-foreground)] transition-colors w-[44px] shrink-0 text-right"
         >
           清空
         </button>
@@ -452,7 +452,7 @@ export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
       <div className="mt-4 text-center">
         <button
           onClick={openEditor}
-          className="px-4 py-2 rounded-lg bg-blue-500 text-white font-medium hover:bg-blue-600 transition-colors text-sm"
+          className="hhwx-action-accent px-4 py-2 rounded-lg font-medium transition-colors text-sm"
         >
           编辑活动日程
         </button>
@@ -467,18 +467,18 @@ export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
           <h3 className="text-lg font-bold">编辑活动日程</h3>
         </div>
         <div className="flex items-center gap-2">
-          {successMessage && <span className="text-green-600 text-sm font-medium">{successMessage}</span>}
-          {error && <span className="text-red-500 text-sm">{error}</span>}
+          {successMessage && <span className="text-[var(--theme-color-semantic-success-foreground)] text-sm font-medium">{successMessage}</span>}
+          {error && <span className="text-[var(--theme-color-semantic-danger-foreground)] text-sm">{error}</span>}
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-4 py-1.5 rounded-lg bg-green-500 text-white font-medium hover:bg-green-600 disabled:opacity-50 transition-colors text-sm"
+            className="px-4 py-1.5 rounded-lg bg-[var(--theme-color-semantic-success-foreground)] text-[var(--theme-color-text-on-emphasis)] font-medium hover:bg-[var(--theme-color-semantic-success-foreground)] disabled:opacity-50 transition-colors text-sm"
           >
             {saving ? "提交中..." : "提交"}
           </button>
           <button
             onClick={() => setIsOpen(false)}
-            className="px-4 py-1.5 rounded-lg bg-gray-400 text-white font-medium hover:bg-gray-500 transition-colors text-sm"
+            className="hhwx-control border px-4 py-1.5 rounded-lg font-medium transition-colors text-sm"
           >
             取消
           </button>
@@ -487,7 +487,7 @@ export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
 
       <div className="overflow-x-auto pb-2">
         <div className="min-w-[900px]">
-          <div className="flex items-center gap-1.5 py-1.5 px-2 text-xs text-gray-500 font-medium">
+          <div className="flex items-center gap-1.5 py-1.5 px-2 text-xs text-[var(--theme-color-text-muted)] font-medium">
             <span className="w-[16px]" />
             <span className="w-1.5" />
             <span className="w-[52px] text-center">ID</span>

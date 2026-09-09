@@ -130,22 +130,22 @@ export default function AccountAvatarCardControl({
           displayName={selectedCardDisplayName}
           size={size}
         />
-        <span className="absolute -bottom-1 -right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/80 bg-white text-sky-700 shadow-xs transition group-hover:scale-105">
+        <span className="absolute -bottom-1 -right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-semantic-info-foreground)] shadow-xs transition group-hover:scale-105">
           <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
         </span>
       </button>
 
       {open && typeof document !== "undefined" ? createPortal((
-        <div data-testid="account-avatar-card-dialog" className="fixed inset-0 z-1000 flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-slate-950/55 p-3 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="account-avatar-card-dialog-title">
-          <div className="hhwx-card-picker-surface flex max-h-[calc(100dvh-1.5rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-slate-50 shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
-            <div className="hhwx-card-picker-surface flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
+        <div data-testid="account-avatar-card-dialog" className="fixed inset-0 z-1000 flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-[var(--theme-color-overlay-background)] p-3 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="account-avatar-card-dialog-title">
+          <div className="hhwx-floating-surface flex max-h-[calc(100dvh-1.5rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl sm:max-h-[calc(100dvh-3rem)]">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-3 sm:px-5">
               <div className="min-w-0">
-                <h2 id="account-avatar-card-dialog-title" className="text-lg font-bold text-slate-900">{t("dialogTitle")}</h2>
+                <h2 id="account-avatar-card-dialog-title" className="text-lg font-bold text-[var(--theme-color-text-default)]">{t("dialogTitle")}</h2>
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+                className="hhwx-control inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition"
                 title={t("close")}
               >
                 <X className="h-5 w-5" aria-hidden="true" />
@@ -160,8 +160,8 @@ export default function AccountAvatarCardControl({
               />
             </div>
 
-            <div className="hhwx-card-picker-surface flex shrink-0 flex-col gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-              <div className="min-h-5 text-sm font-semibold text-rose-600">
+            <div className="flex shrink-0 flex-col gap-3 border-t border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <div className="min-h-5 text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)]">
                 {message}
               </div>
               <div className="flex flex-wrap justify-end gap-2">
@@ -172,14 +172,14 @@ export default function AccountAvatarCardControl({
                     entityServer: null,
                     trainType: DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE,
                   })}
-                  className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+                  className="hhwx-control inline-flex h-10 items-center rounded-xl border px-4 text-sm font-semibold transition"
                 >
                   {t("useDefault")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
+                  className="hhwx-control inline-flex h-10 items-center rounded-xl border px-4 text-sm font-semibold transition"
                 >
                   {t("cancel")}
                 </button>
@@ -187,7 +187,7 @@ export default function AccountAvatarCardControl({
                   type="button"
                   disabled={saving || !hasChanges}
                   onClick={saveAvatar}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  className="hhwx-action-accent inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold transition "
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}
                   {t("save")}

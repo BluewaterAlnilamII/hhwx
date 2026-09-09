@@ -201,12 +201,12 @@ export default function CardsPageClient() {
           {t("states.loadFailed")}
         </div>
       ) : isLoading ? (
-        <div className="hhwx-panel flex min-h-64 items-center justify-center gap-3 rounded-2xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] text-sm font-bold text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-[#111827]">
+        <div className="hhwx-panel flex min-h-64 items-center justify-center gap-3 border text-sm font-bold text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-[#111827]">
           <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
           {t("states.loading")}
         </div>
       ) : filteredCards.length === 0 ? (
-        <div className="hhwx-panel flex min-h-64 flex-col items-center justify-center gap-3 rounded-2xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] text-center text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-[#111827]">
+        <div className="hhwx-panel flex min-h-64 flex-col items-center justify-center gap-3 border text-center text-[var(--theme-color-text-muted)] dark:border-slate-700 dark:bg-[#111827]">
           <SearchX className="h-9 w-9" aria-hidden="true" />
           <div className="text-sm font-bold">{t("states.empty")}</div>
         </div>
@@ -225,7 +225,7 @@ export default function CardsPageClient() {
             <button
               type="button"
               onClick={() => setVisibleState({ key: filterKey, count: visibleCount + PAGE_SIZE })}
-              className="hhwx-panel hhwx-catalog-action h-12 w-full rounded-2xl border border-sky-200 bg-white text-sm font-black text-sky-700 shadow-xs transition hover:border-sky-300 hover:bg-sky-50 dark:border-sky-900 dark:bg-slate-900 dark:text-sky-300 dark:hover:bg-slate-800"
+              className="hhwx-panel hhwx-catalog-action h-12 w-full border text-sm font-black transition dark:border-sky-900 dark:bg-slate-900 dark:text-sky-300 dark:hover:bg-slate-800"
             >
               {t("page.showMore", { count: Math.min(PAGE_SIZE, remainingCount) })}
             </button>

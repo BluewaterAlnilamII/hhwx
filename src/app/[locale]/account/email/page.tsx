@@ -186,22 +186,22 @@ export default function AccountEmailPage() {
         <AccountErrorState message={profileError} />
       ) : profile ? (
         <div className="space-y-6">
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
+          <section className="rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-6 shadow-xs">
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="text-xl font-semibold text-slate-900">{t("currentStatus")}</h2>
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${profile.emailVerified ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+              <h2 className="text-xl font-semibold text-[var(--theme-color-text-default)]">{t("currentStatus")}</h2>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${profile.emailVerified ? "bg-[var(--theme-color-semantic-success-background)] text-[var(--theme-color-semantic-success-foreground)]" : "bg-[var(--theme-color-semantic-warning-background)] text-[var(--theme-color-semantic-warning-foreground)]"}`}>
                 {profile.emailVerified ? t("verified") : t("unverified")}
               </span>
             </div>
-            <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+            <div className="mt-4 rounded-2xl bg-[var(--theme-color-panel-background)] p-4 text-sm text-[var(--theme-color-text-muted)]">
               {t("currentEmail", { email: profile.email || userEmail || "-" })}
             </div>
           </section>
 
           {!profile.emailVerified && (
-            <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-xs">
-              <h2 className="text-xl font-semibold text-amber-900">{t("resendTitle")}</h2>
-              <p className="mt-2 text-sm leading-6 text-amber-700">
+            <section className="rounded-3xl border border-[var(--theme-color-semantic-warning-border)] bg-[var(--theme-color-semantic-warning-background)] p-6 shadow-xs">
+              <h2 className="text-xl font-semibold text-[var(--theme-color-semantic-warning-foreground)]">{t("resendTitle")}</h2>
+              <p className="mt-2 text-sm leading-6 text-[var(--theme-color-semantic-warning-foreground)]">
                 {t("resendDescription")}
               </p>
               {isTurnstileEnabled && (
@@ -220,7 +220,7 @@ export default function AccountEmailPage() {
                 </div>
               )}
               {verificationMessage && (
-                <div className={`mt-4 text-sm ${verificationMessage === t("verificationSent") ? "text-emerald-600" : "text-red-500"}`}>
+                <div className={`mt-4 text-sm ${verificationMessage === t("verificationSent") ? "text-[var(--theme-color-semantic-success-foreground)]" : "text-[var(--theme-color-semantic-danger-foreground)]"}`}>
                   {verificationMessage}
                 </div>
               )}
@@ -237,20 +237,20 @@ export default function AccountEmailPage() {
             </section>
           )}
 
-          <form onSubmit={handleEmailUpdate} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
-            <h2 className="text-xl font-semibold text-slate-900">{t("submitTitle")}</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
+          <form onSubmit={handleEmailUpdate} className="rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-6 shadow-xs">
+            <h2 className="text-xl font-semibold text-[var(--theme-color-text-default)]">{t("submitTitle")}</h2>
+            <p className="mt-2 text-sm leading-6 text-[var(--theme-color-text-muted)]">
               {t("submitDescription")}
             </p>
 
-            <label className="mt-5 block text-sm font-medium text-slate-700">
+            <label className="mt-5 block text-sm font-medium text-[var(--theme-color-text-default)]">
               {t("newEmail")}
               <input
                 type="email"
                 value={newEmail}
                 onChange={(event) => setNewEmail(event.target.value)}
                 {...emailValidationProps}
-                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-hidden transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                className="hhwx-control mt-2 w-full rounded-2xl border px-4 py-3 transition"
                 placeholder={t("newEmailPlaceholder")}
               />
             </label>
@@ -272,7 +272,7 @@ export default function AccountEmailPage() {
             )}
 
             {emailMessage && (
-              <div className={`mt-4 text-sm ${emailMessage === t("updateSent") ? "text-emerald-600" : "text-red-500"}`}>
+              <div className={`mt-4 text-sm ${emailMessage === t("updateSent") ? "text-[var(--theme-color-semantic-success-foreground)]" : "text-[var(--theme-color-semantic-danger-foreground)]"}`}>
                 {emailMessage}
               </div>
             )}

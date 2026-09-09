@@ -41,10 +41,10 @@ export default function BandoriCardServerSwitcher({
           const isActive = selectedServer === server;
           const code = getBandoriServerCode(server).toUpperCase();
           const controlClassName = cn(
-            "group flex h-11 w-12 items-center justify-center gap-1 border-r border-[var(--theme-color-border-subtle)] text-[10px] font-black transition last:border-r-0 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400 dark:border-slate-700",
+            "group flex h-11 w-12 items-center justify-center gap-1 border-r border-[var(--theme-color-border-subtle)] text-[10px] font-black transition last:border-r-0 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)] dark:border-slate-700",
             isActive
               ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-control-foreground-pressed)]"
-              : "text-slate-600 hover:bg-[var(--theme-color-control-background-hover)] dark:text-slate-300 dark:hover:bg-slate-800",
+              : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] dark:text-slate-300 dark:hover:bg-slate-800",
             !isAvailable && "cursor-not-allowed opacity-35 hover:bg-transparent dark:hover:bg-transparent",
           );
           const content = (
@@ -53,7 +53,7 @@ export default function BandoriCardServerSwitcher({
                 server={server}
                 size={22}
                 isDecorative
-                className={cn(isActive && "ring-2 ring-sky-400 ring-offset-1")}
+                className={cn(isActive && "ring-2 ring-[var(--theme-color-selection-subtle-ring)] ring-offset-1")}
               />
               <span className="sr-only">{code}</span>
             </>

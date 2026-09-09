@@ -72,10 +72,10 @@ function DegreeOption({
       onBlur={() => setInteractive(false)}
       aria-pressed={selected}
       className={cn(
-        "flex min-h-14 w-full items-center justify-center rounded-2xl border bg-white p-2 text-slate-600 shadow-xs outline-hidden transition focus-visible:ring-2 focus-visible:ring-sky-400",
+        "flex min-h-14 w-full items-center justify-center rounded-2xl border bg-[var(--theme-color-control-background)] p-2 text-[var(--theme-color-text-muted)] shadow-xs outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-semantic-info-border)]",
         selected
-          ? "border-sky-400 ring-2 ring-sky-100"
-          : "border-slate-200 hover:border-sky-200 hover:shadow-md",
+          ? "border-[var(--theme-color-semantic-info-border)] ring-2 ring-[var(--theme-color-semantic-info-border)]"
+          : "border-[var(--theme-color-border-subtle)] hover:border-[var(--theme-color-semantic-info-border)] hover:shadow-md",
       )}
     >
       <BandoriDegreeView
@@ -238,7 +238,7 @@ export default function AccountDisplayDegreeControl({
         <button
           type="button"
           title={t("chooseTitle")}
-          className="mt-3 flex max-w-full rounded-lg text-white/90 outline-hidden transition hover:bg-white/8 focus-visible:ring-2 focus-visible:ring-white/60"
+          className="mt-3 flex max-w-full rounded-lg text-[var(--theme-color-profile-banner-foreground)]/90 outline-hidden transition hover:bg-[var(--theme-color-profile-banner-foreground)]/8 focus-visible:ring-2 focus-visible:ring-[var(--theme-color-profile-banner-foreground)]/60"
         >
           {currentDegree ? (
             <BandoriDegreeView
@@ -248,7 +248,7 @@ export default function AccountDisplayDegreeControl({
               className="w-[115px]"
             />
           ) : (
-            <span className="inline-flex h-[25px] w-[115px] max-w-full items-center justify-center rounded-lg border border-dashed border-white/35 px-2 text-xs font-semibold">
+            <span className="inline-flex h-[25px] w-[115px] max-w-full items-center justify-center rounded-lg border border-dashed border-[var(--theme-color-profile-banner-foreground)]/35 px-2 text-xs font-semibold">
               {loadingCatalog ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : t("resourceUnavailable")}
             </span>
           )}
@@ -256,19 +256,19 @@ export default function AccountDisplayDegreeControl({
       </Dialog.Trigger>
 
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-1000 bg-slate-950/55" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-1000 flex max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-5xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-slate-50 shadow-2xl outline-hidden sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100%-3rem)] sm:rounded-3xl">
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
+        <Dialog.Overlay className="fixed inset-0 z-1000 bg-[var(--theme-color-overlay-background)]" />
+        <Dialog.Content className="hhwx-floating-surface fixed left-1/2 top-1/2 z-1000 flex max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-5xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl outline-hidden sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100%-3rem)] sm:rounded-3xl">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-4 sm:px-6">
               <div className="min-w-0">
                 <Dialog.Title asChild>
-                  <h2 className="text-lg font-bold text-slate-900">{t("dialogTitle")}</h2>
+                  <h2 className="text-lg font-bold text-[var(--theme-color-text-default)]">{t("dialogTitle")}</h2>
                 </Dialog.Title>
                 <Dialog.Description asChild>
-                  <p className="mt-1 text-sm leading-6 text-slate-500">{t("dialogDescription")}</p>
+                  <p className="mt-1 text-sm leading-6 text-[var(--theme-color-text-muted)]">{t("dialogDescription")}</p>
                 </Dialog.Description>
               </div>
               <Dialog.Close asChild>
-                <button type="button" title={t("close")} aria-label={t("close")} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-900">
+                <button type="button" title={t("close")} aria-label={t("close")} className="hhwx-control inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition">
                   <X className="h-5 w-5" aria-hidden="true" />
                 </button>
               </Dialog.Close>
@@ -276,11 +276,11 @@ export default function AccountDisplayDegreeControl({
 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
               {loadingOptions ? (
-                <div className="flex min-h-48 items-center justify-center gap-2 text-sm font-semibold text-slate-500"><Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />{t("loading")}</div>
+                <div className="flex min-h-48 items-center justify-center gap-2 text-sm font-semibold text-[var(--theme-color-text-muted)]"><Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />{t("loading")}</div>
               ) : options ? (
                 <div className="space-y-6">
                   <section>
-                    <h3 className="mb-3 text-sm font-bold text-slate-700">{t("accountsLabel")}</h3>
+                    <h3 className="mb-3 text-sm font-bold text-[var(--theme-color-text-default)]">{t("accountsLabel")}</h3>
                     {options.accounts.length > 0 ? (
                       <div className="grid gap-3 sm:grid-cols-2">
                         {options.accounts.map((account) => {
@@ -294,30 +294,30 @@ export default function AccountDisplayDegreeControl({
                               onClick={() => setSelectedAccountKey(accountKey)}
                               aria-pressed={selected}
                               className={cn(
-                                "flex min-h-20 items-center gap-3 rounded-2xl border bg-white px-4 py-3 text-left shadow-xs outline-hidden transition focus-visible:ring-2 focus-visible:ring-sky-400",
-                                selected ? "border-sky-400 ring-2 ring-sky-100" : "border-slate-200 hover:border-sky-200",
-                                empty && "bg-slate-100 text-slate-400",
+                                "flex min-h-20 items-center gap-3 rounded-2xl border bg-[var(--theme-color-control-background)] px-4 py-3 text-left shadow-xs outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-semantic-info-border)]",
+                                selected ? "border-[var(--theme-color-semantic-info-border)] ring-2 ring-[var(--theme-color-semantic-info-border)]" : "border-[var(--theme-color-border-subtle)] hover:border-[var(--theme-color-semantic-info-border)]",
+                                empty && "bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)]",
                               )}
                             >
                               <BandoriServerIcon server={account.server} size={22} />
                               <span className="min-w-0 flex-1">
-                                <span className={cn("block truncate text-base font-bold", empty ? "text-slate-500" : "text-slate-900")}>UID {account.gameUid}</span>
-                                {empty && <span className="mt-1 block text-xs font-medium text-slate-400">{t("empty")}</span>}
+                                <span className={cn("block truncate text-base font-bold", empty ? "text-[var(--theme-color-text-muted)]" : "text-[var(--theme-color-text-default)]")}>UID {account.gameUid}</span>
+                                {empty && <span className="mt-1 block text-xs font-medium text-[var(--theme-color-text-muted)]">{t("empty")}</span>}
                               </span>
-                              {selected && <BadgeCheck className="h-5 w-5 shrink-0 text-sky-500" aria-hidden="true" />}
+                              {selected && <BadgeCheck className="h-5 w-5 shrink-0 text-[var(--theme-color-semantic-info-foreground)]" aria-hidden="true" />}
                             </button>
                           );
                         })}
                       </div>
                     ) : (
-                      <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-10 text-center text-sm font-semibold text-slate-400">{t("empty")}</div>
+                      <div className="rounded-2xl border border-dashed border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-10 text-center text-sm font-semibold text-[var(--theme-color-text-muted)]">{t("empty")}</div>
                     )}
                   </section>
 
                   <section>
-                    <h3 className="mb-3 text-sm font-bold text-slate-700">{t("degreesLabel")}</h3>
+                    <h3 className="mb-3 text-sm font-bold text-[var(--theme-color-text-default)]">{t("degreesLabel")}</h3>
                     {loadingCatalog ? (
-                      <div className="flex min-h-32 items-center justify-center gap-2 text-sm font-semibold text-slate-500"><Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />{t("loading")}</div>
+                      <div className="flex min-h-32 items-center justify-center gap-2 text-sm font-semibold text-[var(--theme-color-text-muted)]"><Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />{t("loading")}</div>
                     ) : availableDegreeVariants.length > 0 ? (
                       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                         {availableDegreeVariants.map(({ degree, degreeEffectId }) => (
@@ -337,25 +337,25 @@ export default function AccountDisplayDegreeControl({
                         ))}
                       </div>
                     ) : (
-                      <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-10 text-center text-sm font-semibold text-slate-400">{catalogError ? t("resourceUnavailable") : t("empty")}</div>
+                      <div className="rounded-2xl border border-dashed border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-10 text-center text-sm font-semibold text-[var(--theme-color-text-muted)]">{catalogError ? t("resourceUnavailable") : t("empty")}</div>
                     )}
                   </section>
                 </div>
               ) : (
-                <div className="flex min-h-48 flex-col items-center justify-center gap-3 text-center text-sm font-semibold text-rose-600">
+                <div className="flex min-h-48 flex-col items-center justify-center gap-3 text-center text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)]">
                   <span>{message || t("loadFailed")}</span>
-                  <button type="button" onClick={() => void loadOptions()} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-slate-700 transition hover:border-slate-300">{t("retry")}</button>
+                  <button type="button" onClick={() => void loadOptions()} className="hhwx-control rounded-xl border px-4 py-2 transition">{t("retry")}</button>
                 </div>
               )}
             </div>
 
-            <div className="flex shrink-0 flex-col gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-              <div className="min-h-5 text-sm font-semibold text-rose-600">{options ? message : ""}</div>
+            <div className="flex shrink-0 flex-col gap-3 border-t border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+              <div className="min-h-5 text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)]">{options ? message : ""}</div>
               <div className="flex justify-end gap-2">
                 <Dialog.Close asChild>
-                  <button type="button" className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-slate-300">{t("cancel")}</button>
+                  <button type="button" className="hhwx-control inline-flex h-10 items-center rounded-xl border px-4 text-sm font-semibold transition">{t("cancel")}</button>
                 </Dialog.Close>
-                <button type="button" disabled={saving || !hasChanges} onClick={saveDegree} className="inline-flex h-10 items-center gap-2 rounded-xl bg-sky-600 px-4 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300">
+                <button type="button" disabled={saving || !hasChanges} onClick={saveDegree} className="hhwx-action-accent inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold transition ">
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}
                   {saving ? t("saving") : t("save")}
                 </button>

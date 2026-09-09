@@ -179,7 +179,7 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
   );
 
   return (
-    <div className="hhwx-panel rounded-2xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-6 shadow-[var(--theme-shadow-surface-raised)] dark:border-slate-700/80 dark:bg-[#111827] dark:shadow-[0_18px_44px_rgba(0,0,0,0.22)]">
+    <div className="hhwx-panel border p-6 dark:border-slate-700/80 dark:bg-[#111827]">
       <div className="mb-2 flex items-start justify-between gap-3 text-sm font-semibold">
         <span className="shrink-0 whitespace-nowrap font-bold text-[var(--theme-color-progress-foreground)]">{t("title")}</span>
         <span className="min-w-0 flex flex-col items-end gap-0.5 text-right leading-tight">
@@ -1140,7 +1140,7 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
           recommendedEventId={recommendedEventId !== null ? String(recommendedEventId) : null}
         />
 
-        <div role="tablist" aria-label={viewT("label")} className="hhwx-panel grid grid-cols-2 overflow-hidden rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-surface-background)] shadow-sm dark:border-slate-700 dark:bg-[#111827]">
+        <div role="tablist" aria-label={viewT("label")} className="hhwx-panel grid grid-cols-2 overflow-hidden border dark:border-slate-700 dark:bg-[#111827]">
           {(["tracker", "info"] as const).map((view) => {
             const active = view === activeView;
             return (
@@ -1173,7 +1173,7 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
             ) : null}
 
             {/* ========== 导航与控制区 ========== */}
-            <div className="hhwx-panel rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-3 shadow-[var(--theme-shadow-surface-raised)] sm:p-5 dark:border-slate-700/80 dark:bg-[#111827] dark:shadow-[0_24px_60px_rgba(0,0,0,0.24)]">
+            <div className="hhwx-panel border p-3 sm:p-5 dark:border-slate-700/80 dark:bg-[#111827]">
           <Tabs.Root
             value={trackingMode}
             onValueChange={handleTrackingModeChange}

@@ -81,7 +81,7 @@ test("card thumbnails stay still and show an active tooltip selection", async ()
 
   assert.doesNotMatch(tile, /hover:-translate-y/u);
   assert.doesNotMatch(pickerTile, /hover:-translate-y/u);
-  assert.match(tile, /z-40 outline-2 outline-sky-500 ring-2/u);
+  assert.match(tile, /z-40 outline-2 outline-\[color:var\(--theme-color-selection-subtle-ring\)\] ring-2/u);
   assert.match(tile, /getBandoriCardTileClassName\([\s\S]*?isHoverTooltipOpen,/u);
 });
 

@@ -41,32 +41,32 @@ export default function ResultPanel({
 
                 <div className="flex justify-center gap-8 mb-8">
                     <div className="text-center">
-                        <div className="text-sm text-gray-400 mb-1">{playerName}</div>
-                        <div className="text-4xl font-bold text-blue-400">{playerScore}</div>
+                        <div className="text-sm text-[var(--theme-color-text-muted)] dark:text-gray-400 mb-1">{playerName}</div>
+                        <div className="text-4xl font-bold text-[var(--theme-color-semantic-info-foreground)] dark:text-blue-400">{playerScore}</div>
                     </div>
-                    <div className="text-gray-500 text-2xl font-light self-end mb-1">:</div>
+                    <div className="text-[var(--theme-color-text-muted)] dark:text-gray-500 text-2xl font-light self-end mb-1">:</div>
                     <div className="text-center">
-                        <div className="text-sm text-gray-400 mb-1">{aiName}</div>
-                        <div className="text-4xl font-bold text-red-400">{aiScore}</div>
+                        <div className="text-sm text-[var(--theme-color-text-muted)] dark:text-gray-400 mb-1">{aiName}</div>
+                        <div className="text-4xl font-bold text-[var(--theme-color-semantic-danger-foreground)] dark:text-red-400">{aiScore}</div>
                     </div>
                 </div>
 
                 <div className="flex flex-col gap-3 justify-center items-center w-full max-w-xs mx-auto mb-4">
                     <button
                         onClick={onRestart}
-                        className="w-full px-6 py-2.5 bg-linear-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-xl hover:opacity-90 transition text-sm"
+                        className="w-full px-6 py-2.5 bg-[var(--theme-color-action-accent-background)] text-[var(--theme-color-action-accent-foreground)] font-semibold rounded-xl hover:opacity-90 transition text-sm"
                     >
                         {t("restart")}
                     </button>
                     <button
                         onClick={onReviewBoard}
-                        className="w-full px-6 py-2.5 bg-white/10 border border-white/20 text-white font-medium rounded-xl hover:bg-white/20 transition text-sm"
+                        className="hhwx-control w-full px-6 py-2.5 border font-medium rounded-xl transition text-sm"
                     >
                         {t("review")}
                     </button>
                     <button
                         onClick={onReturnToSelect}
-                        className="w-full px-6 py-2.5 bg-white/10 border border-white/20 text-white font-medium rounded-xl hover:bg-white/20 transition text-sm"
+                        className="hhwx-control w-full px-6 py-2.5 border font-medium rounded-xl transition text-sm"
                     >
                         {t("reselect")}
                     </button>

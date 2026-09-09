@@ -540,15 +540,15 @@ export default function GameProfilesPanel() {
   }, [loadData, requestGameJson, t]);
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs sm:rounded-3xl sm:p-6">
+    <section className="rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-4 shadow-xs sm:rounded-3xl sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3 sm:gap-4">
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-slate-900 sm:text-xl">{t("title")}</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
+          <h2 className="text-lg font-semibold text-[var(--theme-color-text-default)] sm:text-xl">{t("title")}</h2>
+          <p className="mt-2 text-sm leading-6 text-[var(--theme-color-text-muted)]">
             {t("description")}
           </p>
         </div>
-        <div className="text-sm text-slate-500">
+        <div className="text-sm text-[var(--theme-color-text-muted)]">
           {t("quotaSummary", {
             bindings: bindings.length,
             bindingLimit: USER_GAME_BINDING_LIMIT,
@@ -560,8 +560,8 @@ export default function GameProfilesPanel() {
         </div>
       </div>
 
-      <div className="mt-6 border-t border-slate-100 pt-5">
-        <h3 className="text-base font-semibold text-slate-900">{t("bind.title")}</h3>
+      <div className="mt-6 border-t border-[var(--theme-color-border-subtle)] pt-5">
+        <h3 className="text-base font-semibold text-[var(--theme-color-text-default)]">{t("bind.title")}</h3>
         <BandoriCnExclusiveNotice
           label={cnExclusiveT("label")}
           description={cnExclusiveT("gameProfileBindingDescription")}
@@ -573,41 +573,41 @@ export default function GameProfilesPanel() {
             onChange={(event) => setGameUid(event.target.value.replace(/\D/g, ""))}
             placeholder={t("bind.uidPlaceholder")}
             inputMode="numeric"
-            className="h-11 rounded-2xl border border-slate-200 px-4 text-sm outline-hidden transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
+            className="hhwx-control h-11 rounded-2xl border px-4 text-sm transition"
           />
           <button
             type="button"
             onClick={createChallenge}
             disabled={writeBusy || !normalizedUid || bindings.length >= USER_GAME_BINDING_LIMIT}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-5 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
+            className="hhwx-action-accent inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl px-5 text-sm font-semibold transition sm:w-auto"
           >
             {busyAction?.type === "challenge" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             {challenge ? t("bind.refreshChallenge") : t("bind.createChallenge")}
           </button>
         </div>
         {bindings.length >= USER_GAME_BINDING_LIMIT && (
-          <p className="mt-2 text-sm text-amber-700">{t("bind.limitReached")}</p>
+          <p className="mt-2 text-sm text-[var(--theme-color-semantic-warning-foreground)]">{t("bind.limitReached")}</p>
         )}
 
         {challenge && (
-          <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50 p-3 sm:p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">{t("bind.challengeLabel")}</div>
+          <div className="mt-4 rounded-2xl border border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)] p-3 sm:p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-[var(--theme-color-semantic-info-foreground)]">{t("bind.challengeLabel")}</div>
             <div className="mt-2 flex flex-wrap items-center gap-3">
-              <code className="min-w-0 break-all rounded-xl bg-white px-3 py-2 text-base font-bold text-slate-900 shadow-xs sm:text-lg">{challenge.challenge}</code>
+              <code className="min-w-0 break-all rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2 text-base font-bold text-[var(--theme-color-text-default)] shadow-xs sm:text-lg">{challenge.challenge}</code>
               <button
                 type="button"
                 onClick={copyChallenge}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600"
+                className="hhwx-control rounded-xl border px-3 py-2 text-sm font-semibold transition"
               >
                 {copiedChallenge ? t("bind.copied") : t("bind.copy")}
               </button>
             </div>
-            <div className="mt-3 text-sm text-slate-600">{t("bind.expiresAt", { date: formatDate(challenge.expiresAt) })}</div>
+            <div className="mt-3 text-sm text-[var(--theme-color-text-muted)]">{t("bind.expiresAt", { date: formatDate(challenge.expiresAt) })}</div>
             <button
               type="button"
               onClick={verifyChallenge}
               disabled={writeBusy}
-              className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[var(--theme-color-semantic-success-foreground)] px-5 text-sm font-semibold text-[var(--theme-color-text-on-emphasis)] transition hover:bg-[var(--theme-color-semantic-success-foreground)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
             >
               {busyAction?.type === "verify" ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
               {busyAction?.type === "verify" ? t("bind.verifying") : t("bind.verify")}
@@ -616,20 +616,20 @@ export default function GameProfilesPanel() {
         )}
       </div>
 
-      <div className="mt-6 border-t border-slate-100 pt-5">
+      <div className="mt-6 border-t border-[var(--theme-color-border-subtle)] pt-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="text-base font-semibold text-slate-900">{t("uidManagement.title")}</h3>
+            <h3 className="text-base font-semibold text-[var(--theme-color-text-default)]">{t("uidManagement.title")}</h3>
           </div>
-          <div className="text-sm text-slate-500">{t("uidManagement.quota", { count: autoProfileCount, limit: USER_GAME_AUTO_PROFILE_LIMIT })}</div>
+          <div className="text-sm text-[var(--theme-color-text-muted)]">{t("uidManagement.quota", { count: autoProfileCount, limit: USER_GAME_AUTO_PROFILE_LIMIT })}</div>
         </div>
-        <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+        <div className="mt-3 rounded-2xl border border-[var(--theme-color-semantic-warning-border)] bg-[var(--theme-color-semantic-warning-background)] px-4 py-3 text-sm leading-6 text-[var(--theme-color-semantic-warning-foreground)]">
           {t("uidManagement.syncWarning")}
         </div>
         {loading ? (
-          <p className="mt-3 text-sm text-slate-500">{t("uidManagement.loading")}</p>
+          <p className="mt-3 text-sm text-[var(--theme-color-text-muted)]">{t("uidManagement.loading")}</p>
         ) : bindings.length === 0 ? (
-          <p className="mt-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 text-sm text-slate-500">{t("uidManagement.empty")}</p>
+          <p className="mt-3 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-4 text-sm text-[var(--theme-color-text-muted)]">{t("uidManagement.empty")}</p>
         ) : (
           <div className="mt-3 grid gap-3">
             {sortedBindings.map((binding) => {
@@ -638,7 +638,7 @@ export default function GameProfilesPanel() {
               const isUnbinding = busyAction?.type === "unbind" && busyAction.gameUid === binding.gameUid;
               const syncLimitReached = !profile && autoProfileCount >= USER_GAME_AUTO_PROFILE_LIMIT;
               return (
-                <div key={binding.gameUid} className="rounded-2xl border border-slate-200 p-3 sm:p-4">
+                <div key={binding.gameUid} className="rounded-2xl border border-[var(--theme-color-border-subtle)] p-3 sm:p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
@@ -647,15 +647,15 @@ export default function GameProfilesPanel() {
                             server={normalizeBandoriServer(profile?.server) ?? 3}
                             className="h-5 w-5 shadow-[0_1px_3px_rgba(15,23,42,0.18)]"
                           />
-                          <span className="min-w-0 break-all font-semibold text-slate-900">
+                          <span className="min-w-0 break-all font-semibold text-[var(--theme-color-text-default)]">
                             UID {binding.gameUid}{profile ? ` / ${profile.name}` : ""}
                           </span>
                         </span>
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${profile ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${profile ? "bg-[var(--theme-color-semantic-success-background)] text-[var(--theme-color-semantic-success-foreground)]" : "bg-[var(--theme-color-panel-background)] text-[var(--theme-color-text-muted)]"}`}>
                           {profile ? t("uidManagement.generated") : t("uidManagement.notSynced")}
                         </span>
                       </div>
-                      <div className="mt-2 text-sm leading-6 text-slate-500">
+                      <div className="mt-2 text-sm leading-6 text-[var(--theme-color-text-muted)]">
                         {t("uidManagement.boundAt", { date: formatDate(binding.boundAt) })}
                         <br />
                         {profile
@@ -663,7 +663,7 @@ export default function GameProfilesPanel() {
                           : t("uidManagement.missingProfile")}
                       </div>
                       {syncLimitReached && (
-                        <p className="mt-2 text-sm text-amber-700">{t("uidManagement.syncLimitReached")}</p>
+                        <p className="mt-2 text-sm text-[var(--theme-color-semantic-warning-foreground)]">{t("uidManagement.syncLimitReached")}</p>
                       )}
                     </div>
                     <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:grid-cols-none sm:flex sm:flex-wrap">
@@ -671,7 +671,7 @@ export default function GameProfilesPanel() {
                         type="button"
                         onClick={() => syncAutoProfile(binding.gameUid)}
                         disabled={busy || isSyncing || syncLimitReached}
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-300"
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[var(--theme-color-semantic-success-foreground)] px-4 text-sm font-semibold text-[var(--theme-color-text-on-emphasis)] transition hover:bg-[var(--theme-color-semantic-success-foreground)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
                       >
                         <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
                         {isSyncing ? t("uidManagement.syncing") : profile ? t("uidManagement.resync") : t("uidManagement.sync")}
@@ -680,7 +680,7 @@ export default function GameProfilesPanel() {
                         type="button"
                         onClick={() => unbindGameUid(binding.gameUid)}
                         disabled={writeBusy}
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-white px-4 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-control-background)] px-4 text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)] transition hover:bg-[var(--theme-color-semantic-danger-background)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
                       >
                         {isUnbinding ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                         {isUnbinding ? t("uidManagement.unbinding") : t("uidManagement.unbind")}
@@ -695,18 +695,18 @@ export default function GameProfilesPanel() {
       </div>
 
       {(message || error) && (
-        <div aria-live="polite" className={`mt-4 rounded-2xl px-4 py-3 text-sm ${error ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>
+        <div aria-live="polite" className={`mt-4 rounded-2xl px-4 py-3 text-sm ${error ? "bg-[var(--theme-color-semantic-danger-background)] text-[var(--theme-color-semantic-danger-foreground)]" : "bg-[var(--theme-color-semantic-success-background)] text-[var(--theme-color-semantic-success-foreground)]"}`}>
           {error || message}
         </div>
       )}
 
-      <div className="mt-6 border-t border-slate-100 pt-5">
+      <div className="mt-6 border-t border-[var(--theme-color-border-subtle)] pt-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="text-base font-semibold text-slate-900">{t("manual.title")}</h3>
-            <p className="mt-1 text-sm text-slate-500">{t("manual.description")}</p>
+            <h3 className="text-base font-semibold text-[var(--theme-color-text-default)]">{t("manual.title")}</h3>
+            <p className="mt-1 text-sm text-[var(--theme-color-text-muted)]">{t("manual.description")}</p>
           </div>
-          <div className="text-sm text-slate-500">{t("manual.quota", { count: manualProfileCount, limit: USER_GAME_MANUAL_PROFILE_LIMIT })}</div>
+          <div className="text-sm text-[var(--theme-color-text-muted)]">{t("manual.quota", { count: manualProfileCount, limit: USER_GAME_MANUAL_PROFILE_LIMIT })}</div>
         </div>
 
         <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
@@ -714,13 +714,13 @@ export default function GameProfilesPanel() {
             value={profileName}
             onChange={(event) => setProfileName(event.target.value)}
             placeholder={t("manual.namePlaceholder")}
-            className="h-11 rounded-2xl border border-slate-200 px-4 text-sm outline-hidden transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
+            className="hhwx-control h-11 rounded-2xl border px-4 text-sm transition"
           />
           <button
             type="button"
             onClick={createManualProfile}
             disabled={writeBusy || manualProfileCount >= USER_GAME_MANUAL_PROFILE_LIMIT}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-5 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
+            className="hhwx-action-accent inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl px-5 text-sm font-semibold transition sm:w-auto"
           >
             {busyAction?.type === "create" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             {busyAction?.type === "create" ? t("manual.creating") : t("manual.create")}
@@ -732,13 +732,13 @@ export default function GameProfilesPanel() {
             value={importText}
             onChange={(event) => setImportText(event.target.value)}
             placeholder={t("manual.jsonPlaceholder")}
-            className="min-h-28 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-hidden transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
+            className="hhwx-control min-h-28 w-full rounded-2xl border px-4 py-3 text-sm transition"
           />
           <button
             type="button"
             onClick={importProfile}
             disabled={writeBusy || !importText.trim() || manualProfileCount >= USER_GAME_MANUAL_PROFILE_LIMIT}
-            className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 sm:w-auto"
+            className="hhwx-control mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] sm:w-auto"
           >
             {busyAction?.type === "import" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             {busyAction?.type === "import" ? t("manual.importing") : t("manual.import")}
@@ -746,15 +746,15 @@ export default function GameProfilesPanel() {
         </div>
       </div>
 
-      <div className="mt-6 border-t border-slate-100 pt-5">
-        <h3 className="text-base font-semibold text-slate-900">{t("list.title")}</h3>
-        <div className="mt-2 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
+      <div className="mt-6 border-t border-[var(--theme-color-border-subtle)] pt-5">
+        <h3 className="text-base font-semibold text-[var(--theme-color-text-default)]">{t("list.title")}</h3>
+        <div className="mt-2 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-3 text-sm leading-6 text-[var(--theme-color-text-muted)]">
           {t("list.description")}
         </div>
         {loading ? (
-          <p className="mt-3 text-sm text-slate-500">{t("list.loading")}</p>
+          <p className="mt-3 text-sm text-[var(--theme-color-text-muted)]">{t("list.loading")}</p>
         ) : profiles.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-500">{t("list.empty")}</p>
+          <p className="mt-3 text-sm text-[var(--theme-color-text-muted)]">{t("list.empty")}</p>
         ) : (
           <div className="mt-3 grid gap-3">
             {profiles.map((profile) => {
@@ -766,7 +766,7 @@ export default function GameProfilesPanel() {
               const localProfileCanMigrate = Boolean(profile.localProfile) && (Boolean(profile.cloudProfile) || manualProfileCount < USER_GAME_MANUAL_PROFILE_LIMIT);
 
               return (
-                <div key={profile.id} className="rounded-2xl border border-slate-200 p-3 sm:p-4">
+                <div key={profile.id} className="rounded-2xl border border-[var(--theme-color-border-subtle)] p-3 sm:p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
@@ -775,13 +775,13 @@ export default function GameProfilesPanel() {
                             server={profile.server}
                             className="h-5 w-5 shadow-[0_1px_3px_rgba(15,23,42,0.18)]"
                           />
-                          <span className="min-w-0 wrap-break-word font-semibold text-slate-900">{profile.name}</span>
+                          <span className="min-w-0 wrap-break-word font-semibold text-[var(--theme-color-text-default)]">{profile.name}</span>
                         </span>
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${profile.kind === "auto" ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-700"}`}>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${profile.kind === "auto" ? "bg-[var(--theme-color-semantic-success-background)] text-[var(--theme-color-semantic-success-foreground)]" : "bg-[var(--theme-color-semantic-info-background)] text-[var(--theme-color-semantic-info-foreground)]"}`}>
                           {profile.label}
                         </span>
                       </div>
-                      <div className="mt-2 text-sm leading-6 text-slate-500">
+                      <div className="mt-2 text-sm leading-6 text-[var(--theme-color-text-muted)]">
                         {profile.sourceGameUid ? `UID ${profile.sourceGameUid} / ` : ""}
                         {t("list.cardCount", { count: profile.cardCount })}
                       </div>
@@ -789,13 +789,13 @@ export default function GameProfilesPanel() {
                     <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
                       <Link
                         href={`/bandori/game-profiles/${encodeURIComponent(profile.viewProfileId)}/cards`}
-                        className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600"
+                        className="hhwx-control inline-flex h-9 items-center justify-center rounded-xl border px-3 text-sm font-semibold transition"
                       >
                         {t("list.cards")}
                       </Link>
                       <Link
                         href={`/bandori/game-profiles/${encodeURIComponent(profile.viewProfileId)}/items`}
-                        className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600"
+                        className="hhwx-control inline-flex h-9 items-center justify-center rounded-xl border px-3 text-sm font-semibold transition"
                       >
                         {t("list.items")}
                       </Link>
@@ -803,7 +803,7 @@ export default function GameProfilesPanel() {
                         type="button"
                         onClick={() => exportProfile(profile)}
                         disabled={writeBusy}
-                        className={`inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${profileExported ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-700 hover:border-sky-200 hover:text-sky-600"}`}
+                        className={`inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] ${profileExported ? "border-[var(--theme-color-semantic-success-border)] bg-[var(--theme-color-semantic-success-background)] text-[var(--theme-color-semantic-success-foreground)]" : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-default)] hover:border-[var(--theme-color-semantic-info-border)] hover:text-[var(--theme-color-semantic-info-foreground)]"}`}
                       >
                         {isExportingProfile ? <RefreshCw className="h-4 w-4 animate-spin" /> : profileExported ? <CheckCircle2 className="h-4 w-4" /> : <Download className="h-4 w-4" />}
                         {isExportingProfile ? t("list.exporting") : profileExported ? t("list.exported") : t("list.export")}
@@ -813,7 +813,7 @@ export default function GameProfilesPanel() {
                           type="button"
                           onClick={() => migrateLocalProfile(profile.localProfile as LocalGameProfileSummary)}
                           disabled={writeBusy || !localProfileCanMigrate}
-                          className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                          className="hhwx-control inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
                         >
                           {isUploading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                           {isUploading ? t("list.migrating") : profile.cloudProfile ? t("list.updateCloud") : t("list.migrate")}
@@ -824,7 +824,7 @@ export default function GameProfilesPanel() {
                           type="button"
                           onClick={() => copyProfile(profile)}
                           disabled={writeBusy || manualProfileCount >= USER_GAME_MANUAL_PROFILE_LIMIT}
-                          className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                          className="hhwx-control inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
                         >
                           {isCopying ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
                           {isCopying ? t("list.copying") : t("list.copy")}
@@ -834,7 +834,7 @@ export default function GameProfilesPanel() {
                         type="button"
                         onClick={() => deleteProfile(profile)}
                         disabled={writeBusy}
-                        className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                        className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-control-background)] px-3 text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)] transition hover:bg-[var(--theme-color-semantic-danger-background)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
                       >
                         {isDeleting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                         {isDeleting ? t("list.deleting") : t("list.delete")}
@@ -842,21 +842,21 @@ export default function GameProfilesPanel() {
                     </div>
                   </div>
                   {profile.kind === "manual" && (
-                    <div className="mt-3 inline-flex items-center gap-2 text-xs font-semibold text-slate-500">
+                    <div className="mt-3 inline-flex items-center gap-2 text-xs font-semibold text-[var(--theme-color-text-muted)]">
                       <FileJson className="h-3.5 w-3.5" />
                       {t("list.lastSynced", { date: formatDate(profile.syncAt) })}
                     </div>
                   )}
                   {exportedPayload?.profileId === profile.id && (
-                    <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3">
-                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm font-semibold text-emerald-700">
+                    <div className="mt-4 rounded-2xl border border-[var(--theme-color-semantic-success-border)] bg-[var(--theme-color-semantic-success-background)] p-3">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm font-semibold text-[var(--theme-color-semantic-success-foreground)]">
                         <span>{exportedPayload.label} payload</span>
                         <span>{t("list.exportCopied")}</span>
                       </div>
                       <textarea
                         readOnly
                         value={exportedPayload.json}
-                        className="h-52 w-full resize-y rounded-xl border border-emerald-100 bg-white px-3 py-2 font-mono text-xs leading-5 text-slate-700 outline-hidden"
+                        className="hhwx-control h-52 w-full resize-y rounded-xl border px-3 py-2 font-mono text-xs leading-5"
                       />
                     </div>
                   )}

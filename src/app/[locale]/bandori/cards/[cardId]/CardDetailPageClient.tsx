@@ -300,8 +300,8 @@ export default function CardDetailPageClient({
 
   return (
     <BandoriPageShell contentClassName="max-w-6xl">
-      <article className="hhwx-panel rounded-3xl border border-[var(--theme-color-border-default)] bg-[var(--theme-color-surface-background)] p-4 shadow-[var(--theme-shadow-surface-raised)] sm:p-6 dark:border-slate-700 dark:bg-[#111827]">
-        <Link href={cardsListHref} className="inline-flex items-center gap-2 text-sm font-black text-sky-700 transition hover:text-sky-500 dark:text-sky-300">
+      <article className="hhwx-panel border p-4 sm:p-6 dark:border-slate-700 dark:bg-[#111827]">
+        <Link href={cardsListHref} className="hhwx-text-link inline-flex items-center gap-2 text-sm font-black transition dark:text-sky-300">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           {t("detail.back")}
         </Link>

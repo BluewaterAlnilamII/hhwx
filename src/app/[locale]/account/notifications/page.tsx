@@ -362,12 +362,12 @@ export default function AccountNotificationsPage() {
       <>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            {!notification.readAt ? <span className="h-2 w-2 rounded-full bg-sky-500" aria-label={t("unreadLabel")} /> : null}
-            <h3 className="whitespace-pre-wrap text-sm font-semibold text-slate-900 sm:text-base">
+            {!notification.readAt ? <span className="h-2 w-2 rounded-full bg-[var(--theme-color-semantic-info-foreground)]" aria-label={t("unreadLabel")} /> : null}
+            <h3 className="whitespace-pre-wrap text-sm font-semibold text-[var(--theme-color-text-default)] sm:text-base">
               {getNotificationMessage(notification, t)}
             </h3>
           </div>
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-sm text-[var(--theme-color-text-muted)]">
             {target.eventId !== null ? (
               <>
                 {t("activityLabel", { eventId: target.eventId })}
@@ -385,13 +385,13 @@ export default function AccountNotificationsPage() {
           </p>
         </div>
         {target.href ? (
-          <span className="shrink-0 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600">
+          <span className="shrink-0 rounded-full border border-[var(--theme-color-border-subtle)] px-3 py-1.5 text-xs font-semibold text-[var(--theme-color-text-muted)]">
             {commonT("actions.view")}
           </span>
         ) : null}
       </>
     );
-    const className = "flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 shadow-xs";
+    const className = "flex items-center justify-between gap-3 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-3.5 shadow-xs";
 
     if (!target.href) {
       return <div key={notification.id} className={className}>{content}</div>;
@@ -402,7 +402,7 @@ export default function AccountNotificationsPage() {
         key={notification.id}
         href={target.href}
         onClick={() => void markRead(notification.id).catch(() => undefined)}
-        className={`${className} transition hover:border-sky-200 hover:shadow-[0_12px_36px_rgba(14,165,233,0.08)]`}
+        className={`${className} transition hover:border-[var(--theme-color-semantic-info-border)] hover:shadow-[0_12px_36px_rgba(14,165,233,0.08)]`}
       >
         {content}
       </Link>
@@ -422,7 +422,7 @@ export default function AccountNotificationsPage() {
         </div>
 
         {!loading && activeColumn.notifications.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 py-12 text-center text-sm font-semibold text-slate-400">
+          <div className="rounded-2xl border border-dashed border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] py-12 text-center text-sm font-semibold text-[var(--theme-color-text-muted)]">
             {t(getEmptyColumnKey(activeNotificationType))}
           </div>
         ) : null}
@@ -433,7 +433,7 @@ export default function AccountNotificationsPage() {
               type="button"
               onClick={() => void loadMoreNotifications(activeNotificationType)}
               disabled={activeColumn.loadingMore}
-              className="inline-flex h-10 items-center rounded-full border border-slate-200 bg-white px-5 text-sm font-semibold text-sky-700 shadow-xs transition hover:border-sky-200 hover:bg-sky-50 disabled:opacity-60"
+              className="hhwx-control inline-flex h-10 items-center rounded-full border px-5 text-sm font-semibold shadow-xs transition disabled:opacity-60"
             >
               {activeColumn.loadingMore ? commonT("actions.loading") : commonT("actions.loadMore")}
             </button>
@@ -459,14 +459,14 @@ export default function AccountNotificationsPage() {
       ) : (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="text-sm font-semibold text-slate-500">
+            <div className="text-sm font-semibold text-[var(--theme-color-text-muted)]">
               {loadedNotificationCount > 0 ? t("count", { count: loadedNotificationCount }) : t("emptyCount")}
             </div>
             <button
               type="button"
               onClick={() => void markAllRead().catch((err) => setError(err instanceof Error ? err.message : t("updateFailed")))}
               disabled={!hasUnreadNotifications}
-              className="inline-flex h-9 items-center rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className="hhwx-control inline-flex h-9 items-center rounded-full border px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
             >
               {commonT("actions.markAllRead")}
             </button>
@@ -478,7 +478,7 @@ export default function AccountNotificationsPage() {
             <div
               role="tablist"
               aria-label={t("title")}
-              className="grid grid-cols-2 rounded-2xl border border-slate-200 bg-slate-50 p-1"
+              className="grid grid-cols-2 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-1"
             >
               {NOTIFICATION_TYPES.map((type) => {
                 const isActive = activeNotificationType === type;
@@ -494,16 +494,16 @@ export default function AccountNotificationsPage() {
                     className={[
                       "flex h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold transition",
                       isActive
-                        ? "bg-white text-sky-700 shadow-xs ring-1 ring-slate-200"
-                        : "text-slate-500 hover:bg-white/70 hover:text-slate-700",
+                        ? "bg-[var(--theme-color-control-background)] text-[var(--theme-color-semantic-info-foreground)] shadow-xs ring-1 ring-[var(--theme-color-border-subtle)]"
+                        : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)]",
                     ].join(" ")}
                   >
                     <span>{t(getColumnTitleKey(type))}</span>
-                    <span className={isActive ? "text-sky-500" : "text-slate-400"}>
+                    <span className={isActive ? "text-[var(--theme-color-semantic-info-foreground)]" : "text-[var(--theme-color-text-muted)]"}>
                       {tabStats[type].total}
                     </span>
                     {tabStats[type].unread > 0 ? (
-                      <span className="h-2 w-2 rounded-full bg-sky-500" aria-label={t("unreadLabel")} />
+                      <span className="h-2 w-2 rounded-full bg-[var(--theme-color-semantic-info-foreground)]" aria-label={t("unreadLabel")} />
                     ) : null}
                   </button>
                 );

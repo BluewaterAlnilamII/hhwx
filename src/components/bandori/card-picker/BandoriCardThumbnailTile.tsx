@@ -89,8 +89,8 @@ export default function BandoriCardThumbnailTile({
       onBlur={onBlur}
       onKeyDown={onKeyDown}
       className={cn(
-        "relative h-[56px] w-[56px] overflow-visible rounded-[5px] outline-solid outline-1 outline-white/80 transition hover:z-40 hover:outline-2 hover:outline-sky-400 focus-within:z-40 focus-within:outline-2 focus-within:outline-sky-400 sm:h-[76px] sm:w-[76px]",
-        isSelected && "z-30 outline-2 outline-sky-500 ring-2 ring-sky-300/70",
+        "relative h-[56px] w-[56px] overflow-visible rounded-[5px] outline-solid outline-1 outline-white/80 transition hover:z-40 hover:outline-2 hover:outline-[color:var(--theme-color-focus-ring)] focus-within:z-40 focus-within:outline-2 focus-within:outline-[color:var(--theme-color-focus-ring)] sm:h-[76px] sm:w-[76px]",
+        isSelected && "z-30 outline-2 outline-[color:var(--theme-color-selection-subtle-ring)] ring-2 ring-[var(--theme-color-selection-subtle-ring)]",
         className,
       )}
     >
@@ -103,7 +103,7 @@ export default function BandoriCardThumbnailTile({
         title={label}
         aria-pressed={isSelected}
         className={cn(
-          "relative block h-full w-full overflow-visible rounded-[5px] bg-white text-left shadow-[0_2px_7px_rgba(15,23,42,0.22)]",
+          "relative block h-full w-full overflow-visible rounded-[5px] bg-[var(--theme-color-control-background)] text-left shadow-[0_2px_7px_rgba(15,23,42,0.22)]",
           isMuted && BANDORI_MUTED_CARD_CLASS_NAME,
         )}
       >
@@ -117,12 +117,6 @@ export default function BandoriCardThumbnailTile({
         />
       </button>
 
-      {card.entityServer !== null ? (
-        <span className="pointer-events-none absolute -left-1.5 -top-1.5 z-30 rounded-full border border-white bg-slate-800 px-1.5 py-0.5 text-[9px] font-black leading-none text-white shadow-xs sm:text-[10px]">
-          {card.entityServer === 1 ? "EN" : "CN"}
-        </span>
-      ) : null}
-
       {isHoverTooltipOpen ? (
         <BandoriCardHoverPopover
           id={tooltipId}
@@ -134,14 +128,14 @@ export default function BandoriCardThumbnailTile({
           detailHref={`/bandori/cards/${card.cardId}?server=${getBandoriServerCode(detailServer)}`}
           {...tooltipInteractionProps}
         >
-          <span className="hhwx-card-picker-surface block w-full whitespace-normal wrap-break-word rounded-xl bg-slate-50 px-2 py-1 text-slate-700">
+          <span className="block w-full whitespace-normal wrap-break-word rounded-xl bg-[var(--theme-color-panel-background)] px-2 py-1 text-[var(--theme-color-text-default)]">
             {resolvedSkillEffectLabel}
           </span>
         </BandoriCardHoverPopover>
       ) : null}
 
       {isSelected ? (
-        <span className="pointer-events-none absolute -right-2 -top-2 z-40 inline-flex h-6 w-6 items-center justify-center rounded-full border border-white bg-sky-600 text-white shadow-[0_6px_16px_rgba(2,132,199,0.35)]">
+        <span className="pointer-events-none absolute -right-2 -top-2 z-40 inline-flex h-6 w-6 items-center justify-center rounded-full border border-[var(--theme-color-selection-strong-ring)] bg-[var(--theme-color-selection-strong-background)] text-[var(--theme-color-selection-strong-foreground)] shadow-[var(--theme-shadow-selection-subtle)]">
           <Check className="h-4 w-4" aria-hidden="true" />
         </span>
       ) : null}

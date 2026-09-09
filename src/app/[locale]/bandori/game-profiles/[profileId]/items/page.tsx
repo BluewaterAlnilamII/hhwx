@@ -374,7 +374,7 @@ function LevelSelector({
 }) {
   return (
     <div
-      className={`grid w-full overflow-hidden rounded-xl border text-sm sm:inline-flex sm:w-auto ${changed ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}
+      className={`grid w-full overflow-hidden rounded-xl border text-sm sm:inline-flex sm:w-auto ${changed ? "border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)]" : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)]"}`}
       role="radiogroup"
       aria-label={label}
       style={{ gridTemplateColumns: `repeat(${maxLevel + 1}, minmax(0, 1fr))` }}
@@ -387,12 +387,12 @@ function LevelSelector({
           aria-checked={value === level}
           disabled={disabled}
           onClick={() => onChange(level)}
-          className={`h-9 min-w-0 border-r border-slate-200 px-0 text-center font-medium transition last:border-r-0 disabled:cursor-default sm:min-w-9 sm:px-3 ${
+          className={`h-9 min-w-0 border-r border-[var(--theme-color-border-subtle)] px-0 text-center font-medium transition last:border-r-0 disabled:cursor-default sm:min-w-9 sm:px-3 ${
             value === level
-              ? "bg-sky-600 text-white"
+              ? "bg-[var(--theme-color-selection-strong-background)] text-[var(--theme-color-selection-strong-foreground)]"
               : disabled
-                ? "text-slate-500"
-                : "text-slate-700 hover:bg-slate-50"
+                ? "text-[var(--theme-color-text-muted)]"
+                : "text-[var(--theme-color-text-default)] hover:bg-[var(--theme-color-control-background-hover)]"
           }`}
         >
           {level}
@@ -419,13 +419,13 @@ function NumberStepper({
 }) {
   const normalizedValue = clampInteger(value, 0, max);
   return (
-    <div className={`inline-flex h-9 items-center overflow-hidden rounded-xl border text-center text-sm tabular-nums ${changed ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
-      <span className="min-w-10 px-2 text-center text-xs font-semibold text-slate-500">{label}</span>
-      <button type="button" disabled={disabled} onClick={() => onChange(normalizedValue - 1)} className="h-9 w-8 border-l border-slate-200 text-slate-600 transition hover:bg-slate-50 disabled:cursor-default disabled:text-slate-300">
+    <div className={`inline-flex h-9 items-center overflow-hidden rounded-xl border text-center text-sm tabular-nums ${changed ? "border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)]" : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)]"}`}>
+      <span className="min-w-10 px-2 text-center text-xs font-semibold text-[var(--theme-color-text-muted)]">{label}</span>
+      <button type="button" disabled={disabled} onClick={() => onChange(normalizedValue - 1)} className="h-9 w-8 border-l border-[var(--theme-color-border-subtle)] text-[var(--theme-color-text-muted)] transition hover:bg-[var(--theme-color-control-background-hover)] disabled:cursor-default disabled:text-[var(--theme-color-control-foreground-disabled)]">
         -
       </button>
       {disabled ? (
-        <span className="flex h-9 w-12 items-center justify-center border-l border-slate-200 font-semibold leading-none text-slate-900">
+        <span className="flex h-9 w-12 items-center justify-center border-l border-[var(--theme-color-border-subtle)] font-semibold leading-none text-[var(--theme-color-text-default)]">
           {normalizedValue}
         </span>
       ) : (
@@ -436,10 +436,10 @@ function NumberStepper({
           pattern="[0-9]*"
           value={normalizedValue}
           onChange={(event) => onChange(Number(event.target.value))}
-          className="flex h-9 w-12 items-center justify-center border-l border-slate-200 bg-transparent p-0 text-center font-semibold leading-none text-slate-900 outline-hidden"
+          className="flex h-9 w-12 items-center justify-center border-l border-[var(--theme-color-border-subtle)] bg-transparent p-0 text-center font-semibold leading-none text-[var(--theme-color-text-default)] outline-hidden"
         />
       )}
-      <button type="button" disabled={disabled} onClick={() => onChange(normalizedValue + 1)} className="h-9 w-8 border-l border-slate-200 text-slate-600 transition hover:bg-slate-50 disabled:cursor-default disabled:text-slate-300">
+      <button type="button" disabled={disabled} onClick={() => onChange(normalizedValue + 1)} className="h-9 w-8 border-l border-[var(--theme-color-border-subtle)] text-[var(--theme-color-text-muted)] transition hover:bg-[var(--theme-color-control-background-hover)] disabled:cursor-default disabled:text-[var(--theme-color-control-foreground-disabled)]">
         +
       </button>
     </div>
@@ -465,7 +465,7 @@ function BonusFields({
 }) {
   return (
     <div className="min-w-0 text-center">
-      <div className="mb-2 text-xs font-semibold text-slate-500">{title}</div>
+      <div className="mb-2 text-xs font-semibold text-[var(--theme-color-text-muted)]">{title}</div>
       <div className="flex flex-wrap justify-center gap-2">
         <NumberStepper label={labels.performance} value={values.performance} disabled={disabled} max={max} changed={values.performance !== baseline.performance} onChange={(value) => onChange("performance", value)} />
         <NumberStepper label={labels.technique} value={values.technique} disabled={disabled} max={max} changed={values.technique !== baseline.technique} onChange={(value) => onChange("technique", value)} />
@@ -751,45 +751,45 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
       ) : loadingItems ? (
         <AccountLoadingState message={t("loadingItems")} />
       ) : (
-        <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-xs sm:p-6">
+        <section className="rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-4 shadow-xs sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-xl font-semibold text-slate-900">{t("heading")}</h2>
-              <p className="mt-1 text-sm text-slate-500">{t("summary")}</p>
+              <h2 className="text-xl font-semibold text-[var(--theme-color-text-default)]">{t("heading")}</h2>
+              <p className="mt-1 text-sm text-[var(--theme-color-text-muted)]">{t("summary")}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {saveMessage ? <span className="text-sm font-semibold text-emerald-600">{saveMessage}</span> : null}
+              {saveMessage ? <span className="text-sm font-semibold text-[var(--theme-color-semantic-success-foreground)]">{saveMessage}</span> : null}
               {editing ? (
                 <>
-                  <button type="button" onClick={cancelEditing} disabled={saving} className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600 disabled:cursor-not-allowed disabled:text-slate-400">
+                  <button type="button" onClick={cancelEditing} disabled={saving} className="hhwx-control inline-flex h-10 items-center justify-center rounded-xl border px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:text-[var(--theme-color-control-foreground-disabled)]">
                     {t("actions.cancel")}
                   </button>
-                  <button type="button" onClick={saveItems} disabled={!hasChanges || saving} className="inline-flex h-10 items-center justify-center rounded-xl bg-sky-600 px-4 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-slate-300">
+                  <button type="button" onClick={saveItems} disabled={!hasChanges || saving} className="hhwx-action-accent inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-semibold transition ">
                     {saving ? t("actions.saving") : t("actions.save")}
                   </button>
                 </>
               ) : isEditableProfile ? (
                 <>
-                  <button type="button" onClick={() => setEditing(true)} className="inline-flex h-10 items-center justify-center rounded-xl bg-sky-600 px-4 text-sm font-semibold text-white transition hover:bg-sky-500">
+                  <button type="button" onClick={() => setEditing(true)} className="hhwx-action-accent inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-semibold transition ">
                     {t("actions.edit")}
                   </button>
-                  <Link href="/bandori/game-profiles" className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600">
+                  <Link href="/bandori/game-profiles" className="hhwx-control inline-flex h-10 items-center justify-center rounded-xl border px-4 text-sm font-semibold transition">
                     {t("manageProfiles")}
                   </Link>
                 </>
               ) : (
-                <Link href="/bandori/game-profiles" className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600">
+                <Link href="/bandori/game-profiles" className="hhwx-control inline-flex h-10 items-center justify-center rounded-xl border px-4 text-sm font-semibold transition">
                   {t("manageProfiles")}
                 </Link>
               )}
             </div>
           </div>
 
-          <div className="mt-5 flex border-b border-slate-200">
-            <button type="button" onClick={() => setActiveTab("area")} className={`h-11 px-4 text-sm font-semibold transition ${activeTab === "area" ? "border-b-2 border-sky-600 text-sky-600" : "text-slate-500 hover:text-slate-900"}`}>
+          <div className="mt-5 flex border-b border-[var(--theme-color-border-subtle)]">
+            <button type="button" onClick={() => setActiveTab("area")} className={`h-11 px-4 text-sm font-semibold transition ${activeTab === "area" ? "border-b-2 border-[var(--theme-color-selection-subtle-ring)] text-[var(--theme-color-selection-subtle-foreground)]" : "text-[var(--theme-color-text-muted)] hover:text-[var(--theme-color-text-default)]"}`}>
               {t("tabs.area")}
             </button>
-            <button type="button" onClick={() => setActiveTab("characters")} className={`h-11 px-4 text-sm font-semibold transition ${activeTab === "characters" ? "border-b-2 border-sky-600 text-sky-600" : "text-slate-500 hover:text-slate-900"}`}>
+            <button type="button" onClick={() => setActiveTab("characters")} className={`h-11 px-4 text-sm font-semibold transition ${activeTab === "characters" ? "border-b-2 border-[var(--theme-color-selection-subtle-ring)] text-[var(--theme-color-selection-subtle-foreground)]" : "text-[var(--theme-color-text-muted)] hover:text-[var(--theme-color-text-default)]"}`}>
               {t("tabs.characters")}
             </button>
           </div>
@@ -804,8 +804,8 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
 
                 return (
                   <section key={group.key}>
-                    <div className="mb-3 flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
-                      <h3 className="text-base font-semibold text-slate-900">{getAreaItemGroupLabel(group, locale)}</h3>
+                    <div className="mb-3 flex items-center justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] pb-2">
+                      <h3 className="text-base font-semibold text-[var(--theme-color-text-default)]">{getAreaItemGroupLabel(group, locale)}</h3>
                     </div>
                     <div className="space-y-2">
                       {groupItems.map((item) => {
@@ -819,9 +819,9 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
                           labels,
                         );
                         return (
-                          <div key={item.itemKey} className="grid gap-2 rounded-lg border border-slate-100 px-2.5 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-3">
+                          <div key={item.itemKey} className="grid gap-2 rounded-lg border border-[var(--theme-color-border-subtle)] px-2.5 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-3">
                             <div className="min-w-0">
-                              <div className="truncate text-sm font-semibold text-slate-900">{areaItemName}</div>
+                              <div className="truncate text-sm font-semibold text-[var(--theme-color-text-default)]">{areaItemName}</div>
                             </div>
                             <LevelSelector
                               label={t("labels.levelFor", { name: areaItemName })}
@@ -841,8 +841,8 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
 
               {unknownAreaItems.length > 0 ? (
                 <section>
-                  <div className="mb-3 flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
-                    <h3 className="text-base font-semibold text-slate-900">{t("labels.unknownItems")}</h3>
+                  <div className="mb-3 flex items-center justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] pb-2">
+                    <h3 className="text-base font-semibold text-[var(--theme-color-text-default)]">{t("labels.unknownItems")}</h3>
                   </div>
                   <div className="space-y-2">
                     {unknownAreaItems.map((item) => {
@@ -853,7 +853,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
                         labels,
                       );
                       return (
-                        <div key={item.itemKey} className="rounded-lg border border-slate-100 px-3 py-3 text-sm text-slate-700">
+                        <div key={item.itemKey} className="rounded-lg border border-[var(--theme-color-border-subtle)] px-3 py-3 text-sm text-[var(--theme-color-text-default)]">
                           {t("labels.itemLevel", { name: itemName, level: item.level })}
                         </div>
                       );
@@ -866,8 +866,8 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
             <div className="mt-5 space-y-6">
               {characterRowsByBand.map((group) => (
                 <section key={group.bandId}>
-                  <div className="mb-3 flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
-                    <h3 className="text-base font-semibold text-slate-900">{group.label}</h3>
+                  <div className="mb-3 flex items-center justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] pb-2">
+                    <h3 className="text-base font-semibold text-[var(--theme-color-text-default)]">{group.label}</h3>
                   </div>
                   <div className="space-y-3">
                     {group.rows.map((row) => {
@@ -888,9 +888,9 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
                       };
 
                       return (
-                        <div key={row.characterId} className="grid gap-4 rounded-lg border border-slate-100 px-3 py-4 lg:grid-cols-[minmax(9rem,0.8fr)_repeat(3,minmax(0,1fr))]">
+                        <div key={row.characterId} className="grid gap-4 rounded-lg border border-[var(--theme-color-border-subtle)] px-3 py-4 lg:grid-cols-[minmax(9rem,0.8fr)_repeat(3,minmax(0,1fr))]">
                           <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold text-slate-900">{row.characterName}</div>
+                            <div className="truncate text-sm font-semibold text-[var(--theme-color-text-default)]">{row.characterName}</div>
                           </div>
                           <BonusFields
                             title={t("labels.potential")}
@@ -927,7 +927,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
               ))}
 
               {metadata.characters.some((character) => character.characterId <= MAX_CHARACTER_ID && !CHARACTER_GROUP_BAND_IDS.has(character.bandId)) ? (
-                <p className="text-sm text-slate-500">{t("labels.hiddenUngroupedCharacters")}</p>
+                <p className="text-sm text-[var(--theme-color-text-muted)]">{t("labels.hiddenUngroupedCharacters")}</p>
               ) : null}
             </div>
           )}

@@ -48,7 +48,7 @@ export default function SectionSidebarShell({ children, onCloseMobileDrawer }: S
     const active = isItemActive(pathname, item);
     const shouldPrefetch = !active && prefetchIntents[item.href];
     const itemClassName = cn(
-      "hhwx-navigation-item block rounded-[14px] px-4 py-2.5 text-[15px] font-medium transition duration-200",
+      "hhwx-navigation-item block px-4 py-2.5 text-[15px] transition duration-200",
       active
         ? "bg-[var(--theme-color-shell-navigation-item-background-current)] text-[var(--theme-color-shell-navigation-item-foreground-current)] shadow-[var(--theme-shadow-navigation-current)]"
         : "text-[var(--theme-color-shell-navigation-item-foreground)] hover:bg-[var(--theme-color-shell-navigation-item-background-hover)] hover:text-[var(--theme-color-shell-navigation-item-foreground-hover)] hover:shadow-[var(--theme-shadow-navigation-hover)]",

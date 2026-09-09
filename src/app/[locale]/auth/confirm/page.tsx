@@ -1,5 +1,6 @@
 "use client";
 
+import Heading from "@/components/Heading";
 import { type EmailOtpType } from "@supabase/supabase-js";
 import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
@@ -149,14 +150,14 @@ function AuthConfirmPageFallback() {
 
   return (
     <main className="relative min-h-full px-4 py-16 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-xl rounded-[32px] border border-white/50 bg-[#fffef4] p-8 shadow-[0_20px_80px_rgba(15,23,42,0.14)]">
+      <div className="hhwx-panel mx-auto max-w-xl border p-8">
         <div className="mb-6 text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-500">{t("section")}</p>
-          <h1 className="mt-3 text-3xl font-bold text-slate-900">{t("title")}</h1>
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-[var(--theme-color-action-secondary-foreground)]">{t("section")}</p>
+          <Heading as="h1" visualRole="page" className="mt-3">{t("title")}</Heading>
         </div>
         <div className="space-y-4 text-center">
-          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-sky-100 border-t-sky-500" />
-          <p className="text-sm leading-6 text-slate-600">{commonT("states.loadingPage")}</p>
+          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[var(--theme-color-semantic-info-border)] border-t-transparent" />
+          <p className="text-sm leading-6 text-[var(--theme-color-text-muted)]">{commonT("states.loadingPage")}</p>
         </div>
       </div>
     </main>
@@ -436,34 +437,34 @@ function AuthConfirmPageContent() {
 
   return (
     <main className="relative min-h-full px-4 py-16 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-xl rounded-[32px] border border-white/50 bg-[#fffef4] p-8 shadow-[0_20px_80px_rgba(15,23,42,0.14)]">
+      <div className="hhwx-panel mx-auto max-w-xl border p-8">
         <div className="mb-6 text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-500">{t("section")}</p>
-          <h1 className="mt-3 text-3xl font-bold text-slate-900">{getStatusHeading(status, t)}</h1>
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-[var(--theme-color-action-secondary-foreground)]">{t("section")}</p>
+          <Heading as="h1" visualRole="page" className="mt-3">{getStatusHeading(status, t)}</Heading>
         </div>
 
         {status === "verifying" && (
           <div className="space-y-4 text-center">
-            <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-sky-100 border-t-sky-500" />
-            <p className="text-sm leading-6 text-slate-600">{message}</p>
+            <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[var(--theme-color-semantic-info-border)] border-t-transparent" />
+            <p className="text-sm leading-6 text-[var(--theme-color-text-muted)]">{message}</p>
           </div>
         )}
 
         {status === "error" && (
           <div className="space-y-4">
-            <div className="rounded-2xl bg-red-50 p-4 text-sm leading-6 text-red-600">
+            <div className="rounded-2xl bg-[var(--theme-color-semantic-danger-background)] p-4 text-sm leading-6 text-[var(--theme-color-semantic-danger-foreground)]">
               {message}
             </div>
             <div className="flex justify-center gap-3">
               <Link
                 href="/"
-                className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                className="rounded-full bg-[var(--theme-color-action-accent-background)] px-5 py-2 text-sm font-semibold text-[var(--theme-color-text-on-emphasis)] transition hover:bg-[var(--theme-color-action-accent-background)]"
               >
                 {authT("actions.backHome")}
               </Link>
               <Link
                 href={buildAuthPath("login", nextPath, undefined, locale)}
-                className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600"
+                className="rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-5 py-2 text-sm font-semibold text-[var(--theme-color-text-default)] transition hover:border-[var(--theme-color-semantic-info-border)] hover:text-[var(--theme-color-action-secondary-foreground)]"
               >
                 {authT("actions.login")}
               </Link>
@@ -473,10 +474,10 @@ function AuthConfirmPageContent() {
 
         {status === "success" && (
           <div className="space-y-4 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-600">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[var(--theme-color-semantic-success-background)] text-2xl text-[var(--theme-color-semantic-success-foreground)]">
               ✓
             </div>
-            <p className="text-sm leading-6 text-slate-600">{message}</p>
+            <p className="text-sm leading-6 text-[var(--theme-color-text-muted)]">{message}</p>
             <button
               type="button"
               onClick={() => router.replace(nextPath)}
@@ -489,10 +490,10 @@ function AuthConfirmPageContent() {
 
         {status === "recovery" && (
           <form onSubmit={handlePasswordReset} className="space-y-5">
-            <div className="rounded-2xl bg-sky-50 p-4 text-sm leading-6 text-sky-700">
+            <div className="rounded-2xl bg-[var(--theme-color-semantic-info-background)] p-4 text-sm leading-6 text-[var(--theme-color-action-secondary-foreground)]">
               {message}
             </div>
-            <label className="block text-sm font-medium text-slate-700">
+            <label className="block text-sm font-medium text-[var(--theme-color-text-default)]">
               {authT("fields.newPassword")}
               <input
                 type="password"
@@ -502,14 +503,14 @@ function AuthConfirmPageContent() {
                 minLength={PASSWORD_MIN_LENGTH}
                 maxLength={PASSWORD_MAX_LENGTH}
                 pattern={PASSWORD_INPUT_PATTERN}
-                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-hidden transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                className="hhwx-control mt-2 w-full rounded-2xl border px-4 py-3 transition"
                 placeholder={authT("placeholders.newPassword")}
               />
-              <span className="mt-2 block text-xs leading-5 text-slate-500">
+              <span className="mt-2 block text-xs leading-5 text-[var(--theme-color-text-muted)]">
                 {passwordPolicyMessage}
               </span>
             </label>
-            <label className="block text-sm font-medium text-slate-700">
+            <label className="block text-sm font-medium text-[var(--theme-color-text-default)]">
               {authT("fields.confirmNewPassword")}
               <input
                 type="password"
@@ -519,17 +520,17 @@ function AuthConfirmPageContent() {
                 minLength={PASSWORD_MIN_LENGTH}
                 maxLength={PASSWORD_MAX_LENGTH}
                 pattern={PASSWORD_INPUT_PATTERN}
-                className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-hidden transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                className="hhwx-control mt-2 w-full rounded-2xl border px-4 py-3 transition"
                 placeholder={authT("placeholders.confirmNewPassword")}
               />
             </label>
             {passwordMessage && (
-              <div className="text-sm text-red-500">{passwordMessage}</div>
+              <div className="text-sm text-[var(--theme-color-semantic-danger-foreground)]">{passwordMessage}</div>
             )}
             <div className="flex justify-end gap-3">
               <Link
                 href="/"
-                className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-600"
+                className="rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-5 py-2 text-sm font-semibold text-[var(--theme-color-text-default)] transition hover:border-[var(--theme-color-semantic-info-border)] hover:text-[var(--theme-color-action-secondary-foreground)]"
               >
                 {authT("actions.backHome")}
               </Link>

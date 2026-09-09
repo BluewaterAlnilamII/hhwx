@@ -46,14 +46,14 @@ export default function BandoriCardPickerDialog({
   return (
     <Dialog.Root open={isOpen} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-1000 bg-slate-950/55" />
-        <Dialog.Content aria-describedby={undefined} className="hhwx-card-picker-surface fixed left-1/2 top-1/2 z-1000 flex max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-6xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-slate-50 shadow-2xl focus:outline-hidden sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100%-3rem)]">
-          <div className="hhwx-card-picker-surface flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-5">
-            <Dialog.Title className="min-w-0 text-lg font-bold text-slate-900">{title}</Dialog.Title>
+        <Dialog.Overlay className="fixed inset-0 z-1000 bg-[var(--theme-color-overlay-background)]" />
+        <Dialog.Content aria-describedby={undefined} className="hhwx-floating-surface fixed left-1/2 top-1/2 z-1000 flex max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-6xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl focus:outline-hidden sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100%-3rem)]">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-floating-background)] px-4 py-3 sm:px-5">
+            <Dialog.Title className="min-w-0 text-lg font-bold text-[var(--theme-color-text-default)]">{title}</Dialog.Title>
             <Dialog.Close asChild>
               <button
                 type="button"
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+                className="hhwx-control inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition"
                 title={closeLabel}
                 aria-label={closeLabel}
               >

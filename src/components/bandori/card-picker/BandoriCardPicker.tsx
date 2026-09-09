@@ -89,15 +89,12 @@ function ArtToggle({
   onChange: (nextTrainType: BandoriCardArtVariant) => void;
 }) {
   return (
-    <div className="hhwx-card-art-toggle hhwx-catalog-filters hhwx-card-picker-surface inline-flex overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
+    <div className="hhwx-card-art-toggle inline-flex">
       <button
         type="button"
         aria-pressed={trainType === "normal"}
         onClick={() => onChange("normal")}
-        className={cn(
-          "inline-flex h-9 items-center gap-1.5 px-3 text-sm font-semibold transition",
-          trainType === "normal" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-50",
-        )}
+        className="inline-flex h-9 items-center gap-1.5 px-3 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[color:var(--theme-color-focus-ring)]"
       >
         <RotateCcw className="h-4 w-4" aria-hidden="true" />
         {normalLabel}
@@ -106,10 +103,7 @@ function ArtToggle({
         type="button"
         aria-pressed={trainType === "after_training"}
         onClick={() => onChange("after_training")}
-        className={cn(
-          "inline-flex h-9 items-center gap-1.5 border-l border-slate-200 px-3 text-sm font-semibold transition",
-          trainType === "after_training" ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-50",
-        )}
+        className="inline-flex h-9 items-center gap-1.5 px-3 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[color:var(--theme-color-focus-ring)]"
       >
         <RotateCcw className="h-4 w-4" aria-hidden="true" />
         {afterTrainingLabel}
@@ -393,11 +387,11 @@ export default function BandoriCardPicker({
       />
 
       {value && showArtToggle ? (
-        <div className="hhwx-card-picker-surface sticky -top-3 z-80 -mx-3 bg-slate-50/95 px-3 pb-2 pt-3 backdrop-blur-sm sm:-top-5 sm:-mx-5 sm:px-5 sm:pt-5">
-          <div className="hhwx-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-xs">
-            <div className="min-w-0 text-sm text-slate-600">
+        <div className="sticky -top-3 z-80 -mx-3 bg-[var(--theme-color-panel-background)] px-3 pb-2 pt-3 backdrop-blur-sm sm:-top-5 sm:-mx-5 sm:px-5 sm:pt-5">
+          <div className="hhwx-panel flex flex-wrap items-center justify-between gap-3 border p-3">
+            <div className="min-w-0 text-sm text-[var(--theme-color-text-muted)]">
             {t("currentSelection")}
-            <span className="font-semibold text-slate-900">
+            <span className="font-semibold text-[var(--theme-color-text-default)]">
               {selectedCard
                 ? `${selectedCard.displayName} / #${selectedCard.cardId}`
                 : t("cardFallback", { cardId: value.cardId })}
@@ -413,9 +407,9 @@ export default function BandoriCardPicker({
         </div>
       ) : null}
 
-      <div className="hhwx-panel rounded-2xl border border-slate-200 bg-[#fffdf1]/72 p-3 shadow-inner">
+      <div className="hhwx-panel border p-3">
         {isLoading && catalog.length === 0 ? (
-          <div className="flex min-h-56 items-center justify-center gap-2 text-sm font-semibold text-slate-500">
+          <div className="flex min-h-56 items-center justify-center gap-2 text-sm font-semibold text-[var(--theme-color-text-muted)]">
             <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
             {t("states.loadingCards")}
           </div>
@@ -468,14 +462,14 @@ export default function BandoriCardPicker({
                     key: filterKey,
                     count: Math.min(visibleCount + PAGE_SIZE, filteredCards.length),
                   })}
-                  className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-xs transition hover:border-blue-300 hover:text-blue-600"
+                  className="hhwx-control inline-flex h-10 items-center justify-center rounded-xl border px-4 text-sm font-bold shadow-xs transition"
                 >
                   {t("actions.showMore", { count: Math.min(PAGE_SIZE, hiddenCardCount) })}
                 </button>
                 <button
                   type="button"
                   onClick={() => setVisibleState({ key: filterKey, count: filteredCards.length })}
-                  className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-xs transition hover:border-blue-300 hover:text-blue-600"
+                  className="hhwx-control inline-flex h-10 items-center justify-center rounded-xl border px-4 text-sm font-bold shadow-xs transition"
                 >
                   {t("actions.showAll")}
                 </button>
@@ -483,7 +477,7 @@ export default function BandoriCardPicker({
             ) : null}
           </>
         ) : (
-          <div className="flex min-h-56 items-center justify-center text-sm font-semibold text-slate-500">
+          <div className="flex min-h-56 items-center justify-center text-sm font-semibold text-[var(--theme-color-text-muted)]">
             {t("states.empty")}
           </div>
         )}
