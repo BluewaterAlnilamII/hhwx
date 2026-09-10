@@ -1,0 +1,21 @@
+{
+  "title": "服务状态",
+  "service": "服务",
+  "lastUpdated": "最近更新",
+  "pending": "未知",
+  "loading": "加载中",
+  "updateFailed": "更新失败",
+  "services": {
+    "cutoffTracker": "分数追踪",
+    "userFetcher": "用户抓取",
+    "masterBuilder": "数据构建",
+    "assetsBuilder": "资源构建"
+  },
+  "states": {
+    "operational": "正常",
+    "maintenance": "服务器维护中",
+    "error": "异常",
+    "updateRequired": "需要版本更新",
+    "pending": "未知"
+  }
+}

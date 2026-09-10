@@ -3,6 +3,7 @@ export const MESSAGE_NAMESPACES = [
   "common",
   "comments",
   "navigation",
+  "serviceStatus",
   "auth",
   "account",
   "bandori",

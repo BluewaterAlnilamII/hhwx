@@ -1,0 +1,21 @@
+{
+  "title": "Service Status",
+  "service": "Service",
+  "lastUpdated": "Last updated",
+  "pending": "Unknown",
+  "loading": "Loading",
+  "updateFailed": "Update failed",
+  "services": {
+    "cutoffTracker": "Cutoff Tracking",
+    "userFetcher": "User Fetching",
+    "masterBuilder": "Data Building",
+    "assetsBuilder": "Asset Building"
+  },
+  "states": {
+    "operational": "Operational",
+    "maintenance": "Under maintenance",
+    "error": "Error",
+    "updateRequired": "Update required",
+    "pending": "Unknown"
+  }
+}

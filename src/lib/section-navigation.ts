@@ -22,6 +22,12 @@ export const siteNavigationGroups: SectionSidebarNavGroup[] = [
         labelKey: "items.home",
         matchMode: "exact",
       },
+      {
+        id: "status",
+        href: "/status",
+        labelKey: "items.serviceStatus",
+        matchMode: "exact",
+      },
     ],
   },
   {

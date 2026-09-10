@@ -43,6 +43,7 @@ hhwx/
 
 - `[locale]/`: localized application routes. The default `zh-CN` locale is served without a URL prefix; non-default locales use a locale prefix such as `/en`.
 - `[locale]/page.tsx`: retro HHW club home page; its Japanese homage copy is intentionally the same in both locales.
+- `[locale]/status/`: current backend service status, read from the public status API every 60 seconds.
 - `[locale]/othello/`: character selection, local saved-game resume, Othello, and in-game comments.
 - `[locale]/account/`: account center, profile, email, and password pages.
 - `[locale]/bandori/game-profiles/`: game profile card and item views.
