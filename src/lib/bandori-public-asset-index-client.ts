@@ -2,6 +2,8 @@
 
 import {
   parseBandoriCardsAssetIndex,
+  parseBandoriCostumesAssetIndex,
+  parseBandoriLiveSdAssetIndex,
   parseBandoriDegreesAssetIndex,
   parseBandoriEventsAssetIndex,
   parseBandoriMusicAssetIndex,
@@ -175,6 +177,14 @@ export function createBandoriPublicAssetIndexStore<T>({
 
 export const bandoriCardsAssetIndexStore = createBandoriPublicAssetIndexStore<BandoriCardsAssetIndex>({
   parse: parseBandoriCardsAssetIndex,
+});
+
+export const bandoriCostumesAssetIndexStore = createBandoriPublicAssetIndexStore({
+  parse: parseBandoriCostumesAssetIndex,
+});
+
+export const bandoriLiveSdAssetIndexStore = createBandoriPublicAssetIndexStore({
+  parse: parseBandoriLiveSdAssetIndex,
 });
 
 export const bandoriDegreesAssetIndexStore = createBandoriPublicAssetIndexStore<BandoriDegreesAssetIndex>({

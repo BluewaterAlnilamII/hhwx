@@ -1,16 +1,7 @@
 "use client";
 
 import { useMemo, useState, type CSSProperties } from "react";
-import * as Dialog from "@radix-ui/react-dialog";
-import {
-  ChevronLeft,
-  ChevronRight,
-  ImageOff,
-  Maximize2,
-  X,
-  ZoomIn,
-  ZoomOut,
-} from "lucide-react";
+import { ImageOff, Maximize2 } from "lucide-react";
 import {
   buildBandoriCardAttributeIconUrl,
   buildBandoriCardBandIconUrl,
@@ -27,6 +18,7 @@ import {
 import type { BandoriCardAttribute } from "@/lib/bandori/cards/filter";
 import { BANDORI_FULL_CARD_LAYOUT } from "@/lib/bandori/cards/full-card-layout";
 import { cn } from "@/lib/utils";
+import BandoriImageViewer, { type BandoriImageViewerLabels } from "./BandoriImageViewer";
 
 export type BandoriFullCardArtItem = {
   variant: BandoriCardAssetVariant;
@@ -261,15 +253,7 @@ export type BandoriFullCardGalleryProps = {
   assetIndex: BandoriCardsAssetIndex | null | undefined;
   assetIndexLoading?: boolean;
   items: BandoriFullCardArtItem[];
-  viewerLabels: {
-    close: string;
-    zoomIn: string;
-    zoomOut: string;
-    previous: string;
-    next: string;
-    imageLoading: string;
-    imageUnavailable: string;
-  };
+  viewerLabels: BandoriImageViewerLabels;
 };
 
 export default function BandoriFullCardGallery({
@@ -280,7 +264,6 @@ export default function BandoriFullCardGallery({
   viewerLabels,
 }: BandoriFullCardGalleryProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const [zoom, setZoom] = useState(1);
   const activeItem = activeIndex === null ? null : items[activeIndex] ?? null;
   const activeSrc = useMemo(() => activeItem ? buildBandoriPublicAssetUrl(
     lookupBandoriCardImage(
@@ -293,7 +276,6 @@ export default function BandoriFullCardGallery({
 
   const changeActiveIndex = (nextIndex: number) => {
     setActiveIndex((nextIndex + items.length) % items.length);
-    setZoom(1);
   };
 
   return (
@@ -313,78 +295,23 @@ export default function BandoriFullCardGallery({
             item={item}
             loadingLabel={viewerLabels.imageLoading}
             unavailableLabel={viewerLabels.imageUnavailable}
-            onOpen={() => {
-              setActiveIndex(index);
-              setZoom(1);
-            }}
+            onOpen={() => setActiveIndex(index)}
           />
         ))}
       </div>
 
-      <Dialog.Root
-        open={activeIndex !== null}
-        onOpenChange={(open) => {
-          if (!open) setActiveIndex(null);
-        }}
-      >
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[1100] bg-slate-950/88 backdrop-blur-sm" />
-          <Dialog.Content
-            aria-describedby={undefined}
-            className="fixed inset-0 z-[1101] flex flex-col outline-hidden"
-          >
-            <Dialog.Title className="sr-only">{activeItem?.label}</Dialog.Title>
-            <div className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-white/10 px-3 sm:px-5">
-              <div className="truncate text-sm font-black text-white">{activeItem?.label}</div>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setZoom((value) => Math.max(1, value - 0.5))} disabled={zoom <= 1} aria-label={viewerLabels.zoomOut} title={viewerLabels.zoomOut} className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-35">
-                  <ZoomOut className="h-5 w-5" aria-hidden="true" />
-                </button>
-                <button type="button" onClick={() => setZoom((value) => Math.min(3, value + 0.5))} disabled={zoom >= 3} aria-label={viewerLabels.zoomIn} title={viewerLabels.zoomIn} className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-35">
-                  <ZoomIn className="h-5 w-5" aria-hidden="true" />
-                </button>
-                <Dialog.Close asChild>
-                  <button type="button" aria-label={viewerLabels.close} title={viewerLabels.close} className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20">
-                    <X className="h-5 w-5" aria-hidden="true" />
-                  </button>
-                </Dialog.Close>
-              </div>
-            </div>
-            <div className="relative min-h-0 flex-1 overflow-auto p-4 sm:p-8">
-              {items.length > 1 ? (
-                <>
-                  <button type="button" onClick={() => changeActiveIndex((activeIndex ?? 0) - 1)} aria-label={viewerLabels.previous} title={viewerLabels.previous} className="fixed left-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/12 text-white backdrop-blur-sm transition hover:bg-white/22 sm:left-6">
-                    <ChevronLeft className="h-6 w-6" aria-hidden="true" />
-                  </button>
-                  <button type="button" onClick={() => changeActiveIndex((activeIndex ?? 0) + 1)} aria-label={viewerLabels.next} title={viewerLabels.next} className="fixed right-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/12 text-white backdrop-blur-sm transition hover:bg-white/22 sm:right-6">
-                    <ChevronRight className="h-6 w-6" aria-hidden="true" />
-                  </button>
-                </>
-              ) : null}
-              <div className="flex min-h-full min-w-full items-center justify-center">
-                {activeItem ? (
-                  <div
-                    style={{ width: `calc(min(90vw, 1100px) * ${zoom})` }}
-                    className="mx-auto shrink-0 max-w-none"
-                  >
-                    <BandoriFullCardSurface
-                      metadata={metadata}
-                      src={activeSrc}
-                      alt={activeItem.alt}
-                      isTrained={activeItem.isTrained}
-                      isResolving={assetIndexLoading}
-                      loadingLabel={viewerLabels.imageLoading}
-                      unavailableLabel={viewerLabels.imageUnavailable}
-                      priority
-                      className="mx-auto w-full max-w-none"
-                    />
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+      {activeItem ? (
+        <BandoriImageViewer
+          src={activeSrc}
+          alt={activeItem.alt}
+          label={activeItem.label}
+          labels={viewerLabels}
+          loading={assetIndexLoading}
+          onClose={() => setActiveIndex(null)}
+          onPrevious={items.length > 1 ? () => changeActiveIndex((activeIndex ?? 0) - 1) : undefined}
+          onNext={items.length > 1 ? () => changeActiveIndex((activeIndex ?? 0) + 1) : undefined}
+        />
+      ) : null}
     </>
   );
 }

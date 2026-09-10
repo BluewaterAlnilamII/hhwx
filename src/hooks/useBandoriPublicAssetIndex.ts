@@ -11,6 +11,8 @@ import {
 } from "@/lib/bandori-public-asset-index";
 import {
   bandoriCardsAssetIndexStore,
+  bandoriCostumesAssetIndexStore,
+  bandoriLiveSdAssetIndexStore,
   bandoriDegreesAssetIndexStore,
   bandoriEventsAssetIndexStore,
   bandoriMusicAssetIndexStore,
@@ -81,6 +83,20 @@ export function useBandoriCardsAssetIndex(
   return useBandoriPublicAssetIndex(
     enabled ? buildBandoriPublicAssetIndexUrl("cards") : null,
     bandoriCardsAssetIndexStore,
+  );
+}
+
+export function useBandoriCostumesAssetIndex(enabled = true) {
+  return useBandoriPublicAssetIndex(
+    enabled ? buildBandoriPublicAssetIndexUrl("costumes") : null,
+    bandoriCostumesAssetIndexStore,
+  );
+}
+
+export function useBandoriLiveSdAssetIndex(enabled = true) {
+  return useBandoriPublicAssetIndex(
+    enabled ? buildBandoriPublicAssetIndexUrl("liveSd") : null,
+    bandoriLiveSdAssetIndexStore,
   );
 }
 

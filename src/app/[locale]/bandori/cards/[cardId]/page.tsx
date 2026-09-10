@@ -10,6 +10,8 @@ import {
   materializeBandoriCardForServer,
 } from "@/lib/bandori/cards/regional-extensions";
 import { readBandoriCardApiDetail } from "@/lib/bandori/cards/api-server";
+import { readBandoriCostumeApiDetail } from "@/lib/bandori/costumes/api-server";
+import type { BandoriCardCostumeResult } from "./_components/BandoriCardRelatedMedia";
 import {
   pickBandoriCharacterDisplayName,
   type BandoriCharacterMaster,
@@ -33,6 +35,21 @@ type BandoriCardDetailPageProps = {
 };
 
 const readCardDetail = cache(readBandoriCardApiDetail);
+
+async function readCardCostume(costumeId: unknown, server: BandoriServer): Promise<BandoriCardCostumeResult> {
+  if (typeof costumeId !== "number" || !Number.isSafeInteger(costumeId) || costumeId <= 0) {
+    return { costume: null, costumeLoadFailed: false };
+  }
+  try {
+    const record = await readBandoriCostumeApiDetail(String(costumeId), server);
+    return {
+      costume: record ? { characterId: record.characterId, assetBundleName: record.assetBundleName, description: record.description } : null,
+      costumeLoadFailed: false,
+    };
+  } catch {
+    return { costume: null, costumeLoadFailed: true };
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -153,6 +170,7 @@ export default async function BandoriCardDetailPage({
       jpCard={jpCard}
       selectedServer={selectedServer}
       availableServers={availableServers}
+      costumeResult={readCardCostume(currentCard.costumeId, selectedServer)}
     />
   );
 }

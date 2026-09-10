@@ -22,6 +22,22 @@ same namespace. See the [Costumes contract](bandori-master-asset-contract.md#cos
 A complete metadata snapshot can coexist with a media sample; missing index
 entries do not imply missing costumes. This contract does not define browser playback.
 
+Card detail pages stream the associated costume summary from the private Costumes reader
+into an independent Live2D section, so slow or failed costume reads do not block card details.
+The browser's shared index cache supplies its thumbnail and the card's own LiveSD PNG.
+They select the exact current-server slot and display the complete SD image without cropping
+or animation. Costume read failures remain local to that section and can be retried.
+The compact Resources section lists `thumb` avatar previews, `trim` transparent art, and
+LiveSD in that order; each opens its complete original image in the shared in-page viewer,
+with wheel/pinch zoom, drag panning, click-to-close, and image navigation. Zoom follows the
+cursor or moving pinch midpoint; axes smaller than the viewing area stay centered, and
+panning is bounded by the image edges. Keyboard users can zoom around the viewing-area
+center with + / −, pan with Shift + arrow keys, and close with Esc. The viewer initially fits images within the viewport
+without exceeding their intrinsic dimensions and shows raw card art without frames or overlays.
+Card previews follow the
+indexed art variants. A separate Live2D tile displays the costume thumbnail, name, and
+character without a navigation link; Live2D playback belongs to a future page.
+
 ## Web Configuration
 
 Built-in card UI resources use stable, non-content-addressed paths that preserve the official game resource names. Full card frames are under `bandori/resources/images/card-frame/{resourceName}.png`; individual MenuAtlas sprites are under `bandori/resources/atlases/menu-atlas/{spriteName}.png`. These objects are extracted once from a JP base APK, published with a one-year immutable cache policy, and never discovered through a public index. The web app builds their URLs from a fixed allowlist and fails closed when the asset CDN is not configured; it does not fall back to Bestdori. Card renderers use the pre-existing vector overlays at `bandori/res/icon/band_{bandId}.svg`, `bandori/res/icon/{attribute}.svg`, and `bandori/res/icon/master.svg`; both thumbnails and full-card surfaces use SVG for the applicable band and attribute marks, while the master-rank badge is used where that overlay is rendered. The five composite rarity previews also remain unchanged at `bandori/res/icon/star_1.png` through `star_5.png`. These fixed legacy objects are served from owned R2 and never fetched from Bestdori at runtime.
