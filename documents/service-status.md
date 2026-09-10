@@ -10,7 +10,7 @@ The existing success envelope contains `data.hhwxBandoriBackend`, with these ser
 
 | Public key | Private source service | Meaning |
 | --- | --- | --- |
-| `cutoffTracker` | `scoreTracking` | Score tracking |
+| `cutoffTracker` | `scoreTracking` | Cutoff tracking |
 | `userFetcher` | `userFetch` | User fetching |
 | `masterBuilder` | `dataBuild` | Data building |
 | `assetsBuilder` | `assetBuild` | Resource building, including coordination and execution |
@@ -58,6 +58,12 @@ Maintenance and component errors return HTTP 200 with `success: true`: the statu
 
 The route reads memory and applies the elapsed-time threshold; it performs no upstream request or persistence. Both browser and CDN cache headers use the existing no-store policy, so a second cache does not delay transitions. Browser consumers should read the public endpoint every 60 seconds.
 
+## Status page
+
+The HHWX sidebar links to `/status` (Chinese) and `/en/status` (English). The page displays the four services in JP / EN / TW / CN order, with a compact two-column regional layout on mobile. Colors follow the shared light/dark theme: operational is success, maintenance and unconfirmed are neutral, and errors (including update required) are danger. Every state also has a text label.
+
+The browser reads `/api/status` on entry and every 60 seconds with no browser cache. Requests do not overlap, time out after ten seconds, and are cancelled on unmount. All request feedback stays in the header's update-time slot: initially “Loading”, then “Last updated” with a time or “Unknown”. A failed or invalid response shows “Update failed” in that same slot, retaining any previous timestamp and service results; it does not turn individual services into errors. Background refreshes keep the previous display, and the next successful response clears the failure label. No separate loading, error or automatic-refresh description appears between the page header and the service group. The displayed last-update time comes from `meta.checkedAt`, formatted in the viewer's local time zone. The frontend does not reclassify backend health or expose raw error details.
+
 ## Configuration and deployment
 
 Use `HHWX_USER_FETCHER_BASE_URL` and `HHWX_BANDORI_BACKEND_TOKEN` from [.env.example](../.env.example). User fetching and status collection share the backend token. During migration, the nonempty trimmed new value takes precedence; otherwise `HHWX_USER_FETCHER_TOKEN` remains a compatibility fallback. Keep the existing token value while renaming the configuration, and remove the old name once all consumers support the new name. The URL is an HTTP(S) base, optionally with a path prefix, without embedded credentials, a query, or a fragment. The collector appends `/internal/service-health` and sends the token only in the server-side Bearer authorization header. Redirects are rejected. Each attempt has a five-second total fetch/body timeout and a 64 KiB response limit; there is no immediate retry or overlapping poll.
@@ -72,4 +78,4 @@ The collector and cache are per Node process. A single long-lived Node instance 
 
 ## Verification
 
-Run `npm run test:service-status`, `npm run typecheck`, `npm run lint`, and `npm run build`. The focused tests use synthetic reports and a controlled clock; they make no game requests. The status page, navigation entry and additional explanations for generic errors are separate work.
+Run `npm run test:service-status`, `npm run i18n:check`, `npm run typecheck`, `npm run lint`, and `npm run build`. The focused tests use synthetic reports and a controlled clock; they make no game requests. Check the page in both languages, light/dark modes and desktop/mobile layouts, including initial loading, all status labels, refresh failure and recovery. Additional explanations for generic errors remain separate work.

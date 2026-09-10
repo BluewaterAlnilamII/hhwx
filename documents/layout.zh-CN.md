@@ -43,6 +43,7 @@ hhwx/
 
 - `[locale]/`：本地化应用路由。默认 `zh-CN` 不带 URL 前缀，非默认语言使用 `/en` 等语言前缀。
 - `[locale]/page.tsx`：HHW 团复古首页，致敬用的日文文案在两种语言下保持一致。
+- `[locale]/status/`：后端服务当前状态，每 60 秒读取公开状态 API。
 - `[locale]/othello/`：角色选择、本地存档续局、黑白棋与游戏内留言。
 - `[locale]/account/`：账号中心、资料、邮箱和密码页面。
 - `[locale]/bandori/game-profiles/`：游戏档案卡牌和道具视图。

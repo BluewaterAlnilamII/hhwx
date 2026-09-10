@@ -6,6 +6,7 @@
   },
   "items": {
     "home": "Home",
+    "serviceStatus": "Service Status",
     "othello": "Othello",
     "calendar": "Calendar",
     "tracker": "Event Tracker",

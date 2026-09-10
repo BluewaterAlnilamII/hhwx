@@ -2,6 +2,10 @@
   "root": {
     "description": "HHW 团的复古主页，提供 Bandori 活动追踪、日历、图鉴、组队工具与黑白棋。"
   },
+  "serviceStatus": {
+    "title": "服务状态",
+    "description": "查看 HHWX 分数追踪、用户抓取、数据构建和资源构建的当前服务状态。"
+  },
   "othello": {
     "title": "黑白棋",
     "description": "与 Hello, Happy World! 的成员们来一场黑白棋对决吧！"

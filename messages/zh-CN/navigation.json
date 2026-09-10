@@ -6,6 +6,7 @@
   },
   "items": {
     "home": "首页",
+    "serviceStatus": "服务状态",
     "othello": "黑白棋",
     "calendar": "日历",
     "tracker": "活动追踪",

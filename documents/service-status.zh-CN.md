@@ -58,6 +58,12 @@ English: [service-status.md](service-status.md).
 
 路由只读取内存并计算经过时间，不请求上游或写入存储。浏览器和 CDN 均沿用现有 no-store 策略，避免额外缓存延后状态变化。浏览器消费方应每 60 秒读取一次公开接口。
 
+## 状态页面
+
+HHWX 侧栏提供 `/status`（中文）和 `/en/status`（英文）入口。页面按 JP / EN / TW / CN 顺序展示四类服务，手机端每类服务下的地区采用紧凑双列布局。配色复用共用浅深主题：正常使用成功色，维护和未知使用中性色，异常（包括需要版本更新）使用危险色。每种状态均同时提供文字标签。
+
+浏览器进入页面时及之后每 60 秒读取 `/api/status`，不使用浏览器缓存。请求不重叠，十秒超时，离开页面时取消。请求反馈统一放在页头的更新时间位置：首次读取显示“加载中”，成功后显示“最近更新”及时间或“未知”。请求失败或响应无效时在同一处显示“更新失败”，保留已有的上次时间和服务结果，不把各项服务改为异常。后台刷新保留原显示，下次读取成功后清除失败标记。页头与服务分组之间不另加加载、错误或自动刷新说明。最近更新时间来自 `meta.checkedAt`，按访客本地时区格式化。前端不重新判定后端健康状态，也不展示原始错误详情。
+
 ## 配置与部署
 
 使用 [.env.example](../.env.example) 中的 `HHWX_USER_FETCHER_BASE_URL` 和 `HHWX_BANDORI_BACKEND_TOKEN`。用户抓取与状态采集共用后端 token。迁移期间，新名称去除首尾空白后非空时优先使用，否则兼容旧 `HHWX_USER_FETCHER_TOKEN`。改名时保留现有 token 值，待所有消费者支持新名称后删除旧配置。地址为 HTTP(S) base，可带路径前缀，不包含内嵌凭据、查询参数或 fragment。采集器追加 `/internal/service-health`，仅通过服务端 Bearer 请求头发送 token。拒绝重定向。每次请求及响应体读取共用五秒超时，响应上限 64 KiB；不立即重试，也不重叠采集。
@@ -72,4 +78,4 @@ English: [service-status.md](service-status.md).
 
 ## 验证
 
-运行 `npm run test:service-status`、`npm run typecheck`、`npm run lint` 和 `npm run build`。专项测试使用模拟汇报和可控时钟，不请求游戏服务器。状态页面、导航入口和普通异常的更多解释留待后续实现。
+运行 `npm run test:service-status`、`npm run i18n:check`、`npm run typecheck`、`npm run lint` 和 `npm run build`。专项测试使用模拟汇报和可控时钟，不请求游戏服务器。页面验证覆盖中英文、浅深主题、桌面与手机布局，以及初始读取、全部状态文案、刷新失败与恢复。普通异常的更多解释留待后续讨论。
