@@ -245,8 +245,9 @@ test("card consumers share the canonical Cards dataset without the sparse route"
     /useBandoriCardsMaster\(\s*server,\s*providedCardMetadata === undefined,\s*missingCardFallback,\s*\)/u,
   );
   assert.match(picker, /entityServer: card\.entityServer/u);
-  assert.doesNotMatch(picker, /\?server=/u);
+  assert.doesNotMatch(picker, /\/api\/bandori\/(?:master\/)?cards\b/u);
   assert.match(cardsHook, /"\/api\/bandori\/master\/cards"/u);
+  assert.doesNotMatch(cardsHook, /[?&]server=/u);
   assert.match(pickerDialog, /server=\{server\}/u);
 });
 
