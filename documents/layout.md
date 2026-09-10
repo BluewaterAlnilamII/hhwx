@@ -90,6 +90,7 @@ hhwx/
 - `auth-*.ts`, `supabase-*.ts`, `turnstile-server.ts`, and `turnstile-public.ts`: authentication, security verification, and server/public wrappers.
 - Remaining root-level `bandori-*.ts` and `calendar-*.ts`: shared cross-domain infrastructure and compatibility entry points that do not belong to one feature folder.
 - `bandori/cards/`: Card catalogs, regional materialization, API contracts/services, release/training rules, generated Card metadata, layouts, and profile-card helpers.
+- `bandori/costumes/`: Costumes metadata validation, regional materialization, and private snapshot API readers. Media extraction belongs to the assets-builder.
 - `bandori/events/`: event catalogs, API contracts/services, route/region/status helpers, banner proxy logic, and event-specific comment target validation.
 - `bandori/event-tracker/`: Event Tracker cutoff, TOP10, live-series, projection, history, and prediction contracts/services shared by event, song, and monthly tracker modes.
 - `bandori/chart-simulator/`: lossless chart compilation, versioned worker transport, seek-state rebuilding, native presentation/effect/audio runtimes, and CDN manifest resolution. Physical simulator assets stay outside the Web repository and are resolved through logical paths; this module contains no region selection.

@@ -2,12 +2,12 @@
 
 English version: [bandori-master-asset-contract.md](bandori-master-asset-contract.md).
 
-本文统一说明 HHWX 对外提供的 Events、Cards、Degrees、Stamps、Music 数据契约。各数据集的业务字段可以不同，但传输格式、四服槽位、发布方式和资源查找规则应当遵循同一套约定。领域名称统一使用 `degree`；“称号/title”只作为 UI 文案。
+本文统一说明 HHWX 对外提供的 Events、Cards、Costumes、Degrees、Stamps、Music 数据契约。各数据集的业务字段可以不同，但传输格式、四服槽位、发布方式和资源查找规则应当遵循同一套约定。领域名称统一使用 `degree`；“称号/title”只作为 UI 文案。
 
 ## 共通规则
 
-- 公开 Master API 成功响应为 `{ "success": true, "data": { id: record } }`；错误响应为 `{ "success": false, "error": { "code", "message" } }` 并使用非 2xx 状态码。
-- 区服数组固定为 `jp`、`en`、`tw`、`cn` 四槽。API 与 index 的具名区服 map 使用这些名称；数字 `0`、`1`、`2`、`3` 只用于 Cards 的 `server` 查询参数及用户/档案设置。
+- 公开 Master 列表 API 成功响应为 `{ "success": true, "data": { id: record } }`，详情 API 的 `data` 直接放记录；错误响应为 `{ "success": false, "error": { "code", "message" } }` 并使用非 2xx 状态码。
+- 区服数组固定为 `jp`、`en`、`tw`、`cn` 四槽。API 与 index 的具名区服 map 使用这些名称；数字 `0`、`1`、`2`、`3` 只用于 Cards 和 Costumes 的 `server` 查询参数及用户/档案设置。
 - 缺失的区服字符串使用 `""`；Degree 数字槽缺失时使用 `0`；业务上允许“未知”的标量（例如 Stamp `characterId`）使用 `null`；缺失的可选结构直接省略。
 - Master API 只承载游戏语义数据；公开 asset discovery index 只承载构造 CDN URL 所需的内容 hash，独立的 Music meta root 承载派生计分系数和精确的配对 index 身份。API 不公开 pointer、pack key、generation、来源 hash 或私有对象路径。
 - 可变 API 与 index 使用 snapshot 缓存；所有被 index 引用的媒体对象（包括 Music 媒体和谱面 JSON）都以 SHA-256 命名并使用一年 immutable 缓存。读取失败时关闭，不回退 Bestdori 或旧公开 artifact。
@@ -19,12 +19,13 @@ English version: [bandori-master-asset-contract.md](bandori-master-asset-contrac
 | --- | --- | --- | --- | --- | --- | --- |
 | Events | `/api/bandori/master/events` | `/api/bandori/master/events/{eventId}` | `/bandori/events/index.json` | 数字 event ID | Master 四槽字段及本地 `stampRewardId`；标量 `stampCharacterId`；banner/team image 四槽 | fast-mutable API；snapshot index |
 | Cards | `/api/bandori/master/cards` | `/api/bandori/master/cards/{cardId}` | `/bandori/cards/index.json` | `resourceSetName` | 四槽文本和显式 `serverExtensions`；图片按内容 hash 跨服共享 | snapshot API 与 index |
+| Costumes | `/api/bandori/master/costumes` | `/api/bandori/master/costumes/{costumeId}` | `/bandori/costumes/index.json`; `/bandori/costumes/livesd/index.json` | `assetBundleName`; 各记录自己的 `sdResourceName` | 四字符串槽及显式存在性；详情可覆盖 `cards` | snapshot API 与 schema 1 index |
 | Degrees | `/api/bandori/master/degrees` | 无 | `/bandori/degrees/index.json` | 元数据使用数字 degree ID；资源使用派生资源名 | 八个固定四槽 Master 字段及可选四槽 `serverExtensions`，缺服 `null`、有服无扩展 `{}`、仅 CN 可含 `degreeEffect`；独立选择 base、rank、icon 与 effect 资源 | snapshot API 与 schema 2 index |
 | Stamps | `/api/bandori/master/stamps` | 无 | `/bandori/stamps/index.json` | 数字 stamp ID | 四槽 `imageName`、`characterId`、图片、语音与 Changed variant | snapshot API 与 index |
 | Music | `/api/bandori/master/music` | `/api/bandori/master/music/{musicId}` | `/bandori/music/index.json` | 数字 music ID | 四槽区服元数据与共享的谱面/音频派生字段；使用 `0` 到 `4` 的数字难度 key | snapshot API 与 index |
 | Music 计分 meta | `/api/bandori/master/music/meta` | 无 | `/bandori/music/meta.json` | music ID、难度、技能时长 | 无区服槽；每个难度为 `{total: [普通, FEVER], covered: {时长: [普通, FEVER]}}` | snapshot API 与 index |
 
-Cards 与 Music 列表都采用一次下载、整个 SPA 会话复用的完整 map；只有 Cards 支持可选的 `server=0|1|2|3` 物化查询。Event 的 `cnSchedule` 保持为可选 overlay，因为它可能独立于 immutable event snapshot 变化。Music 的 `difficulty`、`notes` 与 `bpm` 键表示谱面难度，而不是服务器槽位。Music 计分 meta 是供前端实时计算分数与排名使用的独立最小数据集，不含歌曲展示字段、预计算分数、排名或内部发布元数据。
+Cards 与 Music 列表都采用一次下载、整个 SPA 会话复用的完整 map；Cards 与 Costumes 的列表/详情均支持可选的 `server=0|1|2|3` 物化查询。Event 的 `cnSchedule` 保持为可选 overlay，因为它可能独立于 immutable event snapshot 变化。Music 的 `difficulty`、`notes` 与 `bpm` 键表示谱面难度，而不是服务器槽位。Music 计分 meta 是供前端实时计算分数与排名使用的独立最小数据集，不含歌曲展示字段、预计算分数、排名或内部发布元数据。
 
 Event `stampRewardId` 固定为 `[jp, en, tw, cn]` 四槽，因为它是服务器本地外键；该服不存在活动时保留 `null`，不得用其他服 ID 补位。历史来源中的十进制字符串 ID 会规范化为整数。`stampCharacterId` 使用单个标量，因为所有已存在区服的奖励必须通过 Stamps API 解析成相同的语义图片和角色；出现分歧时拒绝发布 snapshot。
 
@@ -32,12 +33,59 @@ Degree Master 记录按 degree ID 组织，且恰好包含八个四槽字段：�
 
 Degree 动画 manifest 固定使用 `hhwx-bandori-degree-animation-v1`，显式包含 `frameRate: 30`、`loop: true`、图集尺寸，以及使用左上角坐标的有序 `{ name, rect }` 帧。帧名必须零填充、按字典序排列且连续。Stamp 动画使用独立的精简 `hhwx-bandori-stamp-animation-v1` 合约，显式包含正数 `frameRate`、图集尺寸和有序 `{ name, cssRect }` 帧；不再使用 12 FPS 或 `unityRect` fallback。Bundle 来源只属于诊断元数据，不进入不可变播放 manifest。新写入的 Stamp 根描述符只包含 `manifest` 与 `atlas`；Web reader 仅为旧根描述符兼容而校验并丢弃可选的 `frameRate`、`frameCount`。
 
+## Costumes API 与资源
+
+`GET /api/bandori/master/costumes` 返回 `{success:true,data:{id:summary}}`；
+`GET /api/bandori/master/costumes/{costumeId}` 返回 `{success:true,data:record}`。
+两者均接受一个可选 `server=0|1|2|3`；重复、未知参数或非法区服返回 400。
+未知 ID 或该服不存在的详情返回 404。成功沿用 snapshot 缓存策略，错误使用 `no-store`。
+
+列表字段为 `characterId`、`assetBundleName`、`description`、`publishedAt`；
+详情增加 `sdResourceName` 和排序去重的 `cards`。两个文本字段始终是 JP/EN/TW/CN
+四个字符串，缺失填 `""`。未指定 `server` 时，`serverExtensions` 用四槽记录存在性：
+`null` 为不存在，`{}` 为存在；详情只允许覆盖 `cards`。指定 `server` 后过滤不存在的记录，
+物化扩展并移除 `serverExtensions`。三种身份字段 `characterId`、`assetBundleName`、
+`sdResourceName` 的跨服差异阻止发布。v1 不含 `howToGet`，API 不暴露媒体 hash 或私有存储描述。
+
+canonical `cards` 按 Cards API 相同的 JP/EN/TW/CN 优先级确定每张卡的服装后反向聚合；
+地区覆盖保留本地卡牌 ID。它既不是首个存在区服的服装卡牌列表，也不是地区 ID 并集。
+手动 seed 的私有 EN 基线仅在官方 EN 服装缺失且官方 JP 身份已核实时补回历史 `description`。
+官方已有字段和当前区服存在性保持权威。正常构建及请求不访问 Bestdori；完整缓存对照
+排除 `howToGet`/KR 并规范化四槽文本后，要求业务字段差异为零。
+
+列表和详情读取同一个私有完整 pack。上限为压缩 4 MiB、解压 16 MiB、10,000 条记录，
+同时核对压缩和语义 SHA-256。本地开发可用 `BANDORI_COSTUMES_API_LOCAL_STORE_ROOT`；
+生产模式要求签名读取私有 R2，不接受本地文件覆盖。
+
+资源统一使用 `bandori/costumes/`：schema 1 的 `index.json` 以 `assetBundleName`
+映射 `images`、`live2d` 四字符串 hash 槽；`livesd/index.json` 以 `sdResourceName`
+映射四字符串 `images` 槽。空槽不允许跨服补位。缩略图位于 `images/{sha256}.png`，
+SD 位于 `livesd/images/{sha256}.png`，保留完整透明原图。Cards 与 Costumes 各自
+使用自己的 `sdResourceName`；抓取库存为两个来源表声明的并集，不从 ID 推导。
+Costume 声明的 SD 必须完整；仅由 Cards 声明且官方 AssetBundleInfo 未收录的
+名称记录为不可用并跳过提取，不伪造 hash 或替换图片。目录请求、下载及解包失败
+仍须阻止发布。
+
+Live2D 使用 `live2d/{kind}/{sha256}.{ext}`：kind 包括 `manifests`、`models`、
+`textures`、`motions`、`expressions`、`physics`、`transitions`。
+扩展名除 model `.moc`、texture `.png`、motion `.mtn` 外均为 JSON。
+schema 1 manifest 声明 `format: "cubism2-moc"`、模型 hash、有序纹理 hash、
+可选 physics/transition hash（缺失为 `""`）、命名动作和表情 hash，以及
+`paramGeneralA`/`paramLoop` 配置。名称及顺序来自官方 `buildData`，包括重复纹理槽位；
+旧式无扩展名纹理/transition 引用在声明的 bundle 中补为 `.png`/`.asset`。
+同 basename 的 Live2D 纹理遵循已核实的 Unity 原生查找规则，选择完整 container
+路径按字节字典序排列的第一项；其他引用仍要求唯一解析。
+hash 对应最终发布字节，独立于游戏 bundle ID。
+先发布依赖、再 manifest，最后分别提交两个 index，不保证两根跨对象原子切换。
+该资源合同不定义浏览器播放行为。
+
 ## 固定 JSON 顺序
 
 公开 index 使用确定性序列化，便于 hash 稳定和人工检查：
 
 - 根字段为 `schemaVersion`、`updatedAt`，然后是数据集 map；
 - Cards 先排列标准 resource name，再排列 `bili_` 名称；
+- Costumes/SD 资源按资源名排序，资源字段先 `images` 后 `live2d`；
 - Degrees 先排列普通资源名，再排列 `ani_degree` 名称；单个资源先写 `images`，再写 `animations`；
 - Stamps 根字段为 `schemaVersion`、`updatedAt`、`stamps`、`changedStampGroups`；
 - Music 单曲字段为 `files`、`notes`、`bpm`、`length`；文件字段依次为 `jacket`、`thumb`、可选 `audio`、`charts`；

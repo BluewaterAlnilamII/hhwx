@@ -14,6 +14,7 @@ import {
   readBandoriCardsApiDatasetForServer,
 } from "@/lib/bandori/cards/api-server";
 import { parseBandoriCardServerQuery } from "@/lib/bandori/cards/api-query";
+import { readBandoriCostumeApiList } from "@/lib/bandori/costumes/api-server";
 import { readBandoriPublicEventApiDataset } from "@/lib/bandori/events/api-server";
 import { readBandoriDegreesApiDataset } from "@/lib/bandori-degrees-api-server";
 import { readBandoriStampsApiDataset } from "@/lib/bandori-stamps-api-server";
@@ -38,7 +39,7 @@ function isBandoriMasterDatasetKey(value: string): value is BandoriMasterDataset
 }
 
 type LegacyMasterDatasetKey = Exclude<BandoriMasterDatasetKey, "cards" | "events" | "songs">;
-type MasterDatasetKey = LegacyMasterDatasetKey | "cards" | "degrees" | "events" | "music" | "stamps";
+type MasterDatasetKey = LegacyMasterDatasetKey | "cards" | "costumes" | "degrees" | "events" | "music" | "stamps";
 
 function isLegacyMasterDatasetKey(value: string): value is LegacyMasterDatasetKey {
   return value !== "cards"
@@ -50,6 +51,7 @@ function isLegacyMasterDatasetKey(value: string): value is LegacyMasterDatasetKe
 function normalizeDatasetKey(value: string): MasterDatasetKey | null {
   if (
     value === "cards"
+    || value === "costumes"
     || value === "degrees"
     || value === "events"
     || value === "music"
@@ -77,13 +79,13 @@ export async function GET(request: Request, context: RouteContext) {
     });
   }
 
-  const serverQuery = dataset === "cards"
+  const serverQuery = dataset === "cards" || dataset === "costumes"
     ? parseBandoriCardServerQuery(request)
     : { status: "unsupported" as const };
   if (serverQuery.status === "invalid") {
     return jsonError(
       400,
-      "BANDORI_MASTER_CARD_SERVER_INVALID",
+      dataset === "costumes" ? "BANDORI_MASTER_COSTUME_SERVER_INVALID" : "BANDORI_MASTER_CARD_SERVER_INVALID",
       "server must be exactly one of 0, 1, 2, or 3",
       { headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY) },
     );
@@ -96,6 +98,10 @@ export async function GET(request: Request, context: RouteContext) {
   }
 
   try {
+    if (dataset === "costumes") {
+      const costumes = await readBandoriCostumeApiList(serverQuery.status === "valid" ? serverQuery.server : undefined);
+      return jsonSuccess(costumes, { headers: withHttpCachePolicy(SNAPSHOT_HTTP_CACHE_POLICY) });
+    }
     if (dataset === "events") {
       return jsonSuccess(await readBandoriPublicEventApiDataset("events"), {
         headers: withHttpCachePolicy(FAST_MUTABLE_HTTP_CACHE_POLICY),
