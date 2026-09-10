@@ -46,7 +46,8 @@
     "test:bandori-tracker-topdata": "node --import tsx --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/bandori-tracker-live-contract.test.mjs tests/bandori-topdata-contract.test.mjs tests/bandori-topdata-live.test.mjs tests/bandori-top10-view.test.mjs tests/bandori-eventtracker-ranking.test.mjs tests/bandori-eventtracker-top10-ui.test.mjs tests/bandori-eventtracker-regional-history.test.mjs tests/bandori-eventtracker-comment-links.test.mjs tests/bandori-event-route.test.mjs tests/bandori-tracker-topdata-api.test.mjs tests/bandori-snapshot-api-server.test.mjs",
     "test:supabase": "supabase test db",
     "i18n:check": "node scripts/check-i18n-messages.mjs",
-    "typecheck": "tsc --noEmit --pretty false"
+    "typecheck": "tsc --noEmit --pretty false",
+    "test:bandori-costumes": "node --import tsx --test tests/bandori-costumes-api.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

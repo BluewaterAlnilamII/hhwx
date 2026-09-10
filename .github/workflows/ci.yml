@@ -75,6 +75,9 @@ jobs:
       - name: Test Bandori cards
         run: npm run test:bandori-cards
 
+      - name: Test Costumes API
+        run: npm run test:bandori-costumes
+
       - name: Test Bandori TOP10 tracker
         run: npm run test:bandori-tracker-topdata
 

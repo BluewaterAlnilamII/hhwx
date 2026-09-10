@@ -1,6 +1,6 @@
 # Bandori Asset CDN 契约
 
-Events/Cards/Degrees/Music/Stamps API 与 index 的统一约定见 [bandori-master-asset-contract.zh-CN.md](bandori-master-asset-contract.zh-CN.md)。
+Events/Cards/Costumes/Degrees/Music/Stamps API 与 index 的统一约定见 [bandori-master-asset-contract.zh-CN.md](bandori-master-asset-contract.zh-CN.md)。
 
 English version: [bandori-asset-cdn-setup.md](bandori-asset-cdn-setup.md)
 
@@ -9,6 +9,16 @@ English version: [bandori-asset-cdn-setup.md](bandori-asset-cdn-setup.md)
 HHWX 生产环境使用私有采集和镜像服务填充 CDN 与 R2 bucket。这些服务不包含在本仓库中。自托管运营者如果希望同样依赖资源较多的工作流可用，需要提供自己的资源主机、兼容的私有采集流程和已填充的 R2 bucket。
 
 本文档不是素材许可证、公开再分发授权，也不允许复用 HHWX 生产基础设施。缓存、镜像或展示第三方游戏数据和媒体前，请阅读 [../NOTICE.zh-CN.md](../NOTICE.zh-CN.md)。
+
+## Costumes 元数据与媒体
+
+服装元数据通过 `/api/bandori/master/costumes` 和
+`/api/bandori/master/costumes/{costumeId}` 提供，两者支持 `server=0|1|2|3`。
+服务端读取私有 `bandori/master/costumes-v1/api/active.json` 指针及经过验证的完整 pack。
+公开媒体根为 `bandori/costumes/index.json` 和 `bandori/costumes/livesd/index.json`；
+Live2D 依赖与静态 SD PNG 均在同一命名空间下按内容寻址。
+详见 [Costumes 合同](bandori-master-asset-contract.zh-CN.md#costumes-api-与资源)。
+完整元数据快照允许搭配媒体样本；缺少 index 条目不代表服装记录不存在。该合同不定义浏览器播放行为。
 
 ## Web 配置
 

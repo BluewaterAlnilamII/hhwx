@@ -1,6 +1,6 @@
 # Bandori Asset CDN Contract
 
-The shared Events/Cards/Degrees/Music/Stamps API and index conventions are documented in [bandori-master-asset-contract.md](bandori-master-asset-contract.md).
+The shared Events/Cards/Costumes/Degrees/Music/Stamps API and index conventions are documented in [bandori-master-asset-contract.md](bandori-master-asset-contract.md).
 
 中文说明见 [bandori-asset-cdn-setup.zh-CN.md](bandori-asset-cdn-setup.zh-CN.md).
 
@@ -9,6 +9,18 @@ This document describes the public URL contract that the HHWX web application ex
 HHWX production uses private ingestion and mirroring services to populate its CDN and R2 buckets. Those services are not included in this repository. Self-hosted operators must provide their own asset host, compatible private ingestion pipeline, and populated R2 buckets if they want the same asset-heavy workflows to work.
 
 This document is not an asset license, a public redistribution grant, or permission to reuse HHWX production infrastructure. See [../NOTICE.md](../NOTICE.md) before caching, mirroring, or displaying third-party game data and media.
+
+## Costumes metadata and media
+
+Costumes metadata is available through `/api/bandori/master/costumes` and
+`/api/bandori/master/costumes/{costumeId}`. Both support `server=0|1|2|3`.
+Server readers use the private `bandori/master/costumes-v1/api/active.json`
+pointer and its verified complete pack. The public media roots are
+`bandori/costumes/index.json` and `bandori/costumes/livesd/index.json`.
+Live2D dependencies and static SD PNGs are content-addressed beneath the
+same namespace. See the [Costumes contract](bandori-master-asset-contract.md#costumes-api-and-resources).
+A complete metadata snapshot can coexist with a media sample; missing index
+entries do not imply missing costumes. This contract does not define browser playback.
 
 ## Web Configuration
 

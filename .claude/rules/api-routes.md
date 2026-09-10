@@ -6,6 +6,7 @@ paths:
   - "src/lib/api-response.ts"
   - "src/lib/auth-server.ts"
   - "src/lib/bandori/cards/api-query.ts"
+  - "src/lib/bandori/master-api-query.ts"
   - "src/lib/bandori/cards/comment-target.ts"
   - "src/lib/bandori/events/comment-target.ts"
   - "src/lib/bandori/events/banner-proxy-server.ts"
