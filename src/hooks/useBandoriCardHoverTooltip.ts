@@ -7,8 +7,7 @@ import {
   useRef,
   useState,
   type FocusEventHandler,
-  type KeyboardEventHandler,
-  type MouseEventHandler,
+  type PointerEventHandler,
 } from "react";
 
 export function useBandoriCardHoverTooltip<TElement extends HTMLElement>() {
@@ -46,9 +45,32 @@ export function useBandoriCardHoverTooltip<TElement extends HTMLElement>() {
         closeTooltip();
       }
     };
+    const handleScroll = (event: Event) => {
+      if (!(event.target instanceof Node) || !anchorRef.current?.contains(event.target)) {
+        closeTooltip();
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        const trigger = anchorRef.current?.querySelector("button");
+        if (anchorRef.current?.contains(document.activeElement) && document.activeElement !== trigger) {
+          trigger?.focus({ preventScroll: true });
+        }
+        closeTooltip();
+      }
+    };
 
     document.addEventListener("pointerdown", handlePointerDown, true);
-    return () => document.removeEventListener("pointerdown", handlePointerDown, true);
+    window.addEventListener("scroll", handleScroll, true);
+    // Close the preview before a parent dialog handles Escape at the document.
+    window.addEventListener("keydown", handleEscape, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      window.removeEventListener("scroll", handleScroll, true);
+      window.removeEventListener("keydown", handleEscape, true);
+    };
   }, [closeTooltip, isOpen]);
 
   const handleBlur: FocusEventHandler<TElement> = (event) => {
@@ -63,34 +85,31 @@ export function useBandoriCardHoverTooltip<TElement extends HTMLElement>() {
       closeIfInactive();
     }
   };
-  const handleMouseEnter = () => {
+  const handlePointerEnter: PointerEventHandler<HTMLElement> = (event) => {
+    if (event.pointerType !== "mouse") return;
     isPointerInsideRef.current = true;
     openTooltip();
   };
-  const handleMouseLeave: MouseEventHandler<TElement> = (event) => {
+  const handlePointerLeave: PointerEventHandler<TElement> = (event) => {
+    if (event.pointerType !== "mouse") return;
     if (anchorRef.current?.contains(event.relatedTarget as Node | null)) {
       return;
     }
     isPointerInsideRef.current = false;
     closeIfInactive();
   };
-  const handleTooltipMouseLeave: MouseEventHandler<HTMLDivElement> = (event) => {
+  const handleTooltipPointerLeave: PointerEventHandler<HTMLDivElement> = (event) => {
+    if (event.pointerType !== "mouse") return;
     if (anchorRef.current?.contains(event.relatedTarget as Node | null)) {
       return;
     }
     isPointerInsideRef.current = false;
     closeIfInactive();
   };
-  const handleFocus = () => {
+  const handleFocus: FocusEventHandler<HTMLElement> = (event) => {
+    if (!event.target.matches(":focus-visible")) return;
     isFocusInsideRef.current = true;
     openTooltip();
-  };
-  const handleKeyDown: KeyboardEventHandler<TElement> = (event) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      closeTooltip();
-    }
   };
 
   return {
@@ -99,14 +118,13 @@ export function useBandoriCardHoverTooltip<TElement extends HTMLElement>() {
     isOpen,
     openTooltip,
     closeTooltip,
-    onMouseEnter: handleMouseEnter,
-    onMouseLeave: handleMouseLeave,
+    onPointerEnter: handlePointerEnter,
+    onPointerLeave: handlePointerLeave,
     onFocus: handleFocus,
     onBlur: handleBlur,
-    onKeyDown: handleKeyDown,
     tooltipInteractionProps: {
-      onMouseEnter: handleMouseEnter,
-      onMouseLeave: handleTooltipMouseLeave,
+      onPointerEnter: handlePointerEnter,
+      onPointerLeave: handleTooltipPointerLeave,
       onFocus: handleFocus,
       onBlur: handleTooltipBlur,
     },

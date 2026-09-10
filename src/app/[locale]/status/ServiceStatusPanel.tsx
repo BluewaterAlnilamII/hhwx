@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import Heading from "@/components/Heading";
+import LoadingIndicator from "@/components/LoadingIndicator";
 import { BANDORI_SERVER_CODES } from "@/lib/bandori-server";
 import { formatLocalizedDateTime } from "@/lib/localized-format";
 import { normalizeLocale } from "@/i18n/routing";
@@ -17,6 +18,8 @@ export default function ServiceStatusPanel() {
   const locale = normalizeLocale(useLocale());
   const [snapshot, setSnapshot] = useState<ServiceStatusSnapshot | null>(null);
   const [failed, setFailed] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const commonT = useTranslations("common");
 
   useEffect(() => {
     let active = true;
@@ -50,7 +53,7 @@ export default function ServiceStatusPanel() {
       window.clearInterval(interval);
       request?.abort();
     };
-  }, []);
+  }, [retry]);
 
   const checkedAt = snapshot?.meta.checkedAt;
 
@@ -61,7 +64,7 @@ export default function ServiceStatusPanel() {
         <p role="status" className={`text-sm leading-6 ${failed
           ? "text-[var(--theme-color-semantic-danger-foreground)]"
           : "text-[var(--theme-color-text-muted)]"}`}>
-          {!snapshot ? t(failed ? "updateFailed" : "loading") : (
+          {!snapshot ? failed ? t("updateFailed") : null : (
             <>
               {t("lastUpdated")}{" "}
               {checkedAt ? (
@@ -71,12 +74,16 @@ export default function ServiceStatusPanel() {
             </>
           )}
         </p>
+        {failed ? <button type="button" className="hhwx-control rounded-lg border px-3 py-1 text-sm" onClick={() => { setFailed(false); setRetry((value) => value + 1); }}>{commonT("actions.retry")}</button> : null}
       </header>
 
       <section className="mt-5" aria-labelledby="backend-status-title">
         <Heading as="h2" visualRole="section" id="backend-status-title" className="mb-4 break-words">
           hhwx-bandori-backend
         </Heading>
+        <div className="relative">
+          {!snapshot && !failed ? <LoadingIndicator label={t("loading")} className="absolute inset-0 z-10 bg-[var(--theme-color-panel-background)]" /> : null}
+          <div aria-hidden={!snapshot && !failed ? true : undefined}>
         <div aria-hidden="true" className="hidden grid-cols-[10rem_repeat(4,minmax(0,1fr))] gap-4 border-b border-[var(--theme-color-border-subtle)] pb-3 text-sm font-semibold text-[var(--theme-color-text-muted)] md:grid">
           <span>{t("service")}</span>
           {BANDORI_SERVER_CODES.map((server) => <span key={server}>{server.toUpperCase()}</span>)}
@@ -98,8 +105,11 @@ export default function ServiceStatusPanel() {
                   <div key={server}>
                     <dt className="mb-1 text-xs font-semibold text-[var(--theme-color-text-muted)] md:sr-only">{server.toUpperCase()}</dt>
                     <dd className={`flex items-baseline gap-2 text-sm leading-6 ${color}`}>
-                      <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-current" />
-                      <span>{t(`states.${label}`)}</span>
+                      {!snapshot ? (
+                        <span aria-label={failed ? t("updateFailed") : undefined}>—</span>
+                      ) : (
+                        <><span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-current" /><span>{t(`states.${label}`)}</span></>
+                      )}
                     </dd>
                   </div>
                 );
@@ -107,6 +117,8 @@ export default function ServiceStatusPanel() {
             </dl>
           </section>
         ))}
+          </div>
+        </div>
       </section>
     </section>
   );

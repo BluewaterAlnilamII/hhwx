@@ -193,8 +193,7 @@
         "rank": "Rank",
         "avatar": "Avatar",
         "player": "Player",
-        "score": "Score",
-        "noAvatar": "No avatar"
+        "score": "Score"
       }
     }
   },
@@ -224,8 +223,7 @@
     "common": {
       "noInformation": "No information",
       "cardDetails": "Card details",
-      "imageLoading": "Loading card art",
-      "imageUnavailable": "Card art unavailable"
+      "imageLoading": "Loading card art"
     },
     "types": {
       "permanent": "Permanent",
@@ -261,10 +259,7 @@
       "costumeLoadFailed": "Could not load costume information",
       "costumeLoading": "Loading costume information",
       "liveSdTitle": "LiveSD",
-      "mediaLoadFailed": "Could not load image",
       "mediaLoading": "Loading image",
-      "mediaUnavailable": "Image unavailable",
-      "retryMedia": "Retry",
       "openMediaOriginal": "View {label} image",
       "previousMedia": "Previous image",
       "nextMedia": "Next image",

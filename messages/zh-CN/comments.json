@@ -42,7 +42,8 @@
   },
   "pickers": {
     "emoji": "选择表情",
-    "stamp": "选择贴纸"
+    "stamp": "选择贴纸",
+    "stampEmpty": "该服务器暂无贴纸"
   },
   "reactions": {
     "authenticationRequired": "登录并完成邮箱验证后可以回应",

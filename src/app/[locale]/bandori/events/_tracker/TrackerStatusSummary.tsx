@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Loader2 } from "lucide-react";
+import { LoadingSpinner } from "@/components/LoadingIndicator";
 
 import type { BandoriEventStatus } from "@/lib/bandori/events/status";
 import { formatBandoriTrackerUpdateAge } from "@/lib/bandori/event-tracker/time";
@@ -112,15 +112,15 @@ export const TrackerStatusSummary = memo(function TrackerStatusSummary({
                   ? <TimeAgo timestamp={scoreSummary.latestUpdateTime} />
                   : <span className="text-[13px] font-medium text-[var(--theme-color-text-muted)] opacity-60">-</span>
                 }
-                <Loader2
+                <span
+                  role={isRefreshing ? "status" : undefined}
                   aria-hidden={!isRefreshing}
+                  aria-busy={isRefreshing}
                   aria-label={isRefreshing ? t("updatingScore") : undefined}
-                  className={`h-3.5 w-3.5 text-[var(--theme-color-semantic-info-foreground)] transition-opacity ${
-                    isRefreshing
-                      ? "animate-spin opacity-100 motion-reduce:animate-none"
-                      : "opacity-0"
-                  }`}
-                />
+                  className="flex h-3.5 w-3.5 items-center"
+                >
+                  {isRefreshing ? <LoadingSpinner className="h-3.5 w-3.5" /> : null}
+                </span>
               </span>
             </div>
             {trackingMode === "event" && showBestdoriPrediction && (

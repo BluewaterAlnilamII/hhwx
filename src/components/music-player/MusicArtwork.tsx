@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, type ImgHTMLAttributes, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
+import LoadingImage from "@/components/LoadingImage";
 
 interface MusicArtworkProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> {
   src: string;
@@ -14,6 +16,7 @@ export default function MusicArtwork({
   ...imageProps
 }: MusicArtworkProps) {
   const [failedSourceUrl, setFailedSourceUrl] = useState<string | null>(null);
+  const t = useTranslations("common");
 
   if (failedSourceUrl === src) {
     return fallback;
@@ -21,15 +24,17 @@ export default function MusicArtwork({
 
   // Let the browser and CDN handle request coalescing and caching while keeping
   // the durable source URL visible to the page and system media integrations.
-  // eslint-disable-next-line @next/next/no-img-element
   return (
-    <img
-      {...imageProps}
-      src={src}
-      onError={(event) => {
-        onError?.(event);
-        setFailedSourceUrl(src);
-      }}
-    />
+    <span className="relative block h-full w-full overflow-hidden rounded-[inherit]">
+      <LoadingImage
+        {...imageProps}
+        src={src}
+        loadingLabel={t("states.loading")}
+        onError={(event) => {
+          onError?.(event);
+          setFailedSourceUrl(src);
+        }}
+      />
+    </span>
   );
 }

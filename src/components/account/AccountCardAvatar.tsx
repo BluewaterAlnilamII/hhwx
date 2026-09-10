@@ -1,11 +1,13 @@
 "use client";
 
 import { BandoriCardArtImage } from "@/components/bandori/BandoriCardArtImage";
+import { UserRound } from "lucide-react";
+import { useTranslations } from "next-intl";
+import LoadingPlaceholder from "@/components/LoadingPlaceholder";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { type AccountAvatarCardTrainType } from "@/lib/account-avatar-defaults";
 import { type BandoriServer } from "@/lib/bandori-server";
 import { pickGameProfileCardName } from "@/lib/bandori/cards/game-profile-card";
-import { getUsernameAvatarLabel } from "@/lib/username-policy";
 import { cn } from "@/lib/utils";
 import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 
@@ -27,6 +29,7 @@ export type AccountCardAvatarProps = {
   displayName?: string | null;
   size?: AccountCardAvatarSize;
   className?: string;
+  pending?: boolean;
 };
 
 export default function AccountCardAvatar({
@@ -38,11 +41,14 @@ export default function AccountCardAvatar({
   displayName,
   size = "default",
   className,
+  pending = false,
 }: AccountCardAvatarProps) {
+  const t = useTranslations("bandori.cards.common");
+  const commonT = useTranslations("common");
   const preferredServer = useBandoriPreferredServer();
-  const { data: cards } = useBandoriCardsMaster(
+  const { data: cards, loading } = useBandoriCardsMaster(
     entityServer ?? undefined,
-    Boolean(cardId && !resourceSetName),
+    Boolean(!pending && cardId && !resourceSetName),
   );
   const cardMetadata = cardId ? cards?.[String(cardId)] : null;
   const resolvedResourceSetName = resourceSetName ?? cardMetadata?.resourceSetName;
@@ -52,26 +58,31 @@ export default function AccountCardAvatar({
       : null
   );
   const hasCardAvatar = Boolean(cardId && resolvedResourceSetName);
+  const fallback = <UserRound className="h-1/2 w-1/2" aria-hidden="true" />;
 
   return (
     <div
       className={cn(
-        "relative shrink-0 overflow-hidden rounded-full bg-linear-to-br from-sky-400 to-indigo-500 text-white shadow-xs ring-2 ring-white/35",
+        "relative shrink-0 overflow-hidden rounded-full bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] shadow-xs ring-2 ring-[var(--theme-color-border-subtle)]",
         SIZE_CLASS_NAMES[size],
         className,
       )}
     >
-      {hasCardAvatar && cardId && resolvedResourceSetName ? (
+      {pending || (!hasCardAvatar && loading) ? (
+        <LoadingPlaceholder label={t("imageLoading")} className="h-full w-full rounded-full" />
+      ) : hasCardAvatar && cardId && resolvedResourceSetName ? (
         <BandoriCardArtImage
           cardId={cardId}
           resourceSetName={resolvedResourceSetName}
           trainType={trainType ?? "normal"}
           alt={resolvedDisplayName ?? username ?? "avatar"}
           className="rounded-full"
+          loading={size === "toolbar" || size === "large" ? "eager" : "lazy"}
+          fallback={fallback}
         />
       ) : (
-        <div className="flex h-full w-full items-center justify-center font-bold">
-          {getUsernameAvatarLabel(username, "?")}
+        <div role="img" aria-label={commonT("states.imageUnavailable")} className="flex h-full w-full items-center justify-center">
+          {fallback}
         </div>
       )}
     </div>

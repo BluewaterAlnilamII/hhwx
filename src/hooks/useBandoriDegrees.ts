@@ -26,6 +26,7 @@ export function useBandoriDegreeCatalog(enabled = true): {
   catalog: BandoriDegreeCatalog | null;
   loading: boolean;
   error: Error | null;
+  refresh: () => void;
 } {
   const masterUrl = useMemo(() => buildBandoriDegreeMasterApiUrl(), []);
   const masterResult = useCachedFetch<BandoriDegreeMasterMap>(
@@ -35,6 +36,7 @@ export function useBandoriDegreeCatalog(enabled = true): {
     { staleTimeMs: BANDORI_DEGREES_STALE_TIME_MS, refreshOnVisible: false },
   );
   const assetsResult = useBandoriDegreesAssetIndex(enabled);
+  const error = masterResult.error ?? assetsResult.error;
   const catalog = useMemo(
     () => (masterResult.data && assetsResult.value
       ? { master: masterResult.data, assets: assetsResult.value }
@@ -44,8 +46,12 @@ export function useBandoriDegreeCatalog(enabled = true): {
 
   return {
     catalog,
-    loading: catalog === null && (masterResult.loading || assetsResult.loading),
-    error: masterResult.error ?? assetsResult.error,
+    loading: catalog === null && !error && (masterResult.loading || assetsResult.loading),
+    error,
+    refresh: () => {
+      if (!masterResult.data || masterResult.error) masterResult.refresh();
+      if (!assetsResult.value || assetsResult.error) assetsResult.refresh();
+    },
   };
 }
 

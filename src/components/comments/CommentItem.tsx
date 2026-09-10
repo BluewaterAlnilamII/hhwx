@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingSpinner } from "@/components/LoadingIndicator";
+
 import type {
   CSSProperties,
   MouseEvent,
@@ -86,9 +88,22 @@ function ReactionChip({ reaction, disabled, onToggle, onViewAll }: ReactionChipP
       if (containerRef.current?.contains(event.target as Node)) return;
       setTooltipOpen(false);
     };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (tooltipRef.current?.contains(document.activeElement)) {
+        containerRef.current?.querySelector("button")?.focus({ preventScroll: true });
+      }
+      setTooltipOpen(false);
+    };
 
     document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown, true);
+    };
   }, [tooltipOpen]);
 
   const updateTooltipPosition = useCallback(() => {
@@ -179,12 +194,14 @@ function ReactionChip({ reaction, disabled, onToggle, onViewAll }: ReactionChipP
       ref={containerRef}
       className="relative inline-flex select-none [-webkit-touch-callout:none]"
       onPointerEnter={(event) => {
-        if (event.pointerType !== "touch") showTooltip();
+        if (event.pointerType === "mouse") showTooltip();
       }}
       onPointerLeave={(event) => {
-        if (event.pointerType !== "touch") setTooltipOpen(false);
+        if (event.pointerType === "mouse") setTooltipOpen(false);
       }}
-      onFocus={showTooltip}
+      onFocus={(event) => {
+        if (event.target.matches(":focus-visible")) showTooltip();
+      }}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
           setTooltipOpen(false);
@@ -817,7 +834,7 @@ export const CommentItem = memo(function CommentItem({
               disabled={loadingReplies[threadRootId]}
               className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] px-3 text-xs font-semibold text-[var(--theme-color-action-secondary-foreground)] shadow-xs transition hover:bg-[var(--theme-color-action-secondary-background-hover)] disabled:opacity-60"
             >
-              <MoreHorizontal size={14} />
+              {loadingReplies[threadRootId] ? <LoadingSpinner className="h-3.5 w-3.5 text-current" /> : <MoreHorizontal size={14} />}
               {loadingReplies[threadRootId]
                 ? t("states.loading")
                 : loadedReplies?.hasMore

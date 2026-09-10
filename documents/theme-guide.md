@@ -98,6 +98,29 @@ Calendar bars retain band identity, white labels and no added colored outlines. 
 
 PWA installation colors are separate metadata in `src/app/manifest.ts` and `src/app/[locale]/manifest.webmanifest/route.ts`. They currently retain the fixed yellow brand color and are not changed by CSS media queries.
 
+## Loading and interaction feedback
+
+Reuse the loading components below. Block loading follows the event information panel: an orange spinner above muted text. Keep dimensions appropriate to the containing page, panel or dialog rather than making every loader full-screen.
+
+Group required dependencies behind one initial panel loader; do not give each column or field its own spinner. Individual images retain their dimensions with a placeholder. Missing or failed images use the shared `common.states.imageUnavailable` message ("Image unavailable"), without per-image retry buttons or media-specific wording. Data-loading errors that block a page or panel retain their retry action.
+
+| Component | Purpose |
+| --- | --- |
+| `LoadingIndicator` | Initial page or panel loading; `compact` places a small spinner beside the label for inline sections |
+| `LoadingSpinner` | Decorative progress inside an action; keep an accessible button label and use `text-current` when it should inherit the button ink |
+| `LoadingPlaceholder` | Reserve image or known layout dimensions while data is pending; supply a localized accessible label |
+| `LoadingImage` | Keep an image hidden until its actual source loads; reuse the placeholder and preserve the image dimensions |
+
+Wait for the data required to render a meaningful initial view. Do not present initial defaults such as zero results, unknown service states, a fallback card identity or an incomplete filter list as loaded content. Show an empty state only after a successful response. An initial failure replaces loading with an error and a retry for the failed dependencies; it must not also show a false empty state. Keep complete data during a background refresh of the same resource, with refresh errors shown alongside it. A different account, item or data key must not inherit the previous result.
+
+Image identity follows the resolved source URL. When it changes, remove the old image immediately and show a placeholder until the new image loads; do not remount an unchanged URL merely because the selected server changed. Metadata loading and the subsequent image download both need feedback. A viewer that needs its own image ref for zoom and gestures may keep a keyed native image with a centered `LoadingSpinner` over it. Viewers show no visible loading text; the status container retains a generic localized loading label for assistive technology. Failure ends the busy state. Fixed dark viewer overlays may retain white feedback text for contrast; ordinary image placeholders still use the theme roles above.
+
+Use hover styling only for hover-capable input (`@media (hover: hover)` for handwritten CSS). Pointer-driven previews open for mouse input; keyboard previews use `:focus-visible`. Touch activation performs the action on the first tap without a leftover hover selection. An intentional long-press preview can remain available independently. Escape closes the current preview before its containing dialog and restores focus to the trigger if focus was inside the preview. Button focus styling uses `focus-visible`; text inputs may retain a visible editing focus treatment. Filtering a picker must not reset its scroll container merely because results became empty and returned.
+
+Shared indicators and placeholders expose an accessible loading label/status and use `motion-safe` animation, leaving static feedback when reduced motion is requested. Specialized layout skeletons, such as the calendar grid, may keep their geometry and theme colors; they follow the same state and accessibility rules instead of introducing another loading style.
+
+Verify delayed responses, failure and retry, successful empty results, cached data, changed and unchanged image URLs, light/dark mode, reduced motion, and touch/keyboard behavior where applicable. These rules define the target for affected components; they do not imply that every unrelated site flow has been audited.
+
 ## How to change and verify a color
 
 1. Find the semantic role and all consumers before changing it. For a panel adjustment, edit the panel role in the relevant Smile Patrol media block; for an action, inspect its background, foreground, hover and disabled states together.

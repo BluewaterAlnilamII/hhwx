@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingSpinner } from "@/components/LoadingIndicator";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
@@ -180,6 +182,9 @@ export default function AccountNotificationsPage() {
   const [activeNotificationType, setActiveNotificationType] = useState<CommentNotificationType>("comment_reply");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loadedUserId, setLoadedUserId] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const hasLoaded = userId !== null && loadedUserId === userId;
   const loadedNotificationCount = useMemo(
     () => NOTIFICATION_TYPES.reduce((count, type) => count + columns[type].notifications.length, 0),
     [columns],
@@ -222,19 +227,13 @@ export default function AccountNotificationsPage() {
     }
 
     const loadInitialNotifications = async () => {
-      const accessToken = await getAccessToken();
-      if (disposed) return;
-
-      if (!accessToken) {
-        setColumns(createEmptyColumns());
-        setLoading(false);
-        return;
-      }
-
       setLoading(true);
       setError("");
 
       try {
+        const accessToken = await getAccessToken();
+        if (disposed) return;
+        if (!accessToken) throw new Error(t("loadFailed"));
         const [replyData, reactionData] = await Promise.all([
           fetchNotificationColumn("comment_reply", null, accessToken),
           fetchNotificationColumn("comment_reaction", null, accessToken),
@@ -245,6 +244,7 @@ export default function AccountNotificationsPage() {
           comment_reply: toLoadedColumnState(replyData),
           comment_reaction: toLoadedColumnState(reactionData),
         });
+        setLoadedUserId(userId);
       } catch (err) {
         if (!disposed) {
           setError(err instanceof Error ? err.message : t("loadFailed"));
@@ -261,7 +261,7 @@ export default function AccountNotificationsPage() {
     return () => {
       disposed = true;
     };
-  }, [authReady, fetchNotificationColumn, t, userId]);
+  }, [authReady, fetchNotificationColumn, loadAttempt, t, userId]);
 
   const loadMoreNotifications = async (type: CommentNotificationType) => {
     const column = columns[type];
@@ -435,6 +435,7 @@ export default function AccountNotificationsPage() {
               disabled={activeColumn.loadingMore}
               className="hhwx-control inline-flex h-10 items-center rounded-full border px-5 text-sm font-semibold shadow-xs transition disabled:opacity-60"
             >
+              {activeColumn.loadingMore ? <LoadingSpinner className="mr-2 text-current" /> : null}
               {activeColumn.loadingMore ? commonT("actions.loading") : commonT("actions.loadMore")}
             </button>
           </div>
@@ -450,12 +451,21 @@ export default function AccountNotificationsPage() {
       backHref="/account"
       backLabel={accountT("shell.defaultBackLabel")}
     >
-      {!authReady || loadingProfile || loading ? (
+      {!authReady || loadingProfile ? (
         <AccountLoadingState message={t("loading")} />
       ) : !userId ? (
         <AccountSignInState nextPath="/account/notifications" />
       ) : profileError ? (
         <AccountErrorState message={profileError} />
+      ) : !hasLoaded ? (
+        loading || !error ? <AccountLoadingState message={t("loading")} /> : (
+          <div className="space-y-3">
+            <AccountErrorState message={error} />
+            <button type="button" onClick={() => setLoadAttempt((attempt) => attempt + 1)} className="hhwx-control rounded-xl border px-4 py-2 text-sm font-semibold transition">
+              {commonT("actions.retry")}
+            </button>
+          </div>
+        )
       ) : (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">

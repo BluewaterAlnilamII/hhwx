@@ -1,7 +1,8 @@
 "use client";
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, SearchX } from "lucide-react";
+import { SearchX } from "lucide-react";
+import LoadingIndicator from "@/components/LoadingIndicator";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
@@ -44,6 +45,7 @@ function setListParam<T extends string | number>(
 
 export default function SongsPageClient() {
   const t = useTranslations("bandori.songs");
+  const commonT = useTranslations("common");
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
@@ -133,20 +135,22 @@ export default function SongsPageClient() {
 
       <BandoriSongFilterControls
         filter={filter}
-        resultCountLabel={t("page.resultCount", { count: filteredSongs.length })}
+        resultCountLabel={!musicMaster.loaded ? commonT(musicMaster.error ? "states.loadFailed" : "states.loading") : t("page.resultCount", { count: filteredSongs.length })}
         onFilterChange={updateFilter}
         onClearFilter={clearFilter}
       />
 
-      {musicMaster.error ? (
+      {musicMaster.error || musicAssetIndex.error ? (
         <div role="alert" className="hhwx-catalog-error rounded-2xl border p-5 text-sm font-bold">
-          {t("states.loadFailed")}
+          {commonT(musicMaster.loaded && musicAssetIndex.value ? "states.refreshFailed" : "states.loadFailed")}{" "}
+          <button type="button" className="hhwx-text-link" onClick={() => {
+            if (musicMaster.error) musicMaster.refresh();
+            if (musicAssetIndex.error) musicAssetIndex.refresh();
+          }}>{commonT("actions.retry")}</button>
         </div>
-      ) : musicMaster.loading ? (
-        <div className="hhwx-panel flex min-h-64 items-center justify-center gap-3 border text-sm font-bold text-[var(--theme-color-text-muted)]">
-          <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-          {t("states.loading")}
-        </div>
+      ) : null}
+      {musicMaster.error && !musicMaster.loaded ? null : musicMaster.loading ? (
+        <LoadingIndicator label={t("states.loading")} className="hhwx-panel min-h-64 border" />
       ) : filteredSongs.length === 0 ? (
         <div className="hhwx-panel flex min-h-64 flex-col items-center justify-center gap-3 border text-center text-[var(--theme-color-text-muted)]">
           <SearchX className="h-9 w-9" aria-hidden="true" />
@@ -159,6 +163,7 @@ export default function SongsPageClient() {
               key={entry.songId}
               entry={entry}
               assetIndex={musicAssetIndex.value}
+              artworkLoading={musicAssetIndex.loading}
               href={`/bandori/songs/${entry.songId}`}
             />
           ))}

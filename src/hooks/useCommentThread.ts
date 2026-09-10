@@ -231,7 +231,7 @@ export function useCommentThread({
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [totalCommentCount, setTotalCommentCount] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(apiBase));
   const [error, setError] = useState("");
   const [focusedCommentId, setFocusedCommentId] = useState<string | null>(null);
   const [replies, setReplies] = useState<Record<string, CommentListResponse>>({});
@@ -494,7 +494,7 @@ export function useCommentThread({
     setTotalPages(1);
     setTotalCount(0);
     setTotalCommentCount(0);
-    setLoading(false);
+    setLoading(Boolean(apiBase));
     setLoadingReplies({});
     setError("");
     pendingCommentScrollIdRef.current = null;
@@ -526,6 +526,7 @@ export function useCommentThread({
         }
         if (locateFailure === "failed") {
           // A transient context failure must not destroy a valid share URL.
+          setLoading(false);
           return;
         }
       }

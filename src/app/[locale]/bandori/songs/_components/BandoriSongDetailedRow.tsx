@@ -3,6 +3,7 @@
 import { CalendarDays, ChevronRight, Music2 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import MusicArtwork from "@/components/music-player/MusicArtwork";
+import LoadingPlaceholder from "@/components/LoadingPlaceholder";
 import { Link } from "@/i18n/navigation";
 import type { BandoriChartDifficulty } from "@/lib/bandori-master-contract";
 import {
@@ -24,12 +25,14 @@ type BandoriSongDetailedRowProps = {
   entry: BandoriSongCatalogEntry;
   assetIndex: BandoriMusicAssetIndex | null;
   href: string;
+  artworkLoading?: boolean;
 };
 
 export default function BandoriSongDetailedRow({
   entry,
   assetIndex,
   href,
+  artworkLoading = false,
 }: BandoriSongDetailedRowProps) {
   const locale = useLocale();
   const t = useTranslations("bandori.songs");
@@ -57,6 +60,8 @@ export default function BandoriSongDetailedRow({
               className="h-full w-full object-cover"
               fallback={<Music2 className="h-7 w-7" aria-label={t("artworkUnavailable")} />}
             />
+          ) : artworkLoading ? (
+            <LoadingPlaceholder label={t("states.loading")} className="h-full w-full" />
           ) : (
             <Music2 className="h-7 w-7" aria-label={t("artworkUnavailable")} />
           )}

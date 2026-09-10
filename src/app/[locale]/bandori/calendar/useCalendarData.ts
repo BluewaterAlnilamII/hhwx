@@ -143,9 +143,11 @@ export function useCalendarData() {
   const {
     events: eventCatalog,
     loading: eventCatalogLoading,
+    loaded: eventCatalogLoaded,
+    error: eventCatalogError,
     refresh: refreshEventCatalog,
   } = useBandoriEventsMaster();
-  const { data: scheduleData, loading: scheduleLoading, refresh: refreshSchedule } = useCachedFetch<{ events: BandoriScheduleSupplement[] }>(
+  const { data: scheduleData, loading: scheduleLoading, error: scheduleError, refresh: refreshSchedule } = useCachedFetch<{ events: BandoriScheduleSupplement[] }>(
     "bandori-calendar-cn-schedules-v3",
     "/api/bandori/calendar/cn/schedules",
     (raw) => {
@@ -156,7 +158,7 @@ export function useCalendarData() {
     },
     { ...SHORT_CLIENT_CACHE_POLICY },
   );
-  const { data: characterData, loading: characterLoading, refresh: refreshCharacters } = useCachedFetch<{ characters: CalendarCharacter[] }>(
+  const { data: characterData, loading: characterLoading, error: characterError, refresh: refreshCharacters } = useCachedFetch<{ characters: CalendarCharacter[] }>(
     "bandori-characters-v2",
     "/api/bandori/characters",
     (raw) => {
@@ -167,7 +169,7 @@ export function useCalendarData() {
     },
     { ...LONG_CLIENT_CACHE_POLICY },
   );
-  const { data: holidayData, loading: holidayLoading, refresh: refreshHolidayData } = useCachedFetch<CalendarHolidayData>(
+  const { data: holidayData, loading: holidayLoading, error: holidayError, refresh: refreshHolidayData } = useCachedFetch<CalendarHolidayData>(
     "bandori-calendar-cn-holidays",
     "/api/bandori/calendar/cn/holidays",
     (raw) => parseApiSuccessData<CalendarHolidayData>(raw) ?? raw as CalendarHolidayData,
@@ -196,6 +198,8 @@ export function useCalendarData() {
     calendarEvents,
     holidayData,
     loading: eventCatalogLoading || scheduleLoading || characterLoading || holidayLoading,
+    loaded: eventCatalogLoaded && scheduleData !== null && characterData !== null && holidayData !== null,
+    error: eventCatalogError ?? scheduleError ?? characterError ?? holidayError,
     refresh,
   };
 }

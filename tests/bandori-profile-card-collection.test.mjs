@@ -41,6 +41,39 @@ import {
 
 const readSource = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
+test("page retry requests only failed dependencies without resetting the card draft", async () => {
+  const source = await readSource("src/app/[locale]/bandori/game-profiles/[profileId]/cards/page.tsx");
+  const syntax = ts.createSourceFile("page.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let retry, hasPageData;
+  const visit = (node) => {
+    if (ts.isVariableDeclaration(node) && node.name.getText(syntax) === "handleRetryLoad") retry = node.initializer;
+    if (ts.isVariableDeclaration(node) && node.name.getText(syntax) === "hasPageData") hasPageData = node.initializer;
+    ts.forEachChild(node, visit);
+  };
+  visit(syntax);
+  assert.ok(retry);
+  assert.ok(hasPageData);
+  for (const [userId, profileId, expected] of [["user-a", "profile-a", true], ["user-b", "profile-a", false], ["user-a", "profile-b", false]]) {
+    assert.equal(runInNewContext(hasPageData.getText(syntax), {
+      userId, profileId, loadedProfileKey: "user-a:profile-a", profilePayload: {}, isMasterDataReady: true,
+    }), expected);
+  }
+  const dependencies = ["account", "payload", "cards", "characters", "skills"];
+  for (const failed of [[], ...dependencies.map((name) => [name]), dependencies]) {
+    const calls = [];
+    const request = (name) => ({ error: failed.includes(name) ? new Error(name) : null, refresh: () => calls.push(name) });
+    runInNewContext(`(${retry.getText(syntax)})()`, {
+      profileError: failed.includes("account") ? "Account unavailable" : "",
+      loadError: failed.includes("payload") ? "Payload unavailable" : "",
+      loadAccountProfile: () => { calls.push("account"); return Promise.reject(new Error("Still unavailable")); },
+      loadProfile: () => { calls.push("payload"); return Promise.resolve(); },
+      cardsMaster: request("cards"), charactersMaster: request("characters"), skillsMaster: request("skills"),
+      resetCards: () => assert.fail("Retry must not reset drafts directly"),
+    });
+    assert.deepEqual(calls, failed);
+  }
+});
+
 function card(cardId, overrides = {}) {
   return {
     cardId,

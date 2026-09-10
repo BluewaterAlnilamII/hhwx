@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import LoadingIndicator, { LoadingSpinner } from "@/components/LoadingIndicator";
 import {
   CheckCircle2,
   ChevronFirst,
@@ -164,7 +165,7 @@ export default function CommentThread({
         <Heading as="h2" visualRole="section" accentSlot="a" icon={<MessageSquare size={20} />}>
           {title}
           <span className="text-sm font-semibold text-[var(--theme-color-text-muted)]">
-            {t("thread.commentCount", { count: totalCommentCount })}
+            {loading && comments.length === 0 ? null : t("thread.commentCount", { count: totalCommentCount })}
           </span>
         </Heading>
         <div className="relative shrink-0">
@@ -176,10 +177,7 @@ export default function CommentThread({
             title={t("actions.refresh")}
             className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] shadow-xs transition hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] disabled:cursor-not-allowed disabled:opacity-45"
           >
-            <RefreshCw
-              size={17}
-              className={loading || visibleRefreshPhase === "pending" ? "animate-spin" : undefined}
-            />
+            {loading || visibleRefreshPhase === "pending" ? <LoadingSpinner /> : <RefreshCw size={17} />}
           </button>
           {visibleRefreshPhase === "success" ? (
             <div
@@ -204,7 +202,7 @@ export default function CommentThread({
       <div className="mt-4">
         {!authReady ? (
           <div className="rounded-2xl border border-[var(--theme-color-semantic-neutral-border)] bg-[var(--theme-color-semantic-neutral-background)] p-4 text-center text-sm font-semibold text-[var(--theme-color-semantic-neutral-foreground)]">
-            {t("states.loadingAuth")}
+            <LoadingIndicator compact label={t("states.loadingAuth")} />
           </div>
         ) : userId && emailVerified ? (
           <CommentComposer
@@ -226,12 +224,13 @@ export default function CommentThread({
       </div>
 
       {error ? (
-        <div className="mt-4 rounded-2xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] p-3 text-sm text-[var(--theme-color-semantic-danger-foreground)]">
+        <div role="alert" className="mt-4 rounded-2xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] p-3 text-sm text-[var(--theme-color-semantic-danger-foreground)]">
           {error}
         </div>
       ) : null}
 
       <div className="mt-5 divide-y divide-[var(--theme-color-border-subtle)]">
+        {loading && comments.length === 0 ? <LoadingIndicator label={t("states.loading")} className="min-h-32" /> : null}
         {comments.map((comment) => (
           <CommentItem
             key={comment.id}
@@ -334,9 +333,7 @@ export default function CommentThread({
       ) : null}
 
       {loading && comments.length > 0 ? (
-        <div className="mt-3 text-center text-xs text-[var(--theme-color-text-muted)]">
-          {t("states.loading")}
-        </div>
+        <LoadingIndicator compact label={t("states.loading")} className="mt-3 text-xs" />
       ) : null}
     </section>
   );

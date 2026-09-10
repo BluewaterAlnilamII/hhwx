@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingSpinner } from "@/components/LoadingIndicator";
+
 import { useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import TurnstileChallenge, { type TurnstileChallengeHandle } from "@/components/TurnstileChallenge";
@@ -142,6 +144,7 @@ export default function AccountPasswordPage() {
               disabled={sending || isTurnstileLoading}
               className="hhwx-accent-button"
             >
+              {sending ? <LoadingSpinner className="mr-2 text-current" /> : null}
               {sending ? commonT("actions.sending") : t("action")}
             </button>
           </div>

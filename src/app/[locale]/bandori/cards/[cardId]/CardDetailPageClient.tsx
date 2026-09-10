@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowLeft, ClipboardList, Images, Play } from "lucide-react";
 import Heading from "@/components/Heading";
+import LoadingPlaceholder from "@/components/LoadingPlaceholder";
+import LoadingIndicator from "@/components/LoadingIndicator";
 import { useBandoriCharactersMaster } from "@/hooks/useBandoriCharactersMaster";
 import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { useBandoriSkillsMaster } from "@/hooks/useBandoriSkillsMaster";
@@ -181,11 +183,12 @@ export default function CardDetailPageClient({
 }: CardDetailPageClientProps) {
   const locale = useLocale();
   const t = useTranslations("bandori.cards");
+  const commonT = useTranslations("common");
   const termsT = useTranslations("bandori.terms");
   const router = useRouter();
   const charactersMaster = useBandoriCharactersMaster();
   const skillsMaster = useBandoriSkillsMaster();
-  const { value: assetIndex, loading: assetIndexLoading } = useBandoriCardsAssetIndex();
+  const { value: assetIndex, loading: assetIndexLoading, error: assetIndexError, refresh: refreshAssetIndex } = useBandoriCardsAssetIndex();
   const [cardsListHref, setCardsListHref] = useState("/bandori/cards");
 
   useEffect(() => {
@@ -311,7 +314,7 @@ export default function CardDetailPageClient({
         <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
             <Heading as="h1" visualRole="page" className="wrap-break-word tracking-tight">
-              {characterName} - {cardName}
+              {charactersMaster.loading ? <LoadingPlaceholder label={commonT("states.loading")} className="h-9 w-full min-w-48 max-w-xl" /> : <>{characterName} - {cardName}</>}
             </Heading>
             <div className="mt-2 flex min-h-5 flex-wrap items-baseline gap-x-3 gap-y-1 text-sm leading-5 text-[var(--theme-color-text-muted)]">
               <span className="font-black uppercase tracking-[0.18em]">#{cardId}</span>
@@ -328,12 +331,22 @@ export default function CardDetailPageClient({
           />
         </div>
 
+        {charactersMaster.error || skillsMaster.error || assetIndexError ? (
+          <div role="alert" className="mt-5 text-sm text-[var(--theme-color-semantic-danger-foreground)]">
+            {commonT("states.loadFailed")}{" "}
+            <button type="button" className="hhwx-text-link" onClick={() => {
+              if (charactersMaster.error) charactersMaster.refresh();
+              if (skillsMaster.error) skillsMaster.refresh();
+              if (assetIndexError) refreshAssetIndex();
+            }}>{commonT("actions.retry")}</button>
+          </div>
+        ) : null}
         <section className="@container mt-6 border-t border-[var(--theme-color-border-subtle)] pt-6">
           <Heading as="h2" visualRole="section" accentSlot="c" icon={<Images className="h-5 w-5" />}>
             {t("detail.artworkTitle")}
           </Heading>
           <div className="mt-4">
-            <BandoriFullCardGallery
+            {assetIndexLoading ? <LoadingIndicator label={t("common.imageLoading")} className="min-h-64 lg:aspect-[127/42.5]" /> : !assetIndex ? <p className="py-10 text-center text-sm text-[var(--theme-color-text-muted)]">{commonT("states.imageUnavailable")}</p> : <BandoriFullCardGallery
               metadata={{
                 cardId,
                 resourceSetName,
@@ -350,9 +363,8 @@ export default function CardDetailPageClient({
                 previous: t("detail.previousArt"),
                 next: t("detail.nextArt"),
                 imageLoading: t("common.imageLoading"),
-                imageUnavailable: t("common.imageUnavailable"),
               }}
-            />
+            />}
           </div>
         </section>
 
@@ -380,7 +392,7 @@ export default function CardDetailPageClient({
                       className="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-[var(--theme-color-border-subtle)]"
                     />
                   ) : null}
-                  <span>{characterName}</span>
+                  <span>{charactersMaster.loading ? <LoadingPlaceholder label={commonT("states.loading")} className="h-5 w-24" /> : characterName}</span>
                 </span>
               </SingleDetailRow>
               <SingleDetailRow label={t("detail.band")} alignment="center">
@@ -394,7 +406,7 @@ export default function CardDetailPageClient({
                       className="h-7 w-7 shrink-0 object-contain"
                     />
                   ) : null}
-                  <span>{bandName}</span>
+                  <span>{charactersMaster.loading ? <LoadingPlaceholder label={commonT("states.loading")} className="h-5 w-24" /> : bandName}</span>
                 </span>
               </SingleDetailRow>
               <SingleDetailRow label={t("detail.attribute")} alignment="center">
@@ -444,7 +456,7 @@ export default function CardDetailPageClient({
                 currentValue={skillName}
                 jpValue={jpSkillName}
               />
-              <SingleDetailRow label={t("detail.skillEffect")}>{skillEffect}</SingleDetailRow>
+              <SingleDetailRow label={t("detail.skillEffect")}>{skillsMaster.loading ? <LoadingPlaceholder label={commonT("states.loading")} className="h-5 w-40" /> : skillEffect}</SingleDetailRow>
               {gachaText ? (
                 <RegionalDetailRow
                   label={t("detail.gachaText")}

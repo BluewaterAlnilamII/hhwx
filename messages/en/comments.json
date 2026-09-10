@@ -42,7 +42,8 @@
   },
   "pickers": {
     "emoji": "Select emoji",
-    "stamp": "Select stamp"
+    "stamp": "Select stamp",
+    "stampEmpty": "No stamps available for this server"
   },
   "reactions": {
     "authenticationRequired": "Sign in and verify your email to react",

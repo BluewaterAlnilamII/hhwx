@@ -61,7 +61,7 @@ function getBandoriCardTileClassName(
   isActive = false,
 ) {
   const interactionClassName = isInteractive
-    ? "transition hover:z-40 hover:outline-2 hover:outline-[color:var(--theme-color-focus-ring)] focus-within:z-40 focus-within:outline-2 focus-within:outline-[color:var(--theme-color-focus-ring)]"
+    ? "transition hover:z-40 hover:outline-2 hover:outline-[color:var(--theme-color-focus-ring)] has-[:focus-visible]:z-40 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-[color:var(--theme-color-focus-ring)]"
     : "";
   const activeClassName = isActive
     ? "z-40 outline-2 outline-[color:var(--theme-color-selection-subtle-ring)] ring-2 ring-[var(--theme-color-selection-subtle-ring)]"
@@ -154,11 +154,10 @@ function InteractiveBandoriCardTile(props: BandoriCardTileInteractiveProps) {
     isOpen: isHoverTooltipOpen,
     openTooltip,
     closeTooltip,
-    onMouseEnter,
-    onMouseLeave,
+    onPointerEnter,
+    onPointerLeave,
     onFocus,
     onBlur,
-    onKeyDown,
     tooltipInteractionProps,
   } = useBandoriCardHoverTooltip<HTMLElement>();
   const interaction = props.interaction;
@@ -181,11 +180,10 @@ function InteractiveBandoriCardTile(props: BandoriCardTileInteractiveProps) {
   return (
     <article
       ref={anchorRef}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
       onFocus={onFocus}
       onBlur={onBlur}
-      onKeyDown={onKeyDown}
       className={getBandoriCardTileClassName(
         props.size ?? "default",
         true,

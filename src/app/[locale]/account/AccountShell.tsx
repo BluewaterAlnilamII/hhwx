@@ -2,6 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import Heading from "@/components/Heading";
+import LoadingIndicator from "@/components/LoadingIndicator";
 import { Link } from "@/i18n/navigation";
 import { type AppLocale } from "@/i18n/routing";
 import { buildAuthPath } from "@/lib/supabase";
@@ -87,7 +88,7 @@ export default function AccountShell({
 }
 
 export function AccountLoadingState({ message }: AccountStateProps) {
-  return <div className="py-16 text-center text-[var(--theme-color-text-muted)]">{message}</div>;
+  return <LoadingIndicator label={message} className="py-16" />;
 }
 
 export function AccountErrorState({ message }: AccountStateProps) {

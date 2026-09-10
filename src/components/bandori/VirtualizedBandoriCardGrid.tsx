@@ -275,6 +275,8 @@ function ElementVirtualizedBandoriCardGrid<T>({
   const rowVirtualizer = useVirtualizer<HTMLElement, HTMLDivElement>({
     count: rowCount,
     getScrollElement: () => scrollElementRef?.current ?? null,
+    // Empty results can unmount the grid while its scroll container stays mounted.
+    initialOffset: () => scrollElementRef?.current?.scrollTop ?? 0,
     estimateSize: () => rowHeight,
     overscan,
     scrollMargin,

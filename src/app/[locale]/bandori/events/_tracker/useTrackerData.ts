@@ -174,7 +174,8 @@ export function useTrackerData(
 
   // Event metadata is shared for the full SPA session. Live tracker data uses
   // a separate foreground refresh policy below.
-  const { events: eventCatalog } = useBandoriEventsMaster();
+  const eventCatalogRequest = useBandoriEventsMaster();
+  const { events: eventCatalog } = eventCatalogRequest;
 
   const { data: holidayData } = useCachedFetch<ChinaMainlandHolidayCalendarData | null>(
     server === 3 ? "bandori-calendar-cn-holidays" : null,
@@ -302,7 +303,7 @@ export function useTrackerData(
     []
   );
 
-  const { data: trackerResult, loading, refreshing } = useCachedFetch<TrackerResult>(
+  const { data: trackerResult, loading, refreshing, error, refresh } = useCachedFetch<TrackerResult>(
     trackerCacheKey,
     trackerCacheKey !== null && targetEventParam !== null
       ? `/api/bandori/tracker/data?server=${server}&event=${targetEventParam}&type=${trackingMode}&tier=${selectedTier}`
@@ -457,7 +458,12 @@ export function useTrackerData(
     eventStatusEndDate: resolvedCurrentEventWindow.statusEndDate,
     chartData,
     holidayData,
-    loading,
+    loading: eventCatalogRequest.loading || loading,
+    catalogLoading: eventCatalogRequest.loading,
+    catalogError: eventCatalogRequest.error,
+    refreshCatalog: eventCatalogRequest.refresh,
+    error,
+    refresh,
     refreshing,
     apiHasResult,
     liveTarget,

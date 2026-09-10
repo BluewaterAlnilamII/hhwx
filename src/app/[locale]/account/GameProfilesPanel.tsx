@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Copy, Download, FileJson, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
+import LoadingIndicator, { LoadingSpinner } from "@/components/LoadingIndicator";
 import { Link } from "@/i18n/navigation";
 import { type AppLocale } from "@/i18n/routing";
 import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
@@ -581,7 +582,7 @@ export default function GameProfilesPanel() {
             disabled={writeBusy || !normalizedUid || bindings.length >= USER_GAME_BINDING_LIMIT}
             className="hhwx-action-accent inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl px-5 text-sm font-semibold transition sm:w-auto"
           >
-            {busyAction?.type === "challenge" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            {busyAction?.type === "challenge" ? <LoadingSpinner className="text-current" /> : <Plus className="h-4 w-4" />}
             {challenge ? t("bind.refreshChallenge") : t("bind.createChallenge")}
           </button>
         </div>
@@ -609,7 +610,7 @@ export default function GameProfilesPanel() {
               disabled={writeBusy}
               className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[var(--theme-color-action-success-background)] px-5 text-sm font-semibold text-[var(--theme-color-action-success-foreground)] transition hover:bg-[var(--theme-color-action-success-background)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
             >
-              {busyAction?.type === "verify" ? <RefreshCw className="h-4 w-4 animate-spin" /> : null}
+              {busyAction?.type === "verify" ? <LoadingSpinner className="text-current" /> : null}
               {busyAction?.type === "verify" ? t("bind.verifying") : t("bind.verify")}
             </button>
           </div>
@@ -627,7 +628,7 @@ export default function GameProfilesPanel() {
           {t("uidManagement.syncWarning")}
         </div>
         {loading ? (
-          <p className="mt-3 text-sm text-[var(--theme-color-text-muted)]">{t("uidManagement.loading")}</p>
+          <LoadingIndicator compact label={t("uidManagement.loading")} className="mt-3 justify-start" />
         ) : bindings.length === 0 ? (
           <p className="mt-3 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-4 text-sm text-[var(--theme-color-text-muted)]">{t("uidManagement.empty")}</p>
         ) : (
@@ -673,7 +674,7 @@ export default function GameProfilesPanel() {
                         disabled={busy || isSyncing || syncLimitReached}
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[var(--theme-color-action-success-background)] px-4 text-sm font-semibold text-[var(--theme-color-action-success-foreground)] transition hover:bg-[var(--theme-color-action-success-background)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
                       >
-                        <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+                        {isSyncing ? <LoadingSpinner className="text-current" /> : <RefreshCw className="h-4 w-4" />}
                         {isSyncing ? t("uidManagement.syncing") : profile ? t("uidManagement.resync") : t("uidManagement.sync")}
                       </button>
                       <button
@@ -682,7 +683,7 @@ export default function GameProfilesPanel() {
                         disabled={writeBusy}
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-control-background)] px-4 text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)] transition hover:bg-[var(--theme-color-semantic-danger-background)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
                       >
-                        {isUnbinding ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        {isUnbinding ? <LoadingSpinner className="text-current" /> : <Trash2 className="h-4 w-4" />}
                         {isUnbinding ? t("uidManagement.unbinding") : t("uidManagement.unbind")}
                       </button>
                     </div>
@@ -722,7 +723,7 @@ export default function GameProfilesPanel() {
             disabled={writeBusy || manualProfileCount >= USER_GAME_MANUAL_PROFILE_LIMIT}
             className="hhwx-action-accent inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl px-5 text-sm font-semibold transition sm:w-auto"
           >
-            {busyAction?.type === "create" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            {busyAction?.type === "create" ? <LoadingSpinner className="text-current" /> : <Plus className="h-4 w-4" />}
             {busyAction?.type === "create" ? t("manual.creating") : t("manual.create")}
           </button>
         </div>
@@ -740,7 +741,7 @@ export default function GameProfilesPanel() {
             disabled={writeBusy || !importText.trim() || manualProfileCount >= USER_GAME_MANUAL_PROFILE_LIMIT}
             className="hhwx-control mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] sm:w-auto"
           >
-            {busyAction?.type === "import" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            {busyAction?.type === "import" ? <LoadingSpinner className="text-current" /> : <Upload className="h-4 w-4" />}
             {busyAction?.type === "import" ? t("manual.importing") : t("manual.import")}
           </button>
         </div>
@@ -752,7 +753,7 @@ export default function GameProfilesPanel() {
           {t("list.description")}
         </div>
         {loading ? (
-          <p className="mt-3 text-sm text-[var(--theme-color-text-muted)]">{t("list.loading")}</p>
+          <LoadingIndicator label={t("list.loading")} className="min-h-40" />
         ) : profiles.length === 0 ? (
           <p className="mt-3 text-sm text-[var(--theme-color-text-muted)]">{t("list.empty")}</p>
         ) : (
@@ -805,7 +806,7 @@ export default function GameProfilesPanel() {
                         disabled={writeBusy}
                         className={`inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] ${profileExported ? "border-[var(--theme-color-semantic-success-border)] bg-[var(--theme-color-semantic-success-background)] text-[var(--theme-color-semantic-success-foreground)]" : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-default)] hover:border-[var(--theme-color-action-secondary-border)] hover:text-[var(--theme-color-action-secondary-foreground)]"}`}
                       >
-                        {isExportingProfile ? <RefreshCw className="h-4 w-4 animate-spin" /> : profileExported ? <CheckCircle2 className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+                        {isExportingProfile ? <LoadingSpinner className="text-current" /> : profileExported ? <CheckCircle2 className="h-4 w-4" /> : <Download className="h-4 w-4" />}
                         {isExportingProfile ? t("list.exporting") : profileExported ? t("list.exported") : t("list.export")}
                       </button>
                       {profile.localProfile ? (
@@ -815,7 +816,7 @@ export default function GameProfilesPanel() {
                           disabled={writeBusy || !localProfileCanMigrate}
                           className="hhwx-control inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
                         >
-                          {isUploading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                          {isUploading ? <LoadingSpinner className="text-current" /> : <Upload className="h-4 w-4" />}
                           {isUploading ? t("list.migrating") : profile.cloudProfile ? t("list.updateCloud") : t("list.migrate")}
                         </button>
                       ) : null}
@@ -826,7 +827,7 @@ export default function GameProfilesPanel() {
                           disabled={writeBusy || manualProfileCount >= USER_GAME_MANUAL_PROFILE_LIMIT}
                           className="hhwx-control inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
                         >
-                          {isCopying ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                          {isCopying ? <LoadingSpinner className="text-current" /> : <Copy className="h-4 w-4" />}
                           {isCopying ? t("list.copying") : t("list.copy")}
                         </button>
                       ) : null}
@@ -836,7 +837,7 @@ export default function GameProfilesPanel() {
                         disabled={writeBusy}
                         className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-control-background)] px-3 text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)] transition hover:bg-[var(--theme-color-semantic-danger-background)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
                       >
-                        {isDeleting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        {isDeleting ? <LoadingSpinner className="text-current" /> : <Trash2 className="h-4 w-4" />}
                         {isDeleting ? t("list.deleting") : t("list.delete")}
                       </button>
                     </div>
