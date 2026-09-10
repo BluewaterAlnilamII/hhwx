@@ -56,6 +56,7 @@ import BandoriPageShell from "../../BandoriPageShell";
 import BandoriCardServerSwitcher from "../_components/BandoriCardServerSwitcher";
 import CardComments from "./CardComments";
 import BandoriFullCardGallery from "./_components/BandoriFullCardArt";
+import BandoriCardRelatedMedia, { type BandoriCardCostumeResult } from "./_components/BandoriCardRelatedMedia";
 
 type CardStats = {
   totalPower: number;
@@ -167,6 +168,7 @@ export type CardDetailPageClientProps = {
   jpCard: BandoriCardMaster | null;
   selectedServer: BandoriServer;
   availableServers: BandoriServer[];
+  costumeResult: Promise<BandoriCardCostumeResult>;
 };
 
 export default function CardDetailPageClient({
@@ -175,6 +177,7 @@ export default function CardDetailPageClient({
   jpCard,
   selectedServer,
   availableServers,
+  costumeResult,
 }: CardDetailPageClientProps) {
   const locale = useLocale();
   const t = useTranslations("bandori.cards");
@@ -343,8 +346,7 @@ export default function CardDetailPageClient({
               items={artItems}
               viewerLabels={{
                 close: t("detail.closeViewer"),
-                zoomIn: t("detail.zoomIn"),
-                zoomOut: t("detail.zoomOut"),
+                instructions: t("detail.viewerInstructions"),
                 previous: t("detail.previousArt"),
                 next: t("detail.nextArt"),
                 imageLoading: t("common.imageLoading"),
@@ -484,6 +486,14 @@ export default function CardDetailPageClient({
             </div>
           </div>
         </section>
+        <BandoriCardRelatedMedia
+          resourceSetName={resourceSetName}
+          artItems={artItems}
+          costumeId={currentCard.costumeId}
+          costumeResult={costumeResult}
+          sdResourceName={currentCard.sdResourceName}
+          selectedServer={selectedServer}
+        />
       </article>
       <CardComments cardId={cardId} entityServer={entityServer} />
     </BandoriPageShell>

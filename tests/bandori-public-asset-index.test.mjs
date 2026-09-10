@@ -7,10 +7,13 @@ import {
   buildBandoriPublicAssetUrl,
   listBandoriCardAssetVariants,
   lookupBandoriCardImage,
+  lookupBandoriCostumeImage,
   lookupBandoriEventBanner,
   lookupBandoriEventTeamIcon,
   lookupBandoriMusicChart,
   parseBandoriCardsAssetIndex,
+  parseBandoriCostumesAssetIndex,
+  parseBandoriLiveSdAssetIndex,
   parseBandoriDegreesAssetIndex,
   parseBandoriEventsAssetIndex,
   parseBandoriMusicAssetIndex,
@@ -51,6 +54,45 @@ const hashes = {
   degreeManifest: "2".repeat(64),
   degreeAtlas: "3".repeat(64),
 };
+
+test("Costumes and Card SD resolve independent identities without regional fallback", () => {
+  const root = { schemaVersion: 1, updatedAt: "2026-09-10T00:00:00Z" };
+  const costumes = parseBandoriCostumesAssetIndex({
+    ...root,
+    resources: { "001_live_default": { images: [hashes.thumb, "", "", hashes.trainedThumb], live2d: [hashes.full, "", "", hashes.full] } },
+  });
+  const sd = parseBandoriLiveSdAssetIndex({
+    ...root,
+    resources: {
+      sd001001: { images: [hashes.full, "", "", ""] },
+      sd001002: { images: [hashes.trim, "", "", hashes.trainedTrim] },
+    },
+  });
+  assert.equal(lookupBandoriCostumeImage(costumes, "001_live_default", "cn").key, `bandori/costumes/images/${hashes.trainedThumb}.png`);
+  assert.equal(lookupBandoriCostumeImage(sd, "sd001002", "jp").key, `bandori/costumes/livesd/images/${hashes.trim}.png`);
+  assert.notEqual(lookupBandoriCostumeImage(sd, "sd001002", "jp").sha256, lookupBandoriCostumeImage(sd, "sd001001", "jp").sha256);
+  assert.equal(lookupBandoriCostumeImage(sd, "sd001002", "en"), null);
+  assert.equal(lookupBandoriCostumeImage(sd, "missing", "jp"), null);
+  assert.equal(lookupBandoriCostumeImage(null, "sd001002", "jp"), null);
+  assert.equal(Object.hasOwn(costumes.resources["001_live_default"], "live2d"), false);
+  assert.equal(buildBandoriPublicAssetIndexUrl("costumes", "https://cdn.example"), "https://cdn.example/bandori/costumes/index.json");
+  assert.equal(buildBandoriPublicAssetIndexUrl("liveSd", "https://cdn.example"), "https://cdn.example/bandori/costumes/livesd/index.json");
+});
+
+test("Costume image discovery rejects invalid schemas, hashes, names and non-string four-slot contracts", () => {
+  const root = () => ({ schemaVersion: 1, updatedAt: "2026-09-10T00:00:00Z", resources: { sd001002: { images: [hashes.thumb, "", "", ""] } } });
+  for (const slots of [[hashes.thumb, null, "", ""], [hashes.thumb], [hashes.thumb, "", "", "", ""], ["../image.png", "", "", ""]]) {
+    const candidate = root();
+    candidate.resources.sd001002.images = slots;
+    assert.throws(() => parseBandoriLiveSdAssetIndex(candidate));
+  }
+  assert.throws(() => parseBandoriLiveSdAssetIndex({ ...root(), schemaVersion: 2 }));
+  assert.throws(() => parseBandoriLiveSdAssetIndex({ ...root(), resources: { "../sd001002": root().resources.sd001002 } }));
+  assert.throws(() => parseBandoriCostumesAssetIndex(root()));
+  const invalidManifest = root();
+  invalidManifest.resources.sd001002.live2d = [null, "", "", ""];
+  assert.throws(() => parseBandoriCostumesAssetIndex(invalidManifest));
+});
 
 function imageSet(entries) {
   return {

@@ -9,6 +9,7 @@ import type { BandoriServer } from "@/lib/bandori-server";
 export type BandoriCardMasterRecord = Record<string, unknown> & {
   attribute?: string;
   characterId?: number;
+  costumeId?: number;
   displayName?: string | null;
   hasTrainedArt?: boolean;
   gachaText?: Array<string | null>;

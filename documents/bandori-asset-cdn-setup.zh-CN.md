@@ -20,6 +20,19 @@ Live2D 依赖与静态 SD PNG 均在同一命名空间下按内容寻址。
 详见 [Costumes 合同](bandori-master-asset-contract.zh-CN.md#costumes-api-与资源)。
 完整元数据快照允许搭配媒体样本；缺少 index 条目不代表服装记录不存在。该合同不定义浏览器播放行为。
 
+卡牌详情页通过私有 Costumes reader 流式读取关联服装摘要，只有独立的 Live2D 区域等待结果，
+服装读取缓慢或失败不阻塞卡牌详情。浏览器共享索引缓存查找服装缩略图及卡牌自身的 LiveSD PNG。
+图片严格选择当前区服槽位，SD 保留完整原图，
+不裁剪、不播放动画。服装读取失败只影响该区域，并提供重试。
+紧凑的“资源”区域依次展示 `thumb` 头像、`trim` 无背景卡面和 LiveSD，
+点击各项在共用的页内图片查看器中展示完整原图，支持滚轮或双指缩放、拖动查看、
+单击退出及切换图片；缩放跟随鼠标或移动的双指中点，小于查看区域的方向保持居中，
+拖动限制在图片边界内。键盘可用 + / − 围绕查看区域中心缩放、Shift + 方向键移动、Esc 退出。
+查看器初始显示适配视口且不超过图片原始尺寸，卡面只展示原图，不叠加卡框或标记。
+卡牌预览遵循索引声明的卡面形态。
+独立的 Live2D 小卡展示服装缩略图、服装名和角色名，本轮不提供跳转链接；
+Live2D 播放由后续页面承担。
+
 ## Web 配置
 
 卡牌 UI 内建资源使用稳定、非内容寻址路径，并保留游戏原始资源名。完整卡框位于 `bandori/resources/images/card-frame/{resourceName}.png`，独立 MenuAtlas sprite 位于 `bandori/resources/atlases/menu-atlas/{spriteName}.png`。这些对象只从 JP base APK 一次性提取，使用一年 `immutable` 缓存发布，不通过公开 index 发现。Web 应用按固定 allowlist 组装 URL；未配置资源 CDN 时失败关闭，不回退 Bestdori。卡牌渲染组件使用已有的矢量叠层：`bandori/res/icon/band_{bandId}.svg`、`bandori/res/icon/{attribute}.svg` 与 `bandori/res/icon/master.svg`；缩略图和完整卡面均使用对应的 SVG 乐团与属性标记，Master 标记则在需要显示该叠层的位置使用。五张组合稀有度预览也保持不变，仍位于 `bandori/res/icon/star_1.png` 至 `star_5.png`。这些固定遗留对象由自有 R2 提供，运行时不会请求 Bestdori。

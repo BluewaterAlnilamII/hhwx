@@ -5,6 +5,8 @@ const POSITIVE_INTEGER_ID_PATTERN = /^[1-9]\d*$/u;
 
 export const BANDORI_PUBLIC_ASSET_SERVERS = ["jp", "en", "tw", "cn"] as const;
 export const BANDORI_CARDS_INDEX_KEY = "bandori/cards/index.json";
+export const BANDORI_COSTUMES_INDEX_KEY = "bandori/costumes/index.json";
+export const BANDORI_LIVE_SD_INDEX_KEY = "bandori/costumes/livesd/index.json";
 export const BANDORI_CHART_SIMULATOR_INDEX_KEY = "bandori/chart-simulator/index.json";
 export const BANDORI_DEGREES_INDEX_KEY = "bandori/degrees/index.json";
 export const BANDORI_EVENTS_INDEX_KEY = "bandori/events/index.json";
@@ -82,6 +84,12 @@ export type BandoriCardsAssetIndex = {
   schemaVersion: typeof BANDORI_PUBLIC_ASSET_INDEX_SCHEMA_VERSION;
   updatedAt: string;
   resources: Record<string, BandoriCardAssetResource>;
+};
+
+export type BandoriCostumeImageIndex = {
+  schemaVersion: 1;
+  updatedAt: string;
+  resources: Record<string, { images: BandoriRegionalPngSlots }>;
 };
 
 export type BandoriEventTeamIcon = {
@@ -475,6 +483,57 @@ export function parseBandoriMusicAssetIndex(value: unknown): BandoriMusicAssetIn
     updatedAt: parseUpdatedAt(value.updatedAt, "Bandori music index"),
     songs,
   };
+}
+
+function parseCostumeImageIndex(value: unknown, kind: "costumes" | "liveSd"): BandoriCostumeImageIndex {
+  const label = `Bandori ${kind} index`;
+  if (!isRecord(value)) throw new Error(`${label} must be an object`);
+  assertExactKeys(value, ["schemaVersion", "updatedAt", "resources"], [], label);
+  if (value.schemaVersion !== 1 || !isRecord(value.resources)) {
+    throw new Error(`Invalid ${label} schema or resources`);
+  }
+  const resources: BandoriCostumeImageIndex["resources"] = Object.create(null);
+  for (const [name, entry] of Object.entries(value.resources)) {
+    if (!/^[A-Za-z0-9_!-]{1,255}$/u.test(name) || !isRecord(entry)) {
+      throw new Error(`Invalid ${label} resource`);
+    }
+    const fields = kind === "costumes" ? ["images", "live2d"] : ["images"];
+    assertExactKeys(entry, fields, [], `${label} ${name}`);
+    for (const field of fields) {
+      const slots = entry[field];
+      if (!Array.isArray(slots) || slots.length !== 4) {
+        throw new Error(`${label} ${name} ${field} must have exactly four string slots`);
+      }
+      for (const hash of slots) {
+        if (hash !== "") parseSha256(hash, `${label} ${name} ${field}`);
+      }
+    }
+    resources[name] = {
+      images: (entry.images as string[]).map((hash) => hash === "" ? null : createPngDescriptor(
+        hash,
+        kind === "costumes" ? "bandori/costumes/images" : "bandori/costumes/livesd/images",
+        `${label} ${name} image`,
+      )) as BandoriRegionalPngSlots,
+    };
+  }
+  // Card details consume static images only; Live2D dependencies are not loaded here.
+  return { schemaVersion: 1, updatedAt: parseUpdatedAt(value.updatedAt, label), resources };
+}
+
+export function parseBandoriCostumesAssetIndex(value: unknown): BandoriCostumeImageIndex {
+  return parseCostumeImageIndex(value, "costumes");
+}
+
+export function parseBandoriLiveSdAssetIndex(value: unknown): BandoriCostumeImageIndex {
+  return parseCostumeImageIndex(value, "liveSd");
+}
+
+export function lookupBandoriCostumeImage(
+  index: BandoriCostumeImageIndex | null | undefined,
+  resourceName: string | null | undefined,
+  server: BandoriPublicAssetServer,
+): BandoriPngAssetDescriptor | null {
+  return index?.resources[resourceName ?? ""]?.images[BANDORI_PUBLIC_ASSET_SERVERS.indexOf(server)] ?? null;
 }
 
 function parseRegionalPngSlots(
@@ -1147,7 +1206,7 @@ export function getBandoriPublicAssetBaseUrl(
 }
 
 export function buildBandoriPublicAssetIndexUrl(
-  kind: "cards" | "chartSimulator" | "degrees" | "events" | "music" | "stamps",
+  kind: "cards" | "costumes" | "liveSd" | "chartSimulator" | "degrees" | "events" | "music" | "stamps",
   baseUrl?: string | null,
 ): string | null {
   const normalizedBaseUrl = getBandoriPublicAssetBaseUrl(baseUrl);
@@ -1156,6 +1215,8 @@ export function buildBandoriPublicAssetIndexUrl(
   }
   const indexKeys = {
     cards: BANDORI_CARDS_INDEX_KEY,
+    costumes: BANDORI_COSTUMES_INDEX_KEY,
+    liveSd: BANDORI_LIVE_SD_INDEX_KEY,
     chartSimulator: BANDORI_CHART_SIMULATOR_INDEX_KEY,
     degrees: BANDORI_DEGREES_INDEX_KEY,
     events: BANDORI_EVENTS_INDEX_KEY,
