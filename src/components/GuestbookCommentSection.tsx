@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import LoadingIndicator, { LoadingSpinner } from "@/components/LoadingIndicator";
 import { useLocale, useTranslations } from "next-intl";
 import { getApiErrorMessage } from "@/lib/api-contracts";
 import { getUsernameAvatarLabel } from "@/lib/username-policy";
@@ -25,23 +26,38 @@ function getErrorMessage(error: unknown, fallbackMessage: string): string {
 export default function GuestbookCommentSection() {
     const t = useTranslations("othello.comments");
     const locale = useLocale();
+    const commonT = useTranslations("common");
     const [comments, setComments] = useState<Comment[]>([]);
     const [newComment, setNewComment] = useState("");
     const [loading, setLoading] = useState(false);
     const [submitError, setSubmitError] = useState("");
+    const [loadingComments, setLoadingComments] = useState(true);
+    const [loadFailed, setLoadFailed] = useState(false);
+    const readSequence = useRef(0);
     const { userId, username, emailVerified, authReady } = useGameStore();
 
     const fetchComments = useCallback(async () => {
-        const { data } = await supabase
-            .from("guestbook_comments")
-            .select("id, content, created_at, profiles(username)")
-            .order("created_at", { ascending: false })
-            .limit(50);
-        if (data) setComments(data as unknown as Comment[]);
+        const sequence = ++readSequence.current;
+        setLoadingComments(true);
+        setLoadFailed(false);
+        try {
+            const { data, error } = await supabase
+                .from("guestbook_comments")
+                .select("id, content, created_at, profiles(username)")
+                .order("created_at", { ascending: false })
+                .limit(50);
+            if (error) throw error;
+            if (sequence === readSequence.current) setComments((data ?? []) as unknown as Comment[]);
+        } catch {
+            if (sequence === readSequence.current) setLoadFailed(true);
+        } finally {
+            if (sequence === readSequence.current) setLoadingComments(false);
+        }
     }, []);
 
     useEffect(() => {
         fetchComments();
+        return () => { readSequence.current += 1; };
     }, [fetchComments]);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -101,7 +117,7 @@ export default function GuestbookCommentSection() {
             {/* Comment input */}
             {!authReady ? (
                 <div className="mb-6 p-4 bg-[var(--theme-color-panel-background)] rounded-xl text-center text-[var(--theme-color-text-muted)] text-sm">
-                    {t("loadingAuth")}
+                    <LoadingIndicator compact label={t("loadingAuth")} />
                 </div>
             ) : userId ? (
                 emailVerified ? (
@@ -124,6 +140,7 @@ export default function GuestbookCommentSection() {
                                     disabled={loading || !newComment.trim()}
                                     className="px-5 py-1.5 text-sm font-medium rounded-full hover:opacity-90 transition disabled:opacity-40 bg-[var(--theme-color-action-accent-background)] text-[var(--theme-color-action-accent-foreground)]"
                                 >
+                                    {loading ? <LoadingSpinner className="mr-2 align-middle text-current" /> : null}
                                     {loading ? t("submitting") : t("submit")}
                                 </button>
                             </div>
@@ -146,7 +163,9 @@ export default function GuestbookCommentSection() {
 
             {/* Comment list */}
             <div className="space-y-3">
-                {comments.length === 0 && (
+                {loadFailed ? <div role="alert" className="text-sm text-[var(--theme-color-semantic-danger-foreground)]">{commonT("states.loadFailed")} <button type="button" className="hhwx-text-link" onClick={() => void fetchComments()}>{commonT("actions.retry")}</button></div> : null}
+                {loadingComments && comments.length === 0 ? <LoadingIndicator label={commonT("states.loading")} className="min-h-32" /> : null}
+                {!loadingComments && !loadFailed && comments.length === 0 && (
                     <div className="text-center text-[var(--theme-color-text-muted)] text-sm py-8">
                         {t("empty")}
                     </div>

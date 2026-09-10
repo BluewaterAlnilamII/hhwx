@@ -1,5 +1,7 @@
 "use client";
 
+import LoadingIndicator from "@/components/LoadingIndicator";
+
 import {
   useCallback,
   useMemo,
@@ -173,12 +175,7 @@ export function Top10Panel({
   return (
     <div className="relative">
       {isBlockingLoading && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center rounded-xl bg-[var(--theme-color-panel-background)]/75">
-          <div className="flex flex-col items-center">
-            <div className="h-10 w-10 animate-spin rounded-full border-4 border-[var(--theme-color-semantic-info-border)] border-t-transparent" />
-            <p className="mt-4 text-sm font-semibold text-[var(--theme-color-semantic-info-foreground)]">{t("loading")}</p>
-          </div>
-        </div>
+        <LoadingIndicator label={t("loading")} className="absolute inset-0 z-30 rounded-xl bg-[var(--theme-color-panel-background)]/75" />
       )}
 
       <TrackerStatusSummary

@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { ImageOff } from "lucide-react";
 
 import BandoriCardTile from "@/components/bandori/BandoriCardTile";
+import LoadingPlaceholder from "@/components/LoadingPlaceholder";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useBandoriCharactersMaster } from "@/hooks/useBandoriCharactersMaster";
 import { resolveBandoriCardBandId } from "@/lib/bandori/cards/master";
@@ -19,10 +20,14 @@ type Top10PlayerListProps = {
 export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
   const locale = useLocale();
   const t = useTranslations("bandori.events.tracker.top10");
+  const commonT = useTranslations("common");
   const scoreFormatter = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const shouldLoadCards = players.some((player) => player.avatarCardId > 0);
-  const { data: cards } = useBandoriCardsMaster(server, shouldLoadCards, "regional");
-  const { data: characters } = useBandoriCharactersMaster(shouldLoadCards);
+  const cardsRequest = useBandoriCardsMaster(server, shouldLoadCards, "regional");
+  const charactersRequest = useBandoriCharactersMaster(shouldLoadCards);
+  const { data: cards } = cardsRequest;
+  const { data: characters } = charactersRequest;
+  const avatarLoading = cardsRequest.loading || charactersRequest.loading;
 
   return (
     <section className="mt-7" aria-label={t("ranking")}>
@@ -50,7 +55,12 @@ export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
               </div>
 
               <div className="flex items-center justify-center">
-                {player.avatarCardId > 0 ? (
+                {player.avatarCardId > 0 && avatarLoading ? (
+                  <LoadingPlaceholder
+                    label={commonT("states.loading")}
+                    className="h-14 w-14 rounded-[5px] sm:h-[76px] sm:w-[76px]"
+                  />
+                ) : player.avatarCardId > 0 && metadata && characters ? (
                   <BandoriCardTile
                     interaction={{ kind: "presentation" }}
                     card={{
@@ -72,7 +82,9 @@ export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
                 ) : (
                   <div className="flex h-14 w-14 flex-col items-center justify-center gap-1 overflow-hidden rounded-[5px] bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] shadow-[var(--theme-shadow-media)] outline-solid outline-1 outline-[color:var(--theme-color-border-subtle)] sm:h-[76px] sm:w-[76px]">
                     <ImageOff className="h-5 w-5" aria-hidden="true" />
-                    <span className="text-[10px] font-semibold">{t("noAvatar")}</span>
+                    <span className="text-[10px] font-semibold">
+                      {commonT("states.imageUnavailable")}
+                    </span>
                   </div>
                 )}
               </div>

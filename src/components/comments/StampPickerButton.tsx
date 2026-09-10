@@ -3,6 +3,7 @@
 import type { CSSProperties } from "react";
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Sticker, Volume2 } from "lucide-react";
+import LoadingIndicator from "@/components/LoadingIndicator";
 import { useTranslations } from "next-intl";
 import { BandoriStampAnimationCanvas } from "@/components/bandori/BandoriStampView";
 import {
@@ -53,12 +54,15 @@ const StampPickerOption = memo(function StampPickerOption({
   return (
     <button
       type="button"
-      onClick={() => onSelect(stamp)}
-      onPointerEnter={() => setPreviewActive(true)}
+      onClick={() => {
+        setPreviewActive(false);
+        onSelect(stamp);
+      }}
+      onPointerEnter={(event) => { if (event.pointerType === "mouse") setPreviewActive(true); }}
       onPointerLeave={() => setPreviewActive(false)}
-      onFocus={() => setPreviewActive(true)}
+      onFocus={(event) => { if (event.currentTarget.matches(":focus-visible")) setPreviewActive(true); }}
       onBlur={() => setPreviewActive(false)}
-      className="relative flex h-20 w-full min-w-0 items-center justify-center rounded-lg p-1 transition hover:bg-[var(--theme-color-control-background-hover)] focus:bg-[var(--theme-color-control-background-hover)] focus:outline-hidden focus:ring-2 focus:ring-[var(--theme-color-focus-ring)]"
+      className="relative flex h-20 w-full min-w-0 items-center justify-center rounded-lg p-1 transition hover:bg-[var(--theme-color-control-background-hover)] focus-visible:bg-[var(--theme-color-control-background-hover)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]"
       aria-label={shortcode}
       title={shortcode}
     >
@@ -99,11 +103,12 @@ export const StampPickerButton = memo(function StampPickerButton({
 }: StampPickerButtonProps) {
   const t = useTranslations("comments");
   const pickerLabel = t("pickers.stamp");
+  const commonT = useTranslations("common");
   const popoverId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({});
-  const { stamps } = useCommentStampsForRegion(selectedRegion, open);
+  const { stamps, loading, error, refresh } = useCommentStampsForRegion(selectedRegion, open);
 
   const updatePopoverPosition = useCallback(() => {
     if (!open || !buttonRef.current || !containerRef.current) return;
@@ -196,7 +201,7 @@ export const StampPickerButton = memo(function StampPickerButton({
                 type="button"
                 onClick={() => onRegionChange(region)}
                 className={cn(
-                  "h-7 rounded-full text-xs font-bold transition focus:outline-hidden focus:ring-2 focus:ring-[var(--theme-color-focus-ring)]",
+                  "h-7 rounded-full text-xs font-bold transition focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]",
                   selectedRegion === region
                     ? "bg-[var(--theme-color-selection-strong-background)] text-[var(--theme-color-selection-strong-foreground)] shadow-xs"
                     : "bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)]",
@@ -207,6 +212,15 @@ export const StampPickerButton = memo(function StampPickerButton({
             ))}
           </div>
           <div className="grid max-h-80 grid-cols-4 gap-1 overflow-x-hidden overflow-y-auto pr-1 [scrollbar-color:var(--theme-color-shell-scrollbar-thumb)_var(--theme-color-shell-scrollbar-track)] scrollbar-thin [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--theme-color-shell-scrollbar-thumb)] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-[var(--theme-color-shell-scrollbar-track)]">
+            {loading ? <LoadingIndicator label={t("states.loading")} className="col-span-4 min-h-40" /> : null}
+            {error ? (
+              <div role="alert" className="col-span-4 flex min-h-20 items-center justify-center gap-2 text-sm text-[var(--theme-color-text-muted)]">
+                {commonT("states.loadFailed")}
+                <button type="button" className="hhwx-text-link" onClick={refresh}>{commonT("actions.retry")}</button>
+              </div>
+            ) : !loading && stamps.length === 0 ? (
+              <p className="col-span-4 py-10 text-center text-sm text-[var(--theme-color-text-muted)]">{t("pickers.stampEmpty")}</p>
+            ) : null}
             {stamps.map((stamp) => (
               <StampPickerOption
                 key={`${stamp.region}-${stamp.id}-${stamp.kind}`}

@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingSpinner } from "@/components/LoadingIndicator";
+
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInState } from "../AccountShell";
@@ -159,6 +161,7 @@ export default function AccountProfilePage() {
                 disabled={saving || !usernameInput.trim()}
                 className="hhwx-accent-button"
               >
+                {saving ? <LoadingSpinner className="mr-2 text-current" /> : null}
                 {saving ? commonT("actions.saving") : commonT("actions.save")}
               </button>
             </div>

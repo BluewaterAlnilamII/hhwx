@@ -22,9 +22,11 @@ import { useCachedFetch } from "@/hooks/useCachedFetch";
 export function useCommentStampCatalog(enabled = true): {
   catalog: BandoriStampCatalog | null;
   loading: boolean;
+  error: Error | null;
+  refresh: () => void;
 } {
   const masterUrl = useMemo(() => buildBandoriStampMasterApiUrl(), []);
-  const { data: master, loading: masterLoading } = useCachedFetch<BandoriStampMasterMap>(
+  const { data: master, loading: masterLoading, error: masterError, refresh: refreshMaster } = useCachedFetch<BandoriStampMasterMap>(
     enabled ? "bandori-comment-stamps:master:v2" : null,
     enabled ? masterUrl : null,
     parseBandoriStampMasterApiResponse,
@@ -36,6 +38,8 @@ export function useCommentStampCatalog(enabled = true): {
   const {
     value: assets,
     loading: assetsLoading,
+    error: assetsError,
+    refresh: refreshAssets,
   } = useBandoriStampsAssetIndex(enabled);
   const catalog = useMemo(
     () => (master && assets ? { master, assets } : null),
@@ -45,18 +49,22 @@ export function useCommentStampCatalog(enabled = true): {
   return {
     catalog,
     loading: catalog === null && (masterLoading || assetsLoading),
+    error: masterError ?? assetsError,
+    refresh: () => { if (masterError) refreshMaster(); if (assetsError) refreshAssets(); },
   };
 }
 
 export function useCommentStampsForRegion(
   region: CommentStampRegion,
   enabled = true,
-): { stamps: readonly CommentStamp[]; loading: boolean } {
-  const { catalog, loading } = useCommentStampCatalog(enabled);
+): { stamps: readonly CommentStamp[]; loading: boolean; error: Error | null; refresh: () => void } {
+  const { catalog, loading, error, refresh } = useCommentStampCatalog(enabled);
 
   return {
     stamps: catalog ? getBandoriStampCatalogItemsForRegion(catalog, region) : [],
     loading: loading && catalog === null,
+    error,
+    refresh,
   };
 }
 

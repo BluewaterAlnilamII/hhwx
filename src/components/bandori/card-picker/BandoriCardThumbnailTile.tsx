@@ -72,24 +72,23 @@ export default function BandoriCardThumbnailTile({
     anchorRef,
     tooltipId,
     isOpen: isHoverTooltipOpen,
-    onMouseEnter,
-    onMouseLeave,
+    closeTooltip,
+    onPointerEnter,
+    onPointerLeave,
     onFocus,
     onBlur,
-    onKeyDown,
     tooltipInteractionProps,
   } = useBandoriCardHoverTooltip<HTMLElement>();
 
   return (
     <article
       ref={anchorRef}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
       onFocus={onFocus}
       onBlur={onBlur}
-      onKeyDown={onKeyDown}
       className={cn(
-        "relative h-[56px] w-[56px] overflow-visible rounded-[5px] outline-solid outline-1 outline-white/80 transition hover:z-40 hover:outline-2 hover:outline-[color:var(--theme-color-focus-ring)] focus-within:z-40 focus-within:outline-2 focus-within:outline-[color:var(--theme-color-focus-ring)] sm:h-[76px] sm:w-[76px]",
+        "relative h-[56px] w-[56px] overflow-visible rounded-[5px] outline-solid outline-1 outline-white/80 transition hover:z-40 hover:outline-2 hover:outline-[color:var(--theme-color-focus-ring)] has-[:focus-visible]:z-40 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-[color:var(--theme-color-focus-ring)] sm:h-[76px] sm:w-[76px]",
         isSelected && "z-30 outline-2 outline-[color:var(--theme-color-selection-subtle-ring)] ring-2 ring-[var(--theme-color-selection-subtle-ring)]",
         className,
       )}
@@ -99,7 +98,10 @@ export default function BandoriCardThumbnailTile({
         data-card-id={card.cardId}
         data-card-ref={card.cardRef}
         data-entity-server={card.entityServer ?? undefined}
-        onClick={onSelect}
+        onClick={() => {
+          closeTooltip();
+          onSelect();
+        }}
         title={label}
         aria-pressed={isSelected}
         className={cn(

@@ -193,8 +193,7 @@
         "rank": "排名",
         "avatar": "头像",
         "player": "玩家",
-        "score": "分数",
-        "noAvatar": "无头像"
+        "score": "分数"
       }
     }
   },
@@ -224,8 +223,7 @@
     "common": {
       "noInformation": "无信息",
       "cardDetails": "卡牌详情",
-      "imageLoading": "正在读取卡面",
-      "imageUnavailable": "暂无卡面"
+      "imageLoading": "正在读取卡面"
     },
     "types": {
       "permanent": "常驻",
@@ -261,10 +259,7 @@
       "costumeLoadFailed": "服装信息加载失败",
       "costumeLoading": "服装信息加载中",
       "liveSdTitle": "LiveSD",
-      "mediaLoadFailed": "图片加载失败",
       "mediaLoading": "图片加载中",
-      "mediaUnavailable": "暂无图片",
-      "retryMedia": "重试",
       "openMediaOriginal": "放大查看{label}",
       "previousMedia": "上一张图片",
       "nextMedia": "下一张图片",

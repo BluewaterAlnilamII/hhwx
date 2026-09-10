@@ -136,8 +136,9 @@ function getReadableTextColor(hexColor: string): string {
 }
 
 function CalendarPageSkeleton({ showEditorPlaceholder }: { showEditorPlaceholder: boolean }) {
+  const commonT = useTranslations("common");
   return (
-    <div className="w-full max-w-5xl mx-auto animate-pulse" aria-hidden="true">
+    <div className="w-full max-w-5xl mx-auto motion-safe:animate-pulse" role="status" aria-busy="true" aria-label={commonT("states.loading")}>
       <div className="hhwx-panel mb-5 flex items-center justify-center border px-3 py-3 md:mb-6">
         <div className="h-8 w-60 rounded-full bg-[var(--theme-color-control-background-muted)] md:h-10 md:w-[18rem]" />
       </div>
@@ -190,7 +191,8 @@ function CalendarPageSkeleton({ showEditorPlaceholder }: { showEditorPlaceholder
  */
 export default function CalendarPage() {
   const cnExclusiveT = useTranslations("bandori.notices.cnExclusive");
-  const { allEvents, allCharacters, calendarEvents, holidayData, loading, refresh } = useCalendarData();
+  const { allEvents, allCharacters, calendarEvents, holidayData, loading, loaded, error, refresh } = useCalendarData();
+  const commonT = useTranslations("common");
   const hasPermission = useCalendarPermission();
   const [showIcsModal, setShowIcsModal] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -625,13 +627,14 @@ export default function CalendarPage() {
         )}
 
         {/* 加载状态 */}
+        {error ? <div role="alert" className="hhwx-panel border p-4 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{commonT(loaded ? "states.refreshFailed" : "states.loadFailed")} <button type="button" className="hhwx-text-link" onClick={refresh}>{commonT("actions.retry")}</button></div> : null}
         {loading && <CalendarPageSkeleton showEditorPlaceholder={hasPermission} />}
 
         {/* 日历 */}
-        {!loading && <CalendarGrid events={calendarEvents} holidayData={holidayData} />}
+        {loaded && <CalendarGrid events={calendarEvents} holidayData={holidayData} />}
 
         {/* 编辑按钮（仅有权限用户可见） */}
-        {hasPermission && !loading && (
+        {hasPermission && loaded && !error && (
           <EventEditor allEvents={allEvents} onSaved={handleSaved} />
         )}
       </div>

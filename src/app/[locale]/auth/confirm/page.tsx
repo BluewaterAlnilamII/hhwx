@@ -1,5 +1,7 @@
 "use client";
 
+import LoadingIndicator from "@/components/LoadingIndicator";
+
 import Heading from "@/components/Heading";
 import { type EmailOtpType } from "@supabase/supabase-js";
 import { useLocale, useTranslations } from "next-intl";
@@ -155,10 +157,7 @@ function AuthConfirmPageFallback() {
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-[var(--theme-color-action-secondary-foreground)]">{t("section")}</p>
           <Heading as="h1" visualRole="page" className="mt-3">{t("title")}</Heading>
         </div>
-        <div className="space-y-4 text-center">
-          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[var(--theme-color-semantic-info-border)] border-t-transparent" />
-          <p className="text-sm leading-6 text-[var(--theme-color-text-muted)]">{commonT("states.loadingPage")}</p>
-        </div>
+        <LoadingIndicator label={commonT("states.loading")} />
       </div>
     </main>
   );
@@ -444,10 +443,7 @@ function AuthConfirmPageContent() {
         </div>
 
         {status === "verifying" && (
-          <div className="space-y-4 text-center">
-            <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[var(--theme-color-semantic-info-border)] border-t-transparent" />
-            <p className="text-sm leading-6 text-[var(--theme-color-text-muted)]">{message}</p>
-          </div>
+          <LoadingIndicator label={message} />
         )}
 
         {status === "error" && (

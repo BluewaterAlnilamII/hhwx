@@ -9,7 +9,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { Check, ChevronDown, Filter, ListFilter, Loader2, Plus, RotateCcw, Save } from "lucide-react";
+import { Check, ChevronDown, Filter, ListFilter, Plus, RotateCcw, Save } from "lucide-react";
+import LoadingIndicator, { LoadingSpinner } from "@/components/LoadingIndicator";
 import { useLocale, useTranslations } from "next-intl";
 import AccountShell, {
   AccountErrorState,
@@ -108,10 +109,7 @@ function CardPickerLoading() {
   const t = useTranslations("bandori.gameProfiles.cards");
   return (
     <div className="fixed inset-0 z-1000 flex h-dvh items-center justify-center bg-[var(--theme-color-overlay-background)] p-4">
-      <div className="inline-flex items-center gap-2 rounded-2xl bg-[var(--theme-color-panel-background)] px-4 py-3 text-sm font-bold text-[var(--theme-color-text-muted)] shadow-2xl">
-        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-        {t("picker.loading")}
-      </div>
+      <LoadingIndicator compact label={t("picker.loading")} className="rounded-2xl bg-[var(--theme-color-panel-background)] px-4 py-3 shadow-2xl" />
     </div>
   );
 }
@@ -211,7 +209,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
   const filterT = useTranslations("bandori.cardFilters");
   const termsT = useTranslations("bandori.terms");
   const commonT = useTranslations("common");
-  const { userId, authReady, loadingProfile, profileError } = useLocalizedAccountProfile();
+  const { userId, authReady, loadingProfile, profileError, loadProfile: loadAccountProfile } = useLocalizedAccountProfile();
   const isMasterEnabled = Boolean(profileId && userId);
   const cardsMaster = useBandoriCardsMaster(undefined, isMasterEnabled);
   const charactersMaster = useBandoriCharactersMaster(isMasterEnabled);
@@ -227,6 +225,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
     markCardsSaved,
   } = useGameProfileCardDraft();
   const [profilePayload, setProfilePayload] = useState<UserGameProfilePayload | null>(null);
+  const [loadedProfileKey, setLoadedProfileKey] = useState("");
   const [canEditProfile, setCanEditProfile] = useState(false);
   const [baseCardsHash, setBaseCardsHash] = useState<string | null>(null);
   const [cardEditorState, setCardEditorState] = useState<CardEditorState>(null);
@@ -279,6 +278,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
       if (generation !== profileLoadGenerationRef.current) return;
       const nextCards = getGameProfileCards(loaded.payload);
       setProfilePayload(loaded.payload);
+      setLoadedProfileKey(requestKey);
       setCanEditProfile(loaded.isEditable);
       setBaseCardsHash(loaded.cardsHash);
       resetCards(nextCards);
@@ -544,6 +544,14 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
   ]);
 
   const pageError = profileError || loadError || (masterDataError ? t("draftErrors.loadMasterFailed") : "");
+  const hasPageData = loadedProfileKey === `${userId}:${profileId}` && profilePayload !== null && isMasterDataReady;
+  const handleRetryLoad = () => {
+    if (profileError) void loadAccountProfile().catch(() => undefined);
+    if (loadError) void loadProfile();
+    for (const request of [cardsMaster, charactersMaster, skillsMaster]) {
+      if (request.error) request.refresh();
+    }
+  };
   const isPageLoading = isLoadingCards
     || cardsMaster.loading
     || charactersMaster.loading
@@ -559,13 +567,26 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
       onBack={handleBack}
       isBackDisabled={isSavingChanges}
     >
-      {!authReady || loadingProfile ? (
+      {!authReady || (loadingProfile && !hasPageData) ? (
         <AccountLoadingState message={commonT("states.loadingAccount")} />
       ) : !userId ? (
         <AccountSignInState nextPath={`/bandori/game-profiles/${profileId}/cards`} />
-      ) : pageError ? (
-        <AccountErrorState message={pageError} />
-      ) : isPageLoading ? (
+      ) : (
+        <>
+          {pageError ? (
+            <div role="alert" className="mb-4 space-y-3">
+              <AccountErrorState message={pageError} />
+              <button
+                type="button"
+                onClick={handleRetryLoad}
+                disabled={isLoadingCards || loadingProfile || cardsMaster.refreshing || charactersMaster.refreshing || skillsMaster.refreshing}
+                className="hhwx-control rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-50"
+              >
+                {commonT("actions.retry")}
+              </button>
+            </div>
+          ) : null}
+          {pageError && !hasPageData ? null : isPageLoading || !hasPageData ? (
         <AccountLoadingState message={t("loadingCards")} />
       ) : (
         <section className="mx-auto w-full max-w-[960px] overflow-visible rounded-[28px] border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-4 shadow-[0_18px_55px_rgba(15,23,42,0.09)] sm:p-5">
@@ -637,7 +658,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                     disabled={isSavingChanges || saveState === "conflict"}
                     className="hhwx-action-accent inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-bold "
                   >
-                    {isSavingChanges ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}
+                    {isSavingChanges ? <LoadingSpinner className="text-current" /> : <Save className="h-4 w-4" aria-hidden="true" />}
                     {isSavingChanges ? t("draftActions.saving") : t("draftActions.saveAll")}
                   </button>
                 </div>
@@ -793,6 +814,8 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
             />
           ) : null}
         </section>
+          )}
+        </>
       )}
     </AccountShell>
   );

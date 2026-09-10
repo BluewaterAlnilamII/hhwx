@@ -21,11 +21,12 @@ function DegreeImage({
   className?: string;
   isDecorativeOverlay?: boolean;
 }) {
-  const [failed, setFailed] = useState(false);
-  if (!src || failed) return null;
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  if (!src || failedSrc === src) return null;
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
+      key={src}
       src={src}
       alt=""
       aria-hidden="true"
@@ -33,7 +34,7 @@ function DegreeImage({
       loading="lazy"
       decoding="async"
       draggable={isDecorativeOverlay ? false : undefined}
-      onError={() => setFailed(true)}
+      onError={() => setFailedSrc(src)}
       className={cn(
         "object-contain",
         isDecorativeOverlay && "pointer-events-none select-none",

@@ -11,10 +11,10 @@ import {
   Clock3,
   FileJson,
   ListFilter,
-  Loader2,
   Music2,
   Users,
 } from "lucide-react";
+import LoadingIndicator, { LoadingSpinner } from "@/components/LoadingIndicator";
 import BandoriAccountShell from "@/app/[locale]/bandori/BandoriAccountShell";
 import BandoriCardTile from "@/components/bandori/BandoriCardTile";
 import BandoriEventBonusPanel from "@/components/bandori/BandoriEventBonusPanel";
@@ -146,10 +146,7 @@ type MedleyResultInputSnapshot = {
 function DynamicTemporaryCardDialogLoading({ message }: { message: string }) {
   return (
     <div className="fixed inset-0 z-1000 flex h-dvh items-center justify-center overflow-hidden overscroll-contain bg-[var(--theme-color-overlay-background)] p-3 sm:p-6" role="dialog" aria-modal="true">
-      <div className="inline-flex items-center gap-2 rounded-2xl bg-[var(--theme-color-panel-background)] px-4 py-3 text-sm font-bold text-[var(--theme-color-text-muted)] shadow-2xl">
-        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-        {message}
-      </div>
+      <LoadingIndicator compact label={message} className="rounded-2xl bg-[var(--theme-color-panel-background)] px-4 py-3 shadow-2xl" />
     </div>
   );
 }
@@ -1964,7 +1961,7 @@ function TeamBuilderPanel() {
     error: masterMusicError,
     refresh: refreshMasterMusic,
   } = useBandoriMusicMaster();
-  const { value: eventAssetIndex } = useBandoriEventsAssetIndex();
+  const { value: eventAssetIndex, loading: eventAssetIndexLoading, error: eventAssetIndexError } = useBandoriEventsAssetIndex();
   const teamT = useTranslations("bandori.teamBuilder");
   const stepsT = useTranslations("bandori.teamBuilder.steps");
   const labelsT = useTranslations("bandori.teamBuilder.labels");
@@ -3079,6 +3076,8 @@ function TeamBuilderPanel() {
             selectedEventId={selectedEventSwitcherId}
             onSelectedEventIdChange={setSelectedEventId}
             bannerUrl={selectedEventBannerUrl}
+            bannerLoading={eventAssetIndexLoading}
+            bannerError={eventAssetIndexError}
             startText={selectedEvent ? `${formatDate(getEventStartAt(selectedEvent), locale, termsT("notSet"))} (CN)` : null}
             endText={selectedEvent ? `${formatDate(getEventEndAt(selectedEvent), locale, termsT("notSet"))} (CN)` : null}
             recommendedEventId={recommendedEvent ? String(recommendedEvent.eventId) : null}
@@ -3423,7 +3422,7 @@ function TeamBuilderPanel() {
                 disabled={submitting || !isPreloadReady}
                 className="hhwx-action-accent inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-bold shadow-xs transition "
               >
-                {submitting || isPreloadLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
+                {submitting || isPreloadLoading ? <LoadingSpinner className="text-current" /> : <Calculator className="h-4 w-4" />}
                 {isPreloadReady ? actionsT("calculate") : actionsT("preparing")}
               </button>
             </div>
@@ -3443,7 +3442,7 @@ function TeamBuilderPanel() {
             {resultError ? <div className="whitespace-pre-line rounded-xl bg-[var(--theme-color-semantic-danger-background)] p-3 text-center text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)]">{resultError}</div> : null}
             {medleyProgress ? (
               <div className="whitespace-pre-line rounded-xl bg-[var(--theme-color-semantic-info-background)] p-3 text-center text-sm font-semibold leading-6 text-[var(--theme-color-semantic-info-foreground)]">
-                <Loader2 className="mr-1 inline h-4 w-4 animate-spin" />
+                <LoadingSpinner className="mr-1 align-middle" />
                 {buildSearchProgressSummary(medleyProgress, proofT)}
               </div>
             ) : result ? (
@@ -3599,8 +3598,8 @@ function TeamBuilderPanel() {
           server={selectedProfileCardServer}
           missingCardFallback="jp"
           scrollElementRef={cardPickerScrollRef}
-          cardMetadata={profileCardMetadata}
-          canonicalCardMetadata={canonicalCardMetadata}
+          cardMetadata={selectedServerCards ?? undefined}
+          canonicalCardMetadata={canonicalCards ?? undefined}
           characters={data.characters}
           skills={data.skills}
           onValueChange={selectTemporaryCard}

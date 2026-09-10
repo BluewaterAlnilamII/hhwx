@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import type {
   CSSProperties,
   FocusEventHandler,
-  MouseEventHandler,
+  PointerEventHandler,
   ReactNode,
   RefObject,
 } from "react";
@@ -27,8 +27,8 @@ export type BandoriCardHoverTooltipProps = {
   children?: ReactNode;
   className?: string;
   style?: CSSProperties;
-  onMouseEnter?: MouseEventHandler<HTMLDivElement>;
-  onMouseLeave?: MouseEventHandler<HTMLDivElement>;
+  onPointerEnter?: PointerEventHandler<HTMLDivElement>;
+  onPointerLeave?: PointerEventHandler<HTMLDivElement>;
   onFocus?: FocusEventHandler<HTMLDivElement>;
   onBlur?: FocusEventHandler<HTMLDivElement>;
 };
@@ -43,8 +43,8 @@ export type BandoriCardHoverPopoverProps = {
   detailHref?: string;
   children?: ReactNode;
   className?: string;
-  onMouseEnter?: MouseEventHandler<HTMLDivElement>;
-  onMouseLeave?: MouseEventHandler<HTMLDivElement>;
+  onPointerEnter?: PointerEventHandler<HTMLDivElement>;
+  onPointerLeave?: PointerEventHandler<HTMLDivElement>;
   onFocus?: FocusEventHandler<HTMLDivElement>;
   onBlur?: FocusEventHandler<HTMLDivElement>;
 };
@@ -111,8 +111,8 @@ const BandoriCardHoverTooltip = forwardRef<HTMLDivElement, BandoriCardHoverToolt
   children,
   className,
   style,
-  onMouseEnter,
-  onMouseLeave,
+  onPointerEnter,
+  onPointerLeave,
   onFocus,
   onBlur,
 }: BandoriCardHoverTooltipProps, ref) {
@@ -131,8 +131,8 @@ const BandoriCardHoverTooltip = forwardRef<HTMLDivElement, BandoriCardHoverToolt
         className,
       )}
       style={style}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
       onFocus={onFocus}
       onBlur={onBlur}
     >
@@ -182,8 +182,8 @@ export function BandoriCardHoverPopover({
   detailHref,
   children,
   className,
-  onMouseEnter,
-  onMouseLeave,
+  onPointerEnter,
+  onPointerLeave,
   onFocus,
   onBlur,
 }: BandoriCardHoverPopoverProps) {
@@ -286,8 +286,8 @@ export function BandoriCardHoverPopover({
         className,
       )}
       style={{ left: position?.left ?? 0, top: position?.top ?? 0 }}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
       onFocus={onFocus}
       onBlur={onBlur}
     >

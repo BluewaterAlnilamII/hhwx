@@ -99,8 +99,8 @@ test("simulator loading reuses the page spinner and keeps the resource count com
     read("../src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx"),
   ]);
 
-  assert.match(indicator, /import \{ Loader2 \} from "lucide-react"/u);
-  assert.match(indicator, /animate-spin motion-reduce:animate-none/u);
+  assert.match(indicator, /import LoadingIndicator from "@\/components\/LoadingIndicator"/u);
+  assert.match(indicator, /<LoadingIndicator label=\{label\}/u);
   assert.match(indicator, /Math\.floor\([\s\S]*Math\.min\(Math\.max\(completedResources, 0\), totalResources\)[\s\S]*\* 100/u);
   assert.match(indicator, /\{progressPercentage\}%/u);
   assert.doesNotMatch(indicator, /\{completedResources\} \/ \{totalResources\}/u);

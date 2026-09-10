@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingSpinner } from "@/components/LoadingIndicator";
+
 import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import TurnstileChallenge, { type TurnstileChallengeHandle } from "@/components/TurnstileChallenge";
@@ -231,6 +233,7 @@ export default function AccountEmailPage() {
                   disabled={resendingVerification || isTurnstileLoading}
                   className="hhwx-accent-button"
                 >
+                  {resendingVerification ? <LoadingSpinner className="mr-2 text-current" /> : null}
                   {resendingVerification ? commonT("actions.sending") : t("resendAction")}
                 </button>
               </div>
@@ -283,6 +286,7 @@ export default function AccountEmailPage() {
                 disabled={emailSaving || isTurnstileLoading || !newEmail.trim()}
                 className="hhwx-accent-button"
               >
+                {emailSaving ? <LoadingSpinner className="mr-2 text-current" /> : null}
                 {emailSaving ? t("submitting") : t("submitAction")}
               </button>
             </div>

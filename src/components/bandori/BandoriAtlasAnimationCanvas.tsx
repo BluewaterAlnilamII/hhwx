@@ -152,7 +152,7 @@ export function BandoriAtlasAnimationCanvas({
     );
     observer.observe(canvas);
     return () => observer.disconnect();
-  }, []);
+  }, [animation.atlasUrl]);
 
   useEffect(() => {
     elapsedMsRef.current = 0;
@@ -248,6 +248,7 @@ export function BandoriAtlasAnimationCanvas({
 
   return (
     <canvas
+      key={animation.atlasUrl}
       ref={canvasRef}
       width={firstFrame.rect.width}
       height={firstFrame.rect.height}

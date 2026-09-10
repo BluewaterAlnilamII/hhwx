@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import LoadingIndicator from "@/components/LoadingIndicator";
 import { useTranslations } from "next-intl";
 import BandoriCardTile from "@/components/bandori/BandoriCardTile";
 import Heading from "@/components/Heading";
@@ -438,19 +438,13 @@ export default function BandoriEventBonusPanel({
         <div className="flex flex-col gap-2 border-b border-[var(--theme-color-border-subtle)] pb-4 sm:flex-row sm:items-center sm:justify-between">
           <Heading as="h2" visualRole="subsection" className="text-base">{labelsT("eventBonus")}</Heading>
           {loading ? (
-            <span className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--theme-color-text-muted)]">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {labelsT("loadBonus")}
-            </span>
+            <LoadingIndicator compact label={labelsT("loadBonus")} />
           ) : null}
         </div>
       ) : null}
 
       {variant === "embedded" && loading ? (
-        <div className="inline-flex items-center gap-2 py-3 text-sm font-semibold text-[var(--theme-color-text-muted)]">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          {labelsT("loadBonus")}
-        </div>
+        <LoadingIndicator compact label={labelsT("loadBonus")} className="justify-start py-3" />
       ) : null}
       {variant === "embedded" && !eventBonus && !loading ? (
         <div className="py-3 text-sm font-semibold text-[var(--theme-color-text-muted)]">{statesT("noEventBonusData")}</div>

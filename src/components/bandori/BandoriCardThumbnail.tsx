@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { useState } from "react";
 import { ImageOff } from "lucide-react";
 import { useTranslations } from "next-intl";
+import LoadingImage from "@/components/LoadingImage";
 import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import {
   buildBandoriRarityStarIconUrl,
@@ -91,7 +92,7 @@ function CardAssetImage({
         role="status"
         aria-busy="true"
         aria-label={loadingLabel}
-        className="h-full w-full animate-pulse bg-[var(--theme-color-control-background-muted)]"
+        className="h-full w-full motion-safe:animate-pulse bg-[var(--theme-color-control-background-muted)]"
       />
     );
   }
@@ -101,10 +102,10 @@ function CardAssetImage({
   }
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
+    <LoadingImage
       src={activeSrc}
       alt={alt}
+      loadingLabel={loadingLabel}
       loading={loading}
       decoding="async"
       className={className}
@@ -135,6 +136,7 @@ export default function BandoriCardThumbnail({
   power?: number | null;
 }) {
   const t = useTranslations("bandori.cards.common");
+  const commonT = useTranslations("common");
   const { value: assetIndex, loading: assetIndexLoading } = useBandoriCardsAssetIndex();
   const requestedTrainType = getCardTrainType(card);
   const trainType = resolveBandoriCardAssetVariant(
@@ -187,7 +189,7 @@ export default function BandoriCardThumbnail({
       style={starStyle as CSSProperties}
     >
       <div className="absolute inset-0">
-        <div className="h-full w-full overflow-hidden rounded-[5px]">
+        <div className="relative h-full w-full overflow-hidden rounded-[5px]">
           <CardAssetImage
             src={thumbnailUrl}
             alt={alt}
@@ -195,7 +197,7 @@ export default function BandoriCardThumbnail({
             className="h-full w-full object-cover"
             isResolving={assetIndexLoading}
             loadingLabel={t("imageLoading")}
-            fallbackLabel={t("imageUnavailable")}
+            fallbackLabel={commonT("states.imageUnavailable")}
           />
         </div>
       </div>

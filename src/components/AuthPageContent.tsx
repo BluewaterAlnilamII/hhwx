@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingSpinner } from "@/components/LoadingIndicator";
+
 import Heading from "@/components/Heading";
 import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
@@ -504,6 +506,7 @@ export default function AuthPageContent() {
                   disabled={loading || (mode !== "login" && isTurnstileLoading)}
                   className="hhwx-accent-button"
                 >
+                  {loading ? <LoadingSpinner className="mr-2 text-current" /> : null}
                   {loading
                     ? commonT("actions.loading")
                     : mode === "login"

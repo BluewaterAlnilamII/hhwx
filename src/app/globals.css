@@ -67,7 +67,7 @@
     right: var(--calendar-label-end);
   }
 
-  @media (prefers-color-scheme: light) {
+  @media (prefers-color-scheme: light) and (hover: hover) {
     .hhwx-text-link:hover {
       text-decoration-line: underline;
     }
@@ -90,9 +90,11 @@
     background: var(--theme-color-calendar-event-shade);
   }
 
-  .hhwx-control:hover:not(:disabled):not([aria-disabled='true']):not([aria-pressed='true']) {
-    border-color: var(--theme-color-action-secondary-border);
-    background-color: var(--theme-color-control-background-hover);
+  @media (hover: hover) {
+    .hhwx-control:hover:not(:disabled):not([aria-disabled='true']):not([aria-pressed='true']) {
+      border-color: var(--theme-color-action-secondary-border);
+      background-color: var(--theme-color-control-background-hover);
+    }
   }
 
   .hhwx-control[aria-pressed='true'] {
@@ -107,8 +109,10 @@
     color: var(--theme-color-action-accent-foreground);
   }
 
-  .hhwx-action-accent:hover:not(:disabled):not([aria-disabled='true']) {
-    background-color: var(--theme-color-action-accent-background-hover);
+  @media (hover: hover) {
+    .hhwx-action-accent:hover:not(:disabled):not([aria-disabled='true']) {
+      background-color: var(--theme-color-action-accent-background-hover);
+    }
   }
 
   .hhwx-control:focus-visible,
@@ -142,19 +146,23 @@
   }
 
   /* Catalog rows and shared card controls use the same theme semantics. */
-  .hhwx-catalog-row:hover {
-    translate: none;
-    border-color: var(--theme-color-action-secondary-border);
-    box-shadow: none;
+  @media (hover: hover) {
+    .hhwx-catalog-row:hover {
+      translate: none;
+      border-color: var(--theme-color-action-secondary-border);
+      box-shadow: none;
+    }
   }
 
   .hhwx-catalog-action {
     color: var(--theme-color-action-secondary-foreground);
   }
 
-  .hhwx-catalog-action:hover {
-    border-color: var(--theme-color-action-secondary-border);
-    background-color: var(--theme-color-action-secondary-background-hover);
+  @media (hover: hover) {
+    .hhwx-catalog-action:hover {
+      border-color: var(--theme-color-action-secondary-border);
+      background-color: var(--theme-color-action-secondary-background-hover);
+    }
   }
 
   .hhwx-catalog-error {
@@ -185,8 +193,10 @@
     color: var(--theme-color-text-default);
   }
 
-  .hhwx-card-art-toggle button:hover {
-    background-color: var(--theme-color-control-background-hover);
+  @media (hover: hover) {
+    .hhwx-card-art-toggle button:hover {
+      background-color: var(--theme-color-control-background-hover);
+    }
   }
 
   .hhwx-card-art-toggle button[aria-pressed="true"] {
@@ -263,8 +273,10 @@
   }
 }
 
-.hhwx-accent-button:hover {
-  background: var(--theme-color-action-primary-background-hover);
+@media (hover: hover) {
+  .hhwx-accent-button:hover {
+    background: var(--theme-color-action-primary-background-hover);
+  }
 }
 
 .hhwx-accent-button:disabled,

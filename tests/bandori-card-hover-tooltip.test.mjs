@@ -132,7 +132,7 @@ test("card tiles declare information, action, and presentation semantics explici
   assert.match(tile, /kind: "action"/u);
   assert.match(tile, /kind: "presentation"/u);
   assert.doesNotMatch(tile, /isPresentationOnly|actionLabel\?:|onAction\?:/u);
-  assert.match(pickerTile, /onClick=\{onSelect\}/u);
+  assert.match(pickerTile, /onClick=\{\(\) => \{\s*closeTooltip\(\);\s*onSelect\(\);/u);
   assert.match(eventInfo, /interaction=\{\{ kind: "information" \}\}/u);
   assert.match(eventBonus, /interaction=\{\{ kind: "information" \}\}/u);
   assert.match(teamBuilder, /interaction=\{\{ kind: "information" \}\}/u);

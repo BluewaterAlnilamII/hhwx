@@ -1,7 +1,9 @@
 "use client";
 
+import LoadingIndicator from "@/components/LoadingIndicator";
+
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { Loader2, SearchX } from "lucide-react";
+import { SearchX } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import BandoriCardFilterControls from "@/components/bandori/BandoriCardFilterControls";
 import { useBandoriCharactersMaster } from "@/hooks/useBandoriCharactersMaster";
@@ -73,6 +75,7 @@ function replaceCardsListQuery(query: string): void {
 
 export default function CardsPageClient() {
   const t = useTranslations("bandori.cards");
+  const commonT = useTranslations("common");
   const filterT = useTranslations("bandori.cardFilters");
   const cardPickerT = useTranslations("bandori.cardPicker");
   const searchParams = useSearchParams();
@@ -169,7 +172,8 @@ export default function CardsPageClient() {
     || charactersMaster.loading
     || skillsMaster.loading
     || cardsAssetIndex.loading;
-  const error = cardsMaster.error ?? charactersMaster.error ?? skillsMaster.error;
+  const error = cardsMaster.error ?? charactersMaster.error ?? skillsMaster.error ?? cardsAssetIndex.error;
+  const hasCatalog = cardsMaster.data !== null && charactersMaster.data !== null && skillsMaster.data !== null;
 
   const updateFilter = (patch: Partial<BandoriCardsPageFilter>) => {
     replaceCardsListQuery(updateBandoriCardsListQuery(window.location.search, patch, filterOptions));
@@ -185,7 +189,7 @@ export default function CardsPageClient() {
 
       <BandoriCardFilterControls
         filter={filter}
-        resultCountLabel={t("page.resultCount", { count: filteredCards.length })}
+        resultCountLabel={!hasCatalog ? commonT(error ? "states.loadFailed" : "states.loading") : t("page.resultCount", { count: filteredCards.length })}
         bandOptions={filterOptions.bandOptions}
         characterOptions={filterOptions.characterOptions}
         availableBandIds={filterOptions.bandIds}
@@ -198,13 +202,17 @@ export default function CardsPageClient() {
 
       {error ? (
         <div role="alert" className="hhwx-catalog-error rounded-2xl border p-5 text-sm font-bold">
-          {t("states.loadFailed")}
+          {commonT(hasCatalog && cardsAssetIndex.value ? "states.refreshFailed" : "states.loadFailed")}{" "}
+          <button type="button" className="hhwx-text-link" onClick={() => {
+            if (cardsMaster.error) cardsMaster.refresh();
+            if (charactersMaster.error) charactersMaster.refresh();
+            if (skillsMaster.error) skillsMaster.refresh();
+            if (cardsAssetIndex.error) cardsAssetIndex.refresh();
+          }}>{commonT("actions.retry")}</button>
         </div>
-      ) : isLoading ? (
-        <div className="hhwx-panel flex min-h-64 items-center justify-center gap-3 border text-sm font-bold text-[var(--theme-color-text-muted)]">
-          <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-          {t("states.loading")}
-        </div>
+      ) : null}
+      {error && !hasCatalog ? null : isLoading ? (
+        <LoadingIndicator label={t("states.loading")} className="hhwx-panel min-h-64 border" />
       ) : filteredCards.length === 0 ? (
         <div className="hhwx-panel flex min-h-64 flex-col items-center justify-center gap-3 border text-center text-[var(--theme-color-text-muted)]">
           <SearchX className="h-9 w-9" aria-hidden="true" />

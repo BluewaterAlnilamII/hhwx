@@ -13,6 +13,8 @@ import MusicArtwork from "@/components/music-player/MusicArtwork";
 import BandoriEventBonusPanel from "@/components/bandori/BandoriEventBonusPanel";
 import BandoriStampView from "@/components/bandori/BandoriStampView";
 import Heading from "@/components/Heading";
+import LoadingPlaceholder from "@/components/LoadingPlaceholder";
+import LoadingIndicator from "@/components/LoadingIndicator";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useBandoriSkillsMaster } from "@/hooks/useBandoriSkillsMaster";
@@ -210,15 +212,26 @@ export default function EventInfoPanel({
   eventRecord,
   musicMaster,
   loading,
+  error,
+  onRetry,
+  musicLoading,
+  musicError,
+  onRetryMusic,
 }: {
   eventId: number | null;
   server: BandoriServer;
   eventRecord: Record<string, unknown> | null;
   musicMaster: BandoriMusicMasterMap | null;
   loading: boolean;
+  error: Error | null;
+  onRetry: () => void;
+  musicLoading: boolean;
+  musicError: Error | null;
+  onRetryMusic: () => void;
 }) {
   const locale = useLocale();
   const t = useTranslations("bandori.events.info");
+  const commonT = useTranslations("common");
   const eventTypesT = useTranslations("bandori.teamBuilder.eventTypes");
   const playerT = useTranslations("navigation.toolbar.player");
   const model = useMemo(
@@ -232,7 +245,8 @@ export default function EventInfoPanel({
   const songs = useMemo(() => songSelection?.songs ?? [], [songSelection]);
   const eventBandId = model ? getBandoriEventBandId(model.band) : null;
   const shouldLoadBandNames = eventId !== null;
-  const { catalog: stampCatalog, loading: stampsLoading } = useCommentStampCatalog(Boolean(model));
+  const stamps = useCommentStampCatalog(Boolean(model));
+  const { catalog: stampCatalog, loading: stampsLoading } = stamps;
   const rewardStampIdsByServer = model?.rewardStampIdsByServer;
   const fallbackRewardStampServer = model?.rewardStampServer ?? server;
   // Keep catalog filtering off the one-second countdown render path.
@@ -257,7 +271,8 @@ export default function EventInfoPanel({
     return { server: fallbackRewardStampServer, stamps: [] };
   }, [fallbackRewardStampServer, rewardStampIdsByServer, server, stampCatalog]);
   const rewardStamps = rewardStampSelection.stamps;
-  const { value: musicAssetIndex } = useBandoriMusicAssetIndex(Boolean(model));
+  const musicAssets = useBandoriMusicAssetIndex(Boolean(model));
+  const { value: musicAssetIndex } = musicAssets;
   const playQueueFromStart = useMusicPlayerStore((state) => state.playQueueFromStart);
   const playableSongs = useMemo(
     () => songs.flatMap((song) => {
@@ -278,20 +293,28 @@ export default function EventInfoPanel({
     () => new Map(playableSongs.map((song, index) => [song.providerTrackId, index])),
     [playableSongs],
   );
-  const { data: cards } = useBandoriCardsMaster(server, Boolean(model), "regional");
-  const { data: characters } = useCachedFetch<Record<string, CharacterRecord | undefined>>(
+  const cardsRequest = useBandoriCardsMaster(server, Boolean(model), "regional");
+  const charactersRequest = useCachedFetch<Record<string, CharacterRecord | undefined>>(
     model ? "bandori-master-characters-main" : null,
     model ? "/api/bandori/master/characters/main" : null,
     parseCharacterResponse,
     SESSION_CLIENT_CACHE_POLICY,
   );
-  const { data: skills } = useBandoriSkillsMaster(Boolean(model));
-  const { data: bands } = useCachedFetch<Record<string, BandoriBandNameRecord | undefined>>(
+  const skillsRequest = useBandoriSkillsMaster(Boolean(model));
+  const bandsRequest = useCachedFetch<Record<string, BandoriBandNameRecord | undefined>>(
     shouldLoadBandNames ? "bandori-master-bands-all" : null,
     shouldLoadBandNames ? "/api/bandori/master/bands/all" : null,
     parseBandResponse,
     SESSION_CLIENT_CACHE_POLICY,
   );
+  const { data: cards } = cardsRequest;
+  const { data: characters } = charactersRequest;
+  const { data: skills } = skillsRequest;
+  const { data: bands } = bandsRequest;
+  const cardDetailsLoading = cardsRequest.loading || charactersRequest.loading || skillsRequest.loading;
+  const cardDetailsReady = cards !== null && characters !== null && skills !== null;
+  const failedRequests = [cardsRequest, charactersRequest, skillsRequest, bandsRequest, stamps, musicAssets]
+    .filter((request) => request.error);
   const jpTitle = model && server !== 0
     ? pickBandoriRegionalText(model.eventName, 0, 0)
     : null;
@@ -315,25 +338,32 @@ export default function EventInfoPanel({
     };
   }, [model]);
 
-  if (loading && !model) {
+  if ((loading && !model) || (model && !cardDetailsReady && cardDetailsLoading)) {
     return (
-      <div className="hhwx-panel border p-8 text-center">
-        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-[var(--theme-color-action-primary-background)] border-t-transparent" />
-        <p className="mt-4 text-sm font-semibold text-[var(--theme-color-text-muted)]">{t("loading")}</p>
-      </div>
+      <LoadingIndicator label={t("loading")} className="hhwx-panel border p-8" />
     );
   }
 
   if (!model || eventId === null) {
     return (
       <div className="hhwx-panel border border-dashed p-10 text-center text-sm font-semibold text-[var(--theme-color-text-muted)]">
-        {t("unavailable")}
+        {error ? <span role="alert">{commonT("states.loadFailed")} <button type="button" className="underline" onClick={onRetry}>{commonT("actions.retry")}</button></span> : t("unavailable")}
       </div>
     );
   }
 
   return (
     <article className="hhwx-panel border p-4 sm:p-6">
+      {error || musicError || failedRequests.length > 0 ? (
+        <div role="alert" className="mb-4 text-sm text-[var(--theme-color-text-muted)]">
+          {commonT("states.loadFailed")}{" "}
+          <button type="button" className="underline" onClick={() => {
+            if (error) onRetry();
+            if (musicError) onRetryMusic();
+            failedRequests.forEach((request) => request.refresh());
+          }}>{commonT("actions.retry")}</button>
+        </div>
+      ) : null}
       <section className="@container">
         <Heading as="h2" visualRole="section" accentSlot="a" icon={<ClipboardList className="h-5 w-5" />}>{t("overviewTitle")}</Heading>
         <div className="mt-4 grid min-w-0 items-stretch gap-y-0 @min-[54rem]:grid-cols-2 @min-[54rem]:gap-x-0">
@@ -362,7 +392,7 @@ export default function EventInfoPanel({
                     className="h-7 w-7 shrink-0 object-contain"
                   />
                 ) : null}
-                <span>{bandName}</span>
+                {bandsRequest.loading ? <LoadingPlaceholder label={commonT("states.loading")} className="h-5 w-24" /> : <span>{bandsRequest.error && !bands ? "—" : bandName}</span>}
               </span>
             </OverviewRow>
             <OverviewRow label={t("eventStatus")}>
@@ -380,7 +410,7 @@ export default function EventInfoPanel({
           </dl>
 
           <div className="min-w-0 border-t border-[var(--theme-color-border-subtle)] @min-[54rem]:border-l @min-[54rem]:border-t-0 @min-[54rem]:pl-8">
-            <BandoriEventBonusPanel
+            {cardDetailsReady ? <BandoriEventBonusPanel
               variant="embedded"
               eventTypeLabel={eventTypeLabel}
               eventBonus={eventBonus}
@@ -390,7 +420,7 @@ export default function EventInfoPanel({
               preferredServer={server}
               showMatch={false}
               showMasterRank={false}
-            />
+            /> : <p className="p-4 text-sm">{commonT("states.loadFailed")}</p>}
           </div>
         </div>
       </section>
@@ -413,7 +443,7 @@ export default function EventInfoPanel({
                 </div>
               ) : (
                 <div className="flex min-h-16 items-center justify-end">
-                  {stampsLoading ? t("loadingRewardStamps") : t("noRewardStamps")}
+                  {stampsLoading ? <LoadingIndicator compact label={t("loadingRewardStamps")} /> : stamps.error ? commonT("states.loadFailed") : t("noRewardStamps")}
                 </div>
               )}
             </OverviewRow>
@@ -421,7 +451,7 @@ export default function EventInfoPanel({
 
           <dl className="mt-2 min-w-0 border-t border-[var(--theme-color-border-subtle)] pt-2 @min-[54rem]:mt-0 @min-[54rem]:border-l @min-[54rem]:border-t-0 @min-[54rem]:pl-8 @min-[54rem]:pt-0">
             <OverviewRow label={t("rewardCards")} mobileLayout="stacked" alignment="start">
-              {model.rewardCardIds.length > 0 ? (
+              {model.rewardCardIds.length > 0 && !cardDetailsReady ? commonT("states.loadFailed") : model.rewardCardIds.length > 0 ? (
                 <div className="flex min-h-16 flex-wrap items-start justify-end gap-3">
                   {model.rewardCardIds.map((cardId) => (
                     <EventCardTile
@@ -462,7 +492,7 @@ export default function EventInfoPanel({
                       className="h-full w-full object-cover"
                       fallback={<ImageOff className="h-6 w-6" />}
                     />
-                  ) : <ImageOff className="h-6 w-6" />}
+                  ) : musicAssets.loading ? <LoadingPlaceholder label={commonT("states.loading")} className="h-full w-full" /> : <ImageOff className="h-6 w-6" />}
                 </div>
                 <div className="min-w-0">
                   <div className="truncate text-base font-black text-[var(--theme-color-text-default)]">{song.title}</div>
@@ -491,9 +521,9 @@ export default function EventInfoPanel({
                       }
                     }}
                     disabled={playableSongIndex === undefined}
-                    title={playableSongIndex === undefined ? playerT("audioUnavailable") : undefined}
+                    title={musicAssets.loading ? commonT("states.loading") : playableSongIndex === undefined ? playerT("audioUnavailable") : undefined}
                     aria-label={playableSongIndex === undefined
-                      ? playerT("audioUnavailable")
+                      ? musicAssets.loading ? commonT("states.loading") : playerT("audioUnavailable")
                       : playerT("playSong", { title: song.title })}
                     className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--theme-color-action-accent-background)] text-[var(--theme-color-action-accent-foreground)] shadow-sm outline-hidden transition hover:scale-105 hover:bg-[var(--theme-color-action-accent-background-hover)] focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] disabled:shadow-none"
                   >
@@ -503,9 +533,9 @@ export default function EventInfoPanel({
               </div>
             );
           })}
-          {songs.length === 0 ? (
+          {musicLoading ? <LoadingIndicator label={commonT("states.loading")} className="h-24 w-full" /> : songs.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] px-5 py-8 text-center text-sm font-semibold text-[var(--theme-color-text-muted)]">
-              {songSelection?.startAt === null || songSelection?.endAt === null
+              {musicError ? commonT("states.loadFailed") : songSelection?.startAt === null || songSelection?.endAt === null
                 ? t("songWindowUnavailable")
                 : t("noSongs")}
             </div>

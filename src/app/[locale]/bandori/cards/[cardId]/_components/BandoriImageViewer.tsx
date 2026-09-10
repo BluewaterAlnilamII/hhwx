@@ -3,6 +3,8 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ChevronLeft, ChevronRight, ImageOff, X } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { LoadingSpinner } from "@/components/LoadingIndicator";
 
 type ImageView = { zoom: number; x: number; y: number };
 type Point = { x: number; y: number };
@@ -13,11 +15,9 @@ export type BandoriImageViewerLabels = {
   previous: string;
   next: string;
   imageLoading: string;
-  imageUnavailable: string;
-  retry?: string;
 };
 
-export default function BandoriImageViewer({ src, alt, label, labels, loading = false, onClose, onPrevious, onNext, onRetry }: {
+export default function BandoriImageViewer({ src, alt, label, labels, loading = false, onClose, onPrevious, onNext }: {
   src: string | null;
   alt?: string;
   label: string;
@@ -26,12 +26,13 @@ export default function BandoriImageViewer({ src, alt, label, labels, loading = 
   onClose: () => void;
   onPrevious?: () => void;
   onNext?: () => void;
-  onRetry?: () => void;
 }) {
+  const commonT = useTranslations("common");
   const [view, setView] = useState<ImageView>({ zoom: 1, x: 0, y: 0 });
   const [imageSize, setImageSize] = useState<{ src: string; width: number; height: number } | null>(null);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const currentSize = imageSize?.src === src ? imageSize : null;
+  const imageLoading = src ? failedSrc !== src && !currentSize : loading;
   const imageWidth = currentSize
     ? `min(${currentSize.width}px, 90vw, calc((100dvh - 8rem) * ${currentSize.width / currentSize.height}))`
     : "auto";
@@ -57,13 +58,16 @@ export default function BandoriImageViewer({ src, alt, label, labels, loading = 
   const bindImage = useCallback((image: HTMLImageElement | null) => {
     imageRef.current = image;
     if (!image) return;
+    setImageSize(src && image.complete && image.naturalWidth > 0
+      ? { src, width: image.naturalWidth, height: image.naturalHeight }
+      : null);
     const resize = new ResizeObserver(() => updateView(viewRef.current));
     resize.observe(image);
     return () => {
       resize.disconnect();
       imageRef.current = null;
     };
-  }, [updateView]);
+  }, [src, updateView]);
   const zoomAt = useCallback((zoom: number, from?: Point, to = from, previous = viewRef.current) => {
     const rect = viewportRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -222,6 +226,7 @@ export default function BandoriImageViewer({ src, alt, label, labels, loading = 
                   draggable={false}
                   className={`block h-auto origin-center shrink-0 ${view.zoom > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-out"}`}
                   style={{
+                    opacity: currentSize ? 1 : 0,
                     width: imageWidth,
                     maxWidth: currentSize ? "none" : "90vw",
                     maxHeight: currentSize ? "none" : "calc(100dvh - 8rem)",
@@ -233,16 +238,18 @@ export default function BandoriImageViewer({ src, alt, label, labels, loading = 
                   }}
                   onError={() => setFailedSrc(src)}
                 />
-              ) : (
-                <div className="m-auto flex flex-col items-center gap-2 text-center text-sm text-white" role={loading ? "status" : undefined} aria-busy={loading}>
+              ) : !imageLoading ? (
+                <div className="m-auto flex flex-col items-center gap-2 text-center text-sm text-white">
                   <ImageOff className="h-8 w-8" aria-hidden="true" />
-                  <span>{loading ? labels.imageLoading : labels.imageUnavailable}</span>
-                  {!loading && onRetry && labels.retry ? (
-                    <button type="button" className="rounded-full bg-white/10 px-3 py-1 hover:bg-white/20" onClick={() => { setFailedSrc(null); onRetry(); }}>{labels.retry}</button>
-                  ) : null}
+                  <span>{commonT("states.imageUnavailable")}</span>
                 </div>
-              )}
+              ) : null}
             </div>
+            {imageLoading ? (
+              <div role="status" aria-busy="true" aria-label={commonT("states.loading")} className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <LoadingSpinner className="h-10 w-10 border-4" />
+              </div>
+            ) : null}
           </div>
         </Dialog.Content>
       </Dialog.Portal>

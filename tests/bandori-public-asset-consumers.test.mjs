@@ -26,7 +26,8 @@ test("card image consumers use index descriptors and never substitute full art",
   assert.match(thumbnail, /resolveBandoriCardAssetVariant/u);
   assert.match(thumbnail, /aria-busy="true"/u);
   assert.doesNotMatch(thumbnail, /No image/u);
-  assert.match(artImage, /aria-busy="true"/u);
+  assert.match(artImage, /<LoadingPlaceholder/u);
+  assert.match(await readSource("src/components/LoadingPlaceholder.tsx"), /aria-busy="true"/u);
   assert.match(artImage, /imageUnavailable/u);
   assert.doesNotMatch(artImage, /No image/u);
   const fullCard = await readSource("src/app/[locale]/bandori/cards/[cardId]/_components/BandoriFullCardArt.tsx");

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+import { useTranslations } from "next-intl";
+import LoadingIndicator from "@/components/LoadingIndicator";
 import { useRouter } from "@/i18n/navigation";
 import {
   pickAvailableBandoriServer,
@@ -21,6 +23,7 @@ export default function CardDetailPreferredServerResolver({
   availableServers,
 }: CardDetailPreferredServerResolverProps) {
   const router = useRouter();
+  const t = useTranslations("common");
   const preferredServer = useBandoriPreferencesStore((state) => state.preferredServer);
   const hydrated = useBandoriPreferencesStore((state) => state.hydrated);
   const hydratePreferredServer = useBandoriPreferencesStore(
@@ -49,14 +52,7 @@ export default function CardDetailPreferredServerResolver({
 
   return (
     <BandoriPageShell contentClassName="max-w-6xl">
-      <article
-        aria-busy="true"
-        className="hhwx-panel min-h-96 animate-pulse border p-4 sm:p-6"
-      >
-        <div className="h-5 w-32 rounded-lg bg-[var(--theme-color-control-background-muted)]" />
-        <div className="mt-7 h-9 w-full max-w-xl rounded-xl bg-[var(--theme-color-control-background)]" />
-        <div className="mt-8 h-64 rounded-2xl bg-[var(--theme-color-control-background-muted)]" />
-      </article>
+      <LoadingIndicator label={t("states.loading")} className="hhwx-panel min-h-96 border p-4 sm:p-6" />
     </BandoriPageShell>
   );
 }

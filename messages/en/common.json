@@ -1,5 +1,6 @@
 {
   "actions": {
+    "retry": "Retry",
     "enter": "Enter",
     "view": "View",
     "backHome": "Back home",
@@ -14,6 +15,10 @@
     "markAllRead": "Mark all as read"
   },
   "states": {
+    "loading": "Loading",
+    "imageUnavailable": "Image unavailable",
+    "loadFailed": "Unable to load data",
+    "refreshFailed": "Update failed; showing previously loaded data",
     "loadingPage": "Please wait. The page will be ready soon.",
     "loadingAccount": "Loading account information...",
     "loadingProfile": "Loading profile...",

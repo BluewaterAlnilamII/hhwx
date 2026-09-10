@@ -165,7 +165,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
     const t = useTranslations("navigation.toolbar");
     const languageT = useTranslations("common.language");
     const preferredServer = useBandoriPreferredServer();
-    const { userId, username, emailVerified, setAuth, logout, debugMode, toggleDebugMode } = useGameStore();
+    const { userId, username, emailVerified, authReady, setAuth, logout, debugMode, toggleDebugMode } = useGameStore();
     const [toolbarMenuState, setToolbarMenuState] = useState<{
         pathname: string;
         menu: OpenToolbarMenu;
@@ -173,6 +173,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
     const [notificationUnreadState, setNotificationUnreadState] = useState<{ userId: string; unreadCount: number } | null>(null);
     const storedProfileUserId = useAccountProfileStore((state) => state.userId);
     const storedProfile = useAccountProfileStore((state) => state.profile);
+    const storedProfileError = useAccountProfileStore((state) => state.error);
     const loadAccountProfile = useAccountProfileStore((state) => state.loadProfile);
     const clearAccountProfile = useAccountProfileStore((state) => state.clearProfile);
     const toolbarMenusRef = useRef<HTMLDivElement | null>(null);
@@ -497,14 +498,17 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                         <button
                             type="button"
                             onClick={toggleAccountMenu}
+                            disabled={!authReady}
                             className={toolbarIconButtonClassName}
                             aria-label={userId ? t("openAccountMenu") : t("openLogin")}
                             aria-expanded={showMenu}
                             aria-haspopup="menu"
                         >
                             <span className={toolbarIconInnerClassName}>
-                                {userId ? (
+                                {!authReady || userId ? (
                                     <AccountCardAvatar
+                                        key={userId ?? "pending"}
+                                        pending={!authReady || (!toolbarProfile && !(storedProfileUserId === userId && storedProfileError))}
                                         username={toolbarUsername}
                                         cardId={avatarCardId}
                                         entityServer={avatarCardServer}

@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useState } from "react";
 import { Check, X } from "lucide-react";
+import { LoadingSpinner } from "@/components/LoadingIndicator";
 import { useTranslations } from "next-intl";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import {
@@ -166,7 +167,7 @@ export const CommentComposer = memo(function CommentComposer({
             disabled={!content.trim() || submitting}
             className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[var(--theme-color-action-accent-background)] px-3 text-xs font-semibold text-[var(--theme-color-action-accent-foreground)] shadow-xs transition hover:bg-[var(--theme-color-action-accent-background-hover)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] disabled:opacity-70 disabled:shadow-none disabled:ring-1 disabled:ring-inset disabled:ring-[var(--theme-color-control-border-disabled)] disabled:hover:bg-[var(--theme-color-control-background-disabled)]"
           >
-            <Check size={14} />
+            {submitting ? <LoadingSpinner className="h-3.5 w-3.5 text-current" /> : <Check size={14} />}
             {submitting ? t("actions.sending") : submitLabel}
           </button>
         </div>

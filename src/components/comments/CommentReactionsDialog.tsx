@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { LoaderCircle, X } from "lucide-react";
+import { X } from "lucide-react";
+import LoadingIndicator from "@/components/LoadingIndicator";
 import { useTranslations } from "next-intl";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
 import { useCommentReactionParticipants } from "@/hooks/useCommentReactionParticipants";
@@ -186,13 +187,7 @@ export function CommentReactionsDialog({
               ))}
 
               {selectedPage?.isLoading ? (
-                <div
-                  aria-live="polite"
-                  className="flex h-12 items-center justify-center gap-2 text-xs font-semibold text-[var(--theme-color-text-muted)]"
-                >
-                  <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />
-                  {t("reactions.loadingMore")}
-                </div>
+                <LoadingIndicator compact label={t("reactions.loadingMore")} className="h-12 text-xs" />
               ) : null}
 
               {selectedPage?.hasError ? (

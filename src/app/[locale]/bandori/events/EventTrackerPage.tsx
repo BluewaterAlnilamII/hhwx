@@ -1,5 +1,7 @@
 "use client";
 
+import LoadingIndicator from "@/components/LoadingIndicator";
+
 import { Suspense, startTransition, useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
@@ -229,12 +231,13 @@ function EventTrackerRouteStateSync({
 function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
   const locale = useLocale();
   const commonT = useTranslations("bandori.events.common");
+  const sharedT = useTranslations("common");
   const viewT = useTranslations("bandori.events.view");
   const router = useRouter();
   const preferredServer = useBandoriPreferredServer();
   const hasHydratedPreferredServer = useBandoriPreferencesStore((state) => state.hydrated);
-  const { music: masterMusic } = useBandoriMusicMaster();
-  const { value: eventAssetIndex } = useBandoriEventsAssetIndex();
+  const { music: masterMusic, loading: musicLoading, error: musicError, refresh: refreshMusic } = useBandoriMusicMaster();
+  const { value: eventAssetIndex, loading: eventAssetIndexLoading, error: eventAssetIndexError } = useBandoriEventsAssetIndex();
   const [currentEventId, setCurrentEventId] = useState<number | null>(null);
   const [trackingMode, setTrackingMode] = useState<TrackingMode>("event");
   const [selectedRanking, setSelectedRanking] = useState<TrackerRankingSelection>(() => getDefaultTierForMode("event"));
@@ -284,6 +287,11 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
     holidayData,
     loading,
     refreshing,
+    catalogLoading,
+    catalogError,
+    refreshCatalog,
+    error: trackerError,
+    refresh: refreshTracker,
     apiHasResult,
     liveTarget,
   } = useTrackerData(
@@ -1135,6 +1143,9 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
           server={selectedServer}
           onServerChange={handleServerChange}
           bannerUrl={bannerUrl}
+          loading={!hasAppliedInitialUrlState || catalogLoading}
+          bannerLoading={eventAssetIndexLoading}
+          bannerError={catalogError ?? eventAssetIndexError}
           startText={startDate ? `${formatBandoriDateTime(startDate, eventTimeServer, locale)} (${getBandoriServerCode(eventTimeServer).toUpperCase()})` : null}
           endText={endDate ? `${formatBandoriDateTime(endDate, eventTimeServer, locale)} (${getBandoriServerCode(eventTimeServer).toUpperCase()})` : null}
           recommendedEventId={recommendedEventId !== null ? String(recommendedEventId) : null}
@@ -1167,6 +1178,15 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
 
         {activeView === "tracker" ? (
           <>
+            {catalogError || trackerError ? (
+              <div role="alert" className="hhwx-panel border p-4 text-sm">
+                {sharedT("states.loadFailed")}{" "}
+                <button type="button" className="underline" onClick={() => {
+                  if (catalogError) refreshCatalog();
+                  if (trackerError) refreshTracker();
+                }}>{sharedT("actions.retry")}</button>
+              </div>
+            ) : null}
             {/* ========== 进度条 ========== */}
             {eventStatusStartDate !== null && eventStatusEndDate !== null ? (
               <EventProgressBar startDate={eventStatusStartDate} endDate={eventStatusEndDate} />
@@ -1202,12 +1222,7 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
               <div className="mt-3 relative rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-2 shadow-[var(--theme-shadow-surface-raised)] sm:p-4">
 
                 {!isTop10Selected && loading && (
-                  <div className="absolute inset-0 z-30 flex items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--theme-color-panel-background)_75%,transparent)]">
-                    <div className="flex flex-col items-center">
-                      <div className="w-10 h-10 border-4 border-[var(--theme-color-semantic-info-border)] border-t-transparent rounded-full animate-spin" />
-                      <p className="mt-4 text-sm font-semibold text-[var(--theme-color-semantic-info-foreground)] animate-pulse">{commonT("loadingLatestData")}</p>
-                    </div>
-                  </div>
+                  <LoadingIndicator label={commonT("loadingLatestData")} className="absolute inset-0 z-30 rounded-2xl bg-[color-mix(in_srgb,var(--theme-color-panel-background)_75%,transparent)]" />
                 )}
 
                 {isTop10Selected ? (
@@ -1316,10 +1331,19 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
             server={selectedServer}
             eventRecord={eventDetail.data}
             musicMaster={masterMusic}
-            loading={eventDetail.loading}
+            loading={!hasAppliedInitialUrlState || catalogLoading || eventDetail.loading}
+            error={catalogError ?? eventDetail.error}
+            onRetry={catalogError ? refreshCatalog : eventDetail.refresh}
+            musicLoading={musicLoading}
+            musicError={musicError}
+            onRetryMusic={refreshMusic}
           />
         )}
-        <EventComments eventId={resolvedCurrentEventId} server={selectedServer} />
+        <EventComments
+          eventId={resolvedCurrentEventId}
+          server={selectedServer}
+          loading={!hasAppliedInitialUrlState || catalogLoading}
+        />
     </BandoriPageShell>
   );
 }

@@ -1,5 +1,6 @@
 {
   "actions": {
+    "retry": "重试",
     "enter": "进入",
     "view": "查看",
     "backHome": "返回首页",
@@ -14,6 +15,10 @@
     "markAllRead": "全部标为已读"
   },
   "states": {
+    "loading": "加载中",
+    "imageUnavailable": "暂无图片",
+    "loadFailed": "加载失败",
+    "refreshFailed": "更新失败，正在显示已加载的数据",
     "loadingPage": "请稍候，页面马上就好。",
     "loadingAccount": "正在读取账号信息...",
     "loadingProfile": "正在读取资料...",

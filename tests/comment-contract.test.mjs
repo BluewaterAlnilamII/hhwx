@@ -630,7 +630,7 @@ test("manual comment refresh loads the latest page and clears stale deep-link st
   assert.match(hook, /replyResults\.every\(\(result\) => result\.status === "fulfilled"\)/u);
   assert.match(thread, /onClick=\{handleRefresh\}/u);
   assert.match(thread, /aria-label=\{t\("actions\.refresh"\)\}/u);
-  assert.match(thread, /visibleRefreshPhase === "pending" \? "animate-spin"/u);
+  assert.match(thread, /loading \|\| visibleRefreshPhase === "pending" \? <LoadingSpinner/u);
   assert.match(thread, /role="status"[\s\S]*t\("states\.refreshSuccess"\)/u);
   assert.match(thread, /role="alert"[\s\S]*t\("states\.refreshFailed"\)/u);
   assert.equal(thread.match(/absolute right-full top-1\/2 z-20 mr-2/gu)?.length, 2);

@@ -2,6 +2,9 @@
 
 import { useMemo, useState, type CSSProperties } from "react";
 import { ImageOff, Maximize2 } from "lucide-react";
+import { useTranslations } from "next-intl";
+import LoadingImage from "@/components/LoadingImage";
+import LoadingPlaceholder from "@/components/LoadingPlaceholder";
 import {
   buildBandoriCardAttributeIconUrl,
   buildBandoriCardBandIconUrl,
@@ -84,7 +87,6 @@ function BandoriFullCardSurface({
   isTrained,
   isResolving = false,
   loadingLabel,
-  unavailableLabel,
   priority = false,
   className,
 }: {
@@ -94,10 +96,10 @@ function BandoriFullCardSurface({
   isTrained: boolean;
   isResolving?: boolean;
   loadingLabel: string;
-  unavailableLabel: string;
   priority?: boolean;
   className?: string;
 }) {
+  const commonT = useTranslations("common");
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const rarity = Math.min(5, Math.max(1, Math.trunc(metadata.rarity)));
   const frameName = getFullCardFrameName(rarity, metadata.attribute);
@@ -116,30 +118,25 @@ function BandoriFullCardSurface({
     )} data-bandori-full-card-art data-trained={isTrained ? "true" : "false"}>
       <div
         data-bandori-card-artwork-viewport
-        className="absolute overflow-hidden bg-slate-100"
+        className="absolute overflow-hidden bg-[var(--theme-color-control-background-muted)]"
         style={FULL_CARD_ARTWORK_VIEWPORT_STYLE}
       >
         {src && !isFailed ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <LoadingImage
             src={src}
             alt={alt}
+            loadingLabel={loadingLabel}
             loading={priority ? "eager" : "lazy"}
             decoding="async"
             className="h-full w-full object-cover"
             onError={() => setFailedSrc(src)}
           />
         ) : isResolving ? (
-          <div
-            role="status"
-            aria-busy="true"
-            aria-label={loadingLabel}
-            className="h-full w-full animate-pulse bg-slate-100"
-          />
+          <LoadingPlaceholder label={loadingLabel} className="h-full w-full" />
         ) : (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-sm font-bold text-slate-400">
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-sm font-bold text-[var(--theme-color-text-muted)]">
             <ImageOff className="h-8 w-8" aria-hidden="true" />
-            <span>{unavailableLabel}</span>
+            <span>{commonT("states.imageUnavailable")}</span>
           </div>
         )}
       </div>
@@ -198,7 +195,6 @@ export type BandoriFullCardArtProps = {
   assetIndexLoading: boolean;
   item: BandoriFullCardArtItem;
   loadingLabel: string;
-  unavailableLabel: string;
   onOpen: () => void;
 };
 
@@ -208,7 +204,6 @@ export function BandoriFullCardArt({
   assetIndexLoading,
   item,
   loadingLabel,
-  unavailableLabel,
   onOpen,
 }: BandoriFullCardArtProps) {
   const src = buildBandoriPublicAssetUrl(
@@ -226,7 +221,7 @@ export function BandoriFullCardArt({
         type="button"
         onClick={onOpen}
         aria-label={item.alt}
-        className="group relative block w-full rounded-[2.4%] outline-hidden focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-4"
+        className="group relative block w-full rounded-[2.4%] outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] focus-visible:ring-offset-4 focus-visible:ring-offset-[var(--theme-color-panel-background)]"
       >
         <BandoriFullCardSurface
           metadata={metadata}
@@ -235,7 +230,6 @@ export function BandoriFullCardArt({
           isTrained={item.isTrained}
           isResolving={assetIndexLoading}
           loadingLabel={loadingLabel}
-          unavailableLabel={unavailableLabel}
         />
         <span className="pointer-events-none absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/80 bg-slate-950/55 text-white opacity-0 shadow-lg backdrop-blur-sm transition group-hover:opacity-100 group-focus-visible:opacity-100">
           <Maximize2 className="h-4 w-4" aria-hidden="true" />
@@ -294,7 +288,6 @@ export default function BandoriFullCardGallery({
             assetIndexLoading={assetIndexLoading}
             item={item}
             loadingLabel={viewerLabels.imageLoading}
-            unavailableLabel={viewerLabels.imageUnavailable}
             onOpen={() => setActiveIndex(index)}
           />
         ))}

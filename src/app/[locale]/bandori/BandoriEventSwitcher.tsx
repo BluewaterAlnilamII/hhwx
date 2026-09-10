@@ -4,8 +4,10 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import * as Dialog from "@radix-ui/react-dialog";
-import { History, Search, X } from "lucide-react";
+import { History, ImageOff, Search, X } from "lucide-react";
 import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
+import LoadingImage from "@/components/LoadingImage";
+import LoadingPlaceholder from "@/components/LoadingPlaceholder";
 import { cn } from "@/lib/utils";
 import { BANDORI_SERVERS, getBandoriServerCode, type BandoriServer } from "@/lib/bandori-server";
 
@@ -41,6 +43,8 @@ type BandoriEventSwitcherProps = {
   onSelectedEventIdChange: (eventId: string) => void;
   bannerUrl?: string;
   bannerAlt?: string;
+  bannerLoading?: boolean;
+  bannerError?: Error | null;
   startText?: ReactNode;
   endText?: ReactNode;
   recommendedEventId?: string | null;
@@ -59,6 +63,8 @@ export default function BandoriEventSwitcher({
   onSelectedEventIdChange,
   bannerUrl,
   bannerAlt,
+  bannerLoading = false,
+  bannerError,
   startText,
   endText,
   recommendedEventId,
@@ -70,6 +76,7 @@ export default function BandoriEventSwitcher({
   onServerChange,
 }: BandoriEventSwitcherProps) {
   const t = useTranslations("bandori.eventSwitcher");
+  const commonT = useTranslations("common");
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [failedBannerUrl, setFailedBannerUrl] = useState<string | null>(null);
@@ -276,9 +283,9 @@ export default function BandoriEventSwitcher({
             </div>
           ) : (
             <div className="grid w-full max-w-[492px] grid-cols-[minmax(0,1fr)_44px_44px] items-center gap-2" aria-hidden="true">
-              <div className="h-11 animate-pulse rounded-xl bg-[var(--theme-color-control-background-muted)]" />
-              <div className="h-11 w-11 animate-pulse rounded-xl bg-[var(--theme-color-control-background-pressed)]" />
-              <div className="h-11 w-11 animate-pulse rounded-xl bg-[var(--theme-color-control-background-muted)]" />
+              <div className="h-11 motion-safe:animate-pulse rounded-xl bg-[var(--theme-color-control-background-muted)]" />
+              <div className="h-11 w-11 motion-safe:animate-pulse rounded-xl bg-[var(--theme-color-control-background-pressed)]" />
+              <div className="h-11 w-11 motion-safe:animate-pulse rounded-xl bg-[var(--theme-color-control-background-muted)]" />
             </div>
           )}
         </div>
@@ -312,8 +319,8 @@ export default function BandoriEventSwitcher({
             </div>
           ) : showSkeleton ? (
             <div className="flex flex-col gap-2 py-0.5" aria-hidden="true">
-              <div className="h-4 w-48 animate-pulse rounded-full bg-[var(--theme-color-control-background-muted)]" />
-              <div className="h-4 w-56 animate-pulse rounded-full bg-[var(--theme-color-control-background-muted)]" />
+              <div className="h-4 w-48 motion-safe:animate-pulse rounded-full bg-[var(--theme-color-control-background-muted)]" />
+              <div className="h-4 w-56 motion-safe:animate-pulse rounded-full bg-[var(--theme-color-control-background-muted)]" />
             </div>
           ) : (
             <>
@@ -327,18 +334,23 @@ export default function BandoriEventSwitcher({
       <div className="w-full max-w-[420px] xl:w-[420px] xl:justify-self-end">
         <div className="hhwx-panel-media relative aspect-3/1 w-full overflow-hidden">
           {bannerUrl && bannerUrl !== failedBannerUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <LoadingImage
               src={bannerUrl}
               alt={effectiveBannerAlt}
+              loadingLabel={commonT("states.loading")}
               loading="eager"
               fetchPriority="high"
               decoding="async"
               onError={() => setFailedBannerUrl(bannerUrl)}
               className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 hover:scale-105"
             />
+          ) : !bannerUrl && !bannerError && (loading || bannerLoading) ? (
+            <LoadingPlaceholder label={commonT("states.loading")} className="absolute inset-0" />
           ) : (
-            <div className="absolute inset-0 animate-pulse bg-[var(--theme-color-control-background-muted)]" />
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-[var(--theme-color-text-muted)]">
+              <ImageOff className="h-6 w-6" aria-hidden="true" />
+              <span>{commonT("states.imageUnavailable")}</span>
+            </div>
           )}
         </div>
       </div>

@@ -1,8 +1,10 @@
 "use client";
 
 import { useDeferredValue, useMemo, useState, type RefObject } from "react";
-import { Loader2, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
+import LoadingIndicator from "@/components/LoadingIndicator";
 import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import BandoriCardFilterControls from "@/components/bandori/BandoriCardFilterControls";
 import { useBandoriCharactersMaster } from "@/hooks/useBandoriCharactersMaster";
 import {
@@ -20,6 +22,7 @@ import {
 } from "@/lib/bandori-skill-label";
 import {
   pickAvailableBandoriServer,
+  getBandoriServerCode,
   type BandoriServerLanguageTag,
 } from "@/lib/bandori-server";
 import {
@@ -177,6 +180,8 @@ export default function BandoriCardPicker({
   const t = useTranslations("bandori.cardPicker");
   const filterT = useTranslations("bandori.cardFilters");
   const termsT = useTranslations("bandori.terms");
+  const cardsT = useTranslations("bandori.cards.common");
+  const commonT = useTranslations("common");
   const preferredServer = useBandoriPreferredServer();
   const sortValues = useMemo(
     () => buildBandoriCardSortValues({
@@ -213,9 +218,11 @@ export default function BandoriCardPicker({
   } | null>(null);
   const [previewTrainType, setPreviewTrainType] = useState<BandoriCardArtVariant>(() => value?.trainType ?? "after_training");
   const [visibleState, setVisibleState] = useState({ key: "", count: INITIAL_VISIBLE_COUNT });
-  const isLoading = (providedCardMetadata === undefined && cardsMaster.loading)
-    || (characters === undefined && charactersMaster.loading)
-    || (skills === undefined && skillsMaster.loading);
+  const hasCatalog = cardMetadata !== null
+    && characterMetadata !== null
+    && skillMetadata !== null
+    && cardsAssetIndex.value !== null;
+  const error = cardsMaster.error ?? charactersMaster.error ?? skillsMaster.error ?? cardsAssetIndex.error;
   const sortOptions = useMemo(
     () => sortValues.map((value) => ({ value, label: filterT(`sort.${value}`) })),
     [filterT, sortValues],
@@ -328,6 +335,10 @@ export default function BandoriCardPicker({
     )) ?? null,
     [catalog, value?.cardId, value?.entityServer],
   );
+  const selectedCardServer = selectedCard?.entityServer
+    ?? pickAvailableBandoriServer(selectedCard?.availableServers ?? [], server ?? preferredServer)
+    ?? server
+    ?? preferredServer;
   const virtualGridLayoutKey = useMemo(
     () => [
       showArtToggle ? "art-toggle" : "no-art-toggle",
@@ -371,8 +382,29 @@ export default function BandoriCardPicker({
     });
   };
 
+  const errorPanel = error ? (
+    <div role="alert" className="hhwx-catalog-error rounded-2xl border p-5 text-sm font-bold">
+      {commonT(hasCatalog ? "states.refreshFailed" : "states.loadFailed")}{" "}
+      <button type="button" className="hhwx-text-link" onClick={() => {
+        if (cardsMaster.error) cardsMaster.refresh();
+        if (charactersMaster.error) charactersMaster.refresh();
+        if (skillsMaster.error) skillsMaster.refresh();
+        if (cardsAssetIndex.error) cardsAssetIndex.refresh();
+      }}>{commonT("actions.retry")}</button>
+    </div>
+  ) : null;
+
+  if (!hasCatalog) {
+    return (
+      <div className={className}>
+        {errorPanel ?? <LoadingIndicator label={t("states.loadingCards")} className="hhwx-panel min-h-64 border" />}
+      </div>
+    );
+  }
+
   return (
     <div className={cn("space-y-4", className)}>
+      {errorPanel}
       <BandoriCardFilterControls
         filter={effectiveFilter}
         resultCountLabel={t("resultCount", { count: filteredCards.length })}
@@ -396,6 +428,16 @@ export default function BandoriCardPicker({
                 ? `${selectedCard.displayName} / #${selectedCard.cardId}`
                 : t("cardFallback", { cardId: value.cardId })}
             </span>
+            {selectedCard ? (
+              <Link
+                href={`/bandori/cards/${selectedCard.cardId}?server=${getBandoriServerCode(selectedCardServer)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hhwx-text-link ml-2 inline-block text-xs font-semibold underline"
+              >
+                {cardsT("cardDetails")}
+              </Link>
+            ) : null}
           </div>
             <ArtToggle
               trainType={previewTrainType}
@@ -408,12 +450,7 @@ export default function BandoriCardPicker({
       ) : null}
 
       <div className="hhwx-panel border p-3">
-        {isLoading && catalog.length === 0 ? (
-          <div className="flex min-h-56 items-center justify-center gap-2 text-sm font-semibold text-[var(--theme-color-text-muted)]">
-            <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-            {t("states.loadingCards")}
-          </div>
-        ) : filteredCards.length > 0 ? (
+        {filteredCards.length > 0 ? (
           <>
             <VirtualizedBandoriCardGrid
               items={filteredCards}

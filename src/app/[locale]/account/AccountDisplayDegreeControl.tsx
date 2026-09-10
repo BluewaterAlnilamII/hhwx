@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
-import { BadgeCheck, Loader2, Save, X } from "lucide-react";
+import { BadgeCheck, Save, X } from "lucide-react";
+import LoadingIndicator, { LoadingSpinner } from "@/components/LoadingIndicator";
 import BandoriDegreeView from "@/components/bandori/BandoriDegreeView";
 import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
 import { useBandoriDegreeCatalog } from "@/hooks/useBandoriDegrees";
@@ -66,9 +67,9 @@ function DegreeOption({
     <button
       type="button"
       onClick={onSelect}
-      onMouseEnter={() => setInteractive(true)}
-      onMouseLeave={() => setInteractive(false)}
-      onFocus={() => setInteractive(true)}
+      onPointerEnter={(event) => { if (event.pointerType === "mouse") setInteractive(true); }}
+      onPointerLeave={() => setInteractive(false)}
+      onFocus={(event) => { if (event.currentTarget.matches(":focus-visible")) setInteractive(true); }}
       onBlur={() => setInteractive(false)}
       aria-pressed={selected}
       className={cn(
@@ -103,7 +104,7 @@ export default function AccountDisplayDegreeControl({
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const { catalog, loading: loadingCatalog, error: catalogError } = useBandoriDegreeCatalog(true);
+  const { catalog, loading: loadingCatalog, error: catalogError, refresh: refreshCatalog } = useBandoriDegreeCatalog(true);
 
   const catalogByServer = useMemo(() => {
     const result = new Map<number, Map<number, BandoriDegreeCatalogItem>>();
@@ -249,7 +250,7 @@ export default function AccountDisplayDegreeControl({
             />
           ) : (
             <span className="inline-flex h-[25px] w-[115px] max-w-full items-center justify-center rounded-lg border border-dashed border-[var(--theme-color-profile-banner-foreground)]/35 px-2 text-xs font-semibold">
-              {loadingCatalog ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : t("resourceUnavailable")}
+              {loadingCatalog ? <LoadingSpinner /> : t("resourceUnavailable")}
             </span>
           )}
         </button>
@@ -276,7 +277,7 @@ export default function AccountDisplayDegreeControl({
 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
               {loadingOptions ? (
-                <div className="flex min-h-48 items-center justify-center gap-2 text-sm font-semibold text-[var(--theme-color-text-muted)]"><Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />{t("loading")}</div>
+                <LoadingIndicator label={t("loading")} className="min-h-48" />
               ) : options ? (
                 <div className="space-y-6">
                   <section>
@@ -316,8 +317,14 @@ export default function AccountDisplayDegreeControl({
 
                   <section>
                     <h3 className="mb-3 text-sm font-bold text-[var(--theme-color-text-default)]">{t("degreesLabel")}</h3>
+                    {catalogError ? (
+                      <div role="alert" className="mb-3 flex flex-col items-center gap-3 py-6 text-center text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)]">
+                        <span>{t("resourceUnavailable")}</span>
+                        <button type="button" onClick={refreshCatalog} className="hhwx-control rounded-xl border px-4 py-2 transition">{t("retry")}</button>
+                      </div>
+                    ) : null}
                     {loadingCatalog ? (
-                      <div className="flex min-h-32 items-center justify-center gap-2 text-sm font-semibold text-[var(--theme-color-text-muted)]"><Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />{t("loading")}</div>
+                      <LoadingIndicator label={t("loading")} className="min-h-32" />
                     ) : availableDegreeVariants.length > 0 ? (
                       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                         {availableDegreeVariants.map(({ degree, degreeEffectId }) => (
@@ -336,9 +343,9 @@ export default function AccountDisplayDegreeControl({
                           />
                         ))}
                       </div>
-                    ) : (
-                      <div className="rounded-2xl border border-dashed border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-10 text-center text-sm font-semibold text-[var(--theme-color-text-muted)]">{catalogError ? t("resourceUnavailable") : t("empty")}</div>
-                    )}
+                    ) : !catalogError ? (
+                      <div className="rounded-2xl border border-dashed border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-10 text-center text-sm font-semibold text-[var(--theme-color-text-muted)]">{t("empty")}</div>
+                    ) : null}
                   </section>
                 </div>
               ) : (
@@ -356,7 +363,7 @@ export default function AccountDisplayDegreeControl({
                   <button type="button" className="hhwx-control inline-flex h-10 items-center rounded-xl border px-4 text-sm font-semibold transition">{t("cancel")}</button>
                 </Dialog.Close>
                 <button type="button" disabled={saving || !hasChanges} onClick={saveDegree} className="hhwx-action-accent inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold transition ">
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}
+                  {saving ? <LoadingSpinner className="text-current" /> : <Save className="h-4 w-4" aria-hidden="true" />}
                   {saving ? t("saving") : t("save")}
                 </button>
               </div>

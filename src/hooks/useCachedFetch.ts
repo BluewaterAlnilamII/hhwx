@@ -109,10 +109,18 @@ export function useCachedFetch<T>(
 
     return null;
   });
-  const data = selectCachedFetchData(visibleData, key);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
+  const [refreshingKey, setRefreshingKey] = useState<string | null>(null);
+  const [requestError, setRequestError] = useState<VisibleData<Error> | null>(null);
+  const enabled = Boolean(key && url);
+  const cachedEntry = enabled && key ? readCacheEntry<T>(key) : undefined;
+  const currentData = enabled && visibleData?.key === key ? visibleData : null;
+  // A successful null/empty response is still loaded. Resolve this during render,
+  // including key changes, before the effect starts the next request.
+  const hasData = currentData !== null || cachedEntry !== undefined;
+  const data = currentData ? currentData.value : cachedEntry?.value ?? null;
+  const error = enabled ? selectCachedFetchData(requestError, key) : null;
+  const loading = enabled && !hasData && !error;
+  const refreshing = enabled && hasData && refreshingKey === key;
 
   // 使用 ref 持有最新值，避免 doFetch 的 useCallback 因依赖数组为空而产生 stale closure
   const keyRef = useRef(key);
@@ -147,14 +155,12 @@ export function useCachedFetch<T>(
     const currentKey = keyRef.current;
     const currentUrl = urlRef.current;
     if (!currentKey || !currentUrl) return;
-    setError(null);
+    setRequestError(null);
 
     if (silent) {
       const activeCount = (activeSilentFetchesRef.current.get(currentKey) ?? 0) + 1;
       activeSilentFetchesRef.current.set(currentKey, activeCount);
-      setRefreshing(true);
-    } else {
-      setLoading(true);
+      setRefreshingKey(currentKey);
     }
 
     fetchJsonOnce(currentUrl, requestCache)
@@ -179,7 +185,7 @@ export function useCachedFetch<T>(
       .catch((err) => {
         console.error(`[useCachedFetch] ${currentKey}:`, err);
         if (keyRef.current === currentKey) {
-          setError(err instanceof Error ? err : new Error(String(err)));
+          setRequestError({ key: currentKey, value: err instanceof Error ? err : new Error(String(err)) });
         }
       })
       .finally(() => {
@@ -194,10 +200,8 @@ export function useCachedFetch<T>(
             activeSilentFetchesRef.current.set(currentKey, remainingCount);
           }
           if (keyRef.current === currentKey) {
-            setRefreshing(remainingCount > 0);
+            setRefreshingKey(remainingCount > 0 ? currentKey : null);
           }
-        } else if (keyRef.current === currentKey) {
-          setLoading(false);
         }
       });
   }, []);
@@ -205,24 +209,21 @@ export function useCachedFetch<T>(
   // key / url 变化时：缓存命中 → 立即显示 + 后台静默刷新；未命中 → 常规 loading
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-      setRefreshing(false);
+      setRefreshingKey(null);
       if (!key || !url) {
         setVisibleData(null);
-        setLoading(false);
-        setError(null);
+        setRequestError(null);
         return;
       }
 
       const cachedEntry = readCacheEntry<T>(key);
       if (cachedEntry !== undefined) {
         setVisibleData({ key, value: cachedEntry.value });
-        setLoading(false);
         if (shouldRefresh(key)) {
           doFetch(true); // 有缓存但已过保鲜期，静默刷新
         }
       } else {
         setVisibleData(null);
-        setLoading(true);
         doFetch(false); // 无缓存，显示 loading
       }
     }, 0);
