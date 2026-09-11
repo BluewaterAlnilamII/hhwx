@@ -2,6 +2,8 @@
 
 Events/Cards/Costumes/Degrees/Music/Stamps API 与 index 的统一约定见 [bandori-master-asset-contract.zh-CN.md](bandori-master-asset-contract.zh-CN.md)。
 
+玩家资料展示、隐私规则和固定资源消费者见 [bandori-player-search.zh-CN.md](bandori-player-search.zh-CN.md)。
+
 English version: [bandori-asset-cdn-setup.md](bandori-asset-cdn-setup.md)
 
 本文档说明 HHWX Web 应用对 Bandori 静态资源的公开 URL 契约。它不是 tracker 设置指南。

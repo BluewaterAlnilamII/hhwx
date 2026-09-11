@@ -55,6 +55,28 @@ export function buildBandoriCharacterIconUrl(characterId: number): string | null
   return buildMenuAtlasSpriteUrl(`icon_character${normalizedId.toString().padStart(3, "0")}`);
 }
 
+export function buildBandoriBandLogoUrl(bandId: number): string | null {
+  return SUPPORTED_BAND_IDS.has(bandId)
+    ? buildBandoriAssetCdnUrl(`${BUILTIN_RESOURCE_PREFIX}/images/band-logo/${String(bandId).padStart(3, "0")}/logoS.png`)
+    : null;
+}
+
+export function buildBandoriPlayerSpriteUrl(name: "label_ribbon_pink" | "icon_stagechallenge"): string | null {
+  return buildBandoriAssetCdnUrl(`${BUILTIN_RESOURCE_PREFIX}/atlases/${name === "icon_stagechallenge" ? "spot-atlas" : "menu-atlas"}/${name}.png`);
+}
+
+export function buildBandoriDeckRankSpriteUrls(rank: string, level: number | null): { symbol: string | null; digits: (string | null)[] } | null {
+  if (rank === "hyphen") return { symbol: buildMenuAtlasSpriteUrl("icon_banddeckrank_hyphen"), digits: [] };
+  if (!["c", "b", "a", "s", "ss", "sss"].includes(rank)) return null;
+  const digits = level !== null && Number.isSafeInteger(level) && level > 0 ? String(level).split("") : [];
+  const maxDigit = rank === "sss" ? 5 : rank === "ss" ? 9 : 3;
+  if (digits.some((digit) => Number(digit) > maxDigit || (digit === "0" && rank !== "ss"))) return null;
+  return {
+    symbol: buildMenuAtlasSpriteUrl(`icon_scorerank_${rank}`),
+    digits: digits.map((digit) => buildBandoriAssetCdnUrl(`${BUILTIN_RESOURCE_PREFIX}/atlases/rank-number-atlas/ranknumber_${rank}_${digit}.png`)),
+  };
+}
+
 export function buildBandoriRarityStarIconUrl(isTrained: boolean): string | null {
   return buildMenuAtlasSpriteUrl(
     isTrained ? "icon_rarity_rainbow" : "icon_rarity_yellow",

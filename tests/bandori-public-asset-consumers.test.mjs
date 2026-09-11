@@ -22,7 +22,9 @@ test("card image consumers use index descriptors and never substitute full art",
   assert.match(thumbnail, /buildBandoriCardAttributeIconUrl/u);
   assert.match(thumbnail, /buildBandoriCardBandIconUrl/u);
   assert.match(thumbnail, /buildBandoriCardMasterRankIconUrl/u);
-  assert.match(thumbnail, /usesBandoriTrainedStarStyle\(metadata\?\.type, trainType\)/u);
+  assert.match(thumbnail, /usesBandoriTrainedStarStyle\(metadata\?\.type, card\.illustration && card\.isTrained \? "after_training" : trainType\)/u);
+  assert.match(artImage, /imageKind = "thumb"/u);
+  assert.match(artImage, /lookupBandoriCardImage\(assetIndex, resourceSetName, trainType, imageKind\)/u);
   assert.match(thumbnail, /resolveBandoriCardAssetVariant/u);
   assert.match(thumbnail, /aria-busy="true"/u);
   assert.doesNotMatch(thumbnail, /No image/u);

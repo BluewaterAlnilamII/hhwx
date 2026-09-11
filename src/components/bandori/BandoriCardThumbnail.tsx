@@ -31,6 +31,7 @@ export type BandoriCardThumbnailCard = {
   masterRank: number;
   skillLevel: number;
   isTrained?: boolean;
+  illustration?: TrainType;
   hasTrainedArt?: boolean;
 };
 
@@ -46,6 +47,7 @@ export type BandoriCardThumbnailMetadata = {
 export type BandoriCardThumbnailSize = "tile" | "preview" | "editor";
 
 function getCardTrainType(card: BandoriCardThumbnailCard): TrainType {
+  if (card.illustration) return card.illustration;
   return card.isTrained ? "after_training" : "normal";
 }
 
@@ -153,7 +155,7 @@ export default function BandoriCardThumbnail({
   const attributeIconUrl = attribute ? buildBandoriCardAttributeIconUrl(attribute) : null;
   const bandIconUrl = bandId ? buildBandoriCardBandIconUrl(bandId) : null;
   const starIconUrl = buildBandoriRarityStarIconUrl(
-    usesBandoriTrainedStarStyle(metadata?.type, trainType),
+    usesBandoriTrainedStarStyle(metadata?.type, card.illustration && card.isTrained ? "after_training" : trainType),
   );
   const masterIconUrl = buildBandoriCardMasterRankIconUrl();
   const starSlots = Array.from({ length: rarity }, (_, index) => index);

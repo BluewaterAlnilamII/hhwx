@@ -5,6 +5,7 @@ import { ArrowLeft, ClipboardList, Images, Play } from "lucide-react";
 import Heading from "@/components/Heading";
 import LoadingPlaceholder from "@/components/LoadingPlaceholder";
 import LoadingIndicator from "@/components/LoadingIndicator";
+import { BandoriDetailColumns, BandoriDetailRow as SingleDetailRow } from "@/components/bandori/BandoriDetailLayout";
 import { useBandoriCharactersMaster } from "@/hooks/useBandoriCharactersMaster";
 import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { useBandoriSkillsMaster } from "@/hooks/useBandoriSkillsMaster";
@@ -119,15 +120,6 @@ function RegionalDetailRow({
         </span>
       ) : null}
     </SingleDetailRow>
-  );
-}
-
-function SingleDetailRow({ label, children, alignment = "baseline" }: { label: string; children: ReactNode; alignment?: "baseline" | "center" }) {
-  return (
-    <div className={`grid grid-cols-[7rem_minmax(0,1fr)] ${alignment === "center" ? "items-center" : "items-baseline"} gap-3 border-b border-[var(--theme-color-border-subtle)] py-3 last:border-b-0 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-5`}>
-      <dt className="text-sm font-semibold leading-5 text-[var(--theme-color-text-muted)]">{label}</dt>
-      <dd className="flex min-w-0 flex-col items-end wrap-break-word text-right text-sm font-semibold leading-5 text-[var(--theme-color-text-default)]">{children}</dd>
-    </div>
   );
 }
 
@@ -373,8 +365,8 @@ export default function CardDetailPageClient({
             {t("detail.informationTitle")}
           </Heading>
 
-          <div className="mt-4 grid min-w-0 items-stretch gap-y-0 @min-[54rem]:grid-cols-2 @min-[54rem]:gap-x-0">
-            <dl className="min-w-0 @min-[54rem]:pr-8">
+          <div className="mt-4">
+            <BandoriDetailColumns left={<dl>
               <SingleDetailRow label={t("detail.cardId")}>{cardId}</SingleDetailRow>
               <RegionalDetailRow
                 label={t("detail.cardName")}
@@ -440,9 +432,7 @@ export default function CardDetailPageClient({
                   </span>
                 ) : rarity}
               </SingleDetailRow>
-            </dl>
-
-            <dl className="mt-2 min-w-0 border-t border-[var(--theme-color-border-subtle)] pt-2 @min-[54rem]:mt-0 @min-[54rem]:border-l @min-[54rem]:border-t-0 @min-[54rem]:pl-8 @min-[54rem]:pt-0">
+            </dl>} right={<dl className="mt-2 pt-2 @min-[54rem]:mt-0 @min-[54rem]:pt-0">
               <SingleDetailRow label={t("detail.type")}>{t(`types.${type as BandoriCardCatalogType}`)}</SingleDetailRow>
               <RegionalDetailRow
                 label={t("detail.releaseDate")}
@@ -474,7 +464,7 @@ export default function CardDetailPageClient({
                   jpValue={jpGachaText}
                 />
               ) : null}
-            </dl>
+            </dl>} />
           </div>
 
           <div className="mt-6 border-t border-[var(--theme-color-border-subtle)] pt-5">

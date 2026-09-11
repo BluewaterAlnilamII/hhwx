@@ -49,6 +49,10 @@ const eventInfoPanelSource = readFileSync(
   new URL("../src/app/[locale]/bandori/events/_info/EventInfoPanel.tsx", import.meta.url),
   "utf8",
 );
+const detailLayoutSource = readFileSync(
+  new URL("../src/components/bandori/BandoriDetailLayout.tsx", import.meta.url),
+  "utf8",
+);
 const eventStatusSummarySource = readFileSync(
   new URL("../src/app/[locale]/bandori/events/_info/EventStatusSummary.tsx", import.meta.url),
   "utf8",
@@ -238,11 +242,13 @@ test("event overview reuses the team builder event type labels", () => {
 
 test("event overview integrates bonuses into a responsive two-column layout", () => {
   assert.match(eventInfoPanelSource, /<section className="@container">/u);
-  assert.match(eventInfoPanelSource, /@min-\[54rem\]:grid-cols-2/u);
-  assert.match(eventInfoPanelSource, /items-stretch[\s\S]*@min-\[54rem\]:gap-x-0/u);
-  assert.match(eventInfoPanelSource, /<dl className="min-w-0 @min-\[54rem\]:pr-8">/u);
-  assert.match(eventInfoPanelSource, /@min-\[54rem\]:border-l @min-\[54rem\]:border-t-0/u);
-  assert.match(eventInfoPanelSource, /@min-\[54rem\]:pl-8/u);
+  assert.match(eventInfoPanelSource, /import \{ BandoriDetailColumns, BandoriDetailRow as OverviewRow \} from "@\/components\/bandori\/BandoriDetailLayout"/u);
+  assert.match(eventInfoPanelSource, /<BandoriDetailColumns left=\{<dl>/u);
+  assert.match(detailLayoutSource, /@min-\[54rem\]:grid-cols-2/u);
+  assert.match(detailLayoutSource, /items-stretch[\s\S]*@min-\[54rem\]:gap-x-0/u);
+  assert.match(detailLayoutSource, /<div className="min-w-0 @min-\[54rem\]:pr-8">\{left\}/u);
+  assert.match(detailLayoutSource, /@min-\[54rem\]:border-l @min-\[54rem\]:border-t-0/u);
+  assert.match(detailLayoutSource, /@min-\[54rem\]:pl-8/u);
   assert.match(eventInfoPanelSource, /<BandoriEventBonusPanel[\s\S]*variant="embedded"/u);
   assert.match(eventBonusPanelSource, /variant === "card" \? \([\s\S]*labelsT\("eventBonus"\)/u);
   assert.match(eventBonusPanelSource, /variant === "card" \? \([\s\S]*labelsT\("type"\)/u);
@@ -317,8 +323,9 @@ test("event rewards fallback stamps by server and keep reward cards unlabelled",
   assert.match(eventInfoPanelSource, /<OverviewRow label=\{t\("rewardCards"\)\} mobileLayout="stacked" alignment="start">/u);
   assert.match(eventInfoPanelSource, /useBandoriCardsMaster\(server, Boolean\(model\), "regional"\)/u);
   assert.equal(eventInfoPanelSource.match(/justify-end/gu)?.length >= 4, true);
-  assert.match(eventInfoPanelSource, /@min-\[54rem\]:grid-cols-2/u);
-  assert.match(eventInfoPanelSource, /@min-\[54rem\]:border-l @min-\[54rem\]:border-t-0/u);
+  assert.equal(eventInfoPanelSource.match(/<BandoriDetailColumns/gu)?.length, 2);
+  assert.match(detailLayoutSource, /@min-\[54rem\]:grid-cols-2/u);
+  assert.match(detailLayoutSource, /@min-\[54rem\]:border-l @min-\[54rem\]:border-t-0/u);
   assert.doesNotMatch(eventInfoPanelSource, /RewardDetails|完整积分奖励|完整排名奖励|rewardLabel/u);
 });
 
