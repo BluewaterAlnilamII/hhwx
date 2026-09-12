@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { ApiRouteError, getApiErrorCode } from "@/lib/api-contracts";
 
 type CacheEntry<T> = {
   value: T;
@@ -36,7 +37,7 @@ function writeCacheEntry<T>(key: string, value: T): void {
   globalCache.set(key, { value, updatedAt: Date.now() });
 }
 
-function fetchJsonOnce(url: string, cache: RequestCache): Promise<unknown> {
+export function fetchJsonOnce(url: string, cache: RequestCache): Promise<unknown> {
   const requestKey = `${cache}:${url}`;
   const activeRequest = globalJsonRequests.get(requestKey);
   if (activeRequest) {
@@ -44,9 +45,10 @@ function fetchJsonOnce(url: string, cache: RequestCache): Promise<unknown> {
   }
 
   const request = fetch(url, { cache })
-    .then((response) => {
+    .then(async (response) => {
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const payload: unknown = await response.json().catch(() => null);
+        throw new ApiRouteError(response.status, getApiErrorCode(payload) ?? "HTTP_ERROR", `HTTP ${response.status}`);
       }
       return response.json() as Promise<unknown>;
     })
@@ -84,6 +86,7 @@ function isCacheStale(entry: CacheEntry<unknown> | undefined, staleTimeMs: numbe
  * @param transform  将原始 JSON 响应转换为目标类型 T 的纯函数
  * @param options.refreshOnVisible  是否在切回前台时自动刷新（默认 true）
  * @param options.staleTimeMs       缓存保鲜时长。命中且未过期时，跳过挂载刷新与可见性刷新。
+ * @param options.retainOnError     Return false to discard invalid or expired data after a failed request.
  * @param options.merge  合并策略函数，用于防止静默刷新覆盖实时推送的新数据。
  *                       当提供此函数时，HTTP 响应不会直接替换缓存，而是与当前缓存进行合并。
  *                       典型场景：WebSocket 在 HTTP 请求期间追加了新数据点，
@@ -94,7 +97,7 @@ export function useCachedFetch<T>(
   key: string | null,
   url: string | null,
   transform?: (raw: unknown) => T,
-  options?: { refreshOnVisible?: boolean; staleTimeMs?: number; merge?: (incoming: T, existing: T) => T }
+  options?: { refreshOnVisible?: boolean; staleTimeMs?: number; merge?: (incoming: T, existing: T) => T; retainOnError?: (error: Error, data: T) => boolean }
 ): { data: T | null; loading: boolean; refreshing: boolean; error: Error | null; refresh: () => void } {
   const refreshOnVisible = options?.refreshOnVisible ?? true;
 
@@ -128,6 +131,7 @@ export function useCachedFetch<T>(
   const transformRef = useRef(transform);
   const mergeRef = useRef(options?.merge);
   const staleTimeRef = useRef(options?.staleTimeMs);
+  const retainOnErrorRef = useRef(options?.retainOnError);
   const activeSilentFetchesRef = useRef(new Map<string, number>());
 
   useEffect(() => {
@@ -136,7 +140,8 @@ export function useCachedFetch<T>(
     transformRef.current = transform;
     mergeRef.current = options?.merge;
     staleTimeRef.current = options?.staleTimeMs;
-  }, [key, options?.merge, options?.staleTimeMs, transform, url]);
+    retainOnErrorRef.current = options?.retainOnError;
+  }, [key, options?.merge, options?.staleTimeMs, options?.retainOnError, transform, url]);
 
   const shouldRefresh = useCallback((currentKey: string) => {
     return isCacheStale(readCacheEntry(currentKey), staleTimeRef.current);
@@ -185,7 +190,13 @@ export function useCachedFetch<T>(
       .catch((err) => {
         console.error(`[useCachedFetch] ${currentKey}:`, err);
         if (keyRef.current === currentKey) {
-          setRequestError({ key: currentKey, value: err instanceof Error ? err : new Error(String(err)) });
+          const error = err instanceof Error ? err : new Error(String(err));
+          const cached = readCacheEntry<T>(currentKey);
+          if (cached && retainOnErrorRef.current?.(error, cached.value) === false) {
+            globalCache.delete(currentKey);
+            setVisibleData(null);
+          }
+          setRequestError({ key: currentKey, value: error });
         }
       })
       .finally(() => {

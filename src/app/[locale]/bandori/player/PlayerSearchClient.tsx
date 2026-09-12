@@ -17,6 +17,7 @@ import MusicArtwork from "@/components/music-player/MusicArtwork";
 import BandoriDegreeView from "@/components/bandori/BandoriDegreeView";
 import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
 import { LONG_CLIENT_CACHE_POLICY } from "@/lib/api-cache";
+import { ApiRouteError } from "@/lib/api-contracts";
 import { calculatePlayerPower, getPlayerCharacterBonusParameters, parsePlayerAreaItemsMaster } from "@/lib/bandori/player-power";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
@@ -32,7 +33,7 @@ import { buildBandoriPublicAssetUrl } from "@/lib/bandori-public-asset-index";
 import { resolveBandoriSkillLabel } from "@/lib/bandori-skill-label";
 import { getBandoriServerCode, getBandoriServerFromCode, pickBandoriRegionalText, type BandoriServer } from "@/lib/bandori-server";
 import { pickBandoriCharacterDisplayName, resolveBandoriCardBandId } from "@/lib/bandori/cards/master";
-import { PLAYER_BANDS, PLAYER_STAGE_BANDS, PLAYER_CLEAR_ROWS, PLAYER_UID_PATTERN, parseBandoriPlayerResponse, type PlayerProfileView, type PlayerSection } from "@/lib/bandori/player-profile";
+import { PLAYER_BANDS, PLAYER_STAGE_BANDS, PLAYER_CLEAR_ROWS, PLAYER_UID_PATTERN, parseBandoriPlayerResponse, isPlayerDataFresh, playerErrorMessageKey, retainPlayerDataOnError, type PlayerProfileView, type PlayerSection } from "@/lib/bandori/player-profile";
 import BandoriPageShell from "../BandoriPageShell";
 import BandoriCardServerSwitcher from "../cards/_components/BandoriCardServerSwitcher";
 
@@ -241,7 +242,10 @@ export default function PlayerSearchClient({ initialServer, initialUid }: { init
   const [invalid, setInvalid] = useState(Boolean(initialUid && !PLAYER_UID_PATTERN.test(initialUid)));
   const code = getBandoriServerCode(initialServer);
   const url = PLAYER_UID_PATTERN.test(initialUid) ? `/api/bandori/player/${code}/${initialUid}` : null;
-  const result = useCachedFetch(url, url, parseBandoriPlayerResponse, { refreshOnVisible: false });
+  const result = useCachedFetch(url, url, parseBandoriPlayerResponse, { refreshOnVisible: false, retainOnError: retainPlayerDataOnError });
+  const data = result.data && (!(result.error || result.data.cache) || isPlayerDataFresh(result.data)) ? result.data : null;
+  const errorCode = result.error instanceof ApiRouteError ? result.error.code : "TRACKER_SERVICE_FAILED";
+  const noticeCode = result.error ? errorCode : data?.refreshError?.code;
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const nextUid = uid.trim();
@@ -258,7 +262,7 @@ export default function PlayerSearchClient({ initialServer, initialUid }: { init
       <button type="submit" className="hhwx-action-accent inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-5 text-sm font-bold disabled:opacity-50" disabled={(result.loading || result.refreshing) && server === initialServer && uid.trim() === initialUid}><Search className="h-4 w-4" />{t(result.loading || result.refreshing ? "searching" : "search")}</button>
     </form>
     {invalid ? <p id="player-id-error" role="alert" className="mt-3 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{t("invalidId")}</p> : null}
-    {result.error ? <p role="alert" className="mt-5 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{t(result.data ? "refreshFailed" : result.error.message === "HTTP 404" ? "unavailable" : result.error.message === "HTTP 503" ? "busy" : "failed")} <button type="button" className="hhwx-text-link" onClick={result.refresh}>{common("actions.retry")}</button></p> : null}
-    {result.loading ? <LoadingIndicator label={t("searching")} className="min-h-64" /> : result.data ? <PlayerResults player={result.data} /> : !result.error && !invalid ? <p className="py-12 text-center text-sm text-[var(--theme-color-text-muted)]">{t("prompt")}</p> : null}
+    {noticeCode ? <p role="alert" className="mt-5 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{t(playerErrorMessageKey(noticeCode))}{data ? ` ${t("showingCached")}` : ""} <button type="button" className="hhwx-text-link" onClick={result.refresh} disabled={result.refreshing}>{common("actions.retry")}</button></p> : null}
+    {result.loading || result.refreshing && !data ? <LoadingIndicator label={t("searching")} className="min-h-64" /> : data ? <PlayerResults player={data} /> : !result.error && !invalid ? <p className="py-12 text-center text-sm text-[var(--theme-color-text-muted)]">{t(result.data ? "cacheMiss" : "prompt")}</p> : null}
   </article></BandoriPageShell>;
 }
