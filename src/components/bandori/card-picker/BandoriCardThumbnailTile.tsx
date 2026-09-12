@@ -115,7 +115,7 @@ export default function BandoriCardThumbnailTile({
           bandId={card.bandId}
           alt={card.displayName}
           loading="eager"
-          showLevel={false}
+          showPower={false}
         />
       </button>
 

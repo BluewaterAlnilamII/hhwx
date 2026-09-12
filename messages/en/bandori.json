@@ -1158,7 +1158,7 @@
     "private": "Private",
     "fetchedAt": "Retrieved",
     "cached": "Cached data",
-    "mainBand": "Main Band",
+    "mainBandPower": "Main Band Power",
     "leader": "Leader",
     "bandRank": "Band Rank",
     "musicRecords": "Song Records",
@@ -1176,6 +1176,13 @@
     "busy": "The profile service is busy; please try again later",
     "failed": "Search failed; please try again later",
     "refreshFailed": "Refresh failed; showing previously retrieved data",
-    "name": "Player name"
+    "name": "Player name",
+    "currentItemsAndBonuses": "Current Items and Bonuses",
+    "bonusParameters": "Bonuses",
+    "potentialBonus": "Potential Release",
+    "missionBonus": "Character Mission",
+    "noEnabledItems": "No area items currently enabled",
+    "itemsFailed": "Failed to load area item data",
+    "powerFailed": "Calculation failed"
   }
 }

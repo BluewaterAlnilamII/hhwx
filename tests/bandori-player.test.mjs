@@ -4,6 +4,9 @@ import test from "node:test";
 import { ApiRouteError } from "../src/lib/api-contracts.ts";
 import { parseBandoriPlayerResponse, redactBandoriPlayerProfile, PLAYER_UID_PATTERN, PLAYER_BAND_ORDER } from "../src/lib/bandori/player-profile.ts";
 import { buildBandoriBandLogoUrl, buildBandoriDeckRankSpriteUrls, buildBandoriPlayerSpriteUrl } from "../src/lib/bandori-builtin-resources.ts";
+import { calculatePlayerPower, getPlayerCharacterBonusParameters } from "../src/lib/bandori/player-power.ts";
+import { calculateFixedTeamParameters } from "../src/lib/bandori/medley-foundation/parameters.ts";
+import { formatLocalizedInteger } from "../src/lib/localized-format.ts";
 
 const serverBoundary = registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -57,6 +60,8 @@ test("privacy redaction removes protected values without changing the source or 
   assert.equal(view.clears[0].value.expert, null);
   assert.deepEqual(view.clears[1], { public: false, value: null });
   assert.deepEqual(view.stage, { public: false, value: null });
+  assert.deepEqual(view.power, { public: false, value: null });
+  assert.equal(calculatePlayerPower(view, {}, {}, {}), null);
   assert.equal(view.bandRanks.value[1], 0);
   assert.equal(view.uid, "9007199254740997");
   for (const key of Object.keys(original).filter((key) => key.startsWith("publish"))) original[key] = false;
@@ -66,6 +71,124 @@ test("privacy redaction removes protected values without changing the source or 
   assert.equal(closed.userCharacterRankMap, undefined);
   assert.equal(closed.bandRankMap, undefined);
   assert.deepEqual(closed.userMusicClearInfoMap.entries.easy, {});
+});
+
+function powerSample() {
+  const input = sample();
+  input.data.profile.publishTotalDeckPowerFlg = true;
+  input.data.profile.mainDeckUserSituations.entries = [1, 2, 3, 4, 5].map((situationId) => ({
+    situationId, level: 60, trainingStatus: "done", limitBreakRank: 4,
+    userAppendParameter: { performance: 200, technique: 200, visual: 200,
+      characterPotentialPerformance: 100, characterPotentialTechnique: 100, characterPotentialVisual: 100,
+      characterBonusPerformance: 30, characterBonusTechnique: 30, characterBonusVisual: 30 },
+  }));
+  input.data.profile.enabledUserAreaItems = { entries: [{ areaItemId: 368, areaItemCategory: 4, level: 8 }] };
+  const masters = Object.fromEntries([1, 2, 3, 4, 5].map((id) => [id, {
+    characterId: id, attribute: "happy", rarity: 4, levelLimit: 50,
+    stat: { 1: { performance: 100, technique: 100, visual: 100 },
+      60: { performance: 1000, technique: 1000, visual: 1000 },
+      training: { levelLimit: 10, performance: 300, technique: 300, visual: 300 },
+      episodes: [{ performance: 150, technique: 150, visual: 150 }] },
+  }]));
+  const characters = Object.fromEntries([1, 2, 3, 4, 5].map((id) => [id, { bandId: 1 }]));
+  const areas = { 4: { targetAttributes: ["happy"], targetBandIds: [1],
+    performance: { 8: [10, 20, 30, 40] }, technique: { 8: [10, 20, 30, 40] }, visual: { 8: [10, 20, 30, 40] } } };
+  return { input, masters, characters, areas };
+}
+
+test("player bonuses recover profile units without guessing rounded or missing values", () => {
+  const { input, masters } = powerSample();
+  const view = parseBandoriPlayerResponse(input);
+  const master = { ...masters[1], stat: { 1: { performance: 100, technique: 100, visual: 100 },
+    60: { performance: 11259, technique: 10880, visual: 9717 }, training: { levelLimit: 10 } } };
+  const append = { cardId: 1, append: { performance: 2250, technique: 2250, visual: 2250 },
+    potential: { performance: 742, technique: 722, visual: 658 }, mission: { performance: 715, technique: 695, visual: 634 } };
+  assert.deepEqual(getPlayerCharacterBonusParameters(view.cards[0], master, append), [
+    { key: "performance", potential: 55, mission: 53 },
+    { key: "technique", potential: 55, mission: 53 },
+    { key: "visual", potential: 55, mission: 53 },
+  ]);
+  // Two separately floored mission parts: floor(10050 * .017) + floor(10050 * .018) = 351.
+  const splitMaster = { ...master, stat: { ...master.stat, 60: { performance: 10050, technique: 10050, visual: 10050 } } };
+  const splitAppend = { ...append, append: { performance: 0, technique: 0, visual: 0 },
+    potential: { performance: 502, technique: 502, visual: 502 }, mission: { performance: 351, technique: 351, visual: 351 } };
+  assert.deepEqual(getPlayerCharacterBonusParameters(view.cards[0], splitMaster, splitAppend).map(({ mission }) => mission), [35, 35, 35]);
+  const lowLevel = { ...view.cards[0], level: 1 };
+  const zero = { performance: 0, technique: 0, visual: 0 };
+  assert.deepEqual(getPlayerCharacterBonusParameters(lowLevel, master, { ...append, append: zero, potential: zero, mission: zero })
+    .map(({ potential, mission }) => [potential, mission]), [[null, null], [null, null], [null, null]]);
+  assert.equal(getPlayerCharacterBonusParameters(view.cards[0], master, { ...append, potential: { ...append.potential, performance: 744 } })[0].potential, null);
+  assert.throws(() => getPlayerCharacterBonusParameters(view.cards[0], undefined, append), /Incomplete card master/);
+});
+
+test("player power uses supplied append points once, matches area categories and selects each region", () => {
+  const { input, masters, characters, areas } = powerSample();
+  for (const [server, expected] of [["jp", 21945], ["en", 23940], ["tw", 25935], ["cn", 27930]]) {
+    input.data.server = server;
+    const view = parseBandoriPlayerResponse(input);
+    const power = calculatePlayerPower(view, masters, characters, areas);
+    assert.equal(power.totalPower, expected);
+    assert.deepEqual(power.cardPowers, Object.fromEntries([1, 2, 3, 4, 5].map((id) => [id, expected / 5])));
+    assert.deepEqual(view.power.value.areaItems, [{ areaItemId: 368, categoryId: 4, level: 8 }]);
+    assert.equal(view.power.value.cards[0].potential.performance, 100);
+  }
+  input.data.server = "jp";
+  masters[5].attribute = "cool";
+  const mixedBand = calculatePlayerPower(parseBandoriPlayerResponse(input), masters, characters, areas);
+  assert.equal(mixedBand.totalPower, 21546);
+  assert.equal(mixedBand.cardPowers[5], 3990);
+  assert.equal(mixedBand.cardPowers[1], 4389);
+  masters[5].attribute = "happy";
+  input.data.profile.mainDeckUserSituations.entries[0].level = 1;
+  const lowerLevel = calculatePlayerPower(parseBandoriPlayerResponse(input), masters, characters, areas);
+  assert.equal(lowerLevel.totalPower, 18975);
+  assert.equal(lowerLevel.cardPowers[1], 1419);
+});
+
+test("absent append values default to zero without filling unreturned area items", () => {
+  const { input, masters, characters } = powerSample();
+  delete input.data.profile.enabledUserAreaItems;
+  input.data.profile.mainDeckUserSituations.entries.forEach((card) => { delete card.userAppendParameter; });
+  const view = parseBandoriPlayerResponse(input);
+  assert.deepEqual(view.power.value.areaItems, []);
+  assert.deepEqual(view.power.value.cards[0].potential, { performance: 0, technique: 0, visual: 0 });
+  assert.deepEqual(calculatePlayerPower(view, masters, characters, {}), { totalPower: 15000,
+    cardPowers: { 1: 3000, 2: 3000, 3: 3000, 4: 3000, 5: 3000 } });
+});
+
+test("player power retains medley precision and rounds only for presentation", () => {
+  const { input, masters, characters, areas } = powerSample();
+  for (const key of ["performance", "technique", "visual"]) areas[4][key][8][0] = 0.01;
+  const view = parseBandoriPlayerResponse(input);
+  const power = calculatePlayerPower(view, masters, characters, areas);
+  const medley = calculateFixedTeamParameters({
+    cards: view.cards.map((card) => ({ cardId: card.cardId, bandId: 1, attribute: "happy",
+      characterParameter: [1330, 1330, 1330], totalPower: 3990 })),
+    areaItemsById: areas,
+    profileAreaItems: new Map([[4, { areaItemId: 4, level: 8 }]]),
+    selectedAreaItemIds: [4], eventBonus: null, server: 0,
+  });
+  assert.equal(power.totalPower, medley.deckTotalParameter);
+  assert.ok(Math.abs(power.totalPower - 19951.995) < 1e-8);
+  assert.ok(Object.values(power.cardPowers).every((value) => Math.abs(value - 3990.399) < 1e-8));
+  assert.equal(formatLocalizedInteger(power.totalPower, "zh-CN"), "19,952");
+  assert.equal(Object.values(power.cardPowers).reduce((sum, value) => sum + Math.round(value), 0), 19950);
+});
+
+test("invalid power inputs and missing regional master values fail instead of displaying zero or estimates", () => {
+  const { input, masters, characters, areas } = powerSample();
+  const view = parseBandoriPlayerResponse(input);
+  assert.throws(() => calculatePlayerPower(view, {}, characters, areas), /card master/);
+  assert.throws(() => calculatePlayerPower(view, masters, characters, {}), /area item master/);
+  const missingRegion = structuredClone(areas);
+  missingRegion[4].performance[8][0] = null;
+  assert.throws(() => calculatePlayerPower(view, masters, characters, missingRegion), /area item master/);
+  view.cards.pop();
+  assert.throws(() => calculatePlayerPower(view, masters, characters, areas), /Incomplete main band/);
+  input.data.profile.mainDeckUserSituations.entries[0].userAppendParameter.characterPotentialPerformance = "100";
+  assert.throws(() => parseBandoriPlayerResponse(input), /append parameter/);
+  input.data.profile.publishTotalDeckPowerFlg = false;
+  assert.deepEqual(parseBandoriPlayerResponse(input).power, { public: false, value: null });
 });
 
 test("profile view preserves card order, selected illustration, both titles, all rating groups and missing data", () => {

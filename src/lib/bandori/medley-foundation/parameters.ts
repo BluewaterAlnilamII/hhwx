@@ -264,8 +264,8 @@ export function calculateProfileAreaItem(
   };
 }
 
-function selectedAreaItemPower(
-  cards: readonly CalculatedProfileCardV1[],
+export function selectedAreaItemPower(
+  cards: readonly Pick<CalculatedProfileCardV1, "attribute" | "bandId" | "characterParameter">[],
   areaItemsById: Record<string, unknown>,
   profileAreaItems: ReadonlyMap<number, DecodedAreaItemStateV1>,
   selectedAreaItemIds: readonly number[],

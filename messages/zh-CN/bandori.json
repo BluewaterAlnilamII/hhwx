@@ -1158,7 +1158,7 @@
     "private": "不公开",
     "fetchedAt": "获取时间",
     "cached": "缓存数据",
-    "mainBand": "主乐队",
+    "mainBandPower": "主乐队综合力",
     "leader": "队长",
     "bandRank": "乐队等级",
     "musicRecords": "歌曲成绩",
@@ -1176,6 +1176,13 @@
     "busy": "查询服务繁忙，请稍后重试",
     "failed": "查询失败，请稍后重试",
     "refreshFailed": "更新失败，正在显示上次获取的资料",
-    "name": "玩家名称"
+    "name": "玩家名称",
+    "currentItemsAndBonuses": "当前道具及加成参数",
+    "bonusParameters": "加成参数",
+    "potentialBonus": "潜能解放加成",
+    "missionBonus": "角色任务加成",
+    "noEnabledItems": "当前未启用区域道具",
+    "itemsFailed": "区域道具资料加载失败",
+    "powerFailed": "计算失败"
   }
 }

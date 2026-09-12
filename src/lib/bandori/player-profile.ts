@@ -74,6 +74,46 @@ export type PlayerCard = {
 };
 export type PlayerRatingSong = { musicId: number; difficulty: BandoriChartDifficulty; rating: number };
 export type PlayerSection<T> = { public: boolean; value: T | null };
+export type PlayerParameters = { performance: number; technique: number; visual: number };
+export type PlayerPowerInput = {
+  areaItems: Array<{ areaItemId: number; categoryId: number; level: number }>;
+  cards: Array<{ cardId: number; append: PlayerParameters; potential: PlayerParameters; mission: PlayerParameters }>;
+};
+
+function readPlayerPower(profile: RecordValue, cards: PlayerCard[]): PlayerSection<PlayerPowerInput> {
+  if (profile.publishTotalDeckPowerFlg !== true) return { public: false, value: null };
+  function parameters(value: RecordValue, prefix: string): PlayerParameters {
+    return Object.fromEntries(["performance", "technique", "visual"].map((key) => {
+      const field = prefix ? `${prefix}${key[0].toUpperCase()}${key.slice(1)}` : key;
+      // Omitted protobuf uint fields have a zero default, including an absent append object.
+      const number = value[field] === undefined ? 0 : integer(value[field]);
+      if (number === null) throw new Error("Invalid player append parameter");
+      return [key, number];
+    })) as PlayerParameters;
+  }
+  if (profile.enabledUserAreaItems !== undefined && (!profile.enabledUserAreaItems || typeof profile.enabledUserAreaItems !== "object" || Array.isArray(profile.enabledUserAreaItems))) throw new Error("Invalid player area items");
+  const areaList = playerRecord(profile.enabledUserAreaItems).entries ?? [];
+  if (!Array.isArray(areaList)) throw new Error("Invalid player area items");
+  const areaItems = areaList.map((value) => {
+    const item = playerRecord(value);
+    const areaItemId = positive(item.areaItemId);
+    const categoryId = positive(item.areaItemCategory);
+    const level = item.level === undefined ? 0 : integer(item.level);
+    if (areaItemId === null || categoryId === null || level === null) throw new Error("Invalid player area item");
+    return { areaItemId, categoryId, level };
+  });
+  const rawCards = playerRecord(profile.mainDeckUserSituations).entries;
+  const byId = new Map((Array.isArray(rawCards) ? rawCards : []).map((value) => {
+    const card = playerRecord(value);
+    if (card.userAppendParameter !== undefined && (!card.userAppendParameter || typeof card.userAppendParameter !== "object" || Array.isArray(card.userAppendParameter))) throw new Error("Invalid player append parameter");
+    return [card.situationId, playerRecord(card.userAppendParameter)];
+  }));
+  return { public: true, value: { areaItems, cards: cards.map(({ cardId }) => {
+    const append = byId.get(cardId) ?? {};
+    return { cardId, append: parameters(append, ""), potential: parameters(append, "characterPotential"), mission: parameters(append, "characterBonus") };
+  }) } };
+}
+
 export type PlayerProfileView = {
   server: BandoriServerCode; uid: string; cache: boolean; fetchedAt: string | null;
   name: string; rank: number | null; introduction: string; cards: PlayerCard[];
@@ -85,6 +125,7 @@ export type PlayerProfileView = {
   stage: PlayerSection<Record<string, number | null>>;
   deckRanks: PlayerSection<Record<string, { rank: string; level: number | null; score: number | null }>>;
   characterRanks: PlayerSection<Record<string, number | null>>;
+  power: PlayerSection<PlayerPowerInput>;
 };
 
 export function parseBandoriPlayerResponse(raw: unknown): PlayerProfileView {
@@ -139,6 +180,7 @@ export function parseBandoriPlayerResponse(raw: unknown): PlayerProfileView {
     fetchedAt: typeof data.fetchedAt === "string" && Number.isFinite(Date.parse(data.fetchedAt)) ? data.fetchedAt : null,
     name: text(profile.userName), rank: integer(profile.rank), introduction: text(profile.introduction),
     cards, avatar, portrait, degreeIds,
+    power: readPlayerPower(profile, cards),
     bandRanks: section("publishBandRankFlg", "bandRankMap", numberMap),
     clears: PLAYER_CLEAR_ROWS.map(([field, flag]) => section(flag, "userMusicClearInfoMap", (value) => (
       Object.fromEntries(BANDORI_CHART_DIFFICULTIES.map((difficulty) => [difficulty, integer(playerRecord(entries(value)[difficulty])[field])])) as Record<BandoriChartDifficulty, number | null>

@@ -4,12 +4,13 @@ import { useMemo } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { ImageOff } from "lucide-react";
 
+import { Link } from "@/i18n/navigation";
 import BandoriCardTile from "@/components/bandori/BandoriCardTile";
 import LoadingPlaceholder from "@/components/LoadingPlaceholder";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useBandoriCharactersMaster } from "@/hooks/useBandoriCharactersMaster";
 import { resolveBandoriCardBandId } from "@/lib/bandori/cards/master";
-import type { BandoriServer } from "@/lib/bandori-server";
+import { getBandoriServerCode, type BandoriServer } from "@/lib/bandori-server";
 import type { BandoriTop10Player } from "@/lib/bandori/event-tracker/top10-view";
 
 type Top10PlayerListProps = {
@@ -76,7 +77,6 @@ export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
                     metadata={metadata ?? undefined}
                     cardName={player.name || String(player.uid)}
                     size="compact"
-                    showLevel={false}
                     showPower={false}
                   />
                 ) : (
@@ -94,7 +94,9 @@ export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
                   {player.name || "—"}
                 </div>
                 <div className="mt-1 whitespace-nowrap text-[10px] font-medium tabular-nums text-[var(--theme-color-text-muted)] sm:text-xs">
-                  {player.uid}
+                  <Link href={`/bandori/player/${getBandoriServerCode(server)}/${player.uid}`} prefetch={false} className="hhwx-text-link">
+                    {player.uid}
+                  </Link>
                 </div>
               </div>
 
