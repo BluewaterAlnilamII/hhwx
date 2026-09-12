@@ -7,6 +7,7 @@ import ts from "typescript";
 import { ApiRouteError } from "../src/lib/api-contracts.ts";
 import * as apiCache from "../src/lib/api-cache.ts";
 import { BANDORI_SERVER_CODES } from "../src/lib/bandori-server.ts";
+import { redactBandoriPlayerProfile } from "../src/lib/bandori/player-profile.ts";
 
 const require = createRequire(import.meta.url);
 const epoch = Date.parse("2026-09-07T06:00:00Z");
@@ -33,11 +34,13 @@ function harness(env = {
   const requests = [];
   const timers = [];
   const warnings = [];
+  const requestTimeouts = new WeakMap();
   const dependencies = {
     "server-only": {},
     "@/lib/api-contracts": { ApiRouteError },
     "@/lib/api-cache": apiCache,
     "@/lib/bandori-server": { BANDORI_SERVER_CODES },
+    "@/lib/bandori/player-profile": { redactBandoriPlayerProfile },
     "next/server": require("next/server"),
   };
   const context = createContext({
@@ -48,10 +51,17 @@ function harness(env = {
     },
     performance: { now: () => monotonic },
     AbortSignal: { timeout: (ms) => {
-      assert.equal(ms, 5_000);
-      return new AbortController().signal;
+      const signal = new AbortController().signal;
+      requestTimeouts.set(signal, ms);
+      return signal;
     } },
-    fetch: async (...args) => { requests.push(args); return responder(...args); },
+    fetch: async (...args) => {
+      const [url, options] = args;
+      if (options.signal) assert.equal(requestTimeouts.get(options.signal),
+        String(url).includes("/internal/hhwx-user-fetcher/player/") ? 30_000 : 5_000);
+      requests.push(args);
+      return responder(...args);
+    },
     setInterval: (callback, ms) => {
       const timer = { callback, ms, unreferenced: false, unref() { this.unreferenced = true; } };
       timers.push(timer);
@@ -102,7 +112,7 @@ test("status, player, and snapshot requests share token precedence and legacy co
     const h = harness({ HHWX_USER_FETCHER_BASE_URL: "https://backend.example", ...env });
     h.service.startServiceStatusPolling();
     await settle();
-    h.respond(() => Response.json({ profile: {}, snapshot: {} }));
+    h.respond(() => Response.json({ profile: { userId: "1001" }, snapshot: {} }));
     if (token) {
       await h.player.fetchBandoriPlayerProfile("cn", "1001", 0);
       await h.snapshot.fetchGameUserSnapshot("1001");
