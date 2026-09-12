@@ -2,6 +2,8 @@
 
 The shared Events/Cards/Costumes/Degrees/Music/Stamps API and index conventions are documented in [bandori-master-asset-contract.md](bandori-master-asset-contract.md).
 
+Player-profile presentation, privacy, and its fixed resource consumers are documented in [bandori-player-search.md](bandori-player-search.md).
+
 中文说明见 [bandori-asset-cdn-setup.zh-CN.md](bandori-asset-cdn-setup.zh-CN.md).
 
 This document describes the public URL contract that the HHWX web application expects for Bandori static assets. It is intentionally not a tracker setup guide.

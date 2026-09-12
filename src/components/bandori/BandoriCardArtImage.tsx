@@ -17,6 +17,7 @@ export type BandoriCardArtImageProps = {
   cardId: number;
   resourceSetName: string | null | undefined;
   trainType: BandoriCardAssetVariant;
+  imageKind?: "thumb" | "trim";
   alt: string;
   className?: string;
   loading?: "eager" | "lazy";
@@ -27,6 +28,7 @@ export function BandoriCardArtImage({
   cardId,
   resourceSetName,
   trainType,
+  imageKind = "thumb",
   alt,
   className,
   loading = "lazy",
@@ -37,7 +39,7 @@ export function BandoriCardArtImage({
   const { value: assetIndex, loading: indexLoading } = useBandoriCardsAssetIndex();
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const src = buildBandoriPublicAssetUrl(
-    lookupBandoriCardImage(assetIndex, resourceSetName, trainType, "thumb"),
+    lookupBandoriCardImage(assetIndex, resourceSetName, trainType, imageKind),
   );
   const failed = Boolean(src && failedSrc === src);
 

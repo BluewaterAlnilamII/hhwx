@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useMemo } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
   ClipboardList,
@@ -41,11 +41,11 @@ import {
 import { getBandoriStampCatalogItemsForRegion } from "@/lib/bandori-stamp-assets";
 import type { BandoriEventBonus } from "@/lib/bandori-team-calculator";
 import BandoriCardTile from "@/components/bandori/BandoriCardTile";
+import { BandoriDetailColumns, BandoriDetailRow as OverviewRow } from "@/components/bandori/BandoriDetailLayout";
 import {
   resolveBandoriSkillLabel,
   type BandoriSkillLabelMaster,
 } from "@/lib/bandori-skill-label";
-import { cn } from "@/lib/utils";
 import { useMusicPlayerStore } from "@/store/useMusicPlayerStore";
 import {
   buildEventInfoModel,
@@ -111,30 +111,6 @@ function formatDateTime(
     minute: "2-digit",
     hour12: false,
   }).format(timestamp);
-}
-
-type OverviewRowProps = {
-  label: string;
-  children: ReactNode;
-  mobileLayout?: "inline" | "stacked";
-  alignment?: "baseline" | "center" | "start";
-};
-
-function OverviewRow({ label, children, mobileLayout = "inline", alignment = "baseline" }: OverviewRowProps) {
-  return (
-    <div className={cn(
-      "grid border-b border-[var(--theme-color-border-subtle)] py-3 last:border-b-0 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-5",
-      alignment === "center" ? "items-center" : alignment === "start" ? "items-start" : "items-baseline",
-      mobileLayout === "inline"
-        ? "grid-cols-[7rem_minmax(0,1fr)] gap-3"
-        : "grid-cols-1 gap-1",
-    )}>
-      <dt className="text-sm font-semibold leading-5 text-[var(--theme-color-text-muted)]">
-        {label}
-      </dt>
-      <dd className="flex min-w-0 flex-col items-end text-right text-sm font-semibold leading-5 text-[var(--theme-color-text-default)]">{children}</dd>
-    </div>
-  );
 }
 
 function EventCardTile({
@@ -366,8 +342,8 @@ export default function EventInfoPanel({
       ) : null}
       <section className="@container">
         <Heading as="h2" visualRole="section" accentSlot="a" icon={<ClipboardList className="h-5 w-5" />}>{t("overviewTitle")}</Heading>
-        <div className="mt-4 grid min-w-0 items-stretch gap-y-0 @min-[54rem]:grid-cols-2 @min-[54rem]:gap-x-0">
-          <dl className="min-w-0 @min-[54rem]:pr-8">
+        <div className="mt-4">
+          <BandoriDetailColumns left={<dl>
             <OverviewRow label={t("eventId")}>{eventId}</OverviewRow>
             <OverviewRow label={t("eventTitle")} mobileLayout="stacked">
               <span>{localizedTitle ?? t("eventTitleFallback", { eventId })}</span>
@@ -407,10 +383,8 @@ export default function EventInfoPanel({
             <OverviewRow label={t("endTime", { server: SERVER_LABELS[model.timeServer] })}>
               {formatDateTime(model.endAt, model.timeServer, locale, t("unannounced"))}
             </OverviewRow>
-          </dl>
-
-          <div className="min-w-0 border-t border-[var(--theme-color-border-subtle)] @min-[54rem]:border-l @min-[54rem]:border-t-0 @min-[54rem]:pl-8">
-            {cardDetailsReady ? <BandoriEventBonusPanel
+          </dl>} right={
+            cardDetailsReady ? <BandoriEventBonusPanel
               variant="embedded"
               eventTypeLabel={eventTypeLabel}
               eventBonus={eventBonus}
@@ -420,15 +394,15 @@ export default function EventInfoPanel({
               preferredServer={server}
               showMatch={false}
               showMasterRank={false}
-            /> : <p className="p-4 text-sm">{commonT("states.loadFailed")}</p>}
-          </div>
+            /> : <p className="p-4 text-sm">{commonT("states.loadFailed")}</p>
+          } />
         </div>
       </section>
 
       <section className="@container mt-6 border-t border-[var(--theme-color-border-subtle)] pt-6">
         <Heading as="h2" visualRole="section" accentSlot="b" icon={<Gift className="h-5 w-5" />}>{t("rewardsTitle")}</Heading>
-        <div className="mt-4 grid min-w-0 items-stretch gap-y-0 @min-[54rem]:grid-cols-2 @min-[54rem]:gap-x-0">
-          <dl className="min-w-0 @min-[54rem]:pr-8">
+        <div className="mt-4">
+          <BandoriDetailColumns left={<dl>
             <OverviewRow label={t("rewardStamps", { server: SERVER_LABELS[rewardStampSelection.server] })} mobileLayout="stacked" alignment="start">
               {rewardStamps.length > 0 ? (
                 <div className="flex min-h-16 flex-wrap items-center justify-end gap-2">
@@ -447,9 +421,7 @@ export default function EventInfoPanel({
                 </div>
               )}
             </OverviewRow>
-          </dl>
-
-          <dl className="mt-2 min-w-0 border-t border-[var(--theme-color-border-subtle)] pt-2 @min-[54rem]:mt-0 @min-[54rem]:border-l @min-[54rem]:border-t-0 @min-[54rem]:pl-8 @min-[54rem]:pt-0">
+          </dl>} right={<dl className="mt-2 pt-2 @min-[54rem]:mt-0 @min-[54rem]:pt-0">
             <OverviewRow label={t("rewardCards")} mobileLayout="stacked" alignment="start">
               {model.rewardCardIds.length > 0 && !cardDetailsReady ? commonT("states.loadFailed") : model.rewardCardIds.length > 0 ? (
                 <div className="flex min-h-16 flex-wrap items-start justify-end gap-3">
@@ -470,7 +442,7 @@ export default function EventInfoPanel({
                 </div>
               )}
             </OverviewRow>
-          </dl>
+          </dl>} />
         </div>
       </section>
 
