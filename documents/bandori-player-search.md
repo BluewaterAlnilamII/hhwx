@@ -12,16 +12,38 @@ envelope and profile field names. TW now joins JP, EN and CN; KR remains unsuppo
 Binding verification continues to read the public `profile.introduction` field.
 
 The page uses mode `2`: refresh synchronously, with the backend's cached response
-when refresh fails or is busy. It shows the response acquisition time and cache
+on temporary service failures or busy lanes. It shows the response acquisition time and cache
 indicator. Repeating the query refreshes it; there is no automatic polling.
 Modes `0` (cache only), `1` (cache with background refresh), and `3` (synchronous
-refresh without cache fallback) remain available to API clients.
+refresh without cache fallback) remain available to API clients. Mode `3`, used by
+binding verification, waits at most five seconds for the server's lane. Mode `1`
+background refresh is best-effort and may be skipped when the lane is busy.
+
+The process-local backend cache retains at most 1,000 profiles for ten minutes
+after acquisition; reads do not renew this lifetime. Mode `2` still attempts a
+live request even when a recent cache entry exists. Temporary failures may return
+`200` with `cache: true` and an optional `refreshError: { code }`; `fetchedAt`
+remains the original acquisition time. Confirmed absence deletes cached data,
+including during background refresh. Invalid responses and unexpected programming
+errors do not fall back to backend cache. The browser also expires error fallback
+by acquisition time and removes old results after confirmed absence.
 
 Both successful and failed API responses are `no-store`. The private backend
 origin and token remain server-only. Requests have a 30-second timeout, disallow
 redirects, limit response bodies to 1 MiB, and verify the returned player identity.
-Errors exclude backend response bodies. A 404 means unavailable and can also
-represent a cache miss; the page does not claim that the account does not exist.
+Errors exclude backend response bodies. Explicit `BANDORI_PLAYER_NOT_FOUND` is
+`404`; `BANDORI_PLAYER_CACHE_MISS` is a separate `404`. Legacy untyped `404`
+responses remain neutral `BANDORI_PLAYER_UNAVAILABLE` errors. Busy lanes,
+maintenance and unavailable bot sessions have distinct codes with `503`; timeouts
+use `504`, and invalid responses or other upstream failures use `502`. Internal
+authentication failures describe a service failure, not the visitor's permissions.
+Only allowlisted codes cross the public API, including the development proxy.
+
+Deploy the compatible Web reader before the backend. Existing successful fields
+and mode numbers remain intact; older backends omit `refreshError`. Web timeouts
+do not cancel an already-issued game request: the backend retains the account
+lock until its token/RequestID chain is safely settled. This change does not alter
+game transport retries, version recovery or the separate `/suite/user` workflow.
 
 ## Privacy and presentation
 

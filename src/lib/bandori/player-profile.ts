@@ -1,9 +1,39 @@
-import { parseApiSuccessData } from "@/lib/api-contracts";
+import { ApiRouteError, parseApiSuccessData } from "@/lib/api-contracts";
 import { BANDORI_CHART_DIFFICULTIES, isBandoriChartDifficulty, type BandoriChartDifficulty } from "@/lib/bandori-master-contract";
 import { BANDORI_CHARACTER_GROUPS } from "@/lib/bandori-character-groups";
 import { getBandoriServerFromCode, type BandoriServerCode } from "@/lib/bandori-server";
 
 export const PLAYER_UID_PATTERN = /^[1-9][0-9]{3,15}$/u;
+export const PLAYER_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
+export const PLAYER_REFRESH_ERROR_CODES = [
+  "TRACKER_SERVICE_BUSY", "BANDORI_PLAYER_MAINTENANCE", "TRACKER_SERVICE_UNAVAILABLE",
+  "TRACKER_SERVICE_TIMEOUT", "TRACKER_SERVICE_FAILED",
+] as const;
+export type PlayerRefreshError = { code: typeof PLAYER_REFRESH_ERROR_CODES[number] };
+
+export function isPlayerDataFresh(data: { fetchedAt: string | null }, now = Date.now()): boolean {
+  const fetchedAt = data.fetchedAt ? Date.parse(data.fetchedAt) : NaN;
+  return Number.isFinite(fetchedAt) && fetchedAt <= now && now - fetchedAt < PLAYER_CACHE_MAX_AGE_MS;
+}
+
+export function retainPlayerDataOnError(error: Error, data: PlayerProfileView): boolean {
+  return !(error instanceof ApiRouteError && [
+    "BANDORI_PLAYER_NOT_FOUND", "BANDORI_PLAYER_CACHE_MISS", "TRACKER_SERVICE_INVALID_RESPONSE",
+  ].includes(error.code)) && isPlayerDataFresh(data);
+}
+
+export function playerErrorMessageKey(code: string) {
+  switch (code) {
+    case "BANDORI_PLAYER_NOT_FOUND": return "notFound";
+    case "BANDORI_PLAYER_CACHE_MISS": return "cacheMiss";
+    case "TRACKER_SERVICE_BUSY": return "busy";
+    case "BANDORI_PLAYER_MAINTENANCE": return "maintenance";
+    case "TRACKER_SERVICE_TIMEOUT": return "timeout";
+    case "TRACKER_SERVICE_UNAVAILABLE": return "serviceUnavailable";
+    case "BANDORI_PLAYER_UNAVAILABLE": return "unavailable";
+    default: return "failed";
+  }
+}
 export const PLAYER_BAND_ORDER = [1, 2, 4, 5, 3, 21, 18, 45] as const;
 export const PLAYER_BANDS = PLAYER_BAND_ORDER.map((id) => BANDORI_CHARACTER_GROUPS.find((band) => band.bandId === id)!);
 // MasterStageChallengeList main challenges 1–7; special challenges are separate.
@@ -116,6 +146,7 @@ function readPlayerPower(profile: RecordValue, cards: PlayerCard[]): PlayerSecti
 
 export type PlayerProfileView = {
   server: BandoriServerCode; uid: string; cache: boolean; fetchedAt: string | null;
+  refreshError?: PlayerRefreshError;
   name: string; rank: number | null; introduction: string; cards: PlayerCard[];
   avatar: PlayerCard | null; portrait: { cardId: number; illust: PlayerCard["illust"] } | null;
   degreeIds: number[];
@@ -177,6 +208,8 @@ export function parseBandoriPlayerResponse(raw: unknown): PlayerProfileView {
   if (!degreeIds.length && positive(profile.degree)) degreeIds.push(profile.degree as number);
   return {
     server: data.server as BandoriServerCode, uid: data.uid, cache: data.cache === true,
+    ...(data.cache === true && PLAYER_REFRESH_ERROR_CODES.includes(playerRecord(data.refreshError).code as PlayerRefreshError["code"])
+      ? { refreshError: { code: playerRecord(data.refreshError).code as PlayerRefreshError["code"] } } : {}),
     fetchedAt: typeof data.fetchedAt === "string" && Number.isFinite(Date.parse(data.fetchedAt)) ? data.fetchedAt : null,
     name: text(profile.userName), rank: integer(profile.rank), introduction: text(profile.introduction),
     cards, avatar, portrait, degreeIds,

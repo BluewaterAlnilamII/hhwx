@@ -1,7 +1,7 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { getBandoriBackendToken } from "@/lib/hhwx-bandori-backend-server";
 import { BANDORI_SERVER_CODES } from "@/lib/bandori-server";
-import { redactBandoriPlayerProfile } from "@/lib/bandori/player-profile";
+import { isPlayerDataFresh, PLAYER_REFRESH_ERROR_CODES, redactBandoriPlayerProfile, type PlayerRefreshError } from "@/lib/bandori/player-profile";
 
 export const BANDORI_PLAYER_MODES = [0, 1, 2, 3] as const;
 export type BandoriPlayerMode = typeof BANDORI_PLAYER_MODES[number];
@@ -18,6 +18,7 @@ export type BandoriPlayerData = {
   cache: boolean;
   fetchedAt: string | null;
   profile: Record<string, unknown>;
+  refreshError?: PlayerRefreshError;
 };
 
 type TrackerBandoriPlayerPayload = {
@@ -29,6 +30,19 @@ type TrackerBandoriPlayerPayload = {
   profile?: unknown;
   error?: unknown;
   details?: unknown;
+  refreshError?: unknown;
+};
+
+const PLAYER_FAILURES: Record<string, { status: number; message: string }> = {
+  BANDORI_PLAYER_NOT_FOUND: { status: 404, message: "Player was not found" },
+  BANDORI_PLAYER_CACHE_MISS: { status: 404, message: "No valid cached player profile is available" },
+  BANDORI_PLAYER_UNAVAILABLE: { status: 404, message: "Player profile is unavailable" },
+  TRACKER_SERVICE_BUSY: { status: 503, message: "Player profile service is busy" },
+  BANDORI_PLAYER_MAINTENANCE: { status: 503, message: "Game server is under maintenance" },
+  TRACKER_SERVICE_UNAVAILABLE: { status: 503, message: "Player profile service is unavailable" },
+  TRACKER_SERVICE_TIMEOUT: { status: 504, message: "Player profile request timed out" },
+  TRACKER_SERVICE_INVALID_RESPONSE: { status: 502, message: "Player profile service returned an invalid response" },
+  TRACKER_SERVICE_FAILED: { status: 502, message: "Failed to fetch player profile" },
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -90,6 +104,22 @@ function normalizeTrackerPlayerPayload(payload: TrackerBandoriPlayerPayload | nu
     throw new ApiRouteError(502, "TRACKER_SERVICE_INVALID_RESPONSE", "Player profile identity did not match the request");
   }
 
+  if (fallback.mode === 3 && payload.cache !== false) {
+    throw new ApiRouteError(502, "TRACKER_SERVICE_INVALID_RESPONSE", "A live player profile was required");
+  }
+  const fetchedAt = typeof payload.fetchedAt === "string" ? payload.fetchedAt : null;
+  if (payload.cache === true && !isPlayerDataFresh({ fetchedAt })) {
+    throw new ApiRouteError(404, "BANDORI_PLAYER_CACHE_MISS", "Cached player profile has expired");
+  }
+  let refreshError: PlayerRefreshError | undefined;
+  if (payload.refreshError !== undefined) {
+    const code = isRecord(payload.refreshError) ? payload.refreshError.code : null;
+    if (payload.cache !== true || !PLAYER_REFRESH_ERROR_CODES.includes(code as PlayerRefreshError["code"])) {
+      throw new ApiRouteError(502, "TRACKER_SERVICE_INVALID_RESPONSE", "Invalid player refresh status");
+    }
+    refreshError = { code: code as PlayerRefreshError["code"] };
+  }
+
   return {
     server: SUPPORTED_BANDORI_PLAYER_SERVERS.includes(payload.server as BandoriPlayerServer)
       ? payload.server as BandoriPlayerServer
@@ -99,8 +129,9 @@ function normalizeTrackerPlayerPayload(payload: TrackerBandoriPlayerPayload | nu
       ? payload.mode as BandoriPlayerMode
       : fallback.mode,
     cache: payload.cache === true,
-    fetchedAt: typeof payload.fetchedAt === "string" ? payload.fetchedAt : null,
+    fetchedAt,
     profile: redactBandoriPlayerProfile(payload.profile),
+    ...(refreshError ? { refreshError } : {}),
   };
 }
 
@@ -125,13 +156,17 @@ export async function fetchBandoriPlayerProfile(
     : new URL(`${baseUrl!.replace(/\/+$/, "")}/internal/hhwx-user-fetcher/player/${server}/${uid}`);
   endpoint.searchParams.set("mode", String(mode));
 
+  const signal = AbortSignal.timeout(30_000);
   const response = await fetch(endpoint, {
     method: "GET",
     headers: developmentProxy ? undefined : { Authorization: `Bearer ${token}` },
     cache: "no-store",
     redirect: "error",
-    signal: AbortSignal.timeout(30_000),
-  }).catch(() => {
+    signal,
+  }).catch((error: unknown) => {
+    if (signal.aborted || error instanceof Error && error.name === "TimeoutError") {
+      throw new ApiRouteError(504, "TRACKER_SERVICE_TIMEOUT", "Player profile request timed out");
+    }
     throw new ApiRouteError(502, "TRACKER_SERVICE_FAILED", "Failed to fetch player profile");
   });
 
@@ -148,6 +183,7 @@ export async function fetchBandoriPlayerProfile(
     }
   } catch {
     await reader?.cancel().catch(() => undefined);
+    if (signal.aborted) throw new ApiRouteError(504, "TRACKER_SERVICE_TIMEOUT", "Player profile request timed out");
     throw new ApiRouteError(502, "TRACKER_SERVICE_INVALID_RESPONSE", "Player profile service returned an invalid response");
   } finally {
     reader?.releaseLock();
@@ -156,8 +192,16 @@ export async function fetchBandoriPlayerProfile(
   try { payload = JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { /* Invalid JSON is handled below. */ }
 
   if (!response.ok) {
+    const code = isRecord(payload)
+      ? developmentProxy && isRecord(payload.error) ? payload.error.code : payload.code
+      : null;
+    const failure = typeof code === "string" && Object.hasOwn(PLAYER_FAILURES, code) ? PLAYER_FAILURES[code] : null;
+    if (failure && (failure.status === response.status || code === "TRACKER_SERVICE_BUSY" && response.status === 429)) {
+      throw new ApiRouteError(failure.status, code as string, failure.message);
+    }
     if (response.status === 404) {
-      throw new ApiRouteError(404, "BANDORI_PLAYER_NOT_FOUND", "Player profile is unavailable");
+      // Legacy backends conflate cache misses and upstream failures with absent players.
+      throw new ApiRouteError(404, "BANDORI_PLAYER_UNAVAILABLE", "Player profile is unavailable");
     }
 
     if (response.status === 429) {
@@ -165,16 +209,12 @@ export async function fetchBandoriPlayerProfile(
     }
 
     if (response.status === 503) {
-      if (developmentProxy) throw new ApiRouteError(503, "TRACKER_SERVICE_BUSY", "Player profile service is unavailable");
-      throw new ApiRouteError(
-        503,
-        "TRACKER_PLAYER_SERVER_NOT_CONFIGURED",
-        "Player profile account is not configured for this server",
-      );
+      throw new ApiRouteError(503, "TRACKER_SERVICE_UNAVAILABLE", "Player profile service is unavailable");
     }
+    if (response.status === 504) throw new ApiRouteError(504, "TRACKER_SERVICE_TIMEOUT", "Player profile request timed out");
 
     throw new ApiRouteError(
-      response.status >= 500 ? 502 : 400,
+      response.status === 400 ? 400 : 502,
       "TRACKER_SERVICE_FAILED",
       "Failed to fetch player profile",
     );

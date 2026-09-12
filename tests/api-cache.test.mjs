@@ -1,5 +1,28 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { ApiRouteError } from "../src/lib/api-contracts.ts";
+import { fetchJsonOnce } from "../src/hooks/useCachedFetch.ts";
+
+test("shared JSON requests preserve safe error codes, HTTP messages and request deduplication", async () => {
+  const savedFetch = globalThis.fetch;
+  try {
+    let resolveResponse;
+    let calls = 0;
+    globalThis.fetch = () => { calls++; return new Promise((resolve) => { resolveResponse = resolve; }); };
+    const first = fetchJsonOnce("https://example.test/profile", "default");
+    const second = fetchJsonOnce("https://example.test/profile", "default");
+    assert.equal(first, second);
+    assert.equal(calls, 1);
+    resolveResponse(Response.json({ success: false, error: { code: "BANDORI_PLAYER_NOT_FOUND", message: "not rendered", details: "not exposed" } }, { status: 404 }));
+    await assert.rejects(first, (error) => error instanceof ApiRouteError && error.code === "BANDORI_PLAYER_NOT_FOUND" && error.status === 404 && error.message === "HTTP 404" && error.details === undefined);
+    globalThis.fetch = async () => new Response("not JSON", { status: 503 });
+    await assert.rejects(fetchJsonOnce("https://example.test/profile", "default"), { code: "HTTP_ERROR", status: 503, message: "HTTP 503" });
+    globalThis.fetch = async () => Response.json({ value: 42 });
+    assert.deepEqual(await fetchJsonOnce("https://example.test/profile", "default"), { value: 42 });
+  } finally {
+    globalThis.fetch = savedFetch;
+  }
+});
 
 import {
   FAST_MUTABLE_HTTP_CACHE_POLICY,
