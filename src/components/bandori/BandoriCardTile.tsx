@@ -25,7 +25,6 @@ type BandoriCardTileBaseProps = {
   cardName: string;
   badge?: string;
   leaderLabel?: string;
-  showLevel?: boolean;
   showPower?: boolean;
   size?: "compact" | "default";
   isMuted?: boolean;
@@ -81,7 +80,6 @@ function BandoriCardTileContent({
   cardName,
   badge,
   leaderLabel,
-  showLevel = true,
   showPower = true,
   isMuted = false,
   trigger,
@@ -101,7 +99,6 @@ function BandoriCardTileContent({
       bandId={card.bandId}
       alt={cardName}
       power={card.totalPower}
-      showLevel={showLevel}
       showPower={showPower}
     />
   );

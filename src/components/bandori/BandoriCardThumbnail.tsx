@@ -123,7 +123,6 @@ export default function BandoriCardThumbnail({
   alt,
   size = "tile",
   loading = "lazy",
-  showLevel = true,
   showPower = true,
   power,
 }: {
@@ -133,7 +132,6 @@ export default function BandoriCardThumbnail({
   alt: string;
   size?: BandoriCardThumbnailSize;
   loading?: "eager" | "lazy";
-  showLevel?: boolean;
   showPower?: boolean;
   power?: number | null;
 }) {
@@ -159,7 +157,7 @@ export default function BandoriCardThumbnail({
   );
   const masterIconUrl = buildBandoriCardMasterRankIconUrl();
   const starSlots = Array.from({ length: rarity }, (_, index) => index);
-  const powerLabel = showPower && showLevel ? formatThumbnailPower(power) : null;
+  const powerLabel = showPower ? formatThumbnailPower(power) : null;
   const starStyle = size === "preview"
     ? {
         "--bandori-card-star-left": "3px",

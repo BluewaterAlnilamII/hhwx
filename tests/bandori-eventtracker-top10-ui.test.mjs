@@ -71,7 +71,7 @@ test("TOP10 avatars reuse the shared card tile presentation mode", () => {
   assert.match(top10PlayerListSource, /<BandoriCardTile/u);
   assert.match(top10PlayerListSource, /interaction=\{\{ kind: "presentation" \}\}/u);
   assert.match(top10PlayerListSource, /size="compact"/u);
-  assert.match(top10PlayerListSource, /showLevel=\{false\}/u);
+  assert.match(top10PlayerListSource, /showPower=\{false\}/u);
   assert.doesNotMatch(top10PlayerListSource, /BandoriCardThumbnail/u);
   assert.doesNotMatch(top10PlayerListSource, /rounded-\[7px\]|ring-slate-200/u);
   assert.match(cardTileSource, /type BandoriCardTilePresentationProps/u);

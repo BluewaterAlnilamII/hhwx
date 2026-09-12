@@ -40,7 +40,6 @@ function CardPreview({
         }}
         bandId={entry.bandId}
         alt={entry.displayName}
-        showLevel={false}
         showPower={false}
       />
     </div>

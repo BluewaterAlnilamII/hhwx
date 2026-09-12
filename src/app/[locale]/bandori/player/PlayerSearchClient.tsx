@@ -2,8 +2,10 @@
 
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Search, Users, Music, Trophy, Star, UserRound, ImageOff } from "lucide-react";
+import { Search, Users, Music, Trophy, Star, UserRound, ImageOff, SlidersHorizontal } from "lucide-react";
 import { Link, useRouter } from "@/i18n/navigation";
+import type { AppLocale } from "@/i18n/routing";
+import { formatLocalizedInteger } from "@/lib/localized-format";
 import Heading from "@/components/Heading";
 import LoadingIndicator from "@/components/LoadingIndicator";
 import LoadingImage from "@/components/LoadingImage";
@@ -14,6 +16,8 @@ import { BandoriDetailColumns, BandoriDetailRow as DetailRow } from "@/component
 import MusicArtwork from "@/components/music-player/MusicArtwork";
 import BandoriDegreeView from "@/components/bandori/BandoriDegreeView";
 import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
+import { LONG_CLIENT_CACHE_POLICY } from "@/lib/api-cache";
+import { calculatePlayerPower, getPlayerCharacterBonusParameters, parsePlayerAreaItemsMaster } from "@/lib/bandori/player-power";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useBandoriCharactersMaster } from "@/hooks/useBandoriCharactersMaster";
@@ -46,7 +50,7 @@ function DetailColumns({ children }: { children: ReactNode[] }) {
 
 function Availability({ section, children }: { section: PlayerSection<unknown>; children: ReactNode }) {
   const t = useTranslations("bandori.player");
-  return section.public && section.value !== null ? children : <p className="py-3 text-sm text-[var(--theme-color-text-muted)]">{t(section.public ? "noData" : "private")}</p>;
+  return section.public && section.value !== null ? children : <p className="py-3 text-center text-sm text-[var(--theme-color-text-muted)]">{t(section.public ? "noData" : "private")}</p>;
 }
 
 function AssetImage({ src, alt, className }: { src: string | null; alt: string; className: string }) {
@@ -112,6 +116,7 @@ function RatingDetails({ player }: { player: PlayerProfileView }) {
 
 function PlayerResults({ player }: { player: PlayerProfileView }) {
   const t = useTranslations("bandori.player");
+  const itemsT = useTranslations("bandori.gameProfiles.items");
   const common = useTranslations("common");
   const terms = useTranslations("bandori.terms");
   const locale = useLocale();
@@ -121,6 +126,8 @@ function PlayerResults({ player }: { player: PlayerProfileView }) {
   const skills = useBandoriSkillsMaster();
   const assets = useBandoriCardsAssetIndex();
   const degrees = useBandoriDegreeCatalog(player.degreeIds.length > 0);
+  const areas = useCachedFetch(player.power.public ? "bandori-master-areaItems-v1" : null,
+    player.power.public ? "/api/bandori/master/areaItems" : null, parsePlayerAreaItemsMaster, LONG_CLIENT_CACHE_POLICY);
   const format = (value: number | null | undefined) => value === null || value === undefined ? t("noData") : value.toLocaleString(locale);
   const error = cards.error ?? characters.error ?? skills.error ?? assets.error ?? degrees.error;
   if (!error && (cards.loading || characters.loading || skills.loading || assets.loading || degrees.loading)) return <LoadingIndicator label={common("states.loading")} className="min-h-64" />;
@@ -130,12 +137,18 @@ function PlayerResults({ player }: { player: PlayerProfileView }) {
     return [pickBandoriCharacterDisplayName(characters.data?.[String(card?.characterId)], server, server), pickBandoriRegionalText(card?.prefix, server, server)].filter(Boolean).join(" · ") || `#${id}`;
   };
   const portrait = player.portrait;
+  let power: ReturnType<typeof calculatePlayerPower> = null;
+  let powerFailed = Boolean(areas.error || cards.error || characters.error);
+  if (player.power.public && !powerFailed && cards.data && characters.data && areas.data) {
+    try { power = calculatePlayerPower(player, cards.data, characters.data, areas.data); }
+    catch { powerFailed = true; }
+  }
   const degreeMap = new Map(getBandoriDegreeCatalogItemsForRegion(degrees.catalog, player.server).map((degree) => [degree.id, degree]));
   const showCard = (card: PlayerProfileView["cards"][number]) => {
     const master = metadata(card.cardId);
-    const tileCard = { cardId: card.cardId, level: card.level ?? 0, masterRank: card.masterRank ?? 0, skillLevel: card.skillLevel ?? 0, isTrained: card.isTrained, illustration: card.illust, bandId: resolveBandoriCardBandId(master, characters.data ?? {}) };
+    const tileCard = { cardId: card.cardId, level: card.level ?? 0, masterRank: card.masterRank ?? 0, skillLevel: card.skillLevel ?? 0, isTrained: card.isTrained, illustration: card.illust, bandId: resolveBandoriCardBandId(master, characters.data ?? {}), totalPower: power ? Math.round(power.cardPowers[card.cardId]) : null };
     const skill = resolveBandoriSkillLabel(skills.data?.[String(master?.skillId)] ?? undefined, card.skillLevel, 1, server, server, terms("unknownSkill"));
-    return <BandoriCardTile interaction={{ kind: "information" }} card={tileCard} metadata={master ?? undefined} cardName={pickBandoriRegionalText(master?.prefix, server, server) || cardLabel(card.cardId)} server={server} characterName={pickBandoriCharacterDisplayName(characters.data?.[String(master?.characterId)], server, server)} skillEffectLabel={skill.label} skillEffectLanguageTag={skill.languageTag} size="compact" showLevel={false} showPower={false} leaderLabel={card.isLeader ? t("leader") : undefined} />;
+    return <BandoriCardTile interaction={{ kind: "information" }} card={tileCard} metadata={master ?? undefined} cardName={pickBandoriRegionalText(master?.prefix, server, server) || cardLabel(card.cardId)} server={server} characterName={pickBandoriCharacterDisplayName(characters.data?.[String(master?.characterId)], server, server)} skillEffectLabel={skill.label} skillEffectLanguageTag={skill.languageTag} size="compact" showPower={player.power.public} leaderLabel={card.isLeader ? t("leader") : undefined} />;
   };
   return <>
     {error ? <p role="alert" className="mt-5 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{t("mediaFailed")} <button type="button" className="hhwx-text-link" onClick={() => { cards.refresh(); characters.refresh(); skills.refresh(); assets.refresh(); degrees.refresh(); }}>{common("actions.retry")}</button></p> : null}
@@ -149,7 +162,7 @@ function PlayerResults({ player }: { player: PlayerProfileView }) {
           <p className="mt-4 whitespace-pre-wrap wrap-anywhere">{player.introduction || t("noIntroduction")}</p>
           <p className="mt-4 flex items-center justify-center gap-2" aria-label={t("uid")}><BandoriServerIcon server={server} size={20} /><span className="tabular-nums">{player.uid}</span></p>
           <div className="mt-4 border-t border-[var(--theme-color-border-subtle)] pt-4">
-            <Heading as="h3" visualRole="subsection" className="text-sm">{t("mainBand")}</Heading>
+            <Heading as="h3" visualRole="subsection" className="text-sm">{t("mainBandPower")}{" "}<span className="font-semibold tabular-nums" aria-live="polite">{player.power.public ? powerFailed ? t("powerFailed") : power === null ? common("states.loading") : formatLocalizedInteger(power.totalPower, locale as AppLocale) : t("private")}</span></Heading>
             {player.cards.length ? <div className="mt-3 flex flex-wrap justify-center gap-1.5 sm:gap-2">{player.cards.map((card, index) => <div key={`${card.cardId}:${index}`}>{showCard(card)}</div>)}</div> : <p className="mt-3 text-[var(--theme-color-text-muted)]">{t("noData")}</p>}
           </div>
           <p className="mt-4 text-xs text-[var(--theme-color-text-muted)]">{t("fetchedAt")} {player.fetchedAt ? <time dateTime={player.fetchedAt}>{new Date(player.fetchedAt).toLocaleString(locale)}</time> : t("noData")}{player.cache ? ` · ${t("cached")}` : ""}</p>
@@ -177,6 +190,45 @@ function PlayerResults({ player }: { player: PlayerProfileView }) {
       const name = pickBandoriCharacterDisplayName(characters.data?.[id], server, server, `#${id}`);
       return <div key={id} className="flex min-w-0 flex-col items-center gap-1"><AssetImage src={buildBandoriCharacterIconUrl(id)} alt={name} className="h-7 w-7 rounded-full" /><span className="tabular-nums">{format(player.characterRanks.value?.[id])}</span></div>;
     })}</div></DetailRow>)}</DetailColumns></Availability></Section>
+    <Section title={t("currentItemsAndBonuses")} icon={<SlidersHorizontal className="h-5 w-5" />}>
+      <Availability section={player.power}>
+        <div className="mx-auto max-w-3xl">
+          {areas.error ? <p role="alert" className="text-[var(--theme-color-semantic-danger-foreground)]">{t("itemsFailed")} <button type="button" className="hhwx-text-link" onClick={areas.refresh}>{common("actions.retry")}</button></p>
+            : areas.loading ? <LoadingIndicator label={common("states.loading")} />
+              : player.power.value?.areaItems.length ? <dl>{player.power.value.areaItems.map((item) => {
+                const master = areas.data?.[item.categoryId];
+                const name = pickBandoriRegionalText(master?.areaItemName, server, server) || `#${item.categoryId}`;
+                return <DetailRow key={item.categoryId} mobileLayout="stacked" label={<>{name}{" "}<span className="whitespace-nowrap font-normal">Lv.{item.level}</span></>} className="sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+                  {master?.description?.[item.level]?.[server]}
+                </DetailRow>;
+              })}</dl> : <p className="text-[var(--theme-color-text-muted)]">{t("noEnabledItems")}</p>}
+          <table className="mx-auto mt-6 w-full max-w-[40rem] table-fixed text-sm" aria-label={t("bonusParameters")}>
+            <thead><tr className={rowClass}>
+              <th className="w-10"><span className="sr-only">{itemsT("tabs.characters")}</span></th>
+              <th className="w-24 sm:w-40"><span className="sr-only">{t("bonusParameters")}</span></th>
+              {(["performance", "technique", "visual"] as const).map((key) => <th key={key} scope="col" className="py-3 text-center text-xs font-semibold text-[var(--theme-color-text-muted)]">{locale === "en" ? itemsT(`labels.${key}Short`) : terms(`parameters.${key}`)}</th>)}
+            </tr></thead>
+            {player.power.value?.cards.filter((card, index, all) => all.findIndex((other) => metadata(other.cardId)?.characterId === metadata(card.cardId)?.characterId) === index)
+              .sort((left, right) => (metadata(left.cardId)?.characterId ?? Infinity) - (metadata(right.cardId)?.characterId ?? Infinity)).map((card) => {
+              const characterId = metadata(card.cardId)?.characterId;
+              const name = pickBandoriCharacterDisplayName(characters.data?.[String(characterId)], server, server, `#${characterId}`);
+              let parameters: ReturnType<typeof getPlayerCharacterBonusParameters> | null = null;
+              try { parameters = getPlayerCharacterBonusParameters(player.cards.find((item) => item.cardId === card.cardId)!, metadata(card.cardId), card); } catch { /* Missing masters cannot yield reliable bonus parameters. */ }
+              return <tbody key={characterId ?? card.cardId} className={rowClass}>
+                {(["potential", "mission"] as const).map((type, index) => <tr key={type}>
+                  {index === 0 ? <th rowSpan={2} scope="rowgroup" className="py-3 text-left"><AssetImage src={characterId ? buildBandoriCharacterIconUrl(characterId) : null} alt={name} className="h-7 w-7 rounded-full" /></th> : null}
+                  <th scope="row" className="py-3 pr-3 text-left text-xs font-semibold text-[var(--theme-color-text-muted)] sm:text-sm">{t(type === "potential" ? "potentialBonus" : "missionBonus")}</th>
+                  {([0, 1, 2] as const).map((paramIndex) => {
+                    const value = parameters?.[paramIndex][type];
+                    return <td key={paramIndex} className="py-3 text-center tabular-nums">{value == null ? "—" : (value / 1000).toLocaleString(locale, { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>;
+                  })}
+                </tr>)}
+              </tbody>;
+            })}
+          </table>
+        </div>
+      </Availability>
+    </Section>
   </>;
 }
 

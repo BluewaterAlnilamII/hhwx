@@ -33,7 +33,8 @@ shown, irrespective of `publishUserIdFlg`.
 
 Sections follow the game profile order: profile with the main deck, band ranks, clear
 counts, expanded Rating songs, main stage challenges, deck ranks, and character
-ranks. No main-deck power is calculated or displayed. The selected profile
+ranks, followed by Current Items and Bonuses. Main-band power appears inline with
+its heading. The selected profile
 illustration supplies the large portrait; otherwise the deck leader is used.
 The top area places this portrait on the left and a bordered profile box on the
 right. The centered combination is capped at 944px: a square portrait up to 448px,
@@ -128,7 +129,7 @@ when present and allowed by the applicable privacy flag, except where noted.
 | Character ranks | `exp`, `addExp`, `nextExp`, `totalExp`, `releasedPotentialLevel` | Shows only rank. |
 | Main deck | `deckId`, `deckName`, `deckType`, `bondsEffectIds` | Uses member IDs and leader for card order. |
 | Main-deck cards | `level`, `exp`, `addExp`, `createdAt`, `duplicateCount`, `skillExp` | Card level was deliberately removed from display; other metadata is unused. |
-| Power inputs | `enabledUserAreaItems` IDs/categories/levels; card `userAppendParameter` performance, technique, visual, potential and character bonuses | No power calculation or display. These inputs are privacy protected and are not a direct total-power field. |
+| Power inputs | `enabledUserAreaItems` IDs/categories/levels; card `userAppendParameter` performance, technique, visual, potential and character bonuses | The subsequent frontend extension uses these for power and current items/bonuses. They remain protected by the power publication flag and are not a direct total-power field. |
 | Twitter | `twitterId`, `twitterName`, `screenName`, `url`, `profileImageUrl` | No social block; this object is empty in all four retained fixtures. |
 | Settings | `searchableFlg`, `friendApplicableFlg`, `publishUpdatedAtFlg`, `publishStageChallengeFriendRankingFlg` | No settings display. Other publication flags control their corresponding sections; the queried UID remains visible. |
 | Stage challenges | Entries outside the seven mapped main challenge IDs | Only main challenges are displayed; the raw map is keyed by challenge ID. |
@@ -136,7 +137,58 @@ when present and allowed by the applicable privacy flag, except where noted.
 
 `searchSuccessFlg` is handled by the backend as query status. Repeated identity
 fields and degree-slot metadata do not represent additional visible profile data.
-This audit does not add fields to the page or change the API contract.
+The original audit does not change the API contract; the subsequent frontend extension is described below.
+
+## Current items, bonus parameters and power
+
+`publishTotalDeckPowerFlg` controls both main-band power and the final section.
+When disabled, both show "Private" without parsing or rendering protected bonuses.
+The public API and private backend contracts are unchanged.
+
+Current Items lists only `enabledUserAreaItems`. Its `areaItemCategory` matches the
+existing `/api/bandori/master/areaItems` catalog; `areaItemId` identifies
+the game's specific level record. Unreturned items are not filled in. An empty
+list means no items are currently enabled, not an empty inventory.
+
+Items keep response order without categories or tabs. Existing `BandoriDetailRow`
+rows show the item name, level and queried region's `description[level]`, without
+substituting another region's effect. The character bonus table follows directly
+below and reuses the song-results table style and existing character icons. Each
+main-band character appears once in ascending character-ID order; card names and
+editing controls are omitted. Parameter headers use full Chinese names and English abbreviations.
+
+The API append values are stat points. Display parameters use the game-profile
+convention of one unit per 0.1%, rendered as percentages such as `5.5%`: add ordinary append stats to the level-based card
+stats, then find the unique integer rate consistent with the returned bonus.
+Potential allows one floor operation; mission totals allow both combined and
+separately floored training/collection values. Ambiguous or inconsistent rates,
+or missing card masters, display `—` instead of an estimate. Zero denotes no
+effective bonus, not proof of an actual potential level of zero. Mission totals
+cannot be split into training and collection from this response.
+
+The JP example yields potential 55 (5.5%), confirmed against its returned bonus
+points; this view does not clamp values to the game-profile editor's existing
+50-level input limit. The editor and its components are unchanged. Omitted
+protobuf append messages and uint fields default to zero; malformed values do not.
+
+The main-band heading displays its power inline; private profiles replace only the
+value with "Private". Card powers include the selected area items and reuse the
+existing `BandoriCardTile` power overlay. Private or unavailable powers have no
+card overlay. The obsolete `showLevel` component option has been removed; only
+`showPower` controls this display.
+
+Power reuses `calculateBandoriCard` for level-based stats with reconstructed training,
+episode, Master Rank and character bonuses disabled, then adds all three groups of
+profile append values exactly once. Medley's `selectedAreaItemPower` applies the
+enabled items with the same accumulation order and without intermediate flooring.
+The total retains fractional contributions and uses the same `formatLocalizedInteger`
+rounding as the medley results; individual card overlays round independently for
+display and are never summed to compute the team total. Missing regional level effects,
+missing card metadata or an incomplete band produce a calculation error, not zero
+or an estimate. A 2026-09-12 comparison using the cached public JP example and current
+masters yielded approximately 396739.59 before display rounding. The former floor
+produced 396739, matching the supplied game screenshot; aligning display with medley
+produces 396740. This is not an exhaustive in-game comparison across regions or card states.
 
 ## Verification and rollout
 
