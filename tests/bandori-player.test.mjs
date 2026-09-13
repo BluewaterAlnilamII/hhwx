@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import test from "node:test";
 import { ApiRouteError } from "../src/lib/api-contracts.ts";
-import { parseBandoriPlayerResponse, redactBandoriPlayerProfile, PLAYER_UID_PATTERN, PLAYER_BAND_ORDER, isPlayerDataFresh, retainPlayerDataOnError, playerErrorMessageKey } from "../src/lib/bandori/player-profile.ts";
+import { parseBandoriPlayerResponse, redactBandoriPlayerProfile, isValidPlayerUid, PLAYER_BAND_ORDER, retainPlayerDataOnError, playerErrorMessageKey } from "../src/lib/bandori/player-profile.ts";
 import { buildBandoriBandLogoUrl, buildBandoriDeckRankSpriteUrls, buildBandoriPlayerSpriteUrl } from "../src/lib/bandori-builtin-resources.ts";
 import { calculatePlayerPower, getPlayerCharacterBonusParameters } from "../src/lib/bandori/player-power.ts";
 import { calculateFixedTeamParameters } from "../src/lib/bandori/medley-foundation/parameters.ts";
@@ -13,7 +13,9 @@ const serverBoundary = registerHooks({
     return nextResolve(specifier === "server-only" ? "next/dist/compiled/server-only/empty" : specifier, context);
   },
 });
-const { fetchBandoriPlayerProfile, normalizeBandoriPlayerServer } = await import("../src/lib/bandori-player-fetcher.ts");
+const { fetchBandoriPlayerProfile, normalizeBandoriPlayerServer, normalizeBandoriPlayerUid } = await import("../src/lib/bandori-player-fetcher.ts");
+const { GET: playerGET } = await import("../src/app/api/bandori/player/[server]/[uid]/route.ts");
+const { fetchGameProfileSignature } = await import("../src/lib/game-account-binding.ts");
 serverBoundary.deregister();
 
 function sample() {
@@ -41,7 +43,7 @@ function sample() {
       "userRaiseASuilenHighScoreMusicList", "userMyGOScoreMusicList", "userOtherHighScoreMusicList",
     ].map((field, index) => [field, { entries: [{ musicId: 1, rating: index + 1, difficulty: "expert" }] }])),
   };
-  return { success: true, data: { server: "jp", uid: profile.userId, cache: true, fetchedAt: new Date().toISOString(), profile } };
+  return { success: true, data: { server: "jp", uid: profile.userId, fetchedAt: new Date().toISOString(), profile } };
 }
 
 test("privacy redaction removes protected values without changing the source or hiding the supplied ID", () => {
@@ -223,7 +225,24 @@ test("profile view preserves card order, selected illustration, both titles, all
   assert.equal(parseBandoriPlayerResponse(input).clears[0].value.easy, null);
   input.data.profile.userId = "1234";
   assert.throws(() => parseBandoriPlayerResponse(input), /identity|response/);
-  for (const uid of ["01234", "123", "1234e2", "1.234", "12345678901234567"]) assert.equal(PLAYER_UID_PATTERN.test(uid), false);
+});
+
+test("player IDs enforce uint64 bounds and normalize leading zeros without losing precision", () => {
+  for (const [input, expected] of [["1", "1"], ["01234", "1234"], ["000", "0"], ["12345678901234567", "12345678901234567"], ["18446744073709551615", "18446744073709551615"], ["00000000000000000001", "1"]]) {
+    assert.equal(isValidPlayerUid(input), true);
+    assert.equal(normalizeBandoriPlayerUid(input), expected);
+    const response = sample();
+    response.data.uid = expected;
+    response.data.profile.userId = expected;
+    assert.equal(parseBandoriPlayerResponse(response).uid, expected);
+  }
+  assert.equal(normalizeBandoriPlayerUid(" 00123 "), "123");
+  assert.equal(isValidPlayerUid("1\n"), false);
+  assert.equal(normalizeBandoriPlayerUid("1\n"), "1");
+  for (const input of ["", "abc", "1234e2", "1.234", "-1", "+1", "１２３", "1/2", "1 2", "18446744073709551616", "9".repeat(20), "0".repeat(21), "1".repeat(40)]) {
+    assert.equal(isValidPlayerUid(input), false);
+    assert.throws(() => normalizeBandoriPlayerUid(input), { code: "INVALID_GAME_UID", status: 400 });
+  }
 });
 
 test("profile images use the published fixed asset contract and reject unsupported rank sprites", () => {
@@ -254,21 +273,22 @@ test("all four servers share safe player transport, identity checks, redaction a
       const { data } = sample();
       globalThis.fetch = async (url, init) => {
         assert.equal(new URL(url).pathname, `/internal/hhwx-user-fetcher/player/${server}/${data.uid}`);
+        assert.equal(new URL(url).search, "");
         assert.equal(init.redirect, "error");
         assert.ok(init.signal);
         return Response.json({ ...data, gameUid: data.uid, server });
       };
-      const result = await fetchBandoriPlayerProfile(server, data.uid, 2);
+      const result = await fetchBandoriPlayerProfile(server, data.uid);
       assert.equal(result.profile.stageChallengeAchievementConditionsMap, undefined);
       assert.equal(result.server, server);
     }
     const { data } = sample();
     globalThis.fetch = async () => Response.json({ ...data, profile: { ...data.profile, userId: "1234" } });
-    await assert.rejects(fetchBandoriPlayerProfile("jp", data.uid, 2), { code: "TRACKER_SERVICE_INVALID_RESPONSE" });
+    await assert.rejects(fetchBandoriPlayerProfile("jp", data.uid), { code: "TRACKER_SERVICE_INVALID_RESPONSE" });
     globalThis.fetch = async () => new Response("x".repeat(1024 * 1024 + 1));
-    await assert.rejects(fetchBandoriPlayerProfile("jp", data.uid, 2), { code: "TRACKER_SERVICE_INVALID_RESPONSE" });
-    globalThis.fetch = async () => Response.json({ secret: "must-not-escape" }, { status: 429 });
-    await assert.rejects(fetchBandoriPlayerProfile("jp", data.uid, 2), (error) => error instanceof ApiRouteError && error.code === "TRACKER_SERVICE_BUSY" && error.details === undefined);
+    await assert.rejects(fetchBandoriPlayerProfile("jp", data.uid), { code: "TRACKER_SERVICE_INVALID_RESPONSE" });
+    globalThis.fetch = async () => Response.json({ code: "TRACKER_SERVICE_BUSY", secret: "must-not-escape" }, { status: 429 });
+    await assert.rejects(fetchBandoriPlayerProfile("jp", data.uid), (error) => error instanceof ApiRouteError && error.code === "TRACKER_SERVICE_BUSY" && error.details === undefined);
   } finally {
     globalThis.fetch = savedFetch;
     if (savedBase === undefined) delete process.env.HHWX_USER_FETCHER_BASE_URL;
@@ -278,7 +298,7 @@ test("all four servers share safe player transport, identity checks, redaction a
   }
 });
 
-test("player errors distinguish confirmed absence, legacy misses, maintenance and service failures", async () => {
+test("player errors require matching codes and statuses and sanitize service failures", async () => {
   const savedFetch = globalThis.fetch;
   const keys = ["NODE_ENV", "HHWX_DEV_PLAYER_API_PROXY", "HHWX_USER_FETCHER_BASE_URL", "HHWX_BANDORI_BACKEND_TOKEN"];
   const saved = keys.map((key) => process.env[key]);
@@ -290,7 +310,7 @@ test("player errors distinguish confirmed absence, legacy misses, maintenance an
       process.env.NODE_ENV = proxy ? "development" : "production";
       process.env.HHWX_DEV_PLAYER_API_PROXY = "1";
       for (const [status, code, expectedStatus] of [
-        [404, "BANDORI_PLAYER_NOT_FOUND", 404], [404, "BANDORI_PLAYER_CACHE_MISS", 404],
+        [404, "BANDORI_PLAYER_NOT_FOUND", 404],
         [proxy ? 503 : 429, "TRACKER_SERVICE_BUSY", 503],
         [503, "BANDORI_PLAYER_MAINTENANCE", 503], [503, "TRACKER_SERVICE_UNAVAILABLE", 503],
         [504, "TRACKER_SERVICE_TIMEOUT", 504], [502, "TRACKER_SERVICE_INVALID_RESPONSE", 502],
@@ -299,54 +319,55 @@ test("player errors distinguish confirmed absence, legacy misses, maintenance an
         globalThis.fetch = async () => Response.json(proxy
           ? { success: false, error: { code, message: "private upstream detail" } }
           : { error: "private upstream detail", code }, { status });
-        await assert.rejects(fetchBandoriPlayerProfile("jp", data.uid, 2, { allowDevelopmentProxy: true }), (error) =>
+        await assert.rejects(fetchBandoriPlayerProfile("jp", data.uid, { allowDevelopmentProxy: true }), (error) =>
           error.code === code && error.status === expectedStatus && !error.message.includes("private") && error.details === undefined);
+      }
+      for (const [status, code] of [
+        [400], [404], [429], [500], [503], [504],
+        [404, "BANDORI_PLAYER_UNAVAILABLE"], [404, "UNKNOWN_ERROR"], [503, "BANDORI_PLAYER_NOT_FOUND"],
+      ]) {
+        globalThis.fetch = async () => Response.json(proxy
+          ? { success: false, error: { code, message: "private upstream detail" } }
+          : { error: "private upstream detail", code }, { status });
+        await assert.rejects(fetchBandoriPlayerProfile("jp", data.uid, { allowDevelopmentProxy: true }), (error) =>
+          error.code === "TRACKER_SERVICE_INVALID_RESPONSE" && error.status === 502
+          && !error.message.includes("private") && error.details === undefined);
       }
     }
     process.env.NODE_ENV = "production";
-    for (const [status, expectedStatus, code] of [
-      [404, 404, "BANDORI_PLAYER_UNAVAILABLE"], [503, 503, "TRACKER_SERVICE_UNAVAILABLE"],
-      [401, 502, "TRACKER_SERVICE_FAILED"], [403, 502, "TRACKER_SERVICE_FAILED"],
-    ]) {
-      globalThis.fetch = async () => Response.json({ error: "legacy" }, { status });
-      await assert.rejects(fetchBandoriPlayerProfile("jp", data.uid, 2), { code, status: expectedStatus });
+    for (const status of [401, 403]) {
+      globalThis.fetch = async () => Response.json({ error: "unauthorized" }, { status });
+      await assert.rejects(fetchBandoriPlayerProfile("jp", data.uid), { code: "TRACKER_SERVICE_FAILED", status: 502 });
     }
     globalThis.fetch = async () => { throw new DOMException("synthetic timeout", "TimeoutError"); };
-    await assert.rejects(fetchBandoriPlayerProfile("jp", data.uid, 2), { status: 504, code: "TRACKER_SERVICE_TIMEOUT" });
-    globalThis.fetch = async () => Response.json({ ...data, gameUid: data.uid, refreshError: { code: "TRACKER_SERVICE_BUSY", details: "private" } });
-    const cached = await fetchBandoriPlayerProfile("jp", data.uid, 2);
-    assert.deepEqual(cached.refreshError, { code: "TRACKER_SERVICE_BUSY" });
-    assert.equal(cached.fetchedAt, data.fetchedAt);
-    assert.equal(cached.profile.enabledUserAreaItems, undefined);
-    assert.deepEqual(parseBandoriPlayerResponse({ success: true, data: cached }).refreshError, cached.refreshError);
-    await assert.rejects(fetchBandoriPlayerProfile("jp", data.uid, 3), { code: "TRACKER_SERVICE_INVALID_RESPONSE" });
-    globalThis.fetch = async () => Response.json({ ...data, cache: false, gameUid: data.uid });
-    assert.equal((await fetchBandoriPlayerProfile("jp", data.uid, 3)).cache, false);
-    for (const fetchedAt of [null, "invalid", new Date(Date.now() - 600_000).toISOString()]) {
-      globalThis.fetch = async () => Response.json({ ...data, fetchedAt, gameUid: data.uid });
-      await assert.rejects(fetchBandoriPlayerProfile("jp", data.uid, 2), { code: "BANDORI_PLAYER_CACHE_MISS" });
+    await assert.rejects(fetchBandoriPlayerProfile("jp", data.uid), { status: 504, code: "TRACKER_SERVICE_TIMEOUT" });
+    for (const retiredFields of [{ mode: 2 }, { cache: true }, { cache: false }, { refreshError: { code: "TRACKER_SERVICE_BUSY" } }]) {
+      globalThis.fetch = async () => Response.json({ ...data, gameUid: data.uid, ...retiredFields });
+      await assert.rejects(fetchBandoriPlayerProfile("jp", data.uid), { code: "TRACKER_SERVICE_INVALID_RESPONSE" });
     }
-    globalThis.fetch = async () => Response.json({ ...data, gameUid: data.uid, refreshError: { code: "secret-token" } });
-    await assert.rejects(fetchBandoriPlayerProfile("jp", data.uid, 2), { code: "TRACKER_SERVICE_INVALID_RESPONSE" });
+    for (const fetchedAt of ["2000-01-01T00:00:00Z", "2999-01-01T00:00:00Z", null]) {
+      globalThis.fetch = async () => Response.json({ ...data, fetchedAt, gameUid: data.uid });
+      const result = await fetchBandoriPlayerProfile("jp", data.uid);
+      assert.equal(parseBandoriPlayerResponse({ success: true, data: result }).fetchedAt, fetchedAt);
+      assert.deepEqual(Object.keys(result).sort(), ["fetchedAt", "profile", "server", "uid"]);
+    }
   } finally {
     globalThis.fetch = savedFetch;
     keys.forEach((key, index) => { if (saved[index] === undefined) delete process.env[key]; else process.env[key] = saved[index]; });
   }
 });
 
-test("browser fallback expires by acquisition time and confirmed absence removes old data", () => {
-  const data = parseBandoriPlayerResponse(sample());
-  const fetched = Date.parse(data.fetchedAt);
-  assert.equal(isPlayerDataFresh(data, fetched + 599_999), true);
-  assert.equal(isPlayerDataFresh(data, fetched + 600_000), false);
-  assert.equal(isPlayerDataFresh({ fetchedAt: null }), false);
-  assert.equal(retainPlayerDataOnError(new ApiRouteError(503, "TRACKER_SERVICE_BUSY", "HTTP 503"), data), true);
-  assert.equal(retainPlayerDataOnError(new ApiRouteError(404, "BANDORI_PLAYER_UNAVAILABLE", "HTTP 404"), data), true);
-  assert.equal(retainPlayerDataOnError(new ApiRouteError(404, "BANDORI_PLAYER_NOT_FOUND", "HTTP 404"), data), false);
-  assert.equal(retainPlayerDataOnError(new Error("network failure"), { ...data, fetchedAt: new Date(Date.now() - 600_000).toISOString() }), false);
+test("browser fallback retains results on temporary failure and clears confirmed invalid results", () => {
+  assert.equal(retainPlayerDataOnError(new ApiRouteError(503, "TRACKER_SERVICE_BUSY", "HTTP 503")), true);
+  assert.equal(retainPlayerDataOnError(new ApiRouteError(502, "TRACKER_SERVICE_INVALID_RESPONSE", "HTTP 502")), false);
+  assert.equal(retainPlayerDataOnError(new ApiRouteError(404, "BANDORI_PLAYER_NOT_FOUND", "HTTP 404")), false);
+  assert.equal(retainPlayerDataOnError(new Error("network failure")), true);
+  assert.equal(retainPlayerDataOnError(new SyntaxError("invalid JSON")), false);
+  assert.throws(() => parseBandoriPlayerResponse({ success: true, data: {} }),
+    (error) => error.code === "TRACKER_SERVICE_INVALID_RESPONSE" && !retainPlayerDataOnError(error));
   assert.equal(playerErrorMessageKey("BANDORI_PLAYER_MAINTENANCE"), "maintenance");
   assert.equal(playerErrorMessageKey("BANDORI_PLAYER_NOT_FOUND"), "notFound");
-  assert.equal(playerErrorMessageKey("BANDORI_PLAYER_UNAVAILABLE"), "unavailable");
+  assert.equal(playerErrorMessageKey("TRACKER_SERVICE_INVALID_RESPONSE"), "failed");
 });
 
 test("development proxy is opt-in, credential-free, validated, and unavailable to production or binding", async () => {
@@ -363,21 +384,21 @@ test("development proxy is opt-in, credential-free, validated, and unavailable t
       const response = sample();
       response.data.server = server;
       globalThis.fetch = async (url, init) => {
-        assert.equal(String(url), `https://hhwx.org/api/bandori/player/${server}/${response.data.uid}?mode=2`);
+        assert.equal(String(url), `https://hhwx.org/api/bandori/player/${server}/${response.data.uid}`);
         assert.equal(new Headers(init.headers).has("Authorization"), false);
         assert.equal(init.redirect, "error");
         assert.equal(init.cache, "no-store");
         return Response.json(response);
       };
-      const player = await fetchBandoriPlayerProfile(server, response.data.uid, 2, { allowDevelopmentProxy: true });
+      const player = await fetchBandoriPlayerProfile(server, response.data.uid, { allowDevelopmentProxy: true });
       assert.equal(player.uid, response.data.uid);
       assert.equal(player.profile.stageChallengeAchievementConditionsMap, undefined);
     }
     const response = sample();
     globalThis.fetch = async () => Response.json({ ...response, data: { ...response.data, uid: "1234" } });
-    await assert.rejects(fetchBandoriPlayerProfile("jp", response.data.uid, 2, { allowDevelopmentProxy: true }), { code: "TRACKER_SERVICE_INVALID_RESPONSE" });
+    await assert.rejects(fetchBandoriPlayerProfile("jp", response.data.uid, { allowDevelopmentProxy: true }), { code: "TRACKER_SERVICE_INVALID_RESPONSE" });
     globalThis.fetch = async () => Response.json({ success: false, error: { secret: "never-expose" } });
-    await assert.rejects(fetchBandoriPlayerProfile("jp", response.data.uid, 2, { allowDevelopmentProxy: true }), { code: "TRACKER_SERVICE_INVALID_RESPONSE" });
+    await assert.rejects(fetchBandoriPlayerProfile("jp", response.data.uid, { allowDevelopmentProxy: true }), { code: "TRACKER_SERVICE_INVALID_RESPONSE" });
 
     process.env.HHWX_USER_FETCHER_BASE_URL = "https://backend.example.test";
     process.env.HHWX_BANDORI_BACKEND_TOKEN = "synthetic-private-token";
@@ -393,10 +414,51 @@ test("development proxy is opt-in, credential-free, validated, and unavailable t
         assert.equal(new Headers(init.headers).get("Authorization"), "Bearer synthetic-private-token");
         return Response.json({ ...response.data, gameUid: response.data.uid });
       };
-      await fetchBandoriPlayerProfile("jp", response.data.uid, 2, options);
+      await fetchBandoriPlayerProfile("jp", response.data.uid, options);
     }
   } finally {
     globalThis.fetch = savedFetch;
+    keys.forEach((key, index) => {
+      if (saved[index] === undefined) delete process.env[key];
+      else process.env[key] = saved[index];
+    });
+  }
+});
+
+test("public query rejects retired modes and binding uses the same live-only contract", async () => {
+  const savedFetch = globalThis.fetch;
+  const savedLog = console.error;
+  const keys = ["HHWX_USER_FETCHER_BASE_URL", "HHWX_BANDORI_BACKEND_TOKEN", "HHWX_DEV_PLAYER_API_PROXY"];
+  const saved = keys.map((key) => process.env[key]);
+  process.env.HHWX_USER_FETCHER_BASE_URL = "https://backend.example.test";
+  process.env.HHWX_BANDORI_BACKEND_TOKEN = "synthetic-token";
+  process.env.HHWX_DEV_PLAYER_API_PROXY = "0";
+  let calls = 0;
+  console.error = () => {};
+  try {
+    globalThis.fetch = async (url) => {
+      calls++;
+      assert.equal(new URL(url).search, "");
+      return Response.json({ server: "cn", gameUid: "1001", fetchedAt: "2999-01-01T00:00:00Z", profile: { userId: "1001", introduction: "synthetic-signature" } });
+    };
+    for (const query of ["mode", "mode=", "mode=0", "mode=1", "mode=2", "mode=3", "mode=9", "mo%64e=0"]) {
+      const response = await playerGET(new Request(`https://web.example/api/bandori/player/cn/1001?${query}`), { params: Promise.resolve({ server: "cn", uid: "1001" }) });
+      assert.equal(response.status, 400);
+      assert.equal((await response.json()).error.code, "INVALID_BANDORI_PLAYER_MODE");
+    }
+    assert.equal(calls, 0);
+    const response = await playerGET(new Request("https://web.example/api/bandori/player/cn/01001"), { params: Promise.resolve({ server: "cn", uid: "01001" }) });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("Cache-Control"), "no-store, max-age=0");
+    const { data } = await response.json();
+    assert.deepEqual(Object.keys(data).sort(), ["fetchedAt", "profile", "server", "uid"]);
+    assert.equal(data.uid, "1001");
+    assert.equal((await fetchGameProfileSignature("1001")).signature, "synthetic-signature");
+    globalThis.fetch = async () => Response.json({ ...data, gameUid: "1001", cache: true, mode: 2 });
+    await assert.rejects(fetchGameProfileSignature("1001"), { code: "TRACKER_SERVICE_INVALID_RESPONSE" });
+  } finally {
+    globalThis.fetch = savedFetch;
+    console.error = savedLog;
     keys.forEach((key, index) => {
       if (saved[index] === undefined) delete process.env[key];
       else process.env[key] = saved[index];
