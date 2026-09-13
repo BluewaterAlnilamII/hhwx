@@ -4,46 +4,49 @@
 
 The BANDORI navigation entry opens `/bandori/player`. Results use the shareable
 `/bandori/player/{jp|en|tw|cn}/{uid}` route, with the normal locale prefix.
-UIDs remain strings of 4–16 decimal digits with no leading zero.
+Player search accepts 1–20 ASCII decimal digits, up to the uint64 maximum
+`18446744073709551615`. The input keeps leading zeros; server-side normalization
+removes them before querying. UIDs remain strings to preserve precision.
+Account binding and snapshot synchronization retain their separate UID validation.
 
-The browser calls the existing `GET /api/bandori/player/{server}/{uid}` endpoint.
-It preserves the `{ success, data: { server, uid, mode, cache, fetchedAt, profile } }`
-envelope and profile field names. TW now joins JP, EN and CN; KR remains unsupported.
-Binding verification continues to read the public `profile.introduction` field.
+The browser calls `GET /api/bandori/player/{server}/{uid}`. Successful responses
+use `{ success, data: { server, uid, fetchedAt, profile } }`. The private backend
+uses `gameUid` in place of `uid`. Supported servers are JP, EN, TW and CN.
+Binding verification reads the public `profile.introduction` through the same live query.
 
-The page uses mode `2`: refresh synchronously, with the backend's cached response
-on temporary service failures or busy lanes. It shows the response acquisition time and cache
-indicator. Repeating the query refreshes it; there is no automatic polling.
-Modes `0` (cache only), `1` (cache with background refresh), and `3` (synchronous
-refresh without cache fallback) remain available to API clients. Mode `3`, used by
-binding verification, waits at most five seconds for the server's lane. Mode `1`
-background refresh is best-effort and may be skipped when the lane is busy.
+Every query fetches the game profile synchronously, waiting at most five seconds
+for that server's account lane. There is no backend profile cache, background
+refresh or cache fallback. Repeating a page query refreshes the result; there is
+no automatic polling. On temporary refresh failures, the browser retains the
+previous result. Confirmed absence or an invalid response clears it. `fetchedAt`
+is only for display; its age or clock skew does not invalidate a profile.
 
-The process-local backend cache retains at most 1,000 profiles for ten minutes
-after acquisition; reads do not renew this lifetime. Mode `2` still attempts a
-live request even when a recent cache entry exists. Temporary failures may return
-`200` with `cache: true` and an optional `refreshError: { code }`; `fetchedAt`
-remains the original acquisition time. Confirmed absence deletes cached data,
-including during background refresh. Invalid responses and unexpected programming
-errors do not fall back to backend cache. The browser also expires error fallback
-by acquisition time and removes old results after confirmed absence.
+The `mode` parameter has been removed. Any explicit `mode` query key, including
+an empty value, returns `400 INVALID_BANDORI_PLAYER_MODE`. Successful responses
+no longer contain `mode`, `cache` or `refreshError`; `BANDORI_PLAYER_CACHE_MISS`
+has also been removed. Deploy the backend and Web in the same release window,
+backend first. Old clients using `mode` must remove it; there is no compatibility
+period. The Web reader rejects the retired success fields so binding verification
+cannot accidentally consume an old backend's cached result.
 
 Both successful and failed API responses are `no-store`. The private backend
 origin and token remain server-only. Requests have a 30-second timeout, disallow
 redirects, limit response bodies to 1 MiB, and verify the returned player identity.
 Errors exclude backend response bodies. Explicit `BANDORI_PLAYER_NOT_FOUND` is
-`404`; `BANDORI_PLAYER_CACHE_MISS` is a separate `404`. Legacy untyped `404`
-responses remain neutral `BANDORI_PLAYER_UNAVAILABLE` errors. Busy lanes,
-maintenance and unavailable bot sessions have distinct codes with `503`; timeouts
-use `504`, and invalid responses or other upstream failures use `502`. Internal
-authentication failures describe a service failure, not the visitor's permissions.
-Only allowlisted codes cross the public API, including the development proxy.
+`404`; the backend also recognizes the verified game response explicitly stating
+that the target user was not found. Other game `400` responses are not assumed to
+mean absence. Missing or unknown error codes, or codes that do not match the HTTP
+status, produce `502 TRACKER_SERVICE_INVALID_RESPONSE`. Busy lanes, maintenance
+and unavailable bot sessions have distinct codes with `503`; timeouts use `504`,
+and decryption, decoding or other invalid responses use `502`. Other upstream
+failures use `502 TRACKER_SERVICE_FAILED`. Internal authentication failures describe
+a service failure, not the visitor's permissions. Only allowlisted codes cross
+the public API, including the development proxy.
 
-Deploy the compatible Web reader before the backend. Existing successful fields
-and mode numbers remain intact; older backends omit `refreshError`. Web timeouts
-do not cancel an already-issued game request: the backend retains the account
-lock until its token/RequestID chain is safely settled. This change does not alter
-game transport retries, version recovery or the separate `/suite/user` workflow.
+Web timeouts do not cancel an already-issued game request: the backend retains
+the account lock until its token/RequestID chain is safely settled. This change
+does not alter game transport retries, version recovery or the separate
+`/suite/user` workflow.
 
 ## Privacy and presentation
 
@@ -225,9 +228,10 @@ before this Web change. No database migration or new production setting is requi
 For local player lookup without starting the private user-fetcher, set
 `HHWX_DEV_PLAYER_API_PROXY=1` in `.env.local` and run `npm run dev`. Only in
 `NODE_ENV=development`, the public player GET route forwards to the fixed
-`https://hhwx.org/api/bandori/player/{server}/{uid}` endpoint. It preserves mode,
+`https://hhwx.org/api/bandori/player/{server}/{uid}` endpoint without a mode parameter. It
 validates the public response envelope and player identity, applies local privacy
-redaction, and retains the same timeout/body/cache policy. It sends no backend
+redaction, and retains the same timeout and body limits. The target must use the
+same live-query contract. It sends no backend
 token, cookies, or browser request headers. Failures do not switch sources.
 
 Production ignores this flag; binding verification, sync, and status collection

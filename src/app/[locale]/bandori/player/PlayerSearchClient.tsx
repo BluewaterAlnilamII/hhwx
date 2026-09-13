@@ -33,7 +33,7 @@ import { buildBandoriPublicAssetUrl } from "@/lib/bandori-public-asset-index";
 import { resolveBandoriSkillLabel } from "@/lib/bandori-skill-label";
 import { getBandoriServerCode, getBandoriServerFromCode, pickBandoriRegionalText, type BandoriServer } from "@/lib/bandori-server";
 import { pickBandoriCharacterDisplayName, resolveBandoriCardBandId } from "@/lib/bandori/cards/master";
-import { PLAYER_BANDS, PLAYER_STAGE_BANDS, PLAYER_CLEAR_ROWS, PLAYER_UID_PATTERN, parseBandoriPlayerResponse, isPlayerDataFresh, playerErrorMessageKey, retainPlayerDataOnError, type PlayerProfileView, type PlayerSection } from "@/lib/bandori/player-profile";
+import { PLAYER_BANDS, PLAYER_STAGE_BANDS, PLAYER_CLEAR_ROWS, isValidPlayerUid, PLAYER_UID_MAX_LENGTH, parseBandoriPlayerResponse, playerErrorMessageKey, retainPlayerDataOnError, type PlayerProfileView, type PlayerSection } from "@/lib/bandori/player-profile";
 import BandoriPageShell from "../BandoriPageShell";
 import BandoriCardServerSwitcher from "../cards/_components/BandoriCardServerSwitcher";
 
@@ -166,7 +166,7 @@ function PlayerResults({ player }: { player: PlayerProfileView }) {
             <Heading as="h3" visualRole="subsection" className="text-sm">{t("mainBandPower")}{" "}<span className="font-semibold tabular-nums" aria-live="polite">{player.power.public ? powerFailed ? t("powerFailed") : power === null ? common("states.loading") : formatLocalizedInteger(power.totalPower, locale as AppLocale) : t("private")}</span></Heading>
             {player.cards.length ? <div className="mt-3 flex flex-wrap justify-center gap-1.5 sm:gap-2">{player.cards.map((card, index) => <div key={`${card.cardId}:${index}`}>{showCard(card)}</div>)}</div> : <p className="mt-3 text-[var(--theme-color-text-muted)]">{t("noData")}</p>}
           </div>
-          <p className="mt-4 text-xs text-[var(--theme-color-text-muted)]">{t("fetchedAt")} {player.fetchedAt ? <time dateTime={player.fetchedAt}>{new Date(player.fetchedAt).toLocaleString(locale)}</time> : t("noData")}{player.cache ? ` · ${t("cached")}` : ""}</p>
+          <p className="mt-4 text-xs text-[var(--theme-color-text-muted)]">{t("fetchedAt")} {player.fetchedAt ? <time dateTime={player.fetchedAt}>{new Date(player.fetchedAt).toLocaleString(locale)}</time> : t("noData")}</p>
         </div>
       </div>
     </Section>
@@ -239,17 +239,16 @@ export default function PlayerSearchClient({ initialServer, initialUid }: { init
   const router = useRouter();
   const [server, setServer] = useState(initialServer);
   const [uid, setUid] = useState(initialUid);
-  const [invalid, setInvalid] = useState(Boolean(initialUid && !PLAYER_UID_PATTERN.test(initialUid)));
+  const [invalid, setInvalid] = useState(Boolean(initialUid && !isValidPlayerUid(initialUid)));
   const code = getBandoriServerCode(initialServer);
-  const url = PLAYER_UID_PATTERN.test(initialUid) ? `/api/bandori/player/${code}/${initialUid}` : null;
+  const url = isValidPlayerUid(initialUid) ? `/api/bandori/player/${code}/${initialUid}` : null;
   const result = useCachedFetch(url, url, parseBandoriPlayerResponse, { refreshOnVisible: false, retainOnError: retainPlayerDataOnError });
-  const data = result.data && (!(result.error || result.data.cache) || isPlayerDataFresh(result.data)) ? result.data : null;
+  const data = result.data;
   const errorCode = result.error instanceof ApiRouteError ? result.error.code : "TRACKER_SERVICE_FAILED";
-  const noticeCode = result.error ? errorCode : data?.refreshError?.code;
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const nextUid = uid.trim();
-    if (!PLAYER_UID_PATTERN.test(nextUid)) { setInvalid(true); return; }
+    if (!isValidPlayerUid(nextUid)) { setInvalid(true); return; }
     setInvalid(false);
     if (server === initialServer && nextUid === initialUid) result.refresh();
     else router.push(`/bandori/player/${getBandoriServerCode(server)}/${nextUid}`, { scroll: false });
@@ -258,11 +257,11 @@ export default function PlayerSearchClient({ initialServer, initialUid }: { init
     <Heading as="h1" visualRole="page">{t("title")}</Heading>
     <form onSubmit={submit} className="mt-5 flex flex-wrap items-end gap-4">
       <div className="w-full sm:w-auto"><BandoriCardServerSwitcher selectedServer={server} label={t("server")} onChange={setServer} /></div>
-      <label className="flex min-w-0 flex-1 flex-col gap-2 text-sm font-bold sm:min-w-52">{t("uid")}<input name="uid" type="text" inputMode="numeric" autoComplete="off" maxLength={16} value={uid} aria-invalid={invalid} aria-describedby={invalid ? "player-id-error" : undefined} onChange={(event) => { setUid(event.target.value); setInvalid(false); }} className="hhwx-control h-11 w-full rounded-xl border px-3 font-normal tabular-nums" /></label>
+      <label className="flex min-w-0 flex-1 flex-col gap-2 text-sm font-bold sm:min-w-52">{t("uid")}<input name="uid" type="text" inputMode="numeric" autoComplete="off" maxLength={PLAYER_UID_MAX_LENGTH} value={uid} aria-invalid={invalid} aria-describedby={invalid ? "player-id-error" : undefined} onChange={(event) => { setUid(event.target.value); setInvalid(false); }} className="hhwx-control h-11 w-full rounded-xl border px-3 font-normal tabular-nums" /></label>
       <button type="submit" className="hhwx-action-accent inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-5 text-sm font-bold disabled:opacity-50" disabled={(result.loading || result.refreshing) && server === initialServer && uid.trim() === initialUid}><Search className="h-4 w-4" />{t(result.loading || result.refreshing ? "searching" : "search")}</button>
     </form>
     {invalid ? <p id="player-id-error" role="alert" className="mt-3 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{t("invalidId")}</p> : null}
-    {noticeCode ? <p role="alert" className="mt-5 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{t(playerErrorMessageKey(noticeCode))}{data ? ` ${t("showingCached")}` : ""} <button type="button" className="hhwx-text-link" onClick={result.refresh} disabled={result.refreshing}>{common("actions.retry")}</button></p> : null}
-    {result.loading || result.refreshing && !data ? <LoadingIndicator label={t("searching")} className="min-h-64" /> : data ? <PlayerResults player={data} /> : !result.error && !invalid ? <p className="py-12 text-center text-sm text-[var(--theme-color-text-muted)]">{t(result.data ? "cacheMiss" : "prompt")}</p> : null}
+    {result.error ? <p role="alert" className="mt-5 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{t(playerErrorMessageKey(errorCode))} <button type="button" className="hhwx-text-link" onClick={result.refresh} disabled={result.refreshing}>{common("actions.retry")}</button></p> : null}
+    {result.loading || result.refreshing && !data ? <LoadingIndicator label={t("searching")} className="min-h-64" /> : data ? <PlayerResults player={data} /> : !result.error && !invalid ? <p className="py-12 text-center text-sm text-[var(--theme-color-text-muted)]">{t("prompt")}</p> : null}
   </article></BandoriPageShell>;
 }

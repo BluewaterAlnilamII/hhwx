@@ -2,10 +2,9 @@ import { NO_STORE_HTTP_CACHE_POLICY, withHttpCachePolicy } from "@/lib/api-cache
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import {
   fetchBandoriPlayerProfile,
-  normalizeBandoriPlayerMode,
   normalizeBandoriPlayerServer,
+  normalizeBandoriPlayerUid,
 } from "@/lib/bandori-player-fetcher";
-import { normalizeGameUid } from "@/lib/game-account-binding";
 import { ApiRouteError } from "@/lib/api-contracts";
 
 export const dynamic = "force-dynamic";
@@ -22,9 +21,11 @@ export async function GET(request: Request, context: RouteContext) {
   try {
     const { server: rawServer, uid: rawUid } = await context.params;
     const server = normalizeBandoriPlayerServer(rawServer);
-    const uid = normalizeGameUid(rawUid);
-    const mode = normalizeBandoriPlayerMode(new URL(request.url).searchParams.get("mode"));
-    const player = await fetchBandoriPlayerProfile(server, uid, mode, { allowDevelopmentProxy: true });
+    const uid = normalizeBandoriPlayerUid(rawUid);
+    if (new URL(request.url).searchParams.has("mode")) {
+      throw new ApiRouteError(400, "INVALID_BANDORI_PLAYER_MODE", "mode is no longer supported; remove this parameter");
+    }
+    const player = await fetchBandoriPlayerProfile(server, uid, { allowDevelopmentProxy: true });
 
     return jsonSuccess(player, {
       headers: withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY),

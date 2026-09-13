@@ -114,13 +114,13 @@ test("status, player, and snapshot requests share token precedence and legacy co
     await settle();
     h.respond(() => Response.json({ profile: { userId: "1001" }, snapshot: {} }));
     if (token) {
-      await h.player.fetchBandoriPlayerProfile("cn", "1001", 0);
+      await h.player.fetchBandoriPlayerProfile("cn", "1001");
       await h.snapshot.fetchGameUserSnapshot("1001");
       assert.equal(h.requests.length, 3);
       for (const [, options] of h.requests) assert.equal(options.headers.Authorization, `Bearer ${token}`);
     } else {
       assert.equal(h.route.GET().status, 503);
-      await assert.rejects(h.player.fetchBandoriPlayerProfile("cn", "1001", 0), { code: "TRACKER_SERVICE_NOT_CONFIGURED" });
+      await assert.rejects(h.player.fetchBandoriPlayerProfile("cn", "1001"), { code: "TRACKER_SERVICE_NOT_CONFIGURED" });
       await assert.rejects(h.snapshot.fetchGameUserSnapshot("1001"), { code: "TRACKER_SERVICE_NOT_CONFIGURED" });
       assert.equal(h.requests.length, 0);
     }

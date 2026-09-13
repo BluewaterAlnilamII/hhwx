@@ -63,7 +63,7 @@ export function isSignatureMatch(signature: unknown, challenge: string): boolean
 }
 
 export async function fetchGameProfileSignature(gameUid: string): Promise<{ signature: string; fetchedAt: string | null }> {
-  const player = await fetchBandoriPlayerProfile(GAME_BIND_PROFILE_SERVER, gameUid, 3);
+  const player = await fetchBandoriPlayerProfile(GAME_BIND_PROFILE_SERVER, gameUid);
   const signature = player.profile.introduction;
 
   if (typeof signature !== "string") {
