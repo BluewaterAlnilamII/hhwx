@@ -101,11 +101,13 @@ test("committed WASM proves infeasibility when fewer than fifteen cards are elig
   assert.deepEqual(result.hydration.candidates, []);
 });
 
-test("committed WASM rejects unknown scoring rules before search", () => {
-  assert.throws(() => run({ ...input, scoringRulesVersion: "unsupported" }), (error) => {
-    const parsed = JSON.parse(error);
-    assert.equal(parsed.code, "UNSUPPORTED_RULES");
-    assert.equal(parsed.path, "scoringRulesVersion");
-    return true;
-  });
+test("committed WASM rejects obsolete and unknown scoring rules before search", () => {
+  for (const scoringRulesVersion of ["hhwx-medley-bestdori-v3", "unsupported"]) {
+    assert.throws(() => run({ ...input, scoringRulesVersion }), (error) => {
+      const parsed = JSON.parse(error);
+      assert.equal(parsed.code, "UNSUPPORTED_RULES");
+      assert.equal(parsed.path, "scoringRulesVersion");
+      return true;
+    });
+  }
 });

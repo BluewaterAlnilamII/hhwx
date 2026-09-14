@@ -84,18 +84,20 @@ Every card has three parameters: performance (`P`), technique (`T`) and visual (
 1. Reconstruct the selected level from the level-one and maximum master rows with the Bestdori rarity growth curve and JavaScript `Math.round`.
 2. Add `50 * rarity * masterRank` to each parameter.
 3. Add training values when trained, then add each completed episode row.
-4. For each parameter separately, combine the character potential rate with the collection-plus-training mission rate, multiply that sum by the parameter obtained above, and floor once.
+4. For each parameter separately, multiply the parameter obtained above by the potential rate and floor it; independently multiply the same parameter by the collection-plus-training mission rate and floor it. Add these two integer bonuses.
 5. Add the resulting character bonus to obtain the card's `characterParameter`.
 6. Calculate matching area-item and event contributions from that value.
 
-For one parameter value of 10,000, a 2% potential and combined 1.5% mission bonus produce:
+For one parameter value of 1,530, a 3% potential and combined 9% mission bonus produce:
 
 ```text
-character bonus = floor(10,000 * (0.02 + 0.015)) = 350
-character parameter = 10,000 + 350 = 10,350
+character bonus = floor(1,530 * 0.03) + floor(1,530 * 0.09) = 45 + 137 = 182
+character parameter = 1,530 + 182 = 1,712
 ```
 
-Potential and mission rates are deliberately added before this single floor. Equal P/T/V values do not select another rule.
+Potential and mission bonuses are floored separately; collection and training mission rates are combined before the mission floor. Equal P/T/V values do not select another rule.
+
+This parameter rule is versioned as `hhwx-medley-bestdori-v4`. The former `v3` combined potential and mission rates before flooring, which could overcount card parameters and their downstream area-item/event contributions. Rebuild older normalized inputs from their source profiles and masters; changing only their version label does not correct their precomputed parameters. Saved profile formats are unchanged. Deploy the TypeScript adapter and regenerated WASM package together so their rule versions agree.
 
 Event contribution is calculated independently for each card and parameter. The adapter takes the first matching percentage, in source order, from each of the event's attribute, character, member-card (`situationId`, the master card ID) and rarity-plus-master-rank lists, then adds those four rates. The event-wide `parameterPercent` and its separate performance, technique and visual room rates are added only when both the matched attribute percentage and matched character percentage are greater than zero. The resulting rate multiplies the card's `characterParameter`; this contribution is not separately floored.
 
@@ -132,7 +134,7 @@ Other entities, including System entries, do not score. A `skill` property marks
 
 Recognized scoring entities are validated before conversion: each retained node must be an object with a finite `beat`; Long and Slide must have an array of at least two endpoints; every BPM entry must have a finite `beat` and a finite positive `bpm`. Finite numbers and nonempty numeric strings are accepted; missing values, blank strings, `null`, booleans and nonfinite values are rejected. Long interior data and Slide middle nodes carrying `hidden` remain ignored, as do unknown/non-scoring entities; their unused fields are not a full chart-schema validation target.
 
-Malformed required data returns `INVALID_CHART` with its original source path, such as `sourceInput.songs[0].chart[7].beat` or `chart[8].connections[1].beat`. Both fixed-team evaluation and search use this same normalizer. An invalid ordinary note or BPM must fail the request before scoring/search, even when six valid triggers remain; silently dropping it would certify a different chart. This validation tightening preserves valid normalized outputs and does not change `hhwx-medley-bestdori-v3`.
+Malformed required data returns `INVALID_CHART` with its original source path, such as `sourceInput.songs[0].chart[7].beat` or `chart[8].connections[1].beat`. Both fixed-team evaluation and search use this same normalizer. An invalid ordinary note or BPM must fail the request before scoring/search, even when six valid triggers remain; silently dropping it would certify a different chart. This validation preserves valid normalized chart outputs.
 
 Notes are ordered by beat, with a trigger note before another note on the same beat. Time is calculated from the nearest preceding BPM change:
 

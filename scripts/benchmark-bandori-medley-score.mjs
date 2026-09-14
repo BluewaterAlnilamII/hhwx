@@ -8,6 +8,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { buildFixedMedleyEvaluationInput } from "../src/lib/bandori/medley-foundation/index.ts";
+import { MEDLEY_SCORING_RULES_VERSION } from "../src/lib/bandori/medley-foundation/contracts.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const { values } = parseArgs({ options: {
@@ -260,7 +261,7 @@ const rows = cases.map((testCase, i) => {
 });
 save("report.json", {
   generatedAt: new Date().toISOString(), sourceCommit: git(root, ["rev-parse", "HEAD"]), sourceChanges: git(root, ["diff", "--stat"]),
-  scoringRulesVersion: "hhwx-medley-bestdori-v3", mainCommit: git(mainRoot, ["rev-parse", "HEAD"]),
+  scoringRulesVersion: MEDLEY_SCORING_RULES_VERSION, mainCommit: git(mainRoot, ["rev-parse", "HEAD"]),
   bestdori: { url: bestdoriUrl, bundleSha256: hash(bundle), functionsSha256: hash(functions), chartUrl, chartBundleSha256: hash(chartBundle), chartFunctionsSha256: hash(chartFunctions) },
   runtime: { node: process.version, rust: execFileSync("rustc", ["--version"], { encoding: "utf8" }).trim(), cpu: cpus()[0]?.model },
   method: "Native release Rust vs main TypeScript/Node, 2000 warmups + median of 7x10000 evaluations. Identical normalized chart, one fixed power value and resolved real skills; same five-member set with best leader. Chart and parameter preparation excluded, main chart/skill formula caches warm, computed-score caches disabled. Not a browser/WASM or full-search speed claim; leader-dependent power variants are not timed. All five leader scores checked, no historical score threshold and no search run.",
