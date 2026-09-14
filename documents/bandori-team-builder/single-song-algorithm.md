@@ -58,8 +58,11 @@ GREAT. GOOD, BAD, MISS, and combo-break probabilities are not modeled.
 The search depends on:
 
 - user profile data: owned cards, levels, skill levels, Master Rank, training
-  state, episode unlocks, exclusion flags, area items, character potentials, and
+  state, episode unlocks, area items, character potentials, and
   character mission bonuses;
+- calculator card preferences: explicit exclusions and owned-card parameter
+  overrides. The Worker ignores saved profile exclusion flags and applies only
+  the calculator's exclusions before constructing search candidates;
 - master data: cards, characters, bands, attributes, skills, area items, songs,
   and charts;
 - event bonus data embedded in the shared Events master API records, optionally

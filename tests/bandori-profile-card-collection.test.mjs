@@ -197,6 +197,43 @@ test("team builder keeps one non-excluded temporary override per card", async ()
   assert.match(worker, /const temporaryCards = request\.cards\.temporaryCards\.map\([\s\S]*?isExcluded: false,[\s\S]*?\}\)\);/u);
 });
 
+test("team builder uses only calculator exclusions without changing saved profile flags", async () => {
+  const source = await readSource("src/app/[locale]/bandori/teambuilder/team-search-worker.ts");
+  const syntax = ts.createSourceFile("worker.ts", source, ts.ScriptTarget.Latest, true);
+  const runSearch = syntax.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "runSearchAttempt");
+  const declarations = runSearch.body.statements.filter((node) => ts.isVariableStatement(node));
+  const names = ["excludedCardIds", "temporaryCardIds", "profileCards", "temporaryCards", "userCards"];
+  const statements = declarations.filter((node) => names.includes(node.declarationList.declarations[0].name.getText(syntax)));
+  assert.equal(statements.length, names.length);
+  const code = ts.transpileModule(statements.map((node) => node.getText(syntax)).join("\n"), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const savedCards = [card(1, { isExcluded: true }), card(2), card(3, { isExcluded: true })];
+  const profilePayload = {
+    bestdoriProfile: encodeBestdoriProfile({ name: "Profile", server: 3, cards: savedCards, items: {}, potentials: [] }),
+  };
+  const savedPayload = JSON.stringify(profilePayload);
+
+  for (const excludedCardIds of [[], [1, 2, 3]]) {
+    const actual = runInNewContext(`${code}\nuserCards`, {
+      request: {
+        profilePayload,
+        cards: { excludedCardIds, temporaryCards: [{ ...card(3, { isExcluded: true }), instanceId: "override-3" }] },
+      },
+      getGameProfileCards,
+      cardsById: {},
+      applyOwnedCardParameterPreferences: (ownedCard) => ownedCard,
+    });
+    assert.deepEqual(Array.from(actual, (item) => [item.cardId, item.isExcluded, item.cardInstanceKey]), [
+      [1, excludedCardIds.includes(1), "profile:1"],
+      [2, excludedCardIds.includes(2), "profile:2"],
+      [3, false, "temporary:override-3"],
+    ]);
+    assert.equal(JSON.stringify(profilePayload), savedPayload);
+    assert.deepEqual(getGameProfileCards(profilePayload).toSorted((left, right) => left.cardId - right.cardId), savedCards);
+  }
+});
+
 test("card equality and change summaries compare every persisted field without caring about order", () => {
   const base = card(1);
   assert.equal(areGameProfileCardsEqual(base, { ...base }), true);
