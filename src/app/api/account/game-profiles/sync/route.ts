@@ -1,12 +1,16 @@
 import { ApiRouteError } from "@/lib/api-contracts";
-import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
+import { jsonError, jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { requireVerifiedAccount } from "@/lib/auth-server";
 import { normalizeGameUid } from "@/lib/game-account-binding";
 import { syncAutoGameProfile } from "@/lib/user-game-profiles-server";
+import { GAME_PROFILE_SYNC_ENABLED } from "@/lib/user-game-profile-sync";
 
 export async function POST(request: Request) {
   try {
     const user = await requireVerifiedAccount(request);
+    if (!GAME_PROFILE_SYNC_ENABLED) {
+      return jsonError(503, "USER_SNAPSHOT_UNAVAILABLE", "游戏档案自动同步暂不可用，请使用手动档案");
+    }
     let body: { gameUid?: unknown };
 
     try {

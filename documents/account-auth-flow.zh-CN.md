@@ -47,6 +47,7 @@ English version: [account-auth-flow.md](account-auth-flow.md)
 - 请求更换邮箱后，HHWX 会清空应用侧邮箱验证状态，直到确认流程重新写入 `email_verified_at`。
 - 密码找回使用 Supabase password recovery，不会把 HHWX 邮箱状态标记为已验证。
 - 资料读取和资料编辑允许已登录用户使用。评论、游戏账号绑定、云端游戏档案、游戏档案同步和 Bandori 排期写入要求邮箱已验证。
+- 游戏档案自动同步目前临时暂停：账号页按钮禁用，已认证的 `/api/account/game-profiles/sync` 请求在启动同步流程前返回 `503 USER_SNAPSHOT_UNAVAILABLE`。手动档案仍可使用。重新开放时需协调 `GAME_PROFILE_SYNC_ENABLED` 与私有后端的快照可用状态。
 
 ## 已知风险和改进项
 

@@ -376,7 +376,9 @@
       "uidManagement": {
         "title": "UID 管理",
         "quota": "自动档案 {count}/{limit}",
-        "syncWarning": "同步会请求游戏接口，可能让该 UID 当前登录中的游戏客户端掉线一次。",
+        "syncWarning": "同步会请求游戏接口，可能让该 UID 当前登录中的游戏客户端掉线一次",
+        "syncUnavailable": "游戏档案自动同步暂不可用，请使用手动档案",
+        "syncPaused": "同步已暂停",
         "loading": "正在读取...",
         "empty": "暂无已绑定 UID。绑定游戏 UID 后可以创建自动同步档案。",
         "generated": "已生成自动档案",
