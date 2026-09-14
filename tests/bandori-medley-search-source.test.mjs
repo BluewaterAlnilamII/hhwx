@@ -53,7 +53,7 @@ test("HHWX profile input becomes the normalized search roster without caller tea
   const result = buildMedleySearchInput(fixture);
 
   assert.equal(result.schemaVersion, "hhwx-medley-search-input-v1");
-  assert.equal(result.scoringRulesVersion, "hhwx-medley-bestdori-v3");
+  assert.equal(result.scoringRulesVersion, "hhwx-medley-bestdori-v4");
   assert.deepEqual(result.cards.map((card) => card.instanceId), Array.from({ length: 15 }, (_, index) => index));
   assert.deepEqual(result.cards[0], {
     instanceId: 0,
@@ -62,7 +62,7 @@ test("HHWX profile input becomes the normalized search roster without caller tea
     bandId: 1,
     attribute: "powerful",
     isExcluded: true,
-    characterParameter: [1173, 1150, 1150],
+    characterParameter: [1172, 1150, 1150],
     eventParameter: [0, 0, 0],
     skillContexts: {
       mixed: {
