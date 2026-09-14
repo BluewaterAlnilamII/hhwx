@@ -179,12 +179,24 @@ JP 示例的潜能加成对应 55（5.5%），可与返回的属性点相互核�
 综合力复用 `calculateBandoriCard` 的等级基础属性计算，关闭由档案状态重建的特训、
 故事、Master Rank 和角色加成，再加上 profile 的三组追加属性，避免重复计入。
 最后复用组曲的 `selectedAreaItemPower` 应用当前启用道具，保持相同的累加顺序，
-不对中间贡献取整。总值保留小数，展示时复用组曲的 `formatLocalizedInteger` 四舍五入；
-单卡只为展示独立四舍五入，不将取整后的单卡数值相加作为队伍总值。
+不对中间贡献取整。计算结果保留小数，展示时共用
+[`power-display.ts`](../src/lib/bandori/power-display.ts)：把 float32 单卡综合力用 double
+累加，结果转为 float32 后截去小数。单卡数字独立截断，不相加单卡的整数显示来计算队伍总显示。
+这与组曲合计三支浮点队伍综合力的转换边界一致。
 只使用查询服对应等级的道具效果；缺少主数据或队伍不完整时显示计算失败，不估算或显示零。
 2026-09-12 使用公开缓存 JP 示例和当前主数据进行一次对照，未取整值约为 396739.59。
-此前向下取整得到 396739，与游戏截图一致；按组曲的显示规则四舍五入后为 396740。
-这不代表所有服、所有卡片状态都已完成实机对照。
+截断得到 396739，与游戏截图一致。后续改成四舍五入的 396740，是复制了组曲错误的显示规则；
+现在两处都改为截断。这不代表所有服、所有卡片状态都已完成实机对照，
+也不代表转换最终单卡综合力就能还原此前所有原生 float32 运算。
+
+2026-09-14 的[国服 9.4.4 APK 审计](bandori-team-builder/medley-foundation.zh-CN.md)
+还核对了玩家资料的实际路径：`UserProfileCacheData.getTotalParamForOthers`（`0x2ac9ccc`）
+将主队卡牌和启用道具交给 `DeckParamCalcUtility.GetDeckTotalParameterIncludeAreaItemBonus`
+（`0x3416110`）。后者在 `0x34162ec` 使用与组曲相同的 `Enumerable.Sum` 合计 float 单卡贡献，
+然后在 `0x341633c` / `0x3416344` 通过 `frintm` / `fcvtms` 向下取整。
+自己的资料路径（`0x2ac9dc4`）在 `0x2ac9e58` / `0x2ac9e5c` 将浮点队伍总值转换为整数，
+`ProfileDeckInfoPage.initializeTotalParam`（`0x2ac7c88`）再格式化所得整数。
+与组曲审计相同，这些证据来自 APK 内置原生方法体，未包含运行时 IFix 替换。
 
 ## 验证和发布
 

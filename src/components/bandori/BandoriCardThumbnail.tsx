@@ -20,6 +20,7 @@ import {
 } from "@/lib/bandori-public-asset-index";
 import { isBandoriCardAttribute, type BandoriCardAttribute } from "@/lib/bandori/cards/filter";
 import { usesBandoriTrainedStarStyle } from "@/lib/bandori/cards/training";
+import { getBandoriPowerDisplayValue } from "@/lib/bandori/power-display";
 
 type TrainType = "normal" | "after_training";
 
@@ -56,7 +57,7 @@ function formatThumbnailPower(power: number | null | undefined): string | null {
     return null;
   }
 
-  return String(Math.max(0, Math.trunc(power)));
+  return String(Math.max(0, getBandoriPowerDisplayValue(power)));
 }
 
 function BrokenImageFallback({ label }: { label: string }) {

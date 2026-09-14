@@ -227,14 +227,30 @@ Power reuses `calculateBandoriCard` for level-based stats with reconstructed tra
 episode, Master Rank and character bonuses disabled, then adds all three groups of
 profile append values exactly once. Medley's `selectedAreaItemPower` applies the
 enabled items with the same accumulation order and without intermediate flooring.
-The total retains fractional contributions and uses the same `formatLocalizedInteger`
-rounding as the medley results; individual card overlays round independently for
-display and are never summed to compute the team total. Missing regional level effects,
+The calculation retains fractional contributions. For display, the shared
+[`power-display.ts`](../src/lib/bandori/power-display.ts) helper sums float32 card
+powers with a double accumulator, narrows the result to float32 and truncates.
+Individual card overlays truncate independently and are never summed to compute
+the team label. This is the same aggregation boundary used for medley's three
+floating team powers. Missing regional level effects,
 missing card metadata or an incomplete band produce a calculation error, not zero
 or an estimate. A 2026-09-12 comparison using the cached public JP example and current
-masters yielded approximately 396739.59 before display rounding. The former floor
-produced 396739, matching the supplied game screenshot; aligning display with medley
-produces 396740. This is not an exhaustive in-game comparison across regions or card states.
+masters yielded approximately 396739.59 before display conversion. Truncation gives
+396739, matching the supplied game screenshot. The subsequent change to round to
+396740 copied medley's incorrect display policy; both displays now truncate.
+This is not an exhaustive in-game comparison across regions or card states, and
+casting final card powers does not reproduce all preceding native float32 arithmetic.
+
+The 2026-09-14 [CN 9.4.4 APK audit](bandori-team-builder/medley-foundation.md)
+also checked the actual player-profile path. `UserProfileCacheData.getTotalParamForOthers`
+(`0x2ac9ccc`) passes the main cards and enabled area items to
+`DeckParamCalcUtility.GetDeckTotalParameterIncludeAreaItemBonus` (`0x3416110`).
+It sums float card contributions at `0x34162ec` through the same `Enumerable.Sum`
+as medley, then floors with `frintm` / `fcvtms` at `0x341633c` / `0x3416344`.
+The own-profile path (`0x2ac9dc4`) converts the floating deck total to an integer
+at `0x2ac9e58` / `0x2ac9e5c`; `ProfileDeckInfoPage.initializeTotalParam`
+(`0x2ac7c88`) formats the resulting integer. As in the medley audit, these are
+bundled native method bodies, without runtime IFix replacements.
 
 ## Verification and rollout
 

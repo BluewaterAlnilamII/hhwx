@@ -247,8 +247,11 @@ fallback + p^n * (active - fallback)
 
 计分公式和谱面时间转换已对照固定的 [Bestdori 主程序包](https://bestdori.com/js/app.d390adb1.js) 模块 `c0f0`（SHA-256 `ac84605d7889e53c0144ab7c41e379c174b94b8dc31edae07f3483b8a0610778`）以及 [ToolTeamBuilder 包](https://bestdori.com/js/ToolTeamBuilder.6367a448.js)（SHA-256 `060930307c802accbd754ac2a6b87eb6294e66cb44646e4cfdff9784670e659b`），复核日期为 2026-08-31。这条路径是平均判定倍率、音符两次取整、持续技能、逐 PERFECT 增长和 BPM 锚定时间的依据。
 
+2026-09-14 重新获取线上程序包，哈希与上述记录一致。`ToolTeamBuilder` 先设置 `entry.bp = Math.floor(sum(card.power))`，搜索估分使用这个整数，详细计分也把它传给 `c0f0` 的导出 `e`（`ct`）。导出的计分函数本身接受带小数的综合力，并在乘法后对音符分数取整，但产品调用方提供的是已向下取整的全队综合力。直接给该导出函数传入小数，不能代表工具完整输入链的实际行为。
+
 Bestdori 的上述路径是单曲计算器。HHWX 为满足组曲产品规则，在以下位置采用不同处理：
 
+- 音符计分前保留综合力的小数部分；Bestdori 单曲组队工具的调用方会先对综合力向下取整；
 - combo 跨三首歌继续累计；
 - 成员索引 2 是队长；
 - 重叠技能窗口分别取整增分后相加；
@@ -257,6 +260,54 @@ Bestdori 的上述路径是单曲计算器。HHWX 为满足组曲产品规则，
 - 即使固定上游函数不识别 `score_only_perfect`，HHWX 仍把它表示为 GREAT 倍率为零的 `perfect_only`。
 
 对 JP 原生客户端 10.1.3、主数据版本 `20260805110509` 和技能效果 SHA-256 `d98e76c0198a6a714be1d38e4696a044242c8384b905426a311c8c2b0961aebc` 的审计还发现了本计算器模型之外的行为：有偏随机技能顺序抽样、单精度计分、combo 主数据表、生命条件触发，以及逐帧处理技能窗口冲突。HHWX 不模拟这些行为。若改变这项边界，需要建立新的计分规则版本和对应参考用例。
+
+### 国服原生综合力显示与计分边界（2026-09-14）
+
+国服 APK 的 manifest 标明包名 `com.bilibili.star.bili`、版本 `9.4.4`、版本号 `105`。本次审计使用其中的 ARM64 IL2CPP 二进制和元数据，通过 Il2CppDumper 6.7.46 解析方法名：
+
+| 文件 | SHA-256 |
+| --- | --- |
+| APK | `71235d006db432a5dafdd276c76ec82a24a766ea63f3fbebd8a1c5c279e15926` |
+| `lib/arm64-v8a/libil2cpp.so` | `1d798715a62f804cfa6696b02a8fc3e060abbb2e04877a50c26fc7ad6c7f2a02` |
+| `global-metadata.dat` | `9dc9035e60aab33b06cea09c3f8264e1c62e9ae50b75b89f550448f9d2652ee1` |
+
+旧本地分析目录名为 `cn-9.4.3-arm64`，其中二进制和元数据与上述 APK 条目逐字节一致。审计版本以 manifest 和哈希为准，不能根据目录名推断。下列地址是 ELF 虚拟地址／RVA，不是文件偏移。这些结论描述 APK 内置的原生方法体；入口的 IFix 分派可以调用运行时替换，本次静态审计未取得这些替换内容。
+
+| 边界 | 原生证据 | 取整行为 |
+| --- | --- | --- |
+| 单队综合力 | `DeckParamDetail.get_TotalParameterIncludeAreaItemAndEventBuff`，`0x339cc78` | 读取 `float` 类型的原始、区域道具、活动总量，以 `fadd s` 先加原始值与道具值，再加活动值，没有转整数。 |
+| 单队显示 | `MedleyEventDifficultySelectPageMusicInfoController.UpdateDeckInfo`，`0x35f9a10` | 在 `0x35f9a8c` 调用上述 getter；`0x35f9aa4` 的 `fcvtzs w9, d0` 截去小数，再调用 `Int32.ToString` 和 `UILabel.set_text`。 |
+| 三队总显示 | `MedleyEventCategorySelectController.updateMedleyBandTotalParam`，`0x35f7764`；`AssignmentMedleyController.get_deckTotalParam`，`0x35f4468`；`FreeMedleyController.get_deckTotalParam`，`0x35f4b3c` | 三条路径均选择同一浮点 getter，先调用 `Enumerable.Sum`，再转整数。对应的截断指令分别位于 `0x35f78a4`、`0x35f45a0`、`0x35f4c74`。求和内部没有逐队截断。 |
+| 求和精度 | 带 selector 的重载 `0x408344c` 调用 float 重载 `0x563a018` | 每个 float 先转 double（`0x563a1ac`），加入 double 累加器（`0x563a1b0`）；最终总和转回 float（`0x563a22c`），调用方随后才截去小数。 |
+| 计分输入 | `ScoreUtility.calcTotalParameter`，`0x33745e4`；`InitBaseScore`，`0x3374c38`；`calculateBaseScore`，`0x3374e4c` | 分别累加 P/T/V 浮点值，再按 `T + (P + V)` 合计。所得 float 直接参与基础分乘除，没有先转为整数。 |
+
+对于有限、非负的原生单队综合力 `p0`、`p1`、`p2`，显示边界可以用 JavaScript 表达为：
+
+```js
+// 输入已经是原生 float32 单队综合力，只是以 JS number 保存。
+const teamLabels = [p0, p1, p2].map(Math.trunc);
+const totalLabel = Math.trunc(Math.fround((p0 + p1) + p2));
+```
+
+总显示重新合计浮点综合力，不合计 `teamLabels`。以构造数值 `100.5`、`200.5`、`300.5` 为例，单队显示相加为 `600`，原生总显示为 `601`，而总和四舍五入会得到 `602`。最终转回 float32 也可能跨过整数边界，因此只截断 double 总和不能完整模拟原生显示路径。
+
+组曲确实进入了上述计分路径：`MedleyLiveStartProcessExecutor.executeTransitionInGameProcess`（`0x360999c`）在 `0x3609a70` 调用 `DeckUtility.SetupRhythmGameDeckUserSituation`（`0x34171a4`），传入所选组曲队伍和区域道具。Setup 把 `DeckParamDetail` 的卡牌数组交给 `RhythmGameStartData`。之后 `ScoreUtility.InitBaseScore` 在 `0x3374cc8` 调用 `calcTotalParameter`，在 `0x3374cf8` 把所得 float 交给 `calculateBaseScore`。后者使用单精度指令计算 `(综合力 * 等级倍率 / 音符数) * 3`。显示 getter 与计分器的累加顺序不同，本次审计不声称两者浮点结果逐位相同。
+
+在 HHWX 提交 `a622ca6dd5a6df88d2aa010d465e977927d8abd8`（`hhwx-medley-bestdori-v4`）中，组曲结果页把单队综合力及原始综合力总和交给使用 `Math.round` 的 `formatLocalizedInteger`，与上述显示规则不同。原生证据**不支持**在计分前对单队综合力取整，也不支持把各队取整值相加作为总显示。修正显示时应保留第 5、7 节的浮点计分契约；修改通用整数格式化函数还会影响无关数值。完整还原原生 float32 参数运算属于另一项兼容性变更，不能靠把 HHWX 最终的双精度总量转成 float32 来补回中间运算差异。
+
+### 网页综合力显示规则
+
+[`power-display.ts`](../../src/lib/bandori/power-display.ts) 现在只在展示时把综合力转换为 float32 并截去小数。合计函数先将 float32 贡献值以 JavaScript number 累加，再将结果转为 float32 并截断。这些函数不修改原始值、计分、搜索排序或计分规则版本。它们以 HHWX 算出的综合力复现已确认的数值转换边界，不代表此前所有原生 float32 运算都已还原。
+
+| 页面 | 综合力来源与显示 |
+| --- | --- |
+| 组曲结果，包括保留方案中的最高分候选 | 单队对其 float32 综合力截断；总值合计浮点队伍贡献，不相加单队的整数显示。 |
+| [玩家查询](../bandori-player-search.zh-CN.md) | 主队合计含当前启用道具的浮点单卡综合力，再截断；卡片数字独立截断。两者都不加入活动加成。 |
+| 单曲组队计算器 | `core/team-evaluation.ts` 已在计分前对全队综合力向下取整，遵循 Bestdori 调用方规则。结果本身为整数，无需额外转换。这仍与组曲计分不同。 |
+| 单曲支援乐队 | 对原始支援合计值向下取整后显示，对齐 Bestdori 的 `Math.floor(entry.supportBP)`。搜索与活动点数计算仍保留支援小数。这不等同于原生支援参数规则，见[支援规则对照](single-song-algorithm.zh-CN.md#任务活动支援队伍)。 |
+| 卡牌详情、档案卡牌列表／编辑器、临时卡及支援卡缩略图 | 基础单卡综合力已经是角色参数的整数和。共用缩略图使用同一显示函数，并保留不公开／不可用状态；卡牌详情直接显示原有整数。 |
+
+通用 `formatLocalizedInteger` 仍对其他数值四舍五入。综合力使用方先按自身规则转换，再调用它；修改这个全局函数还会影响分数、评级与无关计数。
 
 ## 9. 实现与验证
 

@@ -114,9 +114,15 @@ contributions are additive.
 The per-note score formula is:
 
 ```text
+teamPower = floor(sum(card effective power))
+base = teamPower * chart coefficient
 inner = floor(base * judge * combo * fever)
 noteScore = floor(inner * skill)
 ```
+
+The team-power floor happens before scoring, following the Bestdori single-song
+tool's caller, not merely its display. Medley retains fractional team power for
+scoring; see [the native and Bestdori comparison](medley-foundation.md#8-compatibility-and-deliberate-differences).
 
 The song score is the sum of all `noteScore` values.
 
@@ -220,6 +226,22 @@ the search.
 ### Mission-Live Support Band
 
 `mission_live + eventPoint` enables support-band scoring.
+
+HHWX retains fractional support power in search and event-point calculation,
+and floors the combined value only for its label, matching Bestdori's
+`Math.floor(entry.supportBP)`. Do not apply the medley float32 display helper to
+this Bestdori-compatible value.
+
+This differs from the [audited CN 9.4.4 native support path](medley-foundation.md#native-cn-power-display-and-scoring-boundary-2026-09-14):
+`EventSupportBandUtility.calculateEventSupportBandDetail` (`0x341c77c`) multiplies
+each card's P/T/V by the support rate as float32, then truncates each parameter
+at `0x341ca84`/`0x341ca88`, `0x341caac`/`0x341cab0` and
+`0x341cad4`/`0x341cad8`. `EventSupportBandData.CalculatedTotalParam`
+(`0x35de1c0`) adds those integers; `CalculateEventSupportBandTotalParam`
+(`0x341d7a0`) adds the card integers for `EventSupportBandDialog.initializeTotalParam`
+(`0x35b89e8`). Flooring HHWX's final support total does not reproduce that
+per-parameter arithmetic. The display correction preserves the existing
+Bestdori-compatible support search and event-point contract.
 
 Rules:
 

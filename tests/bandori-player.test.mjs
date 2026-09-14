@@ -6,6 +6,7 @@ import { ApiRouteError } from "../src/lib/api-contracts.ts";
 import { parseBandoriPlayerResponse, redactBandoriPlayerProfile, isValidPlayerUid, PLAYER_BAND_ORDER, retainPlayerDataOnError, playerErrorMessageKey } from "../src/lib/bandori/player-profile.ts";
 import { buildBandoriBandLogoUrl, buildBandoriDeckRankSpriteUrls, buildBandoriPlayerSpriteUrl } from "../src/lib/bandori-builtin-resources.ts";
 import { calculatePlayerPower, getPlayerCharacterBonusParameters } from "../src/lib/bandori/player-power.ts";
+import { getBandoriPowerDisplayValue, getBandoriTotalPowerDisplayValue } from "../src/lib/bandori/power-display.ts";
 import { calculateFixedTeamParameters } from "../src/lib/bandori/medley-foundation/parameters.ts";
 import { formatLocalizedInteger } from "../src/lib/localized-format.ts";
 import { fetchJsonOnce } from "../src/hooks/useCachedFetch.ts";
@@ -160,7 +161,27 @@ test("absent append values default to zero without filling unreturned area items
     cardPowers: { 1: 3000, 2: 3000, 3: 3000, 4: 3000, 5: 3000 } });
 });
 
-test("player power retains medley precision and rounds only for presentation", () => {
+test("power labels truncate without changing raw values or unrelated integer formatting", () => {
+  const powers = Object.freeze([100.5, 200.5, 300.5]);
+  assert.deepEqual(powers.map(getBandoriPowerDisplayValue), [100, 200, 300]);
+  assert.equal(getBandoriTotalPowerDisplayValue(powers), 601);
+  assert.equal(powers.reduce((sum, power) => sum + power, 0), 601.5);
+  assert.equal(formatLocalizedInteger(601.5, "zh-CN"), "602");
+  assert.equal(getBandoriPowerDisplayValue(396739.59), 396739);
+  assert.equal(getBandoriPowerDisplayValue(0), 0);
+});
+
+test("native display narrows contributors and the final sum to float32", () => {
+  // Each value becomes an exact half; their sum crosses an integer boundary.
+  assert.equal(getBandoriTotalPowerDisplayValue([100.499999, 200.499999, 300]), 601);
+  // Already-float32 inputs can still require rounding after double accumulation.
+  const powers = [100.5, 200.5, Math.fround(300.99997)];
+  assert.equal(Math.trunc(powers.reduce((sum, power) => sum + power, 0)), 601);
+  assert.equal(getBandoriTotalPowerDisplayValue(powers), 602);
+  assert.equal(getBandoriPowerDisplayValue(300.999999), 301);
+});
+
+test("player power retains medley precision and truncates only for presentation", () => {
   const { input, masters, characters, areas } = powerSample();
   for (const key of ["performance", "technique", "visual"]) areas[4][key][8][0] = 0.01;
   const view = parseBandoriPlayerResponse(input);
@@ -175,8 +196,8 @@ test("player power retains medley precision and rounds only for presentation", (
   assert.equal(power.totalPower, medley.deckTotalParameter);
   assert.ok(Math.abs(power.totalPower - 19951.995) < 1e-8);
   assert.ok(Object.values(power.cardPowers).every((value) => Math.abs(value - 3990.399) < 1e-8));
-  assert.equal(formatLocalizedInteger(power.totalPower, "zh-CN"), "19,952");
-  assert.equal(Object.values(power.cardPowers).reduce((sum, value) => sum + Math.round(value), 0), 19950);
+  assert.equal(formatLocalizedInteger(getBandoriTotalPowerDisplayValue(Object.values(power.cardPowers)), "zh-CN"), "19,951");
+  assert.equal(Object.values(power.cardPowers).reduce((sum, value) => sum + getBandoriPowerDisplayValue(value), 0), 19950);
 });
 
 test("invalid power inputs and missing regional master values fail instead of displaying zero or estimates", () => {

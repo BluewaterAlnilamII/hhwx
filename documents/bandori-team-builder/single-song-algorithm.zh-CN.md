@@ -81,9 +81,14 @@
 单 note 分数公式为：
 
 ```text
+teamPower = floor(sum(card effective power))
+base = teamPower * chart coefficient
 inner = floor(base * judge * combo * fever)
 noteScore = floor(inner * skill)
 ```
+
+全队综合力在计分前向下取整，遵循 Bestdori 单曲工具的调用方规则，并非只影响显示。
+组曲计分则保留浮点综合力，详见[原生与 Bestdori 对照](medley-foundation.zh-CN.md#8-兼容依据与明确差异)。
 
 歌曲总分是所有 `noteScore` 的和。
 
@@ -151,6 +156,10 @@ eventPoint = floor(eventPointBase * liveBoostMultiplier)
 ### 任务活动支援队伍
 
 `mission_live + eventPoint` 启用支援队伍评分。
+
+HHWX 在搜索和活动点数计算中保留支援综合力的小数，仅在显示合计值时向下取整，对齐 Bestdori 的 `Math.floor(entry.supportBP)`。这个遵循 Bestdori 的值不使用组曲的 float32 显示转换函数。
+
+这与[已审计的 CN 9.4.4 原生支援路径](medley-foundation.zh-CN.md#国服原生综合力显示与计分边界2026-09-14)不同：`EventSupportBandUtility.calculateEventSupportBandDetail`（`0x341c77c`）将每张卡的演出／技巧／形象分别乘以 float32 支援倍率，在 `0x341ca84`／`0x341ca88`、`0x341caac`／`0x341cab0`、`0x341cad4`／`0x341cad8` 分别截断。`EventSupportBandData.CalculatedTotalParam`（`0x35de1c0`）合计这些整数，`CalculateEventSupportBandTotalParam`（`0x341d7a0`）再合计各卡整数，供 `EventSupportBandDialog.initializeTotalParam`（`0x35b89e8`）显示。只对 HHWX 的最终支援合计值向下取整，无法还原这种逐参数运算。本次显示修正保留现有遵循 Bestdori 的支援搜索与活动点数契约。
 
 规则：
 

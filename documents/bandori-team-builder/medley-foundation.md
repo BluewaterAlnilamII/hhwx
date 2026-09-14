@@ -247,8 +247,11 @@ The UI displays total boost choices 0/3/6/9, corresponding to multipliers 3/15/3
 
 The score formulas and chart-time conversion were checked against the pinned [Bestdori application bundle](https://bestdori.com/js/app.d390adb1.js), module `c0f0`, SHA-256 `ac84605d7889e53c0144ab7c41e379c174b94b8dc31edae07f3483b8a0610778`, and [ToolTeamBuilder bundle](https://bestdori.com/js/ToolTeamBuilder.6367a448.js), SHA-256 `060930307c802accbd754ac2a6b87eb6294e66cb44646e4cfdff9784670e659b`, verified on 2026-08-31. That path establishes the average judgment multiplier, two note-score floors, continued-skill formula, rate-up formula and BPM-anchored note times.
 
+The live bundles were fetched again on 2026-09-14 and matched those hashes. `ToolTeamBuilder` sets `entry.bp = Math.floor(sum(card.power))`, uses that integer for its search estimate, and passes it to export `e` of `c0f0` (`ct`) for detailed scoring. The exported scorer itself accepts fractional power and floors note scores after multiplication, but the product caller supplies an already floored team power. Calling that export directly with a fractional value does not reproduce the tool's complete input path.
+
 HHWX differs from that single-song path where the medley product requires different behavior:
 
+- team power retains its fractional part before note scoring; Bestdori's single-song team-builder caller floors it;
 - combo continues across three songs;
 - member index two is the leader;
 - overlapping skill windows add their independently rounded extras;
@@ -257,6 +260,54 @@ HHWX differs from that single-song path where the medley product requires differ
 - `score_only_perfect` is represented as `perfect_only`, with zero GREAT multiplier, even though the pinned upstream function does not recognize it.
 
 An audit of native JP client 10.1.3 using master version `20260805110509` and skill-effect SHA-256 `d98e76c0198a6a714be1d38e4696a044242c8384b905426a311c8c2b0961aebc` found behavior outside this calculator model: biased random skill-order sampling, single-precision scoring, a combo master table, life-conditioned triggers, and frame/runtime handling of skill-window conflicts. HHWX does not model those behaviors. Changing that boundary would require a new scoring rule version and corresponding reference cases.
+
+### Native CN power display and scoring boundary (2026-09-14)
+
+The CN APK manifest identifies package `com.bilibili.star.bili`, version `9.4.4`, version code `105`. The audit used its ARM64 IL2CPP binary and metadata, with method names resolved by Il2CppDumper 6.7.46:
+
+| Artifact | SHA-256 |
+| --- | --- |
+| APK | `71235d006db432a5dafdd276c76ec82a24a766ea63f3fbebd8a1c5c279e15926` |
+| `lib/arm64-v8a/libil2cpp.so` | `1d798715a62f804cfa6696b02a8fc3e060abbb2e04877a50c26fc7ad6c7f2a02` |
+| `global-metadata.dat` | `9dc9035e60aab33b06cea09c3f8264e1c62e9ae50b75b89f550448f9d2652ee1` |
+
+An older local analysis directory is named `cn-9.4.3-arm64`; its binary and metadata match the APK entries above byte for byte. The manifest and hashes establish the audited version, not that directory name. Addresses below are ELF virtual addresses/RVAs, not file offsets. These findings describe the bundled native method bodies; their IFix dispatch branches can invoke runtime replacements, which this static audit did not capture.
+
+| Boundary | Native evidence | Rounding behavior |
+| --- | --- | --- |
+| One team's power | `DeckParamDetail.get_TotalParameterIncludeAreaItemAndEventBuff`, `0x339cc78` | Loads original, area-item and event totals as `float`; adds original + area, then event with `fadd s`. No integer conversion. |
+| One team's label | `MedleyEventDifficultySelectPageMusicInfoController.UpdateDeckInfo`, `0x35f9a10` | Calls that getter at `0x35f9a8c`; `fcvtzs w9, d0` at `0x35f9aa4` truncates before `Int32.ToString` and `UILabel.set_text`. |
+| Three-team label | `MedleyEventCategorySelectController.updateMedleyBandTotalParam`, `0x35f7764`; `AssignmentMedleyController.get_deckTotalParam`, `0x35f4468`; `FreeMedleyController.get_deckTotalParam`, `0x35f4b3c` | Each selects the same floating getter and calls `Enumerable.Sum` before integer conversion. The respective truncation instructions are `0x35f78a4`, `0x35f45a0` and `0x35f4c74`. No per-team truncation occurs inside the sum. |
+| Sum precision | Selector overload `0x408344c` calls the float overload `0x563a018` | Each float is widened to double (`0x563a1ac`) and added to a double accumulator (`0x563a1b0`); the final sum is narrowed to float (`0x563a22c`) before the caller truncates it. |
+| Scoring input | `ScoreUtility.calcTotalParameter`, `0x33745e4`; `InitBaseScore`, `0x3374c38`; `calculateBaseScore`, `0x3374e4c` | P/T/V floats are accumulated separately, then combined as `T + (P + V)`. The resulting float enters base-score multiplication/division without conversion to integer. |
+
+For finite, nonnegative native team powers `p0`, `p1`, `p2`, the display boundary can be expressed in JavaScript as:
+
+```js
+// Inputs are already native float32 team powers, widened to JS numbers.
+const teamLabels = [p0, p1, p2].map(Math.trunc);
+const totalLabel = Math.trunc(Math.fround((p0 + p1) + p2));
+```
+
+The total is recomputed from floating powers, not from `teamLabels`. For the synthetic inputs `100.5`, `200.5`, `300.5`, individual labels sum to `600`, the native total label is `601`, and rounding the total to nearest would produce `602`. Final float32 narrowing can also cross an integer boundary; merely truncating a double sum is not a complete emulation of the native display path.
+
+The scoring path is reached by medley itself: `MedleyLiveStartProcessExecutor.executeTransitionInGameProcess` (`0x360999c`) calls `DeckUtility.SetupRhythmGameDeckUserSituation` (`0x34171a4`) at `0x3609a70`, passing the selected medley deck and area items. Setup supplies the `DeckParamDetail` card array to `RhythmGameStartData`. `ScoreUtility.InitBaseScore` then calls `calcTotalParameter` at `0x3374cc8` and passes its float result to `calculateBaseScore` at `0x3374cf8`. The latter computes `(power * levelRate / noteCount) * 3` using single-precision instructions. The display getter and scorer have different accumulation orders; this audit does not assert that their floating results are bit-identical.
+
+At HHWX commit `a622ca6dd5a6df88d2aa010d465e977927d8abd8` (`hhwx-medley-bestdori-v4`), the medley result page instead passes both individual powers and the sum of raw powers to `formatLocalizedInteger`, which uses `Math.round`. That is a presentation difference. The native evidence does **not** justify flooring team power before scoring or summing individually floored powers for the total label. Preserve the fractional scoring contract in Sections 5 and 7 when correcting presentation; changing the shared integer formatter would also affect unrelated values. Fully reproducing native float32 parameter arithmetic is a separate compatibility change, not something recovered by casting HHWX's final double-precision totals to float32.
+
+### Web power display policy
+
+[`power-display.ts`](../../src/lib/bandori/power-display.ts) now projects power to float32 and truncates only at presentation. Its aggregate helper widens float32 contributors to JavaScript numbers, sums them, narrows the result to float32 and truncates. These helpers do not change source values, scoring, search ordering or the scoring rule version. They reproduce the observed conversion boundaries using HHWX-computed powers, not all preceding native float32 arithmetic.
+
+| Surface | Power source and display |
+| --- | --- |
+| Medley results, including the retained maximum-score candidate | Each team label truncates its float32 power; the total uses floating team contributions rather than integer team labels. |
+| [Player query](../bandori-player-search.md) | Main-band power sums floating card powers including enabled area items, then truncates. Card overlays truncate individually. Neither adds an event bonus. |
+| Single-song team builder | `core/team-evaluation.ts` already floors full-team power before scoring, following Bestdori's caller. Its integer result needs no display conversion. This remains distinct from medley scoring. |
+| Single-song support band | Floors the raw support total for display, matching `Math.floor(entry.supportBP)` in Bestdori. Fractional support power remains in search and event-point calculation. This is not the native support-band parameter rule; see [the support comparison](single-song-algorithm.md#mission-live-support-band). |
+| Card detail, profile card collection/editor, temporary cards and support-card thumbnails | Base card powers are already integer sums of character parameters. The shared thumbnail uses the same display helper and preserves hidden/unavailable states. Card detail displays the existing integers directly. |
+
+The general `formatLocalizedInteger` still rounds other numeric values. Power consumers perform their domain-specific conversion before using it; changing this global formatter would also change scores, ratings and unrelated counts.
 
 ## 9. Implementation and verification
 

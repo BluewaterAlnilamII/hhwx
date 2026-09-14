@@ -19,6 +19,7 @@ import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
 import { LONG_CLIENT_CACHE_POLICY } from "@/lib/api-cache";
 import { ApiRouteError } from "@/lib/api-contracts";
 import { calculatePlayerPower, getPlayerCharacterBonusParameters, parsePlayerAreaItemsMaster } from "@/lib/bandori/player-power";
+import { getBandoriTotalPowerDisplayValue } from "@/lib/bandori/power-display";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useBandoriCharactersMaster } from "@/hooks/useBandoriCharactersMaster";
@@ -147,7 +148,7 @@ function PlayerResults({ player }: { player: PlayerProfileView }) {
   const degreeMap = new Map(getBandoriDegreeCatalogItemsForRegion(degrees.catalog, player.server).map((degree) => [degree.id, degree]));
   const showCard = (card: PlayerProfileView["cards"][number]) => {
     const master = metadata(card.cardId);
-    const tileCard = { cardId: card.cardId, level: card.level ?? 0, masterRank: card.masterRank ?? 0, skillLevel: card.skillLevel ?? 0, isTrained: card.isTrained, illustration: card.illust, bandId: resolveBandoriCardBandId(master, characters.data ?? {}), totalPower: power ? Math.round(power.cardPowers[card.cardId]) : null };
+    const tileCard = { cardId: card.cardId, level: card.level ?? 0, masterRank: card.masterRank ?? 0, skillLevel: card.skillLevel ?? 0, isTrained: card.isTrained, illustration: card.illust, bandId: resolveBandoriCardBandId(master, characters.data ?? {}), totalPower: power ? power.cardPowers[card.cardId] : null };
     const skill = resolveBandoriSkillLabel(skills.data?.[String(master?.skillId)] ?? undefined, card.skillLevel, 1, server, server, terms("unknownSkill"));
     return <BandoriCardTile interaction={{ kind: "information" }} card={tileCard} metadata={master ?? undefined} cardName={pickBandoriRegionalText(master?.prefix, server, server) || cardLabel(card.cardId)} server={server} characterName={pickBandoriCharacterDisplayName(characters.data?.[String(master?.characterId)], server, server)} skillEffectLabel={skill.label} skillEffectLanguageTag={skill.languageTag} size="compact" showPower={player.power.public} leaderLabel={card.isLeader ? t("leader") : undefined} />;
   };
@@ -163,7 +164,7 @@ function PlayerResults({ player }: { player: PlayerProfileView }) {
           <p className="mt-4 whitespace-pre-wrap wrap-anywhere">{player.introduction || t("noIntroduction")}</p>
           <p className="mt-4 flex items-center justify-center gap-2" aria-label={t("uid")}><BandoriServerIcon server={server} size={20} /><span className="tabular-nums">{player.uid}</span></p>
           <div className="mt-4 border-t border-[var(--theme-color-border-subtle)] pt-4">
-            <Heading as="h3" visualRole="subsection" className="text-sm">{t("mainBandPower")}{" "}<span className="font-semibold tabular-nums" aria-live="polite">{player.power.public ? powerFailed ? t("powerFailed") : power === null ? common("states.loading") : formatLocalizedInteger(power.totalPower, locale as AppLocale) : t("private")}</span></Heading>
+            <Heading as="h3" visualRole="subsection" className="text-sm">{t("mainBandPower")}{" "}<span className="font-semibold tabular-nums" aria-live="polite">{player.power.public ? powerFailed ? t("powerFailed") : power === null ? common("states.loading") : formatLocalizedInteger(getBandoriTotalPowerDisplayValue(Object.values(power.cardPowers)), locale as AppLocale) : t("private")}</span></Heading>
             {player.cards.length ? <div className="mt-3 flex flex-wrap justify-center gap-1.5 sm:gap-2">{player.cards.map((card, index) => <div key={`${card.cardId}:${index}`}>{showCard(card)}</div>)}</div> : <p className="mt-3 text-[var(--theme-color-text-muted)]">{t("noData")}</p>}
           </div>
           <p className="mt-4 text-xs text-[var(--theme-color-text-muted)]">{t("fetchedAt")} {player.fetchedAt ? <time dateTime={player.fetchedAt}>{new Date(player.fetchedAt).toLocaleString(locale)}</time> : t("noData")}</p>
