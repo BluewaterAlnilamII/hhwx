@@ -376,7 +376,9 @@
       "uidManagement": {
         "title": "UID Management",
         "quota": "Auto profiles {count}/{limit}",
-        "syncWarning": "Syncing calls the game API and may disconnect the currently logged-in game client for this UID once.",
+        "syncWarning": "Syncing calls the game API and may disconnect the currently logged-in game client for this UID once",
+        "syncUnavailable": "Automatic game profile sync is temporarily unavailable; please use manual profiles",
+        "syncPaused": "Sync paused",
         "loading": "Loading...",
         "empty": "No bound UIDs yet. Bind a game UID to create an auto-sync profile.",
         "generated": "Auto profile generated",

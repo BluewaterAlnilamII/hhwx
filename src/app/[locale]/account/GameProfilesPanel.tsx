@@ -10,6 +10,7 @@ import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import { normalizeBandoriServer, type BandoriServer } from "@/lib/bandori-server";
 import { formatLocalizedDateTime } from "@/lib/localized-format";
+import { GAME_PROFILE_SYNC_ENABLED } from "@/lib/user-game-profile-sync";
 import BandoriCnExclusiveNotice from "@/app/[locale]/bandori/BandoriCnExclusiveNotice";
 import type { GameAccountBinding, GameBindChallenge } from "@/lib/game-account-binding";
 import {
@@ -353,6 +354,7 @@ export default function GameProfilesPanel() {
   }, [loadData, profilesByUid, requestGameJson, t]);
 
   const syncAutoProfile = useCallback(async (targetUid: string) => {
+    if (!GAME_PROFILE_SYNC_ENABLED) return;
     const confirmed = window.confirm(
       t("confirm.sync"),
     );
@@ -625,7 +627,7 @@ export default function GameProfilesPanel() {
           <div className="text-sm text-[var(--theme-color-text-muted)]">{t("uidManagement.quota", { count: autoProfileCount, limit: USER_GAME_AUTO_PROFILE_LIMIT })}</div>
         </div>
         <div className="mt-3 rounded-2xl border border-[var(--theme-color-semantic-warning-border)] bg-[var(--theme-color-semantic-warning-background)] px-4 py-3 text-sm leading-6 text-[var(--theme-color-semantic-warning-foreground)]">
-          {t("uidManagement.syncWarning")}
+          {GAME_PROFILE_SYNC_ENABLED ? t("uidManagement.syncWarning") : t("uidManagement.syncUnavailable")}
         </div>
         {loading ? (
           <LoadingIndicator compact label={t("uidManagement.loading")} className="mt-3 justify-start" />
@@ -671,11 +673,11 @@ export default function GameProfilesPanel() {
                       <button
                         type="button"
                         onClick={() => syncAutoProfile(binding.gameUid)}
-                        disabled={busy || isSyncing || syncLimitReached}
+                        disabled={!GAME_PROFILE_SYNC_ENABLED || busy || isSyncing || syncLimitReached}
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[var(--theme-color-action-success-background)] px-4 text-sm font-semibold text-[var(--theme-color-action-success-foreground)] transition hover:bg-[var(--theme-color-action-success-background)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
                       >
                         {isSyncing ? <LoadingSpinner className="text-current" /> : <RefreshCw className="h-4 w-4" />}
-                        {isSyncing ? t("uidManagement.syncing") : profile ? t("uidManagement.resync") : t("uidManagement.sync")}
+                        {!GAME_PROFILE_SYNC_ENABLED ? t("uidManagement.syncPaused") : isSyncing ? t("uidManagement.syncing") : profile ? t("uidManagement.resync") : t("uidManagement.sync")}
                       </button>
                       <button
                         type="button"

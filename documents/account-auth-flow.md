@@ -47,6 +47,7 @@ Operational note: if Supabase user creation succeeds but sending the HHWX verifi
 - After requesting an email change, HHWX clears application-side email verification until the confirmation flow writes `email_verified_at` again.
 - Password reset uses Supabase password recovery and does not mark HHWX email verification complete.
 - Profile reads and profile edits are allowed for authenticated users. Comments, game-account binding, cloud game profiles, game-profile sync, and Bandori schedule writes require verified email.
+- Automatic game-profile sync is temporarily paused: the account button is disabled and authenticated requests to `/api/account/game-profiles/sync` return `503 USER_SNAPSHOT_UNAVAILABLE` before starting the sync workflow. Manual profiles remain available. Reopening requires coordinating `GAME_PROFILE_SYNC_ENABLED` with the private backend's snapshot availability.
 
 ## Known Risks and Improvement Backlog
 
