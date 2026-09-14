@@ -1172,6 +1172,7 @@
     "characterRank": "Character Rank",
     "mediaFailed": "Some images or metadata could not be loaded",
     "busy": "The profile service is busy; please try again later",
+    "rateLimited": "Too many requests; please try again later",
     "failed": "Search failed; please try again later",
     "notFound": "Player does not exist; check the server and ID",
     "maintenance": "The game server is under maintenance; please try again later",

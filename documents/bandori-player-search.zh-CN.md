@@ -34,6 +34,23 @@ HTTP 状态不符时，返回 `502 TRACKER_SERVICE_INVALID_RESPONSE`。繁忙、
 Web 超时不会强制终止已发出的游戏请求；后端仍持有账号锁，直到 Token／RequestID
 链安全收尾。本次不改变游戏请求重试、版本恢复或独立的 `/suite/user` 流程。
 
+## 公开查询限速
+
+[Cloudflare 规则请求体](bandori-player-rate-limit.json) 将 `/api/bandori/player/`
+限制为每 IP 每 10 秒 10 次，超限阻止 10 秒。同一 IP 的四服和不同 UID 查询在各个
+Cloudflare 数据中心内共用计数。账号绑定、档案同步和评论接口不纳入。
+规则使用统一 JSON 错误格式返回 `429 BANDORI_PLAYER_RATE_LIMITED`。
+页面显示“操作过于频繁，请稍后重试”，并保留已有结果。本地开发代理保留此错误；
+后端账号通道繁忙仍使用 `503 TRACKER_SERVICE_BUSY`。
+
+规则配置与 Web 发布相互独立，页面专用提示需要发布相应的 Web 改动。
+2026-09-14，经明确授权，此规则替换了 `hhwx.org` 原有的
+`Leaked credential check` 限速规则。后续操作前核实套餐、可用额度及已有规则；
+更新匹配的规则，不覆盖其他规则。此文件不会自动配置 Cloudflare。操作方式参见
+[Cloudflare API 文档](https://developers.cloudflare.com/waf/rate-limiting-rules/create-api/)。
+定向验证正常查询、超限响应以及限制解除后的恢复；可用无效 UID 请求测试入口限速，
+避免触发游戏数据抓取。
+
 ## 隐私和展示
 
 API 返回前删除受 `publish*Flg` 保护的值。开关为 false 或缺失时，保留栏目标题，
