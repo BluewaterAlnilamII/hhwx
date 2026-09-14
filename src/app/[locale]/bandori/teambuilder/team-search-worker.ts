@@ -946,7 +946,7 @@ async function runSearchAttempt(
       return {
         ...effectiveCard,
         cardInstanceKey: `profile:${card.cardId}`,
-        isExcluded: effectiveCard.isExcluded || excludedCardIds.has(card.cardId),
+        isExcluded: excludedCardIds.has(card.cardId),
       };
     });
   const temporaryCards = request.cards.temporaryCards.map((card, index) => ({

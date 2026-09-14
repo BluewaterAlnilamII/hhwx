@@ -47,7 +47,9 @@ The Worker reports a newly improved best result no earlier than ten seconds afte
 
 The HHWX profile is the only profile format accepted by this pipeline. Its historical field named `bestdoriProfile` contains compression-v2 card and area-item state; it is not a second Bestdori import format. Character bonuses come from the profile's top-level `characterPotentials` and `characterMissionBonuses` fields.
 
-A temporary card is identified by master card ID. Selecting the same ID again edits the existing temporary card instead of adding another copy. A newly selected card starts with its maximum legal progression values, which the editor may then change. During calculation, the temporary card replaces a profile-owned card with the same master ID. Profile exclusion flags apply only to the profile card and therefore do not exclude its temporary replacement. Temporary cards are session input: they are written neither into the saved game profile nor into local card preferences, and reloading the page or switching profiles clears them.
+The calculator Worker replaces saved profile exclusion flags with the calculator's explicit `excludedCardIds` preferences before either single-song or medley search. Imported exclusions therefore do not silently remove candidates. The saved payload and profile codecs retain those flags for compatibility; the lower-level search adapter still honors the exclusion flags in the effective input it receives.
+
+A temporary card is identified by master card ID. Selecting the same ID again edits the existing temporary card instead of adding another copy. A newly selected card starts with its maximum legal progression values, which the editor may then change. During calculation, the temporary card replaces a profile-owned card with the same master ID. Calculator exclusions apply only to the profile card and therefore do not exclude its temporary replacement. Temporary cards are session input: they are written neither into the saved game profile nor into local card preferences, and reloading the page or switching profiles clears them.
 
 Card records are resolved for the profile's gameplay server. When that server has no card slot but the JP slot exists, the existing JP-presence fallback is used. Score-effect and unification percentages prefer the profile server and fall back to JP only when that exact server slot is absent; an explicit zero remains zero. Skill duration uses the same regional fallback but must resolve to a positive number. Area-item rates use only the profile server and search downward for the nearest defined level not above the owned level.
 
@@ -70,7 +72,7 @@ A legal result obeys all of the following:
 
 1. Song slots 0, 1 and 2 remain in the order supplied by the user. A song may appear more than once.
 2. Each team contains exactly five physical card instances and five distinct character IDs.
-3. A profile card marked as excluded is not a legal search candidate. As described above, that flag does not exclude a temporary replacement.
+3. A card marked as excluded in the effective search input is not a legal candidate. In the calculator, this flag comes only from its explicit exclusion preferences and does not exclude a temporary replacement.
 4. One physical card instance appears in at most one team. Different card instances of the same character may be used in different teams.
 5. Member index two is the leader. The engine chooses the leader; it is not a frontend input.
 6. All three teams use the same engine-selected area configuration.
