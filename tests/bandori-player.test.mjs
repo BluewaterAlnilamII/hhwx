@@ -387,8 +387,8 @@ test("edge rate limits reach browsers and the development proxy with a distinct 
       assert.equal(retainPlayerDataOnError(error), true);
       const key = playerErrorMessageKey(error.code);
       for (const [locale, expected] of [
-        ["zh-CN", "操作过于频繁，请稍后重试"],
-        ["en", "Too many requests; please try again later"],
+        ["zh-CN", "同一IP操作过于频繁，请稍后重试"],
+        ["en", "Too many requests from the same IP; please try again later"],
       ]) {
         const messages = JSON.parse(readFileSync(new URL(`../messages/${locale}/bandori.json`, import.meta.url), "utf8"));
         assert.equal(messages.player[key], expected);

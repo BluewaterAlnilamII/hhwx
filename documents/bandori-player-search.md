@@ -50,13 +50,13 @@ does not alter game transport retries, version recovery or the separate
 
 ## Public query rate limit
 
-[Cloudflare rule payload](bandori-player-rate-limit.json) defines a limit of ten
+[Cloudflare rule payload](bandori-player-rate-limit.json) defines a limit of two
 requests per IP per 10 seconds for `/api/bandori/player/`, with a 10-second block.
 All servers and UIDs share the counter for that IP within each Cloudflare data
 center. Account binding, profile synchronization and comment routes are excluded.
 The rule returns `429 BANDORI_PLAYER_RATE_LIMITED` in the standard JSON error
-envelope. The page displays "Too many requests; please try again later" and keeps
-any previous result. The local development proxy preserves this error; internal
+envelope. The page displays "Too many requests from the same IP; please try again later"
+and keeps any previous result. The local development proxy preserves this error; internal
 backend lane contention remains `503 TRACKER_SERVICE_BUSY`.
 
 The rule is configured independently of Web releases; the dedicated page message

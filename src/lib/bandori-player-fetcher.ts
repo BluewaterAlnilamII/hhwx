@@ -162,7 +162,7 @@ export async function fetchBandoriPlayerProfile(
       ? developmentProxy && isRecord(payload.error) ? payload.error.code : payload.code
       : null;
     if (developmentProxy && response.status === 429 && code === "BANDORI_PLAYER_RATE_LIMITED") {
-      throw new ApiRouteError(429, code, "Too many requests; please try again later");
+      throw new ApiRouteError(429, code, "Too many requests from the same IP; please try again later");
     }
     const failure = typeof code === "string" && Object.hasOwn(PLAYER_FAILURES, code) ? PLAYER_FAILURES[code] : null;
     if (failure && (failure.status === response.status || code === "TRACKER_SERVICE_BUSY" && response.status === 429)) {
