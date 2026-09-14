@@ -1172,6 +1172,7 @@
     "characterRank": "角色评级",
     "mediaFailed": "部分图片或资料加载失败",
     "busy": "查询服务繁忙，请稍后重试",
+    "rateLimited": "操作过于频繁，请稍后重试",
     "failed": "查询失败，请稍后重试",
     "notFound": "玩家不存在，请核对服务器和 ID",
     "maintenance": "游戏服务器维护中，请稍后重试",

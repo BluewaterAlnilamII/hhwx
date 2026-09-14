@@ -17,6 +17,7 @@ export function retainPlayerDataOnError(error: Error): boolean {
 export function playerErrorMessageKey(code: string) {
   switch (code) {
     case "BANDORI_PLAYER_NOT_FOUND": return "notFound";
+    case "BANDORI_PLAYER_RATE_LIMITED": return "rateLimited";
     case "TRACKER_SERVICE_BUSY": return "busy";
     case "BANDORI_PLAYER_MAINTENANCE": return "maintenance";
     case "TRACKER_SERVICE_TIMEOUT": return "timeout";

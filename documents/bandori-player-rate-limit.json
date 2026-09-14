@@ -1,0 +1,19 @@
+{
+  "description": "Player queries: 10 requests per IP per 10 seconds",
+  "expression": "starts_with(http.request.uri.path, \"/api/bandori/player/\")",
+  "action": "block",
+  "action_parameters": {
+    "response": {
+      "status_code": 429,
+      "content_type": "application/json",
+      "content": "{\"success\":false,\"error\":{\"code\":\"BANDORI_PLAYER_RATE_LIMITED\",\"message\":\"Too many requests; please try again later\"}}"
+    }
+  },
+  "ratelimit": {
+    "characteristics": ["cf.colo.id", "ip.src"],
+    "period": 10,
+    "requests_per_period": 10,
+    "mitigation_timeout": 10
+  },
+  "enabled": true
+}

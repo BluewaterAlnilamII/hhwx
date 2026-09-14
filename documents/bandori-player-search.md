@@ -48,6 +48,27 @@ the account lock until its token/RequestID chain is safely settled. This change
 does not alter game transport retries, version recovery or the separate
 `/suite/user` workflow.
 
+## Public query rate limit
+
+[Cloudflare rule payload](bandori-player-rate-limit.json) defines a limit of ten
+requests per IP per 10 seconds for `/api/bandori/player/`, with a 10-second block.
+All servers and UIDs share the counter for that IP within each Cloudflare data
+center. Account binding, profile synchronization and comment routes are excluded.
+The rule returns `429 BANDORI_PLAYER_RATE_LIMITED` in the standard JSON error
+envelope. The page displays "Too many requests; please try again later" and keeps
+any previous result. The local development proxy preserves this error; internal
+backend lane contention remains `503 TRACKER_SERVICE_BUSY`.
+
+The rule is configured independently of Web releases; the dedicated page message
+requires the corresponding Web release. On 2026-09-14, this rule replaced the
+`hhwx.org` zone's `Leaked credential check` rate limit with explicit approval.
+Check the zone plan, available quota and existing rules before future changes;
+update the matching rule without replacing unrelated rules. This file does not
+automatically configure Cloudflare.
+See [Cloudflare's API instructions](https://developers.cloudflare.com/waf/rate-limiting-rules/create-api/).
+Verify normal queries, excess-request responses and recovery after the block.
+Invalid UID requests can exercise the edge rule without fetching game data.
+
 ## Privacy and presentation
 
 The API removes values protected by `publish*Flg` before returning the profile.

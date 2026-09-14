@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import test from "node:test";
 import { ApiRouteError } from "../src/lib/api-contracts.ts";
@@ -7,6 +8,7 @@ import { buildBandoriBandLogoUrl, buildBandoriDeckRankSpriteUrls, buildBandoriPl
 import { calculatePlayerPower, getPlayerCharacterBonusParameters } from "../src/lib/bandori/player-power.ts";
 import { calculateFixedTeamParameters } from "../src/lib/bandori/medley-foundation/parameters.ts";
 import { formatLocalizedInteger } from "../src/lib/localized-format.ts";
+import { fetchJsonOnce } from "../src/hooks/useCachedFetch.ts";
 
 const serverBoundary = registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -325,6 +327,7 @@ test("player errors require matching codes and statuses and sanitize service fai
       for (const [status, code] of [
         [400], [404], [429], [500], [503], [504],
         [404, "BANDORI_PLAYER_UNAVAILABLE"], [404, "UNKNOWN_ERROR"], [503, "BANDORI_PLAYER_NOT_FOUND"],
+        [503, "BANDORI_PLAYER_RATE_LIMITED"], ...(!proxy ? [[429, "BANDORI_PLAYER_RATE_LIMITED"]] : []),
       ]) {
         globalThis.fetch = async () => Response.json(proxy
           ? { success: false, error: { code, message: "private upstream detail" } }
@@ -368,6 +371,44 @@ test("browser fallback retains results on temporary failure and clears confirmed
   assert.equal(playerErrorMessageKey("BANDORI_PLAYER_MAINTENANCE"), "maintenance");
   assert.equal(playerErrorMessageKey("BANDORI_PLAYER_NOT_FOUND"), "notFound");
   assert.equal(playerErrorMessageKey("TRACKER_SERVICE_INVALID_RESPONSE"), "failed");
+});
+
+test("edge rate limits reach browsers and the development proxy with a distinct message", async () => {
+  const rule = JSON.parse(readFileSync(new URL("../documents/bandori-player-rate-limit.json", import.meta.url), "utf8"));
+  const { status_code: status, content, content_type: contentType } = rule.action_parameters.response;
+  const savedFetch = globalThis.fetch;
+  const savedEnvironment = process.env.NODE_ENV;
+  const savedProxy = process.env.HHWX_DEV_PLAYER_API_PROXY;
+  try {
+    globalThis.fetch = async () => new Response(content, { status, headers: { "Content-Type": contentType } });
+    await assert.rejects(fetchJsonOnce("/api/bandori/player/jp/1234", "no-store"), (error) => {
+      assert.equal(error.status, 429);
+      assert.equal(error.code, "BANDORI_PLAYER_RATE_LIMITED");
+      assert.equal(retainPlayerDataOnError(error), true);
+      const key = playerErrorMessageKey(error.code);
+      for (const [locale, expected] of [
+        ["zh-CN", "操作过于频繁，请稍后重试"],
+        ["en", "Too many requests; please try again later"],
+      ]) {
+        const messages = JSON.parse(readFileSync(new URL(`../messages/${locale}/bandori.json`, import.meta.url), "utf8"));
+        assert.equal(messages.player[key], expected);
+      }
+      assert.equal(playerErrorMessageKey("TRACKER_SERVICE_BUSY"), "busy");
+      return true;
+    });
+    process.env.NODE_ENV = "development";
+    process.env.HHWX_DEV_PLAYER_API_PROXY = "1";
+    const response = await playerGET(new Request("http://localhost/api/bandori/player/jp/1234"), {
+      params: Promise.resolve({ server: "jp", uid: "1234" }),
+    });
+    assert.equal(response.status, 429);
+    assert.match(response.headers.get("Cache-Control"), /no-store/);
+    assert.equal((await response.json()).error.code, "BANDORI_PLAYER_RATE_LIMITED");
+  } finally {
+    globalThis.fetch = savedFetch;
+    if (savedEnvironment === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = savedEnvironment;
+    if (savedProxy === undefined) delete process.env.HHWX_DEV_PLAYER_API_PROXY; else process.env.HHWX_DEV_PLAYER_API_PROXY = savedProxy;
+  }
 });
 
 test("development proxy is opt-in, credential-free, validated, and unavailable to production or binding", async () => {
