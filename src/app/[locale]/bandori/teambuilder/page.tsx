@@ -91,6 +91,7 @@ import {
   type BandoriServer,
 } from "@/lib/bandori-server";
 import { formatLocalizedDate, formatLocalizedDateTime, formatLocalizedInteger } from "@/lib/localized-format";
+import { getBandoriPowerDisplayValue, getBandoriTotalPowerDisplayValue } from "@/lib/bandori/power-display";
 import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 import TeamBuilderCardPreferencesPanel from "./CardPreferencesPanel";
 import { type TemporaryCardEditorDialogProps } from "./TemporaryCardEditorDialog";
@@ -1690,7 +1691,7 @@ function ResultCard({
           <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3">
             <div className="font-semibold text-[var(--theme-color-text-default)]">{labelsT("supportTeam")}</div>
             <div className="mt-1">
-              {formatNumber(result.supportBandPower, locale)} / {result.supportCards.map((card) => card.cardId).join(", ")}
+              {formatNumber(Math.floor(result.supportBandPower), locale)} / {result.supportCards.map((card) => card.cardId).join(", ")}
             </div>
           </div>
         ) : null}
@@ -1808,7 +1809,7 @@ function MedleyResultCard({
     ? "rounded-full border border-[var(--theme-color-semantic-success-border)] bg-[var(--theme-color-panel-background)] px-2 py-0.5 font-bold text-[var(--theme-color-semantic-success-foreground)]"
     : "rounded-full border border-[var(--theme-color-semantic-warning-border)] bg-[var(--theme-color-panel-background)] px-2 py-0.5 font-bold text-[var(--theme-color-semantic-warning-foreground)]";
   const sharedAreaItemConfiguration = result.areaItemConfiguration;
-  const totalPower = result.songResults.reduce((sum, songResult) => sum + songResult.totalPower, 0);
+  const totalPower = getBandoriTotalPowerDisplayValue(result.songResults.map((songResult) => songResult.totalPower));
   const eventPoint = calculateMedleyEventPoint(result.averageScore, liveBoostCount);
   return (
     <article className={articleClassName}>
@@ -1894,7 +1895,7 @@ function MedleyResultCard({
                   </div>
                   <div className="rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2">
                     <div className="font-semibold text-[var(--theme-color-text-muted)]">{labelsT("totalPower")}</div>
-                    <div className="mt-1 font-bold text-[var(--theme-color-text-default)]">{formatNumber(songResult.totalPower, locale)}</div>
+                    <div className="mt-1 font-bold text-[var(--theme-color-text-default)]">{formatNumber(getBandoriPowerDisplayValue(songResult.totalPower), locale)}</div>
                   </div>
                 </div>
               </div>
