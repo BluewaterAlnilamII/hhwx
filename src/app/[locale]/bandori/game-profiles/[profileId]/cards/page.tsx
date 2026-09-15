@@ -555,8 +555,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
   const isPageLoading = isLoadingCards
     || cardsMaster.loading
     || charactersMaster.loading
-    || skillsMaster.loading
-    || Boolean(profilePayload && isMasterDataReady && !areEntriesReady && entries.length === 0);
+    || skillsMaster.loading;
 
   return (
     <AccountShell
@@ -701,7 +700,9 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
               {!areEntriesReady && entries.length > 0 ? (
                 <div role="status" className="mb-3 rounded-xl bg-[var(--theme-color-panel-background)] p-3 text-sm font-semibold text-[var(--theme-color-text-muted)]">{t("collectionStates.updatingCards")}</div>
               ) : null}
-              {filteredEntries.length === 0 ? (
+              {!areEntriesReady && entries.length === 0 ? (
+                <LoadingIndicator label={t("loadingCards")} className="min-h-[360px]" />
+              ) : filteredEntries.length === 0 ? (
                 <div className="flex min-h-[360px] flex-col items-center justify-center gap-3 text-center text-[var(--theme-color-text-muted)]">
                   <Filter className="h-9 w-9" aria-hidden="true" />
                   <div className="text-sm font-bold">{t("states.empty")}</div>
@@ -762,7 +763,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
             </div>
           </div>
 
-          {isCardPickerOpen && !cardEditorState ? (
+          {isCardPickerOpen ? (
             <DynamicBandoriCardPickerDialog
               isOpen={isCardPickerOpen}
               title={t("picker.title")}

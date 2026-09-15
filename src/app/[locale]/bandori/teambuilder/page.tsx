@@ -3590,7 +3590,7 @@ function TeamBuilderPanel() {
         </section>
       ) : null}
 
-      {isCardPickerOpen && !editingTemporaryCard ? (
+      {isCardPickerOpen ? (
         <DynamicBandoriCardPickerDialog
           isOpen={isCardPickerOpen}
           title={temporaryCardsT("pickerTitle")}
@@ -3605,6 +3605,7 @@ function TeamBuilderPanel() {
           skills={data.skills}
           onValueChange={selectTemporaryCard}
           onClose={() => {
+            if (editingTemporaryCard) return;
             setIsCardPickerOpen(false);
             setCardPickerValue(null);
           }}

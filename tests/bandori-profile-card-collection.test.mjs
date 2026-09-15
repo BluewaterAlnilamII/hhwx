@@ -690,8 +690,6 @@ test("profile cards and team builder use one shared collection implementation", 
   assert.match(page, /DynamicGameProfileCardEditorDialog/u);
   assert.doesNotMatch(page, /import GameProfileCardEditorDialog from/u);
   assert.match(page, /mutedCardIds=\{draftCardIdSet\}/u);
-  assert.match(page, /isCardPickerOpen && !cardEditorState/u);
-  assert.match(teamBuilderPage, /isCardPickerOpen && !editingTemporaryCard/u);
   assert.match(appChrome, /useBandoriCardsAssetIndex\(\)/u);
   assert.doesNotMatch(page, /useBandoriCardsAssetIndex/u);
   assert.match(pickerDialog, /mutedCardIds=\{mutedCardIds\}/u);
