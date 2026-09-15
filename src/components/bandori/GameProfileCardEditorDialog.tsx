@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Save, Trash2, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
@@ -131,6 +131,7 @@ export default function GameProfileCardEditorDialog({
   const preferredServer = useBandoriPreferredServer();
   const t = useTranslations("bandori.cardEditor");
   const [draft, setDraft] = useState(card);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const effectiveTitle = title ?? t("title");
   const effectiveDeleteLabel = deleteLabel ?? t("actions.delete");
   const levelLimit = getGameProfileCardLevelLimit(draft, metadata);
@@ -199,7 +200,16 @@ export default function GameProfileCardEditorDialog({
     <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-1100 bg-[var(--theme-color-overlay-background)]" />
-        <Dialog.Content className="hhwx-floating-surface fixed left-1/2 top-1/2 z-1100 flex max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-3xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border focus:outline-hidden sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100%-3rem)] sm:rounded-[28px]">
+        <Dialog.Content
+          onOpenAutoFocus={() => {
+            returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          }}
+          onCloseAutoFocus={(event) => {
+            if (!returnFocusRef.current?.isConnected) return;
+            event.preventDefault();
+            returnFocusRef.current.focus({ preventScroll: true });
+          }}
+          className="hhwx-floating-surface fixed left-1/2 top-1/2 z-1100 flex max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-3xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border focus:outline-hidden sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100%-3rem)] sm:rounded-[28px]">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-5 py-3 sm:px-6 sm:py-4">
           <div>
             <Dialog.Title className="text-lg font-bold text-[var(--theme-color-text-default)] sm:text-xl">{effectiveTitle}</Dialog.Title>
