@@ -95,9 +95,9 @@ hhwx/
 - `bandori/events/`: event catalogs, API contracts/services, route/region/status helpers, banner proxy logic, and event-specific comment target validation.
 - `bandori/event-tracker/`: Event Tracker cutoff, TOP10, live-series, projection, history, and prediction contracts/services shared by event, song, and monthly tracker modes.
 - `bandori/chart-simulator/`: lossless chart compilation, versioned worker transport, seek-state rebuilding, native presentation/effect/audio runtimes, and CDN manifest resolution. Physical simulator assets stay outside the Web repository and are resolved through logical paths; this module contains no region selection.
-- `bandori/medley-foundation/`: HHWX profile/master validation and projection into the versioned Rust medley scoring and search contracts.
-- `bandori/medley-wasm/pkg/`: generated browser package for Rust medley search and result hydration, loaded by the Team Builder Worker.
-- `bandori/team-builder/`: TypeScript single-song calculator. `core/` contains calculation primitives and shared domain constants; `single/` contains single-song exact-search orchestration. Medley scoring and exhaustive search run in Rust.
+- `bandori/medley-foundation/`: shared HHWX profile/master, card, skill and chart normalization, plus the versioned medley scoring/search contracts.
+- `bandori/medley-wasm/pkg/`: generated browser bindings for medley and single-song Rust search and hydration, loaded by the Team Builder Worker.
+- `bandori/team-builder/`: single-song UI settings, event policy and source adapter; `core/calculator.ts` remains the general card calculator. Both song modes use the shared Rust scorer/search package; the former TypeScript `single/` engine is retired.
 - `comments/`: target-agnostic comment contracts, emoji/stamp catalogs, content parsing, and privileged comment persistence service. Each target type keeps its existence and visibility validation in its own domain.
 - `api-*.ts`: API response conventions and cache policies.
 - `bestdori-profile-codec.ts` and `user-game-*-server.ts`: game profile compatibility, sync, and server-side persistence logic.

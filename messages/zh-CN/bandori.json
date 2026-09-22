@@ -905,11 +905,11 @@
       "lose": "失败"
     },
     "encoreSkillSources": {
-      "self": "你的队长",
-      "other1": "队长 1",
-      "other2": "队长 2",
-      "other3": "队长 3",
-      "other4": "队长 4"
+      "self": "队长 1（自己）",
+      "other1": "队长 2",
+      "other2": "队长 3",
+      "other3": "队长 4",
+      "other4": "队长 5"
     },
     "eventStatus": {
       "ongoing": "进行中",
@@ -938,12 +938,25 @@
       "leaderWithIndex": "队长 {index}",
       "songDifficulty": "歌曲难度",
       "noMatchingSongs": "没有找到匹配的歌曲",
+      "expectedScore": "期望分",
+      "maximumScorePlan": "最高分方案",
+      "peakFormation": "最大概率站位",
+      "currentFormation": "常规站位",
+      "playerFormation": "最佳玩家站位",
+      "selfPlayer": "1（自己）",
+      "otherPlayer": "玩家{index}",
+      "activationOrder": "技能顺序",
+      "peakExpectation": "（期望分 {score}）",
+      "maximumScoreProbability": "最高分概率",
+      "orderProbabilityFraction": "（{count}/{total}）",
+      "externalSkillCondition": "同乐团／同属性技能加成条件已满足",
       "averageScore": "平均分",
       "eventPoint": "活动Pt",
       "totalPower": "综合力",
       "roomScore": "房间分",
       "bonus": "加成",
       "scoreRange": "分数区间",
+      "scoreRangeValues": "<value>最低分 {minimum}</value> ~ <value>最高分 {maximum}</value>",
       "areaItemConfiguration": "区域道具配置",
       "bestSkillOrder": "最佳技能顺序",
       "bestOrderProbability": "最佳顺序概率",
@@ -1006,7 +1019,6 @@
       "preparingData": "正在准备计算数据"
     },
     "proof": {
-      "exact": "已完成精确的全局最优证明",
       "notExact": "未完成精确的全局最优证明",
       "running": "计算中",
       "stillProving": "仍在证明是否存在更高分队伍",

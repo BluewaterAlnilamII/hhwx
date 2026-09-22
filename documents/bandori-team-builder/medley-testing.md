@@ -26,6 +26,18 @@ The focused Node test suite covers profile decoding, character bonuses, card par
 
 Chart cases assert both valid note/timing output and fail-closed behavior: malformed recognized notes, Long/Slide endpoints or BPM entries must report their original field path. A damaged ordinary note with six intact triggers is rejected by both source entry points. Hidden middle nodes, property-presence triggers and numeric strings retain their documented behavior.
 
+### Single-song rules in the shared package
+
+`npm run test:team-builder` executes the committed single-song WASM binding against independent weighted-order/formation and note-by-note enumeration. Its public fixtures cover:
+
+- All 13 page-legal event/live combinations, both API targets and formula versions 0/1/2 (78 cases), including `festival + versus`. Raw bonus data is checked through parameter, point-rate and support-power normalization before exhaustive team/formation comparison; the retained TypeScript Pt functions serve as the independent reference for Rust event formulas.
+- Cooperative expected and peak formations, reachable maximum, emitted order, tied probability and room score, enumerating all 120 room orders for each of the five encore actors; identical skills also require a probability of 120/120.
+- Every Live Boost, challenge CP, placement and festival win/lose display option, with an independent formula reference and threshold-adjacent scores.
+- A complete five-card mission support team, alternate cards of the same character, exclusions, a feasible power constraint and a case where preserving support power changes the winning main team.
+- Regional fallback, independent external skill conditions, simultaneous notes, inclusive skill ends, stop/error paths and infeasibility.
+
+The JavaScript note oracle uses no area items; `single.rs` tests cover multiple area configurations and compare complete search and every partial upper bound with exhaustive completions. These small fixtures do not establish full-profile performance or current-client randomization across all regions. See [Single-Song Team Builder](single-song-algorithm.md) for the separate model/version contract.
+
 ### Rust formatting, linting and tests
 
 ```bash

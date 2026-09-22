@@ -1,1 +1,1 @@
-export * from "@/lib/bandori/team-builder/single/search";
+export * from "@/lib/bandori/team-builder/core/types";

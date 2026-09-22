@@ -905,11 +905,11 @@
       "lose": "Loss"
     },
     "encoreSkillSources": {
-      "self": "Your leader",
-      "other1": "Leader 1",
-      "other2": "Leader 2",
-      "other3": "Leader 3",
-      "other4": "Leader 4"
+      "self": "Leader 1 (you)",
+      "other1": "Leader 2",
+      "other2": "Leader 3",
+      "other3": "Leader 4",
+      "other4": "Leader 5"
     },
     "eventStatus": {
       "ongoing": "Ongoing",
@@ -938,12 +938,25 @@
       "leaderWithIndex": "Leader {index}",
       "songDifficulty": "Song difficulty",
       "noMatchingSongs": "No matching songs",
+      "expectedScore": "Expected score",
+      "maximumScorePlan": "Max score setup",
+      "peakFormation": "Best odds lineup",
+      "currentFormation": "Current lineup",
+      "playerFormation": "Best player formation",
+      "selfPlayer": "1 (you)",
+      "otherPlayer": "Player {index}",
+      "activationOrder": "Skill order",
+      "peakExpectation": "(Expected {score})",
+      "maximumScoreProbability": "Chance of max score",
+      "orderProbabilityFraction": "({count}/{total})",
+      "externalSkillCondition": "Same-band / same-attribute skill condition met",
       "averageScore": "Average score",
       "eventPoint": "Event Pt",
       "totalPower": "Total power",
       "roomScore": "Room score",
       "bonus": "Bonus",
       "scoreRange": "Score range",
+      "scoreRangeValues": "<value>Min {minimum}</value> ~ <value>Max {maximum}</value>",
       "areaItemConfiguration": "Area item setup",
       "bestSkillOrder": "Best skill order",
       "bestOrderProbability": "Best order probability",
@@ -1006,7 +1019,6 @@
       "preparingData": "Preparing calculation data"
     },
     "proof": {
-      "exact": "Exact global optimum proof completed",
       "notExact": "Exact global optimum proof not completed",
       "running": "Calculating",
       "stillProving": "Still proving whether a higher-scoring team exists",

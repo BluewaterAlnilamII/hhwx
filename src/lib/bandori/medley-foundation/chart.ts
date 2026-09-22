@@ -20,10 +20,10 @@ function addNote(notes: SourceNote[], value: unknown, path: string): void {
 }
 
 /** Normalize only the chart fields used by Bestdori score calculation. */
-export function normalizeBestdoriScoringChart(
+function normalizeChart(
   value: unknown,
   path = "chart",
-): ScoringNoteV1[] {
+): Array<ScoringNoteV1 & { beat: number }> {
   const chart = readArray(value, path, "INVALID_CHART");
   const notes: SourceNote[] = [];
   const bpms: SourceBpm[] = [];
@@ -89,11 +89,31 @@ export function normalizeBestdoriScoringChart(
     if (!Number.isFinite(timeSeconds) || timeSeconds < 0 || Object.is(timeSeconds, -0)) {
       failInput("INVALID_CHART", note.path, "normalized note time is invalid");
     }
-    return { noteId, timeSeconds, isSkillTrigger: note.isSkillTrigger };
+    return { noteId, timeSeconds, isSkillTrigger: note.isSkillTrigger, beat: note.beat };
   });
 
   if (normalized.filter((note) => note.isSkillTrigger).length !== 6) {
     failInput("INVALID_CHART", path, "must contain exactly six skill-trigger notes");
   }
   return normalized;
+}
+
+export function normalizeBestdoriScoringChart(value: unknown, path = "chart"): ScoringNoteV1[] {
+  return normalizeChart(value, path).map(({ noteId, timeSeconds, isSkillTrigger }) => ({ noteId, timeSeconds, isSkillTrigger }));
+}
+
+/** Fever is metadata on the shared sorted scoring notes, never a scoring entity. */
+export function normalizeSingleScoringChart(value: unknown, useFever: boolean, path = "chart") {
+  const normalized = normalizeChart(value, path);
+  let start: number | null = null;
+  let end: number | null = null;
+  if (useFever) for (const raw of readArray(value, path, "INVALID_CHART")) {
+    if (!isRecord(raw) || raw.type !== "System") continue;
+    if (raw.data === "cmd_fever_start.wav") start = readChartNumber(raw.beat, `${path}.feverStart`);
+    if (raw.data === "cmd_fever_end.wav") end = readChartNumber(raw.beat, `${path}.feverEnd`);
+  }
+  return {
+    notes: normalized.map(({ noteId, timeSeconds, isSkillTrigger }) => ({ noteId, timeSeconds, isSkillTrigger })),
+    fever: normalized.map(({ beat }) => start !== null && end !== null && beat >= start && beat <= end),
+  };
 }

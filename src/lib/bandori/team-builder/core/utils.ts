@@ -17,27 +17,8 @@ function toRegionalFiniteNumber(value: unknown): number | null {
   return Number.isFinite(numberValue) ? numberValue : null;
 }
 
-export function toPositiveInteger(value: unknown, fallback: number): number {
-  const numberValue = Math.trunc(toFiniteNumber(value, fallback));
-  return numberValue > 0 ? numberValue : fallback;
-}
-
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
-}
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-export function getRegionalNumber(value: unknown, server: number): number {
-  if (Array.isArray(value)) {
-    return toRegionalFiniteNumber(value[server])
-      ?? toRegionalFiniteNumber(value[0])
-      ?? 0;
-  }
-
-  return toRegionalFiniteNumber(value) ?? 0;
 }
 
 function getRegionalNumberForExactServer(value: unknown, server: number): number | null {
@@ -62,15 +43,4 @@ export function getRegionalLevelNumber(
   }
 
   return 0;
-}
-
-export function buildPermutations(values: number[]): number[][] {
-  if (values.length <= 1) {
-    return [values];
-  }
-
-  return values.flatMap((value, index) => {
-    const rest = [...values.slice(0, index), ...values.slice(index + 1)];
-    return buildPermutations(rest).map((permutation) => [value, ...permutation]);
-  });
 }

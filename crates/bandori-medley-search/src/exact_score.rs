@@ -12,10 +12,12 @@ pub(crate) enum ExactScoreFailure {
     ArithmeticOverflow,
 }
 
+#[derive(Clone)]
 struct ComboGroup {
     start: usize,
     end: usize,
     rate: f64,
+    fever: f64,
 }
 
 /// Chart-only work is shared by every candidate and area configuration in a run.
@@ -47,7 +49,7 @@ pub(crate) struct PreparedSongScoreRange {
     pub(crate) order_scores: Vec<i128>,
 }
 
-fn visit_skill_orders(
+pub(crate) fn visit_skill_orders(
     depth: usize,
     order: &mut [usize; 5],
     used: &mut [bool; 5],
@@ -81,6 +83,23 @@ fn combo_rate(combo: u32) -> f64 {
         101..=300 => 1.01 + f64::from((combo - 1) / 50) * 0.01,
         301..=3_000 => 1.04 + f64::from((combo - 1) / 100) * 0.01,
         _ => 1.34,
+    }
+}
+
+pub(crate) fn single_combo_rate(combo: u32) -> f64 {
+    match combo {
+        0..=20 => 1.0,
+        21..=50 => 1.01,
+        51..=100 => 1.02,
+        101..=150 => 1.03,
+        151..=200 => 1.04,
+        201..=250 => 1.05,
+        251..=300 => 1.06,
+        301..=400 => 1.07,
+        401..=500 => 1.08,
+        501..=600 => 1.09,
+        601..=700 => 1.1,
+        _ => 1.11,
     }
 }
 
@@ -141,10 +160,133 @@ fn skill_multiplier(
 }
 
 impl<'input> PreparedSong<'input> {
+    pub(crate) fn trigger_times(&self) -> [f64; 6] {
+        self.trigger_times
+    }
+
+    /// Single-song scheduling only. The medley path keeps its original triggers.
+    pub(crate) fn with_activation_times(
+        &self,
+        starts: [f64; 6],
+    ) -> Result<Self, ExactScoreFailure> {
+        if starts
+            .iter()
+            .zip(self.trigger_times)
+            .any(|(&s, t)| !s.is_finite() || s < t)
+        {
+            return Err(ExactScoreFailure::ArithmeticNonFinite);
+        }
+        Ok(Self {
+            song: self.song,
+            combo_groups: self.combo_groups.clone(),
+            coefficient: self.coefficient,
+            trigger_times: starts,
+            window_starts: std::array::from_fn(|w| {
+                self.window_starts[w].max(
+                    self.song
+                        .notes
+                        .partition_point(|note| note.time_seconds < starts[w]),
+                )
+            }),
+            perfect_rate: self.perfect_rate,
+            judgment_multiplier: self.judgment_multiplier,
+        })
+    }
+
+    /// Uses the same note floors and skill multipliers for a queued activation.
+    /// Start-time ties benefit; the original trigger entity itself never does.
+    pub(crate) fn single_window_extra(
+        &self,
+        bases: &[u32],
+        skill: ResolvedScoreSkillV1,
+        slot: usize,
+        start_time: f64,
+    ) -> Result<(i128, f64), ExactScoreFailure> {
+        let end_time = start_time + skill.duration_seconds;
+        if !end_time.is_finite() || start_time < self.trigger_times[slot] {
+            return Err(ExactScoreFailure::ArithmeticNonFinite);
+        }
+        let start = self.window_starts[slot].max(
+            self.song
+                .notes
+                .partition_point(|n| n.time_seconds < start_time),
+        );
+        let end = self
+            .song
+            .notes
+            .partition_point(|n| n.time_seconds <= end_time);
+        let varying = match skill.behavior {
+            SkillBehaviorV1::Score { .. } => {
+                skill.is_rate_up_with_perfect && self.perfect_rate > 0.0
+            }
+            SkillBehaviorV1::ContinuedPerfect {
+                active_score_up_percent,
+                fallback_score_up_percent,
+            } => {
+                self.perfect_rate > 0.0
+                    && self.perfect_rate < 1.0
+                    && active_score_up_percent != fallback_score_up_percent
+            }
+            _ => false,
+        };
+        let mut result = (0_i128, 0.0);
+        for (group, &base) in self.combo_groups.iter().zip(bases) {
+            let first = start.max(group.start);
+            let last = end.min(group.end);
+            if first >= last {
+                continue;
+            }
+            let alpha = ((self.coefficient * group.rate) * self.judgment_multiplier) * group.fever;
+            let mut add = |count: usize, copies: usize| -> Result<(), ExactScoreFailure> {
+                let multiplier =
+                    skill_multiplier(skill, count, self.perfect_rate, self.judgment_multiplier);
+                result.0 += (i128::from(floor_to_u32(f64::from(base) * multiplier)?)
+                    - i128::from(base))
+                    * copies as i128;
+                // Keep the room estimate's per-note addition order.
+                for _ in 0..copies {
+                    result.1 += alpha * (multiplier - 1.0);
+                }
+                Ok(())
+            };
+            if varying {
+                for note in first..last {
+                    add(note - start + 1, 1)?;
+                }
+            } else {
+                add(1, last - first)?;
+            }
+        }
+        if !result.1.is_finite() {
+            return Err(ExactScoreFailure::ArithmeticNonFinite);
+        }
+        Ok(result)
+    }
+
     pub(crate) fn new(
         song: &'input MedleySongV1,
         start_combo: u32,
         perfect_rate: f64,
+    ) -> Result<Self, ExactScoreFailure> {
+        Self::with_single_rules(song, start_combo, perfect_rate, None)
+    }
+
+    pub(crate) fn single(
+        song: &'input MedleySongV1,
+        perfect_rate: f64,
+        fever: &[bool],
+    ) -> Result<Self, ExactScoreFailure> {
+        if fever.len() != song.notes.len() {
+            return Err(ExactScoreFailure::InvalidSong);
+        }
+        Self::with_single_rules(song, 0, perfect_rate, Some(fever))
+    }
+
+    fn with_single_rules(
+        song: &'input MedleySongV1,
+        start_combo: u32,
+        perfect_rate: f64,
+        single_fever: Option<&[bool]>,
     ) -> Result<Self, ExactScoreFailure> {
         let mut trigger_times = [0.0; 6];
         let mut window_starts = [0; 6];
@@ -172,14 +314,27 @@ impl<'input> PreparedSong<'input> {
             .ok_or(ExactScoreFailure::ArithmeticOverflow)?;
         let mut combo_groups: Vec<ComboGroup> = Vec::new();
         for (index, combo) in (start_combo + 1..=end_combo).enumerate() {
-            let rate = combo_rate(combo);
-            if let Some(group) = combo_groups.last_mut().filter(|group| group.rate == rate) {
+            let rate = if single_fever.is_some() {
+                single_combo_rate(combo)
+            } else {
+                combo_rate(combo)
+            };
+            let fever = if single_fever.is_some_and(|flags| flags[index]) {
+                2.0
+            } else {
+                1.0
+            };
+            if let Some(group) = combo_groups
+                .last_mut()
+                .filter(|group| group.rate == rate && group.fever == fever)
+            {
                 group.end = index + 1;
             } else {
                 combo_groups.push(ComboGroup {
                     start: index,
                     end: index + 1,
                     rate,
+                    fever,
                 });
             }
         }
@@ -194,12 +349,62 @@ impl<'input> PreparedSong<'input> {
         })
     }
 
-    fn base_scores(&self, parameter: f64) -> Result<Vec<u32>, ExactScoreFailure> {
+    pub(crate) fn base_scores(&self, parameter: f64) -> Result<Vec<u32>, ExactScoreFailure> {
         let base = parameter * self.coefficient;
         self.combo_groups
             .iter()
-            .map(|group| floor_to_u32((base * group.rate) * self.judgment_multiplier))
+            .map(|group| {
+                floor_to_u32(((base * group.rate) * self.judgment_multiplier) * group.fever)
+            })
             .collect()
+    }
+
+    /// Shared integer window scorer; callers choose their order distribution.
+    pub(crate) fn contributions(
+        &self,
+        skills: [ResolvedScoreSkillV1; 5],
+        parameter: f64,
+    ) -> Result<(i128, [[i128; 5]; 6]), ExactScoreFailure> {
+        let prepared = self.prepare_skills(skills)?;
+        let base = self.base_scores(parameter)?;
+        let total = self
+            .combo_groups
+            .iter()
+            .zip(&base)
+            .map(|(group, score)| i128::from(*score) * (group.end - group.start) as i128)
+            .sum();
+        Ok((
+            total,
+            self.window_contributions(&base, &prepared, [true; 5])?,
+        ))
+    }
+
+    /// The established cooperative room estimate deliberately omits note floors.
+    pub(crate) fn no_floor_contributions(
+        &self,
+        skills: [ResolvedScoreSkillV1; 5],
+    ) -> Result<(f64, [[f64; 5]; 6]), ExactScoreFailure> {
+        let prepared = self.prepare_skills(skills)?;
+        let mut total = 0.0;
+        let mut windows = [[0.0; 5]; 6];
+        for group in &self.combo_groups {
+            let base = ((self.coefficient * group.rate) * self.judgment_multiplier) * group.fever;
+            total += base * (group.end - group.start) as f64;
+            for (member, skill) in prepared.iter().enumerate() {
+                for (slot, window) in windows.iter_mut().enumerate() {
+                    let start = self.window_starts[slot];
+                    for note in start.max(group.start)..skill.ends[slot].min(group.end) {
+                        let multiplier = skill
+                            .varying_multipliers
+                            .get(note - start)
+                            .copied()
+                            .unwrap_or(skill.constant_multiplier);
+                        window[member] += base * (multiplier - 1.0);
+                    }
+                }
+            }
+        }
+        Ok((total, windows))
     }
 
     fn prepare_skills(
@@ -415,6 +620,80 @@ mod tests {
 
     const FIXTURE: &str =
         include_str!("../../bandori-medley-model/tests/fixtures/valid-fixed-medley-v1.json");
+
+    #[test]
+    fn queued_windows_share_medley_multipliers_floors_and_inclusive_endpoints() {
+        let mut input: FixedMedleyEvaluationInputV1 = serde_json::from_str(FIXTURE).unwrap();
+        let song = &mut input.songs[0];
+        song.notes = (0..721)
+            .map(|i| ScoringNoteV1 {
+                note_id: i,
+                time_seconds: f64::from(i / 2) * 0.125,
+                is_skill_trigger: [0, 120, 240, 360, 480, 600].contains(&i),
+            })
+            .collect();
+        let behaviors = [
+            SkillBehaviorV1::Neutral,
+            SkillBehaviorV1::Score {
+                score_up_percent: 130.0,
+            },
+            SkillBehaviorV1::ScoreOnPerfect {
+                score_up_percent: 130.0,
+            },
+            SkillBehaviorV1::PerfectOnly {
+                score_up_percent: 130.0,
+            },
+            SkillBehaviorV1::GreatOrWorseHalf {
+                score_up_percent: 130.0,
+            },
+            SkillBehaviorV1::ContinuedPerfect {
+                active_score_up_percent: 140.0,
+                fallback_score_up_percent: 60.0,
+            },
+        ];
+        for p in [0.0, 0.73, 1.0] {
+            let prepared = PreparedSong::new(song, 0, p).unwrap();
+            let bases = prepared.base_scores(300_000.125).unwrap();
+            for behavior in behaviors {
+                for duration in [0.0, 1.5, 7.0, 8.0] {
+                    let mut skill = input.cards[0].skill;
+                    skill.behavior = behavior;
+                    skill.duration_seconds = duration;
+                    skill.is_rate_up_with_perfect =
+                        matches!(behavior, SkillBehaviorV1::Score { .. });
+                    let (_, fixed) = prepared.contributions([skill; 5], 300_000.125).unwrap();
+                    let (_, rates) = prepared.no_floor_contributions([skill; 5]).unwrap();
+                    for slot in 0..6 {
+                        let (extra, rate) = prepared
+                            .single_window_extra(&bases, skill, slot, prepared.trigger_times[slot])
+                            .unwrap();
+                        assert_eq!(extra, fixed[slot][0]);
+                        assert_eq!(rate.to_bits(), rates[slot][0].to_bits());
+                    }
+                }
+            }
+        }
+        // Delayed starts include both simultaneous notes; ends include both,
+        // but advancing the start by one representable value excludes its pair.
+        let prepared = PreparedSong::new(song, 0, 1.0).unwrap();
+        let bases = prepared.base_scores(300_000.125).unwrap();
+        let mut skill = input.cards[0].skill;
+        skill.behavior = SkillBehaviorV1::Score {
+            score_up_percent: 100.0,
+        };
+        skill.is_rate_up_with_perfect = false;
+        skill.duration_seconds = 0.125;
+        let at = prepared
+            .single_window_extra(&bases, skill, 0, 0.25)
+            .unwrap()
+            .0;
+        assert_eq!(at, 4 * i128::from(bases[0]));
+        let after = prepared
+            .single_window_extra(&bases, skill, 0, 0.25_f64.next_up())
+            .unwrap()
+            .0;
+        assert_eq!(after, 2 * i128::from(bases[0]));
+    }
 
     #[test]
     #[ignore = "real-chart microbenchmark; run scripts/benchmark-bandori-medley-score.mjs"]

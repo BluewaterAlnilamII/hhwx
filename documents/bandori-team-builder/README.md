@@ -7,9 +7,9 @@ HHWX provides two team builders for Bandori:
 - the **single-song team builder** selects one five-card team for one song and can optimize score or supported event-point targets;
 - the **medley team builder** selects three five-card teams for three ordered songs, with one shared area-item configuration, and proves the best total average score when the search finishes successfully.
 
-Both calculators start from an HHWX game profile and Bandori master/chart data. They share product concepts, but their scoring and search implementations are separate. A change to one calculator must not be assumed to affect the other.
+Both calculators start from an HHWX game profile and Bandori master/chart data. They share the medley normalization, parameter and exact-window foundations and ship in one Rust/WASM package. Single-song search adds weighted formation expectations and its event rules; the three-song medley model remains unchanged.
 
-The medley guarantee is conditional: `exact` proves the optimum within the validated normalized input and the documented scoring rules; `incomplete` reports only the best solution found so far, if any. It does not independently certify the upstream data or unmodeled game mechanics.
+The exact-search guarantee is conditional: `exact` proves the optimum within the validated normalized input and the documented scoring rules; `incomplete` reports only the best solution found so far, if any. It does not independently certify the upstream data or unmodeled game mechanics.
 
 ## Reading order
 
@@ -51,6 +51,16 @@ HHWX profile + Bandori masters + three charts + event settings
 ```
 
 The frontend supplies the selected profile, temporary-card and card-preference settings, three songs in fixed order, event settings, PERFECT rate and a time limit. The Worker obtains the required master and chart records. The frontend does not supply teams, leaders or the winning area configuration; those are search results. The Web Worker keeps the expensive search off the browser's main thread and controls timeout and progress publication.
+
+## Browser preferences
+
+The selected profile is remembered locally per signed-in HHWX account, using its source and ID. Reloading the available profiles preserves a valid current selection, then tries the saved selection, then the first cloud or local profile. An unavailable profile is never restored solely from storage.
+
+Live type and chart difficulty remember explicit user choices. Activity restrictions and missing chart difficulties only change the effective input; they do not overwrite those preferences. Medley retains a separate preferred difficulty for each song slot. The UI, chart preloading and search requests use the same effective values.
+
+Co-op skill-condition switches default to enabled; existing explicit on/off choices are preserved. Search targets, result counts, time limits, result-page Live Boost/CP/rank/outcome selections and temporary cards are not persisted. These frontend preference rules do not change scoring or search algorithms.
+
+Run `node --test tests/bandori-team-builder-preferences.test.mjs` for focused preference and loading-race checks.
 
 ## Source map
 

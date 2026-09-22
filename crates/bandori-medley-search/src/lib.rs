@@ -18,6 +18,10 @@ mod parameters;
 #[cfg(test)]
 mod profiling;
 mod search;
+mod single;
+mod single_event;
+mod single_score;
+mod single_upper;
 mod upper_bound;
 mod validation;
 
@@ -36,6 +40,13 @@ pub use output::{
     SearchIncompleteReasonV1,
 };
 pub use search::search_medley;
+pub use single::{
+    SINGLE_INPUT_VERSION, SINGLE_RULES_VERSION, SingleSearchDiagnosticsV1, SingleSearchInputV1,
+    SingleSearchOutcomeV1, SingleSearchSolutionV1, SingleTargetV1, decode_single_search_input_json,
+    hydrate_single_search_solutions, search_single,
+};
+pub use single_event::SingleEventRuleV1;
+pub use single_score::SingleScoreDetailsV1;
 
 /// Schema identifier for the first normalized medley search input.
 pub const SEARCH_INPUT_SCHEMA_VERSION: &str = "hhwx-medley-search-input-v1";

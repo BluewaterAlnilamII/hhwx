@@ -46,7 +46,7 @@ pub(crate) fn member_order_for_leader(
     ])
 }
 
-fn resolved_skill(
+pub(crate) fn resolved_skill(
     card: &SearchCardV1,
     is_same_band: bool,
     is_same_attribute: bool,

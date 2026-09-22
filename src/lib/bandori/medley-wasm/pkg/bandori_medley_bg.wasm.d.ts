@@ -2,6 +2,7 @@
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
 export const runMedleySearchJson: (a: number, b: number, c: number, d: any, e: any, f: any) => [number, number, number, number];
+export const runSingleSearchJson: (a: number, b: number, c: number, d: any, e: any, f: any) => [number, number, number, number];
 export const __wbindgen_malloc: (a: number, b: number) => number;
 export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
 export const __wbindgen_exn_store: (a: number) => void;

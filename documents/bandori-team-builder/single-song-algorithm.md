@@ -1,587 +1,168 @@
-# HHWX Bandori Single-Song Team Builder Algorithm
+# Single-Song Team Builder
 
-This document describes the HHWX Bandori single-song team builder: the game
-model, scoring model, exact search contract, performance design, correctness
-argument, validation gates, and implementation ownership.
+Chinese version: [single-song-algorithm.zh-CN.md](single-song-algorithm.zh-CN.md)
 
-Medley search is a separate Rust/WebAssembly implementation documented in
-`medley-foundation.md` and `medley-search.md`.
+Single-song search now runs in the medley Rust/WASM package. It shares profile/master normalization, card parameters, area configurations, conditional skill resolution and the exact skill-window scorer described in [Medley Rules and Scoring](medley-foundation.md). The former TypeScript single-song search and its independent chart, scoring and bound modules are retired. The general card calculator remains available to card-detail and profile-editing callers.
 
-## Problem Definition
+## Objective and results
 
-Given:
+The score objective is **the highest expected score over legal formations**, using the position-dependent distribution below. `eventPoint` applies the existing event formula to that expectation, including bonuses and mission support where applicable. This is not the expectation of separately settled per-order Pt. Versus/festival targets remain score-linked; placement, win/loss and Live Boost affect the displayed Pt options.
 
-- a player's owned cards;
-- card level, training state, episode unlocks, Master Rank, and skill level;
-- area items, character potentials, and character mission bonuses;
-- a song chart and difficulty;
-- optional event bonus data;
-- live type, accuracy model, and optimization target;
+A main team has five physical cards from five different characters, no excluded cards, and one owned area configuration. Minimum leader skill and team power constraints remain enforced. Leader eligibility uses the actual full-team skill context, not an unavailable conditional maximum. The own-card leader occupies card position three (index two); this does not fix the cooperative room seat.
 
-the goal is to find the best legal five-card team.
+Before normalization, the Worker applies only the calculator's explicit exclusions to owned cards, ignoring saved profile exclusion flags. Temporary cards replace the corresponding owned cards and remain unexcluded. Saved profiles and their exclusion flags are unchanged; the shared source adapter honors the effective flags supplied by the Worker.
 
-A legal main team must satisfy:
+Individual play displays the optimal card formation; cooperative play additionally reports the optimal player formation. `averageScore` contains the unrounded weighted expectation at that formation, labeled **Expected score**. A score target ranks it directly. Pt targets rank Pt base, then expectation, using room score at that same player formation. Further ties use total power, lexicographic card instance IDs, player identities in room-seat order, then configuration index. Changing the display multiplier does not rerun search.
 
-- exactly five cards;
-- no duplicate character;
-- no excluded card;
-- one shared global area-item configuration for the whole team.
+Each retained team also reports its minimum score in the displayed formation, its reachable maximum over legal formations of the same five cards and area configuration, a formation and activation order achieving that maximum, and the probability and expectation of that formation. The maximum setup may change the leader subject to the same constraint. It maximizes score, then maximum-score probability, then expectation, then stable instance IDs. Probability sums all tied maximum orders, including equivalent skills.
 
-Optional request constraints can further narrow the legal result set:
+Individual-play formation and activation sequences refer to the numbered cards in the main result. This post-search analysis does **not** search the roster for the team with the largest maximum score; that objective is a future enhancement. `resultLimit` remains 1–50. `exact` proves the best result or infeasibility within the supplied data/model. Other results are discovered alternatives, not a proved global top N. `incomplete` preserves its reason and any best-so-far results. Hydration recomputes the retained solution and fails on disagreement.
 
-- `minLeaderScoreUpPercent` requires the selected leader's resolved score-up
-  value to meet or exceed the threshold. Conditional skills are checked after
-  the full five-card team context is known, so an untriggered conditional
-  high-value skill does not qualify by its displayed maximum. When this
-  constraint is active, search uses team-context partitions even for smaller
-  pools so same-band and same-attribute leader bounds are evaluated in the
-  context where they would actually trigger.
-- `minTotalPower` requires the final five-card team power after the active
-  area-item configuration and event parameter bonuses to meet or exceed the
-  threshold. Support band power, room power, and other-player power are not part
-  of this value.
+Hydration also retains `currentMaximumProbabilityNumerator`: the probability of the same reachable team maximum in the selected search-result formation, using the existing denominator. It is zero if that formation cannot attain the maximum, rather than the probability of its own lower peak. In individual play, when the selected and highest-probability formations differ, the UI shows both probabilities on separate lines; otherwise it shows one. Cooperative play hides the maximum-score plan and probability panels while retaining the optimal player formation and score range. The Worker still returns peak fields in both modes. This adds no search pass or scoring rule change.
 
-The current single-song search supports three targets:
+## Skill order and formation optimization
 
-- `score`: maximize song score.
-- `eventPoint`: maximize event points.
-- `mission_live + eventPoint`: maximize mission-live event points, including the
-  support band contribution.
-
-The current model does not solve score-control routes, real multi-live teammate
-team search, or medley three-team coupling. When `perfectRate < 1`, the model
-simulates PERFECT and GREAT outcomes only; non-PERFECT notes are treated as
-GREAT. GOOD, BAD, MISS, and combo-break probabilities are not modeled.
-
-## Input Data
-
-The search depends on:
-
-- user profile data: owned cards, levels, skill levels, Master Rank, training
-  state, episode unlocks, area items, character potentials, and
-  character mission bonuses;
-- calculator card preferences: explicit exclusions and owned-card parameter
-  overrides. The Worker ignores saved profile exclusion flags and applies only
-  the calculator's exclusions before constructing search candidates;
-- master data: cards, characters, bands, attributes, skills, area items, songs,
-  and charts;
-- event bonus data embedded in the shared Events master API records, optionally
-  merged with a manual `bonusOverride`;
-- request parameters: song, difficulty, event, live type, target, perfect rate,
-  room power, external multi-live skills, and default display values for Live
-  Boost or CP.
-
-## Scoring And Event Model
-
-### Card Power
-
-Each candidate card is converted into a static card state before search:
-
-1. Compute current-level three-parameter base values using the rarity growth
-   curve. Non-max levels do not use linear interpolation.
-2. Add training, episode, and Master Rank bonuses.
-3. Add character potentials and character mission bonuses.
-4. Filter excluded cards.
-5. Add event parameter bonuses when the event type affects song score.
-6. Compute effective power under each global area-item configuration.
-
-Area items are not maximized independently per item group. The algorithm
-enumerates one global configuration:
+The audited individual-play initialization is equivalent to:
 
 ```text
-(optional band item configuration, optional attribute item configuration, optional parameter item configuration)
+order = [0, 1, 2, 3, 4]
+for i = 0 .. 4:
+    member = order[i]
+    remove member
+    insert member at an independently uniform integer in [0, 4)
 ```
 
-Each layer may be empty, meaning this global configuration chooses no item from
-that category. In practice, empty band and attribute configurations are omitted
-when the player owns usable band or attribute items, because area-item bonuses
-are non-negative and the empty configuration is then dominated. The parameter
-layer explicitly includes an empty option and then passes all configurations
-through the same dominance pruning. Every card in a candidate team is evaluated
-under the same configuration.
+There are 1,024 choice paths and 96 distinct orders. Each iteration reads the already-mutated list, not the original member i. The insertion index is sampled after removal and excludes the upper endpoint. In individual play the sixth activation belongs to the leader.
 
-### Chart And Note Score
+The marginal weights at the first five triggers are below; divide by 1,024. Each row and column sums to 1,024.
 
-The chart is preprocessed into a reusable note timeline:
+| Trigger / original position | 1 | 2 | 3 | 4 | 5 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1 | 192 | 291 | 144 | 141 | 256 |
+| 2 | 192 | 243 | 176 | 157 | 256 |
+| 3 | 192 | 198 | 200 | 178 | 256 |
+| 4 | 192 | 156 | 216 | 204 | 256 |
+| 5 | 256 | 136 | 288 | 344 | 0 |
 
-- parse scoring notes from Single, Directional, Long, and Slide notes;
-- compute note time, combo multiplier, and fever multiplier;
-- compute the six skill windows from skill notes and skill duration.
+When activation times do not depend on the order, already-rounded card/window contributions C[w,c] give five position/card weights plus `1024*C[5,c]` for the center card and a constant base score. A 32-mask assignment DP finds the best formation in 80 transitions. Queued timing uses the additional exact paths below; the marginal matrix alone is insufficient when earlier actors change later windows.
 
-Game design keeps the six skill windows non-overlapping, so window
-contributions are additive.
+This distribution was independently reproduced from retained arm64 binaries labeled JP 10.1.3 and CN 9.4.3. Their SHA-256 hashes are respectively `66c9c666c50962b662df8d894e851c7d18f07142dca145cfac3d30d063d1d9fa` and `1d798715a62f804cfa6696b02a8fc3e060abbb2e04877a50c26fc7ad6c7f2a02`. `InGameSkillNoteController.SetupSkillCharaList` was located at RVA `0x3307b58` and `0x335969c`. The version labels come from retained audit metadata; the binaries are the directly verified objects. This does not certify every current client version or regional release.
 
-The per-note score formula is:
+Cooperative play uses the player's leader and four external skills. It optimizes all 120 player formations using the same 1,024-path/96-order distribution, initialized in room-seat order. Player identity 1 is self, not a fixed room seat; external inputs are players 2–5. Rearranging own submembers does not rearrange players. Each eligible own leader and player formation is evaluated under the selected score/Pt objective; own and other-player expectations use that same formation. Encore follows the selected player identity regardless of seat. External players independently specify “condition satisfied” and never inherit the user's team context; unchecked uses the base skill. `orderModel: "weighted_room"` replaces the uniform assumption; probability denominator is 1,024. This reuses the same timing tables and one-team search, without a separate cooperative searcher.
+
+Cooperative player formation and activation sequences refer to player identities, while own card formations remain separate. Results retain both optimal and peak player formations; the minimum uses the selected formation, and peak probability uses the peak formation. Peak ties additionally use stable player identities. WASM `playerFormation` and `peakPlayerFormation` use zero-based identities (null in solo); the Worker converts these to 1–5 for display. Persisted `self`/`other1`–`other4` keys retain their identities; only labels change.
+
+## Queued activation timing
+
+Single-song rules include the 0.75-second wait **after the previous skill ends**, in individual and cooperative play, including encore. For the six actual actors:
 
 ```text
-teamPower = floor(sum(card effective power))
-base = teamPower * chart coefficient
-inner = floor(base * judge * combo * fever)
-noteScore = floor(inner * skill)
+start[0] = triggerTime[0]
+end[w] = start[w] + duration[actor[w]]
+start[w+1] = max(triggerTime[w+1], end[w] + 0.75)
 ```
 
-The team-power floor happens before scoring, following the Bestdori single-song
-tool's caller, not merely its display. Medley retains fractional team power for
-scoring; see [the native and Bestdori comparison](medley-foundation.md#8-compatibility-and-deliberate-differences).
+An activation is not dropped when it queues behind another; delays propagate recursively. Its duration and analytical covered-note counter begin at its actual start. A skill queued beyond the chart scores no notes. All skills consume their resolved duration, including score-neutral skills. There is no timing toggle, and the sixth activation is not exempt.
 
-The song score is the sum of all `noteScore` values.
+The retained JP/CN binaries above set the finishing-state countdown to float bits `0x3f400000` (0.75), then start queued skills only after returning to idle. Relevant JP playing/finishing/queue RVAs are `0x33228c4`, `0x3322924`, `0x3322bc4`/`0x33236b0`; CN uses `0x3378af8`, `0x3378bb0`, `0x3379650`. The implementation uses the continuous-time recurrence above, not frame-by-frame `deltaTime` simulation. This is an explicit normal-play scoring model; the native evidence establishes the wait and queue, not exact frame-boundary note ordering.
 
-For multi live, HHWX follows the saved Bestdori-compatible scoring convention:
-room score uses the unrounded own average score and floors only after adding
-the other-player score estimate:
+Four paths keep the cost bounded without approximating the expectation:
+
+| Timing case | Exact evaluation |
+| --- | --- |
+| Even the longest possible actor leaves enough space | Original fixed-window assignment. |
+| All actor durations are equal | Shift the six windows once, then use the same assignment. |
+| Only encore can move | For each eligible leader, add `weight[4,position] * encoreExtra[leader,lastActor]` to the assignment matrix. At most five assignments. |
+| Earlier windows depend on order | Cache contributions by actor, activation slot and actual start; score at most 120 orders for each of five leaders, then apply the 96 order weights to each formation. |
+
+Tables are reused for expectation and retained-result maximum/probability calculations. Equal-power leaders share a calculation; distinct binary64 powers require separate groups. The general case costs more than fixed windows; this change is not a claim that score/Pt search optimization is complete.
+
+## Scoring scope
+
+Character parameters follow medley v4: floor the potential bonus and combined collection/training mission bonus separately. Single-song rules are now `hhwx-single-medley-foundation-v4`, adding cooperative weighted formation optimization to v3. Regenerate normalized inputs with the current adapter; historical v3 uniform-room outputs are not equivalent baselines for cooperative results. Saved profiles are unchanged.
+
+Team power retains its fractional part for scoring, constraints and ranking. Only the displayed total and card overlays use the shared float32-then-truncate power helper. Mission support displays `floor(rawSupportPower)` while Pt uses the original value. Score expectation remains unrounded internally; the general integer formatter is unchanged. This is presentation alignment, not native float32 scoring emulation.
+
+The retired Bestdori-compatible single-song caller floored team power before scoring; the migrated calculator deliberately follows medley's fractional-power contract. Support scoring retains its existing Bestdori-compatible policy: unlike the [audited native CN support path](medley-foundation.md#native-cn-power-display-and-scoring-boundary-2026-09-14), which truncates each card's P/T/V support contribution before summing, HHWX preserves fractional support contributions through search and Pt calculation. Flooring only the displayed total does not emulate those native per-parameter operations.
+
+In that CN 9.4.4 binary, `EventSupportBandUtility.calculateEventSupportBandDetail` (`0x341c77c`) multiplies each card's P/T/V by the support rate as float32, then truncates at `0x341ca84`/`0x341ca88`, `0x341caac`/`0x341cab0` and `0x341cad4`/`0x341cad8`. `EventSupportBandData.CalculatedTotalParam` (`0x35de1c0`) adds those integers; `CalculateEventSupportBandTotalParam` (`0x341d7a0`) adds the card integers for `EventSupportBandDialog.initializeTotalParam` (`0x35b89e8`).
+
+For each leader, parameter accumulation uses the medley canonical order: ascending instance IDs with the leader moved to index two. Card, area-item and event contributions use the same helper and operation order. Rearranging the remaining formation positions changes the order distribution, not this parameter accumulation convention. Distinct leader powers are retained through constraints, ranking and peak hydration, even when they differ only by a floating-point rounding bit.
+
+Charts follow medley normalization: Single/Directional notes, scoring Long/Slide endpoints, property-presence skill triggers, stable trigger-first sorting at equal beats, and times anchored at BPM changes. Exactly six triggers are required. System entries are metadata, not scoring notes.
+
+A trigger excludes itself from its own window. For an undelayed activation, subsequent scoring notes at the **same time are included**. For a queued activation, notes at its actual start are also included: coverage requires `noteIndex > triggerIndex` and `start <= note.time <= start + duration`. Notes between the original trigger and delayed start receive no benefit from that activation. There is no old 10-microsecond tolerance. Single combo starts at zero and caps at 1.11. Applicable Fever metadata doubles note scores inclusively between its start and end.
+
+The shared scorer retains binary64 arithmetic and staged floors:
 
 ```text
-roomScore = floor(rawAverageScore + otherTeamScore)
+coefficient = (3 + 0.03*(playLevel - 5)) / scoringNoteCount
+inner = floor(((teamPower * coefficient * combo) * averageJudgment) * fever)
+extra = floor(inner * skillMultiplier) - inner
+orderScore = sum(inner) + sum(selectedWindowExtras)
 ```
 
-In the Bestdori-compatible wrapper this corresponds to
-`Math.floor(entry.score + entry.teamScore)`, while the displayed own score may
-still be `Math.floor(entry.score)`.
-
-`otherTeamScore` is derived from the room score rate and the other players'
-power, so it can be fractional. Flooring the own average score first changes
-the result when
-`frac(rawAverageScore) + frac(otherTeamScore) >= 1`; those teams end up one
-point lower than the Bestdori-compatible raw-average formula.
-
-This rule matters for validation because the displayed own score and the room
-score intentionally use different rounding points: display may show a floored
-own score, while room score and event-point calculation use the raw average
-before the final room-score floor.
-
-### Skill Resolution
-
-Skills must be resolved after the full five-card team is known, because some
-skills depend on team context:
-
-- all members belonging to the same band;
-- all members having the same attribute;
-- PERFECT-only score-up;
-- score-up rate increasing on each PERFECT note.
-
-A skill cache key cannot be only `skillId + skillLevel`. HHWX includes at least:
-
-- `skillId`;
-- `skillLevel`;
-- `server`;
-- `sameBandId`;
-- `sameAttribute`.
-
-Current support includes regular score-up skills, same-band and same-attribute
-conditional score-up skills, PERFECT-only skills, below-GREAT reduction,
-below-GREAT interruption, and per-PERFECT increasing rates. In the current
-PERFECT/GREAT-only model, below-GREAT interruption does not occur and below-
-GREAT reduction only matters for outcomes the model does not currently
-simulate.
-
-### Full-Team Score Evaluation
-
-For each complete five-card team, HHWX:
-
-1. recomputes same-band and same-attribute context;
-2. resolves each card's real skill behavior;
-3. enumerates the five possible leaders;
-4. scores free live by assigning the six trigger windows to the five team
-   skills, with the sixth activation handled by the leader skill;
-5. scores multi live with four fixed external player skills plus the selected
-   leader skill, then handles the sixth activation according to the encore
-   source;
-6. computes average score, max score, min score, representative max-score skill
-   order, and display fields.
-
-Because skill windows are non-overlapping, max/min assignment can be solved
-exactly with bitmask DP. The reachable DP states are the used-skill masks
-(`2^5` masks), and the transition count is roughly `5 * 2^5`. This is
-equivalent to enumerating all `5!` full permutations for this model, but it
-reuses partial assignments and is easier to extend to min/max scores and plan
-counts.
-
-For example, mask `00101` means skills 1 and 3 have already been assigned; the
-next transition only tries skills not present in that mask.
-
-### Event Points
-
-Parameter-bonus events add bonuses directly to card power. For those events,
-event point maximization is equivalent to score maximization because the event
-bonus affects score-producing power.
-
-Point-bonus events first compute song score or room score, then compute base
-points and main-team point bonus:
-
-```text
-eventPointBase = floor(basePt(score, roomScore) * (1 + mainPointBonusRate))
-eventPoint = floor(eventPointBase * liveBoostMultiplier)
-```
-
-`basePt(score, roomScore)` is selected by event type and event data. The search
-algorithm only requires the monotonic relationship between score, room score,
-and resulting base points.
-
-Challenge Live, Versus Live, Team Festival, Live Boost, CP, ranking, and win/loss
-flags can affect result display, but they do not change the relative team order
-unless they change the score or point formula used by the active target. Results
-carry `eventPointOptions` so the UI can switch display values without rerunning
-the search.
-
-### Mission-Live Support Band
-
-`mission_live + eventPoint` enables support-band scoring.
-
-HHWX retains fractional support power in search and event-point calculation,
-and floors the combined value only for its label, matching Bestdori's
-`Math.floor(entry.supportBP)`. Do not apply the medley float32 display helper to
-this Bestdori-compatible value.
-
-This differs from the [audited CN 9.4.4 native support path](medley-foundation.md#native-cn-power-display-and-scoring-boundary-2026-09-14):
-`EventSupportBandUtility.calculateEventSupportBandDetail` (`0x341c77c`) multiplies
-each card's P/T/V by the support rate as float32, then truncates each parameter
-at `0x341ca84`/`0x341ca88`, `0x341caac`/`0x341cab0` and
-`0x341cad4`/`0x341cad8`. `EventSupportBandData.CalculatedTotalParam`
-(`0x35de1c0`) adds those integers; `CalculateEventSupportBandTotalParam`
-(`0x341d7a0`) adds the card integers for `EventSupportBandDialog.initializeTotalParam`
-(`0x35b89e8`). Flooring HHWX's final support total does not reproduce that
-per-parameter arithmetic. The display correction preserves the existing
-Bestdori-compatible support search and event-point contract.
-
-Rules:
-
-- support candidates come from owned, non-excluded cards;
-- a support card cannot reuse a main-team `cardId`;
-- support band members cannot repeat characters;
-- a different card of the same character as a main-team card may be used in
-  support;
-- support power is computed from the card itself plus mission-live event bonus;
-- support does not use area items;
-- support affects event points only. It does not affect song score, main-team
-  power, skill context, or area-item configuration.
-
-Mission-live search must model support opportunity cost. A strong card can be
-valuable in the main team and also be one of the best support candidates; using
-that card in the main team may remove support power from the remaining support
-pool. HHWX therefore includes support power in candidate compression and upper
-bounds instead of treating support as a display-only post-processing step.
-
-Once the main team is fixed, the support problem is:
-
-```text
-choose up to five support cards with distinct characters, excluding main-team cardIds, maximizing supportPower sum
-```
-
-For each character, only the available card with the highest `supportPower` can
-matter. Taking the top five remaining character representatives is optimal.
-
-Mission-live event point order is:
-
-```text
-eventPoint =
-  floor(basePt(score, roomScore) * (1 + mainPointBonusRate))
-  + floor(supportBandPower / 3000)
-```
-
-Point-bonus targets usually cost more than pure score targets. A score target
-can rank candidates mostly by score-producing power and skill contribution. An
-event-point target must additionally track main-team point bonus, convert score
-or room score through the event formula, and keep objective-specific upper
-bounds. The heaviest current path is `mission_live + multi + eventPoint`,
-because it also includes room score, support opportunity cost, support upper
-bounds, and real support selection.
-
-## Search Algorithm
-
-Each area-item configuration is searched independently:
-
-1. Compute effective power for every card under that configuration.
-2. Drop globally dominated configurations.
-3. Compress dominated candidate cards safely.
-4. Evaluate high-potential seed teams to establish a top-N threshold early.
-5. Run branch-and-bound DFS over five distinct characters.
-6. Apply request constraints by safe power bounds or by exact full-team
-   evaluation.
-7. Resolve real skill context and exactly score each complete team that survives
-   bounds.
-8. Sort results by target value, then by score or power tie-breakers, leader
-   skill strength, and stable card IDs.
-
-The DFS state tracks selected cards, used-character bitset, current power,
-current point bonus, support opportunity cost, team context state, and active
-upper-bound data.
-
-HHWX does not use fixed Top-K candidate clipping in exact mode. Heuristics may
-order branches, build stronger thresholds, or produce bounded fallback results,
-but they must not remove a candidate from the exact search space unless the
-removal has a safety proof.
-
-### Where The Speedup Comes From
-
-The main performance gain does not come from making a single score formula
-evaluation substantially less costly. It comes from preventing weak branches from
-reaching the high-cost part of the pipeline: real skill-context resolution,
-leader comparison, skill-window scoring, event-point conversion, support-band
-selection, and result object construction.
-
-The important mechanisms are:
-
-- candidate compression reduces DFS width before five-card enumeration starts;
-  because a team has five card slots, even moderate per-character reduction can
-  compound into a much smaller team space;
-- seed teams fill the top-N list early, so branch-and-bound has a useful
-  threshold sooner;
-- suffix upper-bound indexes make the frequent "can this branch still enter
-  top-N?" check low-cost enough to run throughout DFS;
-- objective-specific bounds use score, point bonus, and support-band dimensions
-  according to the selected target instead of using one generic power proxy;
-- the optional correlated bound removes near-threshold optimistic combinations
-  that cannot be realized by any remaining card set;
-- mission-live support opportunity cost is included before real support
-  selection, so branches affected by support opportunity cost can be rejected
-  before scanning and constructing the actual support band;
-- target-only evaluation delays detailed max/min skill order, support card
-  details, and display metadata until a team can enter the current top-N list.
-
-In short, HHWX uses low-cost checks to prove many branches cannot affect the
-result list, and reserves high-cost exact scoring for teams that still can.
-
-### Objective Adapters
-
-The three single-song targets share one branch-and-bound kernel. Target-specific
-adapters define which dimensions matter:
-
-```text
-score:
-  score upper bound
-
-eventPoint:
-  score upper bound
-  main-team point bonus upper bound
-
-mission_live + eventPoint:
-  score upper bound
-  main-team point bonus upper bound
-  support-band point upper bound
-```
-
-This keeps scoring, area-item enumeration, card preparation, chart preparation,
-and bound infrastructure shared while preserving target-specific pruning rules.
-
-### Candidate Compression
-
-Candidate compression may delete only cards that are provably dominated.
-
-Base dominance requires:
-
-- same character;
-- same skill signature;
-- same band;
-- same attribute;
-- effective power no lower than the deleted card under the active configuration.
-
-`eventPoint` also requires point bonus no lower than the deleted card.
-
-To let card A dominate card B for `mission_live + eventPoint`, A must also have
-`supportPower` no higher than B. This means replacing B with A in the main team
-does not damage the remaining support pool more than B would have. Without this
-condition mission-live support optimization could be changed by compression.
-
-This condition is intentionally opposite to the usual "higher is better" rule:
-for a main-team replacement, high support power can be a cost. If card A is a
-stronger main card but also the best support card for its character, replacing B
-with A may remove more support power from the support pool.
-
-The skill signature is intentionally more specific than `skillId`. It includes
-duration, unification condition type, unification band, unification effect
-value, and relevant score-effect types, values, conditions, and life thresholds.
-
-### Upper Bounds And Pruning
-
-An upper bound is an optimistic estimate of the best result still reachable from
-a partial branch. If even the optimistic estimate cannot reach the current
-top-N threshold, the branch can be discarded without losing an exact result.
-
-Pruning may use only non-underestimating upper bounds. Current upper bounds
-include:
-
-- remaining character maximum power;
-- remaining character skill contribution;
-- remaining point bonus;
-- context-specific bounds for `both`, `same-band`, `same-attribute`, and
-  `mixed`;
-- area-configuration root bound;
-- global support-band point bound for mission live;
-- final optimistic target value before full result hydration.
-
-The branch threshold is the current N-th result in the sorted result list, where
-N is `resultLimit`. Before the list has `resultLimit` entries, score and target
-threshold pruning is disabled because there is no complete top-N boundary.
-
-The first-level bound is low-cost and called frequently. The second-level bound is
-attempted only near the current threshold. It uses a small Pareto/DP estimate to
-bind remaining power, skill contribution, and point bonus together instead of
-combining unrelated maxima from different cards. If the tighter bound cannot be
-proven safe or is too expensive, the search falls back to the first-level bound.
-
-Changing the threshold window for attempting the correlated bound affects speed
-only; it must not affect exactness.
-
-### Seed Teams
-
-Seed teams are used only to raise the top-N threshold earlier:
-
-- `score`: prioritize high power and high skill potential;
-- `eventPoint`: mix power and point bonus;
-- `mission_live + eventPoint`: also penalize high support opportunity cost for
-  main-team cards.
-
-Poor seeds can make the search slower, but they cannot change correctness
-because DFS still covers the full exact search space.
-
-### Caches
-
-Current cache layers include:
-
-- chart timeline by `chartCacheKey + fever`;
-- inner score rate by chart, accuracy, and combo options;
-- skill-window contribution by skill, skill level, context, and accuracy;
-- skill rate profile by chart, server, skill, and context;
-- per-request effective-power matrices for area-item configurations;
-- worker-lifetime fetch promises for master data, charts, and event bonuses,
-  invalidated on failure.
-
-These caches reduce repeated work only. They must not change the search space or
-the final score formula.
-
-### Target-Only Evaluation And Hydration
-
-Full result objects are expensive to build. The search therefore separates:
-
-- target-only evaluation: compute only the score, room score, event points,
-  leader, and fields needed to sort the team;
-- hydration: build detailed skill order, max/min score fields, support cards,
-  and display metadata only when the team can enter the current top-N list.
-
-This does not change scoring. It delays result-object construction.
-
-## Exact And Bounded Results
-
-`searchMode = "exact"` is allowed only when DFS finishes full enumeration and
-every pruned branch was rejected by a safe upper bound.
-
-If the time budget interrupts the search, the response must be marked bounded:
-
-- `searchMode = "bounded"`;
-- `isExhaustive = false` or `timedOut = true`;
-- any reported upper-bound gap is remaining uncertainty, not additional score
-  achieved by the listed team.
-
-The UI must not present bounded results as proven optimal.
-
-## Correctness Argument
-
-### Search-Space Coverage
-
-Every legal solution consists of:
-
-```text
-area configuration
-+ five main cards with distinct characters
-+ leader choice
-+ skill-window assignment
-+ optional support band
-```
-
-The algorithm enumerates every area-item configuration and every legal
-five-card team under that configuration. For a complete team, it evaluates every
-leader choice and computes the exact skill-window assignment. For mission live,
-once the main team is fixed, the support band is solved optimally. Therefore,
-every unpruned legal team is scored exactly.
-
-### Compression Safety
-
-If card A dominates card B, both cards have the same character and cannot appear
-in the same main team. For any legal team containing B, replacing B with A keeps
-the character set and skill-relevant identity unchanged, does not reduce power,
-does not reduce point bonus, and in mission-live mode does not increase support
-opportunity cost. The replacement objective value is therefore no worse, so
-deleting B cannot delete the unique optimum.
-
-### Pruning Safety
-
-Every branch upper bound is the exact current partial value plus optimistic
-remaining contribution. It may overestimate the best completion, but it must not
-underestimate it. If even that optimistic value is below the current top-N
-threshold, no completion under the branch can enter the result list, so pruning
-is safe.
-
-The final-power constraint follows the same rule: a branch can be discarded only
-when selected power plus the best remaining distinct-character power upper bound
-is still below `minTotalPower`.
-
-### Support-Band Greedy Optimality
-
-With the main team fixed, support selection is a maximum-sum choice of up to
-five cards with distinct characters after excluding main-team card IDs. Only the
-best available card for each character can be useful. Taking the top five
-character representatives is therefore optimal.
-
-### Exact Result Condition
-
-The result can be called exact only when all area configurations and all DFS
-branches have either been fully evaluated or pruned by safe bounds. If the time
-budget stops the search, the result is bounded, even if the incumbent team looks
-strong.
-
-## Difference From Bestdori-Compatible Baseline
-
-The Bestdori-compatible baseline is local validation material, not an external
-runtime dependency. HHWX uses it to check formula compatibility and compare
-performance against the saved Bestdori Team Builder asset bundle used during
-validation. It is not distributed as a public reproducibility suite.
-
-Bestdori Team Builder is an important reference for both formula compatibility
-and performance comparison. The saved Bestdori-compatible baseline uses
-heuristic search, compact skill representations, and cached score estimates; it
-is useful as a controlled comparison target, but it does not provide an exact
-optimality proof. Historically, compact skill estimates keyed close to
-`skillId + skillLevel` cannot fully express same-band or same-attribute
-conditions in partial-team search.
-
-HHWX differs by:
-
-- enumerating the legal search space and pruning only with safe upper bounds;
-- resolving skill context after the full five-card team is known;
-- including mission-live support in the exact target and upper bounds;
-- enumerating global area-item configurations rather than maximizing each group
-  independently;
-- using raw average score in multi-live `roomScore`;
-- explicitly returning `exact` or `bounded`.
-
-The Bestdori-compatible baseline is therefore a formula and performance
-reference, not proof that the exact search is correct.
-
-## Implementation Ownership
-
-The public entry point [`bandori-team-search.ts`](../../src/lib/bandori-team-search.ts) re-exports `searchBandoriBestTeams`. The main call path is:
-
-| Responsibility | Main implementation | Role in the calculation |
-| --- | --- | --- |
-| Search entry and result assembly | [`single/search.ts`](../../src/lib/bandori/team-builder/single/search.ts) `searchBandoriBestTeams` | Normalizes request-level options, runs every surviving global area configuration and assembles the public response. |
-| Shared preparation | [`single/search-prep.ts`](../../src/lib/bandori/team-builder/single/search-prep.ts) `buildSearchPrecomputedData` | Prepares cards, chart scoring data, event settings and reusable objective state once per request. |
-| Configuration planning and exhaustive DFS | [`single/search-execution.ts`](../../src/lib/bandori/team-builder/single/search-execution.ts) `buildConfigurationSearches` and `runExactDfsSearch` | Builds each configuration's search scope, visits legal five-character combinations and applies only the configured safe cuts. |
-| Complete-team evaluation | [`core/team-evaluation.ts`](../../src/lib/bandori/team-builder/core/team-evaluation.ts) `evaluateTeam` | Resolves the final five-card context, chooses the best legal leader and calculates the result object. |
-| Skill-window scoring | [`core/scoring.ts`](../../src/lib/bandori/team-builder/core/scoring.ts) `calculateBestScoreForNonOverlappingSkillWindows` | Calculates the score target from the prepared chart and resolved skills. |
-| Search upper bounds | [`core/character-bounds.ts`](../../src/lib/bandori/team-builder/core/character-bounds.ts) `estimateSearchScopeTargetUpperBoundFromScore` and `estimateCorrelatedSearchScopeTargetUpperBound` | Bounds the best completion still reachable from a partial character selection. |
-| Mission-live support band | [`core/cards.ts`](../../src/lib/bandori/team-builder/core/cards.ts) `resolveSupportBandForTeam` | Selects the support band after the complete main team is known. |
-
-The core layer must not import `single`.
-
-## Verification
-
-The repository provides a focused regional-skill check and the ordinary application checks:
-
-```bash
-npm run test:team-builder
-npm run typecheck
-npm run lint
-npm run build
-```
-
-Formula or search changes need a focused regression case that would fail under the incorrect behavior. Private profiles and machine-specific benchmark reports may supplement these portable checks, but they are not part of the public algorithm contract and must not be treated as reproducible project-wide performance claims.
+PERFECT/GREAT effects, continued-PERFECT and rate-up skills retain the medley analytical simplifications. There is no sampled judgment stream, separately settled P/G expectation, tracked life/skill state, combo-break simulation or native f32 emulation. Probabilities describe skill order under this model, not a human's chance of attaining a literal in-game score. The shared kernel still adds independently rounded window extras; single-song scheduling now prevents overlapping activations, while medley retains its additive overlap policy.
+
+Cooperative room score adds the no-floor other-player power estimate to raw own expectation, then floors once, retaining the existing `1e-5` room-only tolerance. Mission support selects up to five remaining cards with distinct characters, excluding main instances and excluded cards. Another card of a main-team character may serve in support. Support contributes `floor(power/3000)` Pt. Support opportunity cost is recomputed per team and does not discard main-card candidates.
+
+## Search and proof
+
+One-team search enumerates area configurations and character groups, choosing one card per selected character. It reuses Rust parameter/scoring arithmetic without invoking three-team search on dummy songs.
+
+Directed-upward power and window bounds relax context/position constraints. Each timing bound covers the union from the original trigger to the latest possible queued start plus duration, using the longest candidate/context/external duration and upward-rounded recurrence. It deliberately overcounts possible coverage; the old fixed-window bound would be unsafe. Character suffix DP bounds power P, base-plus-weighted-skill coefficient K, bonus and exactly one eligible leader. It also bounds `tP + K/t` for three positive values of t. Since P,K are nonnegative, both `Pmax*Kmax` and `(max(tP+K/t))²/4` are upper bounds; their minimum remains safe. Shared rounding enclosures cover reassociation, skill multipliers and weighted-integer conversion; the cooperative room estimate encloses weighted-rate products and sums with a 256-operation rounding factor. Cooperative coefficients independently maximize each player's weighted position contribution, relaxing the shared-seat constraint; the former 1/5 coefficients would be unsafe. Event bounds relax own and other-player terms separately, never subtracting an upper own score from an upper room score to manufacture an unsafe bound.
+
+Chart coefficients, queued-window envelopes, skill/bonus suffix tables and the support ceiling are prepared once per request. Window sums reuse the exact binary64 `(duration, skill delta bound)` bits; the skill delta and its failure checks are still evaluated before lookup. This cache contains at most four contexts per card plus four external skills and is released after preparation. Configuration-specific power and correlated `tP+K/t` tables remain per configuration. Character-group order is fixed; sorting cards within a group does not change its suffix maxima. This removes repeated work without changing bound arithmetic or traversal priorities.
+
+Normal-event Pt search adds a bonus-conditioned suffix DP for individual and cooperative play, covering formula versions 0/1/2. Each card's bonus is rounded upward to an exact binary bin of 1/32 solely for this bound. For each suffix, remaining card count and total bin, the table bounds power and skill coefficients with zero or exactly one leader. Fixed-prefix contributions and each reachable suffix bin give independent own-score and other-player bounds, passed to the unchanged event upper formula; maximizing across bins covers every completion. This preserves score/bonus correlation without assuming actual cooperative Pt is monotone in power. Actual bonuses, scoring and eligible cards are unchanged. Bonus summation/rounding is enclosed before applying the monotone round-to-cent operation. The stronger bound is checked only after the original bound fails to prune with an incumbent; equality remains searchable. Zero bonus, more than 128 total bins, unsupported event rules or unsafe arithmetic retain the original bound. Its bounded storage is included in the budget estimate before allocation.
+
+Only a bound strictly below the incumbent target prunes; equality remains searchable for ties. Proved infeasibility can close a branch before an incumbent exists. Unknown, non-finite and overflow-unsafe bounds cannot prune. Polling preserves timeout/cancellation, and arithmetic/hydration failures cannot become `exact`.
+
+Storage grows with cards, characters, notes and retained results; five-card candidates are not materialized. A conservative workspace estimate, including a 1 MiB allowance for the bounded timing cache and formation map, is checked against the Worker budget before search. Stop polling also occurs before every complete-team evaluation. `estimatedSearchStorageBytes` is an estimate, not browser RSS, WASM heap capacity or a process hard limit; input serialization and runtime overhead are excluded. Heavy computation stays off the main thread.
+
+## Single/medley alignment audit
+
+The two additional **skill-execution model** features are the weighted order/formation model and the post-skill queue. Their effects on window coverage, expectation and peak probability belong to those two features. This does not mean different live modes have identical scoring and settlement rules.
+
+| Boundary | Shared contract or intentional difference |
+| --- | --- |
+| Profile, regional masters, skills | Same `buildSearchRoster`, physical IDs, exclusion rules, CN null fallback versus explicit zero, skill level/duration and full-team band/attribute context. External players alone use their own condition inputs. |
+| Character and team parameters | Same v4 separate bonus floors, owned area configurations, item applicability, fractional power and canonical leader accumulation. Event type determines whether event bonuses modify power or Pt; medley always uses its parameter-power policy. |
+| Chart and skill boundaries | Same scoring entities, six triggers, stable equal-beat sorting, BPM-anchored time, trigger exclusion, inclusive starts/ends and no epsilon. Only single schedules actual starts. |
+| Note score and analytical skills | Same binary64 coefficient, judgment/multiplier functions, covered-note counting and two staged floors. No additional life, native f32 or sampled-judgment model in either mode. The queued-window helper is checked against all shared skill behaviors and P=0/0.73/1. |
+| Combo and Fever | Intentional mode rules: single resets combo and caps at 1.11; medley carries combo across songs and caps at 1.34. Single uses Fever in cooperative/festival modes; medley has no Fever. |
+| Order and encore | Single individual/cooperative play uses 1024-path/96-order weights and optimizes card/player formation respectively; cooperative encore follows its selected player. Medley retains uniform-120 orders and center-leader encore. |
+| Expectation and maxima | Single keeps fractional expectation and maximizes it over eligible formations; peak probability uses the peak formation and all tied orders. Medley floors each song's uniform expectation before summing and retains its existing maximum output. No global maximum-score roster objective is added. |
+| Pt, room and support | Intentional event contracts: single applies its event formula to E(score), with the existing room estimate/floor and mission support; medley applies its own formula to the three-song total. Live Boost, CP, rank and result options remain presentation choices. |
+| Display and serialization | Same power-display helper and integer score formatter; medley aggregate display converts each team to f32 before summing. Single support display keeps its explicit floor. Both use the same Rust JSON decoder; neither silently changes numeric parsing. |
+| Search and delivery | One-team versus three-disjoint-team search and different stable tie policies are deliberate. Both retain fail-open unsafe bounds, honest incomplete status, recomputed hydration and real Worker/WASM delivery. |
+
+The audit corrected the extra parameter-accumulation discrepancy in single only. Medley v4 normalization, parameter/scoring implementation, search and hydration remain frozen. Future medley alignment should explicitly port the two skill-execution features while retaining the mode-specific rows above; applying a single-song result formula to medley would change its contract.
+
+## Agreed optimization direction
+
+Optimization is staged by objective: first establish and, where measurements justify it, improve expected-score search; then optimize the additional trade-offs required by Pt. Score and Pt retain one search framework with objective-specific bounds and traversal priorities. The objective, event formulas, rounding, formation analysis and deferred maximum-score roster search remain as defined above.
+
+The weighted-order model and full 0.75-second queue have completed their correctness and delivery baseline checks. The first expected-score optimization reuses request-invariant upper preparation. Normal-event Pt search now also uses the bonus-conditioned bound described above, retaining scoring and traversal. Equal-Pt secondary-score pruning, branch-specific support, cooperative completion DP and individual position-matching bounds remain separate, measurement-driven options. Maximum-score roster search remains deferred. Exactness refers to the continuous-time analytical model specified above.
+
+The original optimization baseline was single v3 after mainline #216/#218 alignment, queued timing and canonical leader-parameter accumulation. Cooperative weighted positions advance this to v4. These are correctness updates, not performance experiments. Regenerate single validation inputs; compare medley against the frozen, already-verified v4 baseline with identical input bytes. Medley rules, scoring, search, stable winner tie-breaking and proof semantics must remain unchanged. Shared normalization, JSON number parsing, parameter arithmetic, scoring and medley bounds are outside the subsequent optimization scope. Rust changes still rebuild the shared WASM package, so isolation requires regression evidence rather than only a file boundary.
+
+1. **Expected-score stage:** use individual and cooperative play to assess the common score bounds, branch cost and time to find a good incumbent. Reuse the completed score and score-linked smoke cases, and add controlled counterparts to retained Pt cases by changing only the objective to score, preserving event-dependent power and all other inputs. Improve only measured common-search bottlenecks, one change per experiment, with scoring fixed. This stage establishes correctness, coverage and an adequate baseline within the existing budget; it does not require exhausting all possible score optimizations before proceeding to Pt.
+2. **Pt stage:** the first change conditions power and skill coefficients on bonus bins, initially targeting the retained cooperative timeouts and then covering individual play through the same zero/one-leader DP. Traversal remains fixed. Secondary expectation bounds for equal Pt, Pt-aware traversal and branch-specific mission support are separate later experiments, justified by remaining measured bottlenecks. Pt search still considers the full eligible roster: it must not first select score-optimal teams or a score top N and optimize Pt only within that subset.
+
+Every new pruning rule must agree with independent exhaustive small-case completions, including partial branches, rounding boundaries and ties. Preserve directed upper enclosures and fail-open behavior for unknown bounds; do not truncate the candidate pool. Validate each stage on its target cases, then rerun the full 32-case single-song smoke subset at the same 30-second search budget and run the relevant public checks. Include the controlled score counterparts when verifying common-search changes. Compare elapsed time, visited branches, full-team evaluations, incumbent timing, exact completion and memory: fewer branches alone do not prove a speedup.
+
+For iterations confined to single-song private implementation, verify the rebuilt WASM with public binding tests; add representative medley cases only for a concrete unresolved risk. Rebuilding the shared package or reaching a phase milestone alone does not trigger the full 80-case medley comparison. Run that comparison only when medley or the shared logic/delivery boundaries it depends on actually change, evidence suggests a medley regression, or the user explicitly requests it. Use matching inputs and budgets to compare the exact best result, stable ties, proof behavior and retained-team hydration. Check WASM size and initialization when rebuilding the package; measure medley runtime when a relevant performance risk exists. Reuse successful evidence when the relevant source, artifact and environment are equivalent. Record source and artifact provenance; historical archive results alone do not validate changed behavior.
+
+Correctness comparisons reuse frozen input bytes and verified baseline outputs, with rules versions and source/artifact hashes. Routine iterations run only the new implementation; unchanged reference code is not rerun to reproduce existing answers. Run an old implementation only for a missing new-input baseline, a specific baseline discrepancy, or necessary representative timing measurements. An incomplete baseline remains incomplete evidence. Reuse existing timing records with their environment and date; if they are not comparable, report the new runtime without claiming a precise speedup ratio. Correctness comparison and performance remeasurement are separate decisions.
+
+## Delivery and compatibility
+
+- [`single-source.ts`](../../src/lib/bandori/team-builder/single-source.ts) bridges UI event/settings policy to shared medley roster/chart normalization.
+- [`single.rs`](../../crates/bandori-medley-search/src/single.rs), `single_score.rs`, `single_upper.rs` and `single_event.rs` own one-team search. The common scorer remains `exact_score.rs`.
+- Normalized versions: `hhwx-single-search-input-v1` and `hhwx-single-medley-foundation-v4`; obsolete and unknown versions fail validation.
+- `runSingleSearchJson` ships through the existing `medley-wasm/pkg/` package. Regenerate after shipped Rust changes; rebuild the Worker import graph and WASM asset together.
+- Public profile/master/chart APIs and persisted card IDs are unchanged. The UI enables external skill conditions by default, including when older live preferences omit `conditionSatisfied`; an explicitly saved false remains false. The UI always sends a boolean. Low-level adapter callers that omit the field still receive the base skill effect. The old callable TypeScript search export is removed; `bandori-team-search.ts` retains display/settings types only. Historical comparisons require an explicit clean pre-retirement checkout.
+- Medley uses `hhwx-medley-bestdori-v4`; its input schema, uniform-order scoring, three-song search and output semantics remain unchanged.
+
+Run `npm run test:team-builder` for the actual generated binding against independent note/formation/order enumeration, regional fallback and zero, endpoints, Fever, combo limits, Pt, support, cooperative inputs and stop/error paths. Rust tests compare search and every partial bound with complete enumeration. Run affected shared-source and medley binding regressions; see [Medley Testing](medley-testing.md). Browser verification must execute the real Worker and regenerated WASM, including progress, terminal status, cancellation and result display. Builds alone do not prove those paths.

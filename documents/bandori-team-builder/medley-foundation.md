@@ -2,6 +2,8 @@
 
 Chinese version: [medley-foundation.zh-CN.md](medley-foundation.zh-CN.md)
 
+Single-song search reuses these foundations with its own weighted formation and event rules; see [Single-Song Team Builder](single-song-algorithm.md). The three-song rules below are unchanged.
+
 ## 1. Purpose
 
 The medley team builder chooses three five-card teams for three ordered songs. All three teams share one area-item configuration, no physical card may be reused across teams, and every team must contain five different characters. The optimization target is the sum of the three teams' average song scores.
@@ -211,6 +213,8 @@ note time <= trigger time + skill duration
 
 No epsilon is added. When windows overlap, each window computes and floors its own extra independently; the extras are then added. Multipliers are not merged before flooring.
 
+Medley v4 deliberately retains fixed trigger windows and uniform orders. The single-song weighted-order model and 0.75-second post-skill queue do not run on this path. See the [alignment audit](single-song-algorithm.md#singlemedley-alignment-audit) for the common scoring rules and mode-specific differences that must survive any future timing migration.
+
 ### Expected skill order and leader
 
 The first five triggers use the five team skills in every one of the `5! = 120` orders with equal probability. The sixth trigger repeats the leader skill. Each member therefore occupies each of the first five windows in exactly `4! = 24` orders.
@@ -259,7 +263,7 @@ HHWX differs from that single-song path where the medley product requires differ
 - the first recognized score row and an explicit zero are preserved;
 - `score_only_perfect` is represented as `perfect_only`, with zero GREAT multiplier, even though the pinned upstream function does not recognize it.
 
-An audit of native JP client 10.1.3 using master version `20260805110509` and skill-effect SHA-256 `d98e76c0198a6a714be1d38e4696a044242c8384b905426a311c8c2b0961aebc` found behavior outside this calculator model: biased random skill-order sampling, single-precision scoring, a combo master table, life-conditioned triggers, and frame/runtime handling of skill-window conflicts. HHWX does not model those behaviors. Changing that boundary would require a new scoring rule version and corresponding reference cases.
+An audit of native JP client 10.1.3 using master version `20260805110509` and skill-effect SHA-256 `d98e76c0198a6a714be1d38e4696a044242c8384b905426a311c8c2b0961aebc` found behavior outside this calculator model: biased random skill-order sampling, single-precision scoring, a combo master table, life-conditioned triggers, and frame/runtime handling of skill-window conflicts. Medley does not model those behaviors; the migrated single-song calculator models biased skill order separately. Changing that boundary would require a new scoring rule version and corresponding reference cases.
 
 ### Native CN power display and scoring boundary (2026-09-14)
 
@@ -303,8 +307,8 @@ At HHWX commit `a622ca6dd5a6df88d2aa010d465e977927d8abd8` (`hhwx-medley-bestdori
 | --- | --- |
 | Medley results, including the retained maximum-score candidate | Each team label truncates its float32 power; the total uses floating team contributions rather than integer team labels. |
 | [Player query](../bandori-player-search.md) | Main-band power sums floating card powers including enabled area items, then truncates. Card overlays truncate individually. Neither adds an event bonus. |
-| Single-song team builder | `core/team-evaluation.ts` already floors full-team power before scoring, following Bestdori's caller. Its integer result needs no display conversion. This remains distinct from medley scoring. |
-| Single-song support band | Floors the raw support total for display, matching `Math.floor(entry.supportBP)` in Bestdori. Fractional support power remains in search and event-point calculation. This is not the native support-band parameter rule; see [the support comparison](single-song-algorithm.md#mission-live-support-band). |
+| Single-song team builder | The migrated Rust search preserves fractional team power for scoring. Its displayed team power uses the same float32-then-truncate helper as medley. |
+| Single-song support band | Floors the raw support total for display, matching `Math.floor(entry.supportBP)` in Bestdori. Fractional support power remains in search and event-point calculation. This preserves the support scoring contract in [Single-Song Team Builder](single-song-algorithm.md#scoring-scope); it does not simulate native support-band parameters. |
 | Card detail, profile card collection/editor, temporary cards and support-card thumbnails | Base card powers are already integer sums of character parameters. The shared thumbnail uses the same display helper and preserves hidden/unavailable states. Card detail displays the existing integers directly. |
 
 The general `formatLocalizedInteger` still rounds other numeric values. Power consumers perform their domain-specific conversion before using it; changing this global formatter would also change scores, ratings and unrelated counts.

@@ -26,3 +26,7 @@ The configured storage budget covers local rows and indexes, score-cache capacit
 The browser binding in `bandori-medley-wasm` runs search, reports strict incumbent improvements and hydrates the retained solutions. The Team Builder Web Worker owns the deadline, progress throttling and mapping to frontend display objects.
 
 See [Bandori Medley Exact Search](../../documents/bandori-team-builder/medley-search.md) for the full proof and [Bandori Medley Testing and Verification](../../documents/bandori-team-builder/medley-testing.md) for runnable checks and private-regression boundaries.
+
+## Single-song mode
+
+`single.rs`, `single_score.rs`, `single_upper.rs` and `single_event.rs` add one-team search to the same package. They share roster validation, canonical leader-parameter arithmetic and `exact_score.rs`; weighted formation expectations, the 0.75-second queued activation model, single combo/Fever and event objectives are mode-specific. The medley v4 three-song model remains unchanged. See [Single-Song Team Builder](../../documents/bandori-team-builder/single-song-algorithm.md) for contracts, the alignment audit and proof boundaries.

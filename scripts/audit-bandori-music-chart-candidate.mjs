@@ -3,7 +3,15 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { prepareBandoriChart } from "../src/lib/bandori/team-builder/core/chart.ts";
+import { normalizeSingleScoringChart } from "../src/lib/bandori/medley-foundation/chart.ts";
+
+function prepareChart(chart) {
+  const { notes, fever } = normalizeSingleScoringChart(chart, true);
+  const triggers = notes.filter(note => note.isSkillTrigger);
+  return { notes, fever, notesCount: notes.length,
+    skillStartNotes: triggers.map(note => note.noteId + 1),
+    skillTriggerTimes: triggers.map(note => note.timeSeconds) };
+}
 
 function parseArguments(argv) {
   const values = new Map();
@@ -88,7 +96,7 @@ function unwrapSongs(payload) {
 }
 
 function chartTimeline(chart) {
-  return chart.notes.map(({ beat, time, fever }) => ({ beat, time, fever }));
+  return chart.notes.map(({ timeSeconds }, index) => ({ timeSeconds, fever: chart.fever[index] }));
 }
 
 const slideEndGameNoteTypes = new Set([
@@ -258,7 +266,7 @@ for (let index = 0; index < cases.length; index += 1) {
     throw new Error(`candidate hash mismatch: ${key}`);
   }
   const rebuiltChart = await readJson(candidateObjectPath);
-  const rebuilt = prepareBandoriChart(rebuiltChart, song, current.difficulty);
+  const rebuilt = prepareChart(rebuiltChart);
   const checks = {
     candidateMetadataNotes: rebuilt.notesCount === current.expectedNotes,
   };
@@ -275,7 +283,7 @@ for (let index = 0; index < cases.length; index += 1) {
       current.compatibility,
       key,
     );
-    bestdori = prepareBandoriChart(normalizedBestdoriChart, song, current.difficulty);
+    bestdori = prepareChart(normalizedBestdoriChart);
     Object.assign(checks, {
       preparedFull: same(rebuilt, bestdori),
       timeline: same(chartTimeline(rebuilt), chartTimeline(bestdori)),
@@ -307,7 +315,7 @@ const counts = Object.fromEntries(dimensions.map((dimension) => [
   applicableCounts[dimension] - mismatchKeys[dimension].length,
 ]));
 const report = {
-  schemaVersion: "hhwx-bandori-music-chart-consumer-audit-v4",
+  schemaVersion: "hhwx-bandori-music-chart-consumer-audit-v5",
   generatedAt: new Date().toISOString(),
   inputs: {
     candidate: candidatePath,
@@ -317,7 +325,7 @@ const report = {
     songsSha256: await sha256File(songsPath),
   },
   contract: {
-    consumer: "prepareBandoriChart",
+    consumer: "normalizeSingleScoringChart",
     blockingDimensions: dimensions,
     rawEntityEquality: "informational for ordinary charts only; raw-verified premature Slide End recovery is applied to the Bestdori baseline; multiRange does not read Bestdori",
   },

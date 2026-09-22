@@ -1,6 +1,5 @@
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import {
-  searchBandoriBestTeams,
   type BandoriTeamSearchDifficulty,
   type BandoriTeamSearchConstraints,
   type BandoriTeamSearchEventType,
@@ -12,7 +11,6 @@ import {
   type BestdoriChartEntity,
   type BestdoriSongMaster,
 } from "@/lib/bandori-team-search";
-import { buildBandoriCharacterBonuses } from "@/lib/bandori-character-bonuses";
 import {
   type BandoriEventBonus,
   type BestdoriAreaItemMaster,
@@ -22,8 +20,6 @@ import {
 import {
   getGameProfileAreaItems,
   getGameProfileCards,
-  getGameProfileCharacterMissionBonuses,
-  getGameProfileCharacterPotentials,
   replaceGameProfileCards,
   type UserGameProfileCardRecord,
   type UserGameProfilePayload,
@@ -39,8 +35,10 @@ import {
   MedleyFoundationInputError,
   type MedleySearchInputV1,
 } from "@/lib/bandori/medley-foundation";
+import { buildSingleSearchInput, type SingleSearchInputV1, type SingleSearchRunV1, type SingleSearchSolutionV1, type SingleSettings } from "@/lib/bandori/team-builder/single-source";
+import { createEventPointOptions, resolveBandoriTeamSearchEventMode } from "@/lib/bandori/team-builder/core/events";
 import { MEDLEY_SEARCH_SOURCE_SCHEMA_VERSION } from "@/lib/bandori/medley-foundation/contracts";
-import initMedleyWasm, { runMedleySearchJson } from "@/lib/bandori/medley-wasm/pkg/bandori_medley";
+import initMedleyWasm, { runMedleySearchJson, runSingleSearchJson } from "@/lib/bandori/medley-wasm/pkg/bandori_medley";
 import { resolveBandoriCardMapForServerWithJpFallback } from "@/lib/bandori/cards/regional-extensions";
 import { getGameProfileCardMaxEpisodeCount } from "@/lib/bandori/cards/game-profile-card";
 import { hasTrainedCardArt } from "@/lib/bandori/cards/training";
@@ -55,10 +53,6 @@ import {
   TeamSearchDataIntegrityError,
   type TimedCacheSnapshot,
 } from "./team-search-data-cache";
-
-// This entry file owns the immutable Worker asset URL. Bump the revision when imported
-// search semantics change, and isolate all in-memory search caches under the same revision.
-const TEAM_SEARCH_WORKER_ALGORITHM_REVISION = "regional-skill-fallback-v1";
 
 type MasterResponse<T> = {
   payload: T;
@@ -184,7 +178,7 @@ type WasmMedleySearchRunResult = {
 };
 
 export type BandoriMedleyFrontendProgressDto = {
-  kind: "medley";
+  kind: "medley" | "single";
   elapsedMs: number;
   timeToBestScoreMs: number;
   bestSoFar: {
@@ -602,7 +596,7 @@ function describeAreaItemConfiguration(
 
 function mapMedleyDisplayCard(
   instanceId: number,
-  input: MedleySearchInputV1,
+  input: Pick<MedleySearchInputV1, "cards">,
   effectiveCards: EffectiveProfileCard[],
   cardsById: CardsResponse,
 ): BandoriTeamSearchResult["cards"][number] {
@@ -687,13 +681,6 @@ function mapMedleyCandidate(
         sameAttribute: cards.every((card) => card.attribute === cards[0]?.attribute) ? cards[0]?.attribute ?? null : null,
       },
       cards,
-      skills: cards.map((card) => ({
-        cardId: card.cardId,
-        cardInstanceKey: card.cardInstanceKey,
-        skillId: card.skillId,
-        skillLevel: card.skillLevel,
-        resolvedSkill: null,
-      })),
       songIndex,
       startCombo,
       notesCount,
@@ -843,6 +830,91 @@ async function runMedleySearch({
   };
 }
 
+async function runSingleSearch(
+  request: TeamSearchWorkerSearchRequest,
+  input: SingleSearchInputV1,
+  settings: SingleSettings,
+  effectiveCards: EffectiveProfileCard[],
+  cardsById: CardsResponse,
+  options: TeamSearchWorkerRunOptions,
+): Promise<BandoriTeamSearchResponse> {
+  await initMedleyWasm();
+  const json = JSON.stringify(input);
+  const started = performance.now();
+  const duration = Math.min(MEDLEY_FRONTEND_MAX_SEARCH_DURATION_MS, Math.max(1000, request.calculation.maxSearchDurationMs || 9000));
+  let finished = started;
+  let lastProgress = started;
+  let bestAt = 0;
+  let pending: SingleSearchSolutionV1 | null = null;
+  const card = (id: number) => mapMedleyDisplayCard(id, input, effectiveCards, cardsById);
+  const publish = () => {
+    const now = performance.now();
+    if (!pending || !options.onMedleyProgress || now - started < MEDLEY_PROGRESS_INITIAL_DELAY_MS || now - lastProgress < MEDLEY_PROGRESS_INTERVAL_MS) return;
+    const cards = pending.memberInstanceIds.map(card);
+    options.onMedleyProgress({ kind: "single", elapsedMs: now - started, timeToBestScoreMs: bestAt,
+      bestSoFar: { totalAverageScore: pending.averageScore,
+        selectedAreaItemIds: input.areaConfigurations[pending.configurationIndex].selectedAreaItemIds,
+        teams: [{ slot: 0, cardIds: cards.map(c => c.cardId), leaderCardId: cards[2].cardId,
+          leaderCardInstanceKey: cards[2].cardInstanceKey, averageScore: pending.averageScore, cards }] } });
+    lastProgress = now;
+    pending = null;
+  };
+  const result: SingleSearchRunV1 = JSON.parse(runSingleSearchJson(json, MEDLEY_FRONTEND_MEMORY_BUDGET_BYTES,
+    () => { publish(); return performance.now() - started >= duration ? "timed_out" : undefined; },
+    (value: string) => { pending = JSON.parse(value) as SingleSearchSolutionV1; bestAt = performance.now() - started; publish(); },
+    () => { finished = performance.now(); },
+  ));
+  const { outcome, details } = result;
+  if (details.length !== outcome.discovered.length) throw new Error("Single-song hydration count mismatch");
+  const eventMode = resolveBandoriTeamSearchEventMode(settings.eventType, settings.liveType);
+  const results: BandoriTeamSearchResult[] = outcome.discovered.map((solution, index) => {
+    const detail = details[index];
+    const cards = solution.memberInstanceIds.map(card);
+    const peakCards = detail.peakMemberInstanceIds.map(card);
+    const multi = input.otherSkills !== null;
+    const actors = ["self", "other1", "other2", "other3", "other4"] as const;
+    const activation = multi ? [] : [...detail.peakActivationOrder, detail.peakMemberInstanceIds[2]].map(card);
+    const pointOptions = createEventPointOptions(solution.averageScore, solution.eventPointBase, settings);
+    const point = pointOptions.options.find(option => option.key === pointOptions.defaultKey)?.eventPoint ?? null;
+    return {
+      rank: index + 1, score: solution.averageScore, targetValue: solution.targetValue, averageScore: solution.averageScore,
+      maxScore: detail.maximumScore, minScore: detail.minimumScore,
+      maxScoreOrderCount: detail.maximumProbabilityNumerator, maxScoreOrderTotal: detail.maximumProbabilityDenominator,
+      currentMaxScoreOrderCount: detail.currentMaximumProbabilityNumerator,
+      orderModel: multi ? "weighted_room" : "weighted_self",
+      playerFormation: solution.playerFormation?.map(i => i + 1),
+      peakPlayerFormation: detail.peakPlayerFormation?.map(i => i + 1),
+      peakFormationCardIds: peakCards.map(c => c.cardId), peakFormationCardInstanceKeys: peakCards.map(c => c.cardInstanceKey ?? `profile:${c.cardId}`),
+      peakLeaderCardId: peakCards[2].cardId, peakAverageScore: detail.peakAverageScore,
+      cards, leaderCardId: cards[2].cardId, leaderCardInstanceKey: cards[2].cardInstanceKey,
+      skillOrderCardIds: activation.map(c => c.cardId), skillOrderCardInstanceKeys: activation.map(c => c.cardInstanceKey ?? `profile:${c.cardId}`),
+      skillOrderActors: multi ? [...detail.peakActivationOrder, input.encoreActor].map(i => actors[i]) : undefined,
+      totalPower: solution.totalPower, rawCardPower: solution.cardPower, areaItemPower: solution.areaItemPower,
+      eventPower: solution.eventPower, eventPowerWithRoom: solution.eventPower, pointBonusRate: solution.pointBonusRate,
+      roomScore: solution.roomScore, eventPoint: point, eventPointBase: solution.eventPointBase,
+      eventPointMultiplier: pointOptions.options.find(option => option.key === pointOptions.defaultKey)?.multiplier ?? 1,
+      eventPointOptions: pointOptions, eventMode, eventType: settings.eventType ?? "none", liveType: settings.liveType ?? "free", target: settings.target ?? "score",
+      areaItemConfiguration: describeAreaItemConfiguration(input.areaConfigurations[solution.configurationIndex].selectedAreaItemIds),
+      supportBandPower: input.missionSupport ? solution.supportPower : null,
+      supportCards: solution.supportInstanceIds.map(id => ({ ...card(id), supportPower: input.supportPowers[id] })),
+      context: { sameBandId: cards.every(c => c.bandId === cards[0].bandId) ? cards[0].bandId : null,
+        sameAttribute: cards.every(c => c.attribute === cards[0].attribute) ? cards[0].attribute : null },
+    };
+  });
+  const d = outcome.diagnostics;
+  return { kind: "single", status: outcome.status, incompleteReason: outcome.reason ?? null, results, stats: {
+    candidateCardCount: input.cards.filter(c => !c.isExcluded).length,
+    areaItemConfigurationCount: input.areaConfigurations.length,
+    evaluatedTeamCount: d.evaluatedTeams, hydratedResultCount: results.length,
+    prunedBranchCount: d.prunedNodes, elapsedMs: finished - started,
+    supportBandEnabled: input.missionSupport,
+    supportCandidateCount: input.missionSupport ? input.cards.filter(c => !c.isExcluded).length : 0,
+    supportEvaluationCount: input.missionSupport ? d.evaluatedTeams : 0,
+    isExhaustive: outcome.status === "exact", timedOut: outcome.reason === "timed_out",
+    searchMode: outcome.status === "exact" ? "exact" : "bounded",
+  } };
+}
+
 async function preloadSearchData(request: TeamSearchWorkerPreloadRequest): Promise<void> {
   const messages = getWorkerMessages(request.messages);
   await withIntegrityRefreshRetry(async (forceRefresh) => {
@@ -976,6 +1048,22 @@ async function runSearchAttempt(
     songsById,
   });
 
+  const profilePayload = replaceGameProfileCards(request.profilePayload, userCards.map((card) => ({
+    cardId: card.cardId,
+    level: card.level,
+    masterRank: card.masterRank,
+    skillLevel: card.skillLevel,
+    episodeCount: card.episodeCount,
+    isTrained: card.isTrained,
+    hasTrainedArt: card.hasTrainedArt,
+    isExcluded: card.isExcluded,
+  })));
+  const cardInstanceKeyById = new Map(userCards.map((card) => [card.cardId, card.cardInstanceKey]));
+  const effectiveCards = getGameProfileCards(profilePayload).map((card) => ({
+    ...card,
+    cardInstanceKey: cardInstanceKeyById.get(card.cardId),
+  }));
+
   if (request.event.eventType === "medley") {
     if (medleySongs.length !== 3) {
       throw new Error(messages.selectMedleySongs);
@@ -1002,21 +1090,6 @@ async function runSearchAttempt(
         chart: medleyChartSnapshot.value.chart,
       };
     });
-    const profilePayload = replaceGameProfileCards(request.profilePayload, userCards.map((card) => ({
-      cardId: card.cardId,
-      level: card.level,
-      masterRank: card.masterRank,
-      skillLevel: card.skillLevel,
-      episodeCount: card.episodeCount,
-      isTrained: card.isTrained,
-      hasTrainedArt: card.hasTrainedArt,
-      isExcluded: card.isExcluded,
-    })));
-    const cardInstanceKeyById = new Map(userCards.map((card) => [card.cardId, card.cardInstanceKey]));
-    const effectiveCards = getGameProfileCards(profilePayload).map((card) => ({
-      ...card,
-      cardInstanceKey: cardInstanceKeyById.get(card.cardId),
-    }));
     const medleyInput = buildMedleySearchInput({
       schemaVersion: MEDLEY_SEARCH_SOURCE_SCHEMA_VERSION,
       profilePayload,
@@ -1038,47 +1111,21 @@ async function runSearchAttempt(
     });
   }
 
-  return searchBandoriBestTeams({
-    userCards,
-    userAreaItems,
-    characterBonuses: buildBandoriCharacterBonuses(
-      getGameProfileCharacterPotentials(request.profilePayload),
-      getGameProfileCharacterMissionBonuses(request.profilePayload),
-    ),
-    cardsById,
-    charactersById,
-    skillsById,
-    areaItemsById,
-    chart: chartSnapshot.value.chart,
-    chartCacheKey: [
-      TEAM_SEARCH_WORKER_ALGORITHM_REVISION,
-      `master-${masterSnapshot.generation}`,
-      `chart-${chartSnapshot.generation}`,
-      songId,
-      request.song.difficulty,
-      request.live.type,
-      request.event.eventType,
-    ].join(":"),
-    song,
-    difficulty: request.song.difficulty,
-    eventBonus,
-    eventType: request.event.eventType,
-    eventFormula: request.event.formula,
-    liveType: request.live.type,
-    target: request.calculation.target,
-    resultLimit: request.calculation.resultLimit,
-    perfectRate: request.song.perfectRate,
-    useSpecialRoomBonus: request.live.useSpecialRoomBonus,
-    roomPower: request.live.roomPower,
-    otherPlayersAveragePower: request.live.otherPlayersAveragePower,
-    otherPlayerSkills: request.live.otherPlayerSkills,
-    encoreSkillSource: request.live.encoreSkillSource,
-    liveBoostCount: request.live.liveBoostCount,
-    challengeCpCost: request.live.challengeCpCost,
-    server,
-    maxSearchDurationMs: request.calculation.maxSearchDurationMs,
-    constraints: request.calculation.constraints,
+  const settings: SingleSettings = {
+    eventType: request.event.eventType, eventFormula: request.event.formula,
+    liveType: request.live.type, target: request.calculation.target,
+    resultLimit: request.calculation.resultLimit, otherPlayerSkills: request.live.otherPlayerSkills,
+    encoreSkillSource: request.live.encoreSkillSource, roomPower: request.live.roomPower,
+    otherPlayersAveragePower: request.live.otherPlayersAveragePower, constraints: request.calculation.constraints,
+    liveBoostCount: request.live.liveBoostCount, challengeCpCost: request.live.challengeCpCost,
+  };
+  const { input } = buildSingleSearchInput({
+    profilePayload, cardsById: cachedCards, charactersById, skillsById, areaItemsById, songsById, eventBonus,
+    perfectRatePercentText: request.song.perfectRatePercentText ?? String(request.song.perfectRate * 100),
+    song: { songIdText: String(songId), difficulty: request.song.difficulty, chart: chartSnapshot.value.chart }, settings,
   });
+  return runSingleSearch(request, input, settings, effectiveCards, cardsById, options);
+
 }
 
 function runSearch(
@@ -1110,12 +1157,8 @@ self.onmessage = (event: MessageEvent<TeamSearchWorkerMessage>) => {
     return;
   }
 
-  const shouldReportMedleyProgress = Boolean(
-    event.data.event.eventType === "medley" && event.data.songs?.length === 3,
-  );
   void runSearch(event.data, {
-    onMedleyProgress: shouldReportMedleyProgress
-      ? (progress) => {
+    onMedleyProgress: (progress) => {
         self.postMessage({
           requestId: event.data.requestId,
           type: "search-progress",
@@ -1124,8 +1167,7 @@ self.onmessage = (event: MessageEvent<TeamSearchWorkerMessage>) => {
           result: null,
           progress,
         } satisfies TeamSearchWorkerResponse);
-      }
-      : undefined,
+      },
   })
     .then((result) => {
       self.postMessage({ requestId: event.data.requestId, type: "search", ok: true, result } satisfies TeamSearchWorkerResponse);
