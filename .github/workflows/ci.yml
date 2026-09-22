@@ -81,6 +81,9 @@ jobs:
       - name: Test Bandori cards
         run: npm run test:bandori-cards
 
+      - name: Test shared Bandori help popovers
+        run: node --import tsx --test tests/bandori-help-popover.test.mjs
+
       - name: Test Costumes API
         run: npm run test:bandori-costumes
 

@@ -18,6 +18,7 @@ import LoadingIndicator, { LoadingSpinner } from "@/components/LoadingIndicator"
 import BandoriAccountShell from "@/app/[locale]/bandori/BandoriAccountShell";
 import BandoriCardTile from "@/components/bandori/BandoriCardTile";
 import BandoriEventBonusPanel from "@/components/bandori/BandoriEventBonusPanel";
+import BandoriHelpPopover from "@/components/bandori/BandoriHelpPopover";
 import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
 import BandoriEventSwitcher, { type BandoriEventSwitcherEvent } from "@/app/[locale]/bandori/BandoriEventSwitcher";
 import { AccountErrorState, AccountLoadingState, AccountSignInState } from "@/app/[locale]/account/AccountShell";
@@ -1724,11 +1725,19 @@ function ResultCard({
             leader={getDisplayCardKey(card) === (result.leaderCardInstanceKey ?? `profile:${result.leaderCardId}`)}
           />
         ))}
+        {result.orderModel === "weighted_self" ? <BandoriHelpPopover label={labelsT("formationHelpLabel")} preferredPlacement="above">
+          {labelsT("formationHelp")}
+        </BandoriHelpPopover> : null}
       </div>
 
       <div className="mt-4 grid gap-3 text-sm text-[var(--theme-color-text-muted)] lg:grid-cols-2">
         {result.playerFormation ? <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3">
-          <div className="font-semibold text-[var(--theme-color-text-default)]">{labelsT("playerFormation")}</div>
+          <div className="flex items-center gap-1 font-semibold text-[var(--theme-color-text-default)]">
+            {labelsT("playerFormation")}
+            <BandoriHelpPopover label={labelsT("formationHelpLabel")} preferredPlacement="above">
+              {labelsT("formationHelp")}
+            </BandoriHelpPopover>
+          </div>
           <div className="mt-1">{result.playerFormation.map(player => player === 1 ? labelsT("selfPlayer") : labelsT("otherPlayer", { index: player })).join(" / ")}</div>
         </div> : null}
         <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3">
@@ -1750,7 +1759,12 @@ function ResultCard({
         </div>
         {result.liveType !== "multi" ? <>
           <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3">
-            <div className="font-semibold text-[var(--theme-color-text-default)]">{labelsT(result.orderModel ? "maximumScorePlan" : "bestSkillOrder")}</div>
+            <div className="flex items-center gap-1 font-semibold text-[var(--theme-color-text-default)]">
+              {labelsT(result.orderModel ? "maximumScorePlan" : "bestSkillOrder")}
+              {result.orderModel === "weighted_self" && changedFormation ? <BandoriHelpPopover label={labelsT("peakFormationHelpLabel")} preferredPlacement="above">
+                {labelsT("peakFormationHelp")}
+              </BandoriHelpPopover> : null}
+            </div>
             {changedFormation ? <div className="mt-1 flex flex-wrap items-baseline gap-x-1">
               <span className="whitespace-nowrap">{labelsT("peakFormation")}</span>
               <span className="whitespace-nowrap">{peakFormation}</span>

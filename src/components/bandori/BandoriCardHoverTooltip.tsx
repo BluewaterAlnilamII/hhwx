@@ -61,6 +61,7 @@ type BandoriCardTooltipPositionInput = {
   tooltipWidth: number;
   viewportHeight: number;
   viewportWidth: number;
+  preferredPlacement?: TooltipPosition["placement"];
   gap?: number;
   margin?: number;
 };
@@ -75,14 +76,15 @@ export function getBandoriCardTooltipPosition({
   tooltipWidth,
   viewportHeight,
   viewportWidth,
+  preferredPlacement = "below",
   gap = BANDORI_CARD_TOOLTIP_GAP,
   margin = BANDORI_CARD_TOOLTIP_MARGIN,
 }: BandoriCardTooltipPositionInput): TooltipPosition {
   const availableBelow = viewportHeight - margin - anchorRect.bottom - gap;
   const availableAbove = anchorRect.top - gap - margin;
-  const placement = tooltipHeight <= availableBelow || availableBelow >= availableAbove
-    ? "below"
-    : "above";
+  const placement = preferredPlacement === "above"
+    ? (tooltipHeight <= availableAbove || availableAbove >= availableBelow ? "above" : "below")
+    : (tooltipHeight <= availableBelow || availableBelow >= availableAbove ? "below" : "above");
   const preferredTop = placement === "below"
     ? anchorRect.bottom + gap
     : anchorRect.top - gap - tooltipHeight;
