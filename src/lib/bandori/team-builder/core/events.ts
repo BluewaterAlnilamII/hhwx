@@ -4,10 +4,10 @@
  * Search code keeps score as the primary physical calculation, then uses this module to map
  * that score into event points, room score, fever behavior, and final target comparisons.
  */
-import { resolveBandoriSkill, type BandoriCardAttribute, type BandoriTeamContext, type BestdoriSkillMaster, type ResolvedBandoriSkill } from "@/lib/bandori-team-calculator";
-import { SCORE_FLOOR_EPSILON } from "./constants";
 import { clamp, toFiniteNumber } from "./utils";
-import type { BandoriTeamSearchEventMode, BandoriTeamSearchEventPointOptions, BandoriTeamSearchEventType, BandoriTeamSearchInput, BandoriTeamSearchLiveType, BandoriTeamSearchTarget, ScoreCalculationCache, SearchCard } from "./types";
+import type { BandoriTeamSearchEventMode, BandoriTeamSearchEventPointOptions, BandoriTeamSearchEventType, BandoriTeamSearchSettings, BandoriTeamSearchLiveType, BandoriTeamSearchTarget } from "./types";
+type EventPointInput = Pick<BandoriTeamSearchSettings, "eventType" | "liveType" | "eventFormula" | "challengeCpCost" | "liveBoostCount">;
+
 export function normalizeSearchTarget(value: BandoriTeamSearchTarget | undefined): BandoriTeamSearchTarget {
   return value === "eventPoint" ? value : "score";
 }
@@ -55,7 +55,7 @@ export function resolveBandoriTeamSearchEventMode(
   return "pointBonus";
 }
 
-export function resolveBandoriTeamSearchUseFever(input: Pick<BandoriTeamSearchInput, "eventType" | "liveType" | "useFever">): boolean {
+export function resolveBandoriTeamSearchUseFever(input: Pick<BandoriTeamSearchSettings, "eventType" | "liveType" | "useFever">): boolean {
   if (input.eventType === undefined && input.liveType === undefined) {
     return input.useFever === true;
   }
@@ -63,126 +63,6 @@ export function resolveBandoriTeamSearchUseFever(input: Pick<BandoriTeamSearchIn
   const eventType = normalizeSearchEventType(input.eventType);
   const liveType = normalizeSearchLiveType(input.liveType);
   return eventType === "festival" || (liveType === "multi" && eventType !== "versus");
-}
-
-export function getSearchCardsTeamContext(cards: SearchCard[]): BandoriTeamContext {
-  let sameBandId: number | null | undefined;
-  let sameAttribute: BandoriCardAttribute | null | undefined;
-
-  for (const card of cards) {
-    if (card.bandId === null) {
-      sameBandId = null;
-      break;
-    }
-    if (sameBandId === undefined) {
-      sameBandId = card.bandId;
-    } else if (sameBandId !== card.bandId) {
-      sameBandId = null;
-      break;
-    }
-  }
-
-  for (const card of cards) {
-    if (sameAttribute === undefined) {
-      sameAttribute = card.attribute;
-    } else if (sameAttribute !== card.attribute) {
-      sameAttribute = null;
-      break;
-    }
-  }
-
-  return {
-    sameBandId: sameBandId ?? null,
-    sameAttribute: sameAttribute ?? null,
-  };
-}
-
-function getTeamContextCacheKey(context: BandoriTeamContext): string {
-  return `${context.sameBandId ?? "mixed"}:${context.sameAttribute ?? "mixed"}`;
-}
-
-export function resolveCachedBandoriSkill(
-  skillId: number,
-  skill: BestdoriSkillMaster | undefined,
-  skillLevel: number,
-  context: BandoriTeamContext,
-  server: number,
-  cache?: ScoreCalculationCache,
-): ResolvedBandoriSkill | null {
-  if (!skill) {
-    return null;
-  }
-  const key = [
-    server,
-    skillId,
-    skillLevel,
-    getTeamContextCacheKey(context),
-  ].join(":");
-  if (cache?.resolvedSkills?.has(key)) {
-    return cache.resolvedSkills.get(key) ?? null;
-  }
-
-  const resolved = resolveBandoriSkill(skillId, skill, skillLevel, context, server);
-  cache?.resolvedSkills?.set(key, resolved);
-  return resolved;
-}
-
-export function resolveEncoreSkill(
-  input: BandoriTeamSearchInput,
-  context: BandoriTeamContext,
-  server: number,
-  cache?: ScoreCalculationCache,
-): ResolvedBandoriSkill | undefined {
-  if (normalizeSearchLiveType(input.liveType) !== "multi" || !input.encoreSkillSource || input.encoreSkillSource === "self") {
-    return undefined;
-  }
-
-  const externalIndex = Number(input.encoreSkillSource.replace("other", "")) - 1;
-  const externalSkill = input.otherPlayerSkills?.[externalIndex];
-  if (!externalSkill) {
-    return undefined;
-  }
-
-  const skill = input.skillsById[String(externalSkill.skillId)];
-  return resolveCachedBandoriSkill(externalSkill.skillId, skill, externalSkill.skillLevel, context, server, cache) ?? undefined;
-}
-
-export function resolveOtherPlayerSkills(
-  input: BandoriTeamSearchInput,
-  context: BandoriTeamContext,
-  server: number,
-  cache?: ScoreCalculationCache,
-): Array<ResolvedBandoriSkill | null> {
-  if (normalizeSearchLiveType(input.liveType) !== "multi") {
-    return [];
-  }
-
-  return (input.otherPlayerSkills ?? []).slice(0, 4).map((externalSkill) => {
-    const skill = input.skillsById[String(externalSkill.skillId)];
-    return resolveCachedBandoriSkill(externalSkill.skillId, skill, externalSkill.skillLevel, context, server, cache);
-  });
-}
-
-export function calculateRoomScore(
-  score: number,
-  totalPower: number,
-  input: BandoriTeamSearchInput,
-  roomScoreRatePerPower?: number,
-): number | null {
-  if (normalizeSearchLiveType(input.liveType) !== "multi") {
-    return null;
-  }
-
-  const otherPlayersPower = getOtherPlayersPower(input);
-  if (otherPlayersPower <= 0 || totalPower <= 0) {
-    return Math.floor(score + SCORE_FLOOR_EPSILON);
-  }
-
-  if (roomScoreRatePerPower !== undefined && Number.isFinite(roomScoreRatePerPower)) {
-    return Math.floor(score + roomScoreRatePerPower * otherPlayersPower + SCORE_FLOOR_EPSILON);
-  }
-
-  return Math.floor(score + (score / totalPower) * otherPlayersPower + SCORE_FLOOR_EPSILON);
 }
 
 function calculateWithSoftCap(value: number, divisor: number, caps: readonly number[]): number {
@@ -198,34 +78,6 @@ function calculateWithSoftCap(value: number, divisor: number, caps: readonly num
     scaled += Math.floor((cap / divisor / (index + 1)) * 100);
   }
   return Math.floor(scaled / 100);
-}
-
-function getOtherPlayersPower(input: BandoriTeamSearchInput): number {
-  if (normalizeSearchLiveType(input.liveType) !== "multi") {
-    return 0;
-  }
-  const otherPlayersAveragePower = Math.max(0, Math.trunc(toFiniteNumber(input.otherPlayersAveragePower, 0)));
-  if (otherPlayersAveragePower > 0) {
-    return otherPlayersAveragePower * 4;
-  }
-  const roomPowerAlias = Math.max(0, Math.trunc(toFiniteNumber(input.roomPower, 0)));
-  return roomPowerAlias > 0 ? roomPowerAlias * 4 : 0;
-}
-
-export function estimateTotalRoomScoreUpperBound(
-  scoreUpperBound: number,
-  input: BandoriTeamSearchInput,
-  scoreRateUpper?: number,
-): number | null {
-  if (normalizeSearchLiveType(input.liveType) !== "multi") {
-    return null;
-  }
-  if (!Number.isFinite(scoreUpperBound) || !Number.isFinite(scoreRateUpper ?? Number.NaN)) {
-    return Number.POSITIVE_INFINITY;
-  }
-
-  const otherPlayersPower = getOtherPlayersPower(input);
-  return Math.ceil(scoreUpperBound + Math.max(0, scoreRateUpper ?? 0) * otherPlayersPower);
 }
 
 const LIVE_BOOST_COUNTS = [0, 1, 2, 3] as const;
@@ -264,25 +116,25 @@ function getChallengeCpMultiplier(challengeCpCost: number | undefined): number {
   }[normalizeChallengeCpCost(challengeCpCost)];
 }
 
-export function getEventPointMultiplier(input: BandoriTeamSearchInput): number {
+export function getEventPointMultiplier(input: EventPointInput): number {
   return isChallengeLiveEventPointInput(input)
     ? getChallengeCpMultiplier(input.challengeCpCost)
     : getLiveBoostMultiplier(input.liveBoostCount);
 }
 
-export function isChallengeLiveEventPointInput(input: Pick<BandoriTeamSearchInput, "eventType" | "liveType">): boolean {
+export function isChallengeLiveEventPointInput(input: Pick<BandoriTeamSearchSettings, "eventType" | "liveType">): boolean {
   return normalizeSearchEventType(input.eventType) === "challenge"
     && normalizeSearchLiveType(input.liveType) === "challenge";
 }
 
-export function calculateChallengeLiveEventPointBase(score: number, input: BandoriTeamSearchInput): number {
+export function calculateChallengeLiveEventPointBase(score: number, input: EventPointInput): number {
   const formula = input.eventFormula ?? 0;
   return formula === 2
     ? 3250 + Math.floor(score / 450)
     : 1000 + calculateWithSoftCap(score, 300, [2_100_000, 150_000, 250_000, Number.POSITIVE_INFINITY]);
 }
 
-export function calculateChallengeLiveEventPoint(score: number, input: BandoriTeamSearchInput): number {
+export function calculateChallengeLiveEventPoint(score: number, input: EventPointInput): number {
   return calculateChallengeLiveEventPointBase(score, input) * getChallengeCpMultiplier(input.challengeCpCost);
 }
 
@@ -317,7 +169,7 @@ function calculateFestivalEventPointBase(
     + ([50, 47, 44, 42, 40][placementIndex] ?? 40);
 }
 
-function getEventPointBaseConfig(input: BandoriTeamSearchInput): { base: number; divisor: number } | null {
+function getEventPointBaseConfig(input: EventPointInput): { base: number; divisor: number } | null {
   const eventType = normalizeSearchEventType(input.eventType);
   const formula = input.eventFormula ?? 0;
   switch (eventType) {
@@ -334,7 +186,7 @@ function getEventPointBaseConfig(input: BandoriTeamSearchInput): { base: number;
   }
 }
 
-export function calculateEventPointBase(score: number, roomScore: number | null, input: BandoriTeamSearchInput): number | null {
+export function calculateEventPointBase(score: number, roomScore: number | null, input: EventPointInput): number | null {
   const eventType = normalizeSearchEventType(input.eventType);
   if (eventType === "none") {
     return null;
@@ -367,7 +219,7 @@ export function calculateEventPointBeforeMultiplier(
   score: number,
   roomScore: number | null,
   pointBonusRate: number,
-  input: BandoriTeamSearchInput,
+  input: EventPointInput,
   supportBandPower = 0,
 ): number | null {
   const base = calculateEventPointBase(score, roomScore, input);
@@ -381,7 +233,7 @@ export function calculateEventPoint(
   score: number,
   roomScore: number | null,
   pointBonusRate: number,
-  input: BandoriTeamSearchInput,
+  input: EventPointInput,
   supportBandPower = 0,
 ): number | null {
   const beforeMultiplier = calculateEventPointBeforeMultiplier(score, roomScore, pointBonusRate, input, supportBandPower);
@@ -394,7 +246,7 @@ export function calculateEventPoint(
 export function createEventPointOptions(
   score: number,
   eventPointBase: number | null,
-  input: BandoriTeamSearchInput,
+  input: EventPointInput,
 ): BandoriTeamSearchEventPointOptions {
   // Live boost, CP, placement, and win/loss only change displayed PT, not team ranking, so UI toggles do not restart search.
   const eventType = normalizeSearchEventType(input.eventType);
@@ -484,54 +336,4 @@ export function createEventPointOptions(
     defaultKey: null,
     options: [],
   };
-}
-
-export function getTargetValue(result: {
-  totalPower: number;
-  averageScore: number;
-  eventPoint: number | null;
-  eventMode: BandoriTeamSearchEventMode;
-}, target: BandoriTeamSearchTarget): number {
-  switch (target) {
-    case "eventPoint":
-      return result.eventPoint ?? (
-        result.eventMode === "pointBonus" ? Number.NEGATIVE_INFINITY : result.averageScore
-      );
-    case "score":
-    default:
-      return result.averageScore;
-  }
-}
-
-export function estimateTargetUpperBoundFromScore(
-  scoreUpperBound: number,
-  pointBonusRateUpper: number,
-  input: BandoriTeamSearchInput,
-  target: BandoriTeamSearchTarget,
-  eventMode: BandoriTeamSearchEventMode,
-  supportBandPointUpperBound = 0,
-  scoreRateUpper?: number,
-): number {
-  // Bounds call this before a full team exists, so every non-score term must be optimistic.
-  // The exact result path later recomputes the same target with concrete support and event values.
-  if (!Number.isFinite(scoreUpperBound)) {
-    return scoreUpperBound;
-  }
-  if (target === "eventPoint" && isChallengeLiveEventPointInput(input)) {
-    return calculateChallengeLiveEventPointBase(Math.ceil(scoreUpperBound), input);
-  }
-  if (target !== "eventPoint" || eventMode !== "pointBonus") {
-    return scoreUpperBound;
-  }
-
-  const eventPointBaseUpper = calculateEventPointBase(
-    Math.ceil(scoreUpperBound),
-    estimateTotalRoomScoreUpperBound(Math.ceil(scoreUpperBound), input, scoreRateUpper),
-    input,
-  );
-  return eventPointBaseUpper === null
-    ? scoreUpperBound
-    : (
-      Math.floor(eventPointBaseUpper * (1 + Math.max(0, pointBonusRateUpper))) + supportBandPointUpperBound
-    );
 }

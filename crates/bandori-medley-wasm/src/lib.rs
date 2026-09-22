@@ -75,3 +75,36 @@ pub fn run_medley_search_json(
     })
     .map_err(|error| JsValue::from_str(&error.to_string()))
 }
+
+/// One-team entry using the same resource-control and hydration boundary.
+#[wasm_bindgen(js_name = runSingleSearchJson)]
+pub fn run_single_search_json(
+    input_json: &str,
+    memory_budget_bytes: u32,
+    stop_reason_callback: &Function,
+    incumbent_json_callback: &Function,
+    search_finished_callback: &Function,
+) -> Result<String, JsValue> {
+    use bandori_medley_search::{
+        SingleSearchSolutionV1, decode_single_search_input_json, hydrate_single_search_solutions,
+        search_single,
+    };
+    let input = decode_single_search_input_json(input_json).map_err(|e| json_error(&e))?;
+    let mut poll = || stop_reason(stop_reason_callback);
+    let mut improvement = |solution: &SingleSearchSolutionV1| {
+        let json = serde_json::to_string(solution).unwrap_throw();
+        incumbent_json_callback
+            .call1(&JsValue::UNDEFINED, &JsValue::from_str(&json))
+            .unwrap_throw();
+    };
+    let mut control = SearchControl::new(memory_budget_bytes as usize, &mut poll)
+        .with_strict_improvement(&mut improvement);
+    let outcome = search_single(&input, &mut control);
+    search_finished_callback
+        .call0(&JsValue::UNDEFINED)
+        .unwrap_throw();
+    let details =
+        hydrate_single_search_solutions(&input, outcome.solutions()).map_err(|e| json_error(&e))?;
+    serde_json::to_string(&serde_json::json!({ "outcome": outcome, "details": details }))
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}

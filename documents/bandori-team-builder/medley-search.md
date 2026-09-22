@@ -2,6 +2,8 @@
 
 Chinese version: [medley-search.zh-CN.md](medley-search.zh-CN.md)
 
+Single-song search reuses these foundations with its own weighted formation and event rules; see [Single-Song Team Builder](single-song-algorithm.md). The three-song rules below are unchanged.
+
 ## Abstract
 
 This document specifies the exact search, states the invariants on which pruning depends, and proves why a completed run cannot omit a better legal medley. Read [the scoring and product contract](medley-foundation.md) first; it defines the cards, songs, area configurations, score function and terminal result states used here.

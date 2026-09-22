@@ -12,13 +12,13 @@ pub enum SearchStopReason {
 /// The caller owns its clock and cancellation source. The single-threaded
 /// search polls `stop_check` at safe points instead of depending on a native or
 /// browser-specific timer API.
-pub struct SearchControl<'a> {
+pub struct SearchControl<'a, Solution = MedleySearchSolutionV1> {
     memory_budget_bytes: usize,
     stop_check: &'a mut dyn FnMut() -> Option<SearchStopReason>,
-    strict_improvement: Option<&'a mut dyn FnMut(&MedleySearchSolutionV1)>,
+    strict_improvement: Option<&'a mut dyn FnMut(&Solution)>,
 }
 
-impl<'a> SearchControl<'a> {
+impl<'a, Solution> SearchControl<'a, Solution> {
     pub fn new(
         memory_budget_bytes: usize,
         stop_check: &'a mut dyn FnMut() -> Option<SearchStopReason>,
@@ -33,7 +33,7 @@ impl<'a> SearchControl<'a> {
     /// Report the first feasible solution and later strictly higher totals.
     pub fn with_strict_improvement(
         mut self,
-        strict_improvement: &'a mut dyn FnMut(&MedleySearchSolutionV1),
+        strict_improvement: &'a mut dyn FnMut(&Solution),
     ) -> Self {
         self.strict_improvement = Some(strict_improvement);
         self
@@ -47,7 +47,7 @@ impl<'a> SearchControl<'a> {
         (self.stop_check)()
     }
 
-    pub(crate) fn report_strict_improvement(&mut self, solution: &MedleySearchSolutionV1) {
+    pub(crate) fn report_strict_improvement(&mut self, solution: &Solution) {
         if let Some(callback) = &mut self.strict_improvement {
             callback(solution);
         }
@@ -65,7 +65,7 @@ mod tests {
             calls += 1;
             (calls == 2).then_some(SearchStopReason::TimedOut)
         };
-        let mut control = SearchControl::new(4096, &mut stop_check);
+        let mut control = SearchControl::<MedleySearchSolutionV1>::new(4096, &mut stop_check);
 
         assert_eq!(control.memory_budget_bytes(), 4096);
         assert_eq!(control.poll_stop(), None);

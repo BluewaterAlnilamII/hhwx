@@ -1,35 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { searchBandoriBestTeams } from "../src/lib/bandori/team-builder/single/search.ts";
-
 import { resolveBandoriSkill } from "../src/lib/bandori/team-builder/core/calculator.ts";
-import { buildSkillSearchSignature } from "../src/lib/bandori/team-builder/core/cards.ts";
-import {
-  calculateSkillUpperRatesPerPower,
-  getResolvedSkillMaxScoreUpPercent,
-} from "../src/lib/bandori/team-builder/core/scoring.ts";
-import { getRegionalNumber } from "../src/lib/bandori/team-builder/core/utils.ts";
+import { resolveBestdoriScoreSkill } from "../src/lib/bandori/medley-foundation/skills.ts";
+import { buildSingleSearchInput } from "../src/lib/bandori/team-builder/single-source.ts";
+import { initSync, runSingleSearchJson } from "../src/lib/bandori/medley-wasm/pkg/bandori_medley.js";
 
-const JP_SERVER = 0;
-const CN_SERVER = 3;
-const MIXED_TEAM_CONTEXT = {
-  sameBandId: null,
-  sameAttribute: null,
-};
-const PREPARED_CHART = {
-  notes: Array.from({ length: 24 }, (_, index) => ({
-    beat: index,
-    time: index,
-    skill: index % 4 === 0,
-    fever: false,
-  })),
-  playLevel: 25,
-  notesCount: 24,
-  skillStartNotes: [1, 5, 9, 13, 17, 21],
-  skillTriggerTimes: [0, 4, 8, 12, 16, 20],
-};
-
+initSync({ module: readFileSync(new URL("../src/lib/bandori/medley-wasm/pkg/bandori_medley_bg.wasm", import.meta.url)) });
+const MIXED_TEAM_CONTEXT = { sameBandId: null, sameAttribute: null };
 function regional(value) {
   return [value, null, null, null];
 }
@@ -64,101 +42,33 @@ const skill160 = createSkill({
 });
 const skill170 = createSkill({ score: 170 });
 
-test("single-song search retains scores, event points, and ranking across live modes", () => {
-  const fixture = JSON.parse(readFileSync(
-    new URL("./fixtures/bandori-medley-foundation-source-v1.json", import.meta.url), "utf8",
-  ));
-  // Fixed synthetic six-card input; expected values were captured before dead-code removal.
-  const cases = [
-    ["none", "free", "score", 132153, 132153, null, 132153],
-    ["story", "multi", "eventPoint", 98452, 98469, 915, 61],
-    ["challenge", "challenge", "eventPoint", 132153, 132153, 11520, 1440],
-    ["versus", "versus", "eventPoint", 132153, 132153, 1260, 132153],
-    ["festival", "multi", "eventPoint", 98452, 98469, 2055, 98452],
-    ["mission_live", "multi", "eventPoint", 98452, 98469, 780, 52],
-  ];
-  for (const [eventType, liveType, target, score, maxScore, eventPoint, targetValue] of cases) {
-    const result = searchBandoriBestTeams({
-      cardsById: fixture.cardsById, charactersById: fixture.charactersById,
-      skillsById: fixture.skillsById, areaItemsById: fixture.areaItemsById,
-      userAreaItems: [], characterBonuses: [],
-      userCards: Array.from({ length: 6 }, (_, index) => ({
-        cardId: index + 1, level: 1, masterRank: 0, skillLevel: 1, episodeCount: 0, isTrained: false,
-      })),
-      chart: [{ type: "BPM", beat: 0, bpm: 120 }, ...Array.from({ length: 24 }, (_, beat) => ({
-        type: "Single", beat, ...(beat % 4 === 0 ? { skill: true } : {}),
-      }))],
-      song: { difficulty: { 3: { playLevel: 25 } } }, difficulty: "expert",
-      server: 3, perfectRate: 0.95, resultLimit: 3, eventType, liveType, target,
-      eventBonus: { attributes: ["powerful"], pointPercent: 20, parameterPercent: 20 },
-      otherPlayerSkills: liveType === "multi" ? [{ skillId: 1, skillLevel: 1 }] : [],
-      otherPlayersAveragePower: 10000,
-    });
-    assert.equal(result.stats.isExhaustive, true, eventType);
-    assert.equal(result.stats.timedOut, false, eventType);
-    assert.deepEqual(result.results.map((team) => [
-      team.score, team.maxScore, team.totalPower, team.eventPoint, team.targetValue, team.leaderCardId,
-    ]), [2, 1, 1].map((leader) => [score, maxScore, 17250, eventPoint, targetValue, leader]), eventType);
-  }
+
+function normalized(server, skillMaster) {
+  return resolveBestdoriScoreSkill({ skillId: 82, skillLevel: 5, skillMaster, context: MIXED_TEAM_CONTEXT, server });
+}
+test("single shared resolver preserves CN null fallback and explicit zero", () => {
+  assert.deepEqual(normalized(3, skill160), normalized(0, skill160));
+  assert.equal(normalized(3, skill160).durationSeconds, 7);
+  assert.equal(normalized(3, skill160).behavior.scoreUpPercent, 160);
+  assert.equal(normalized(3, skill170).behavior.scoreUpPercent, 170);
+  assert.equal(normalized(3, skill150).behavior.scoreUpPercent, 150);
+  // Card-detail callers retain their general calculator and the same regional policy.
+  assert.deepEqual(resolveBandoriSkill(82, skill160, 5, MIXED_TEAM_CONTEXT, 3).scoreEffects.map(e => e.valuePercent), [160, 110]);
+  const zero = createSkill({ score: 160 });
+  zero.activationEffect.activateEffectTypes.score.activateEffectValue[3] = 0;
+  assert.equal(normalized(3, zero).behavior.scoreUpPercent, 0);
+  assert.equal(normalized(0, zero).behavior.scoreUpPercent, 160);
 });
-
-test("CN skill resolution falls back from null regional slots to current JP-only values", () => {
-  const resolved160 = resolveBandoriSkill(82, skill160, 5, MIXED_TEAM_CONTEXT, CN_SERVER);
-  const resolved170 = resolveBandoriSkill(83, skill170, 5, MIXED_TEAM_CONTEXT, CN_SERVER);
-
-  assert.equal(resolved160.durationSeconds, 7);
-  assert.deepEqual(
-    resolved160.scoreEffects.map(({ type, valuePercent, conditionLife }) => ({
-      type,
-      valuePercent,
-      conditionLife,
-    })),
-    [
-      { type: "score_over_life", valuePercent: 160, conditionLife: 1000 },
-      { type: "score_under_life", valuePercent: 110, conditionLife: 1000 },
-    ],
-  );
-  assert.equal(getResolvedSkillMaxScoreUpPercent(resolved160), 160);
-  assert.equal(getResolvedSkillMaxScoreUpPercent(resolved170), 170);
-  assert.ok(
-    getResolvedSkillMaxScoreUpPercent(resolved160)
-      > getResolvedSkillMaxScoreUpPercent(resolveBandoriSkill(70, skill150, 5, MIXED_TEAM_CONTEXT, CN_SERVER)),
-  );
-});
-
-test("search signatures and optimistic bounds use the same regional fallback as exact scoring", () => {
-  const cnSignature = buildSkillSearchSignature(82, skill160, 5, CN_SERVER);
-  const jpSignature = buildSkillSearchSignature(82, skill160, 5, JP_SERVER);
-  const cnBounds = calculateSkillUpperRatesPerPower(PREPARED_CHART, skill160, 5, CN_SERVER);
-  const jpBounds = calculateSkillUpperRatesPerPower(PREPARED_CHART, skill160, 5, JP_SERVER);
-
-  assert.equal(cnSignature, jpSignature);
-  assert.match(cnSignature, /score_over_life\/160/);
-  assert.match(cnSignature, /score_under_life\/110/);
-  assert.deepEqual(cnBounds, jpBounds);
-  assert.ok(cnBounds.maxRate > 0);
-  assert.ok(
-    cnBounds.maxRate
-      > calculateSkillUpperRatesPerPower(PREPARED_CHART, skill150, 5, CN_SERVER).maxRate,
-  );
-});
-
-test("an explicit regional zero is preserved instead of falling back to JP", () => {
-  const skillWithExplicitCnZero = createSkill({ score: 160 });
-  skillWithExplicitCnZero.activationEffect.activateEffectTypes.score.activateEffectValue[CN_SERVER] = 0;
-
-  assert.equal(getRegionalNumber([160, null, null, 0], CN_SERVER), 0);
-  assert.equal(
-    resolveBandoriSkill(999, skillWithExplicitCnZero, 5, MIXED_TEAM_CONTEXT, CN_SERVER)
-      .scoreEffects[0].valuePercent,
-    0,
-  );
-  assert.deepEqual(
-    calculateSkillUpperRatesPerPower(PREPARED_CHART, skillWithExplicitCnZero, 5, CN_SERVER),
-    {
-      maxRate: 0,
-      averageRate: 0,
-      leaderRate: 0,
-    },
-  );
+test("actual single WASM uses the same regional resolution in search, bounds and hydration", () => {
+  const fixture = JSON.parse(readFileSync(new URL("./fixtures/bandori-medley-foundation-source-v1.json", import.meta.url), "utf8"));
+  fixture.profilePayload.bestdoriProfile.data.cards.skills = [15, 4];
+  for (const key of Object.keys(fixture.skillsById)) fixture.skillsById[key] = [skill150, skill160, skill170][Number(key) % 3];
+  const results = [0, 3].map(server => {
+    fixture.profilePayload.bestdoriProfile.server = server;
+    const { input } = buildSingleSearchInput({ ...fixture, song: fixture.songs[0], settings: { resultLimit: 1 } });
+    input.cards = input.cards.slice(0, 6); input.supportPowers.length = 6; input.pointBonusRates.length = 6;
+    return JSON.parse(runSingleSearchJson(JSON.stringify(input), 64 * 1024 * 1024, () => undefined, () => {}, () => {}));
+  });
+  assert.equal(results[0].outcome.status, "exact");
+  assert.deepEqual(results[0], results[1]);
 });

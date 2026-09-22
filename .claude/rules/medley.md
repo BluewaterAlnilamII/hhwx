@@ -8,12 +8,17 @@ paths:
   - "src/lib/bandori/medley-wasm/**"
   - "src/app/**/teambuilder/team-search-worker.ts"
   - "tests/bandori-medley-*.test.mjs"
+  - "tests/bandori-single-search.test.mjs"
+  - "tests/bandori-team-search-regional-skill.test.mjs"
+  - "src/lib/bandori/team-builder/single-source.ts"
   - "scripts/*bandori-medley*.mjs"
   - "documents/bandori-team-builder/medley-*.md"
+  - "documents/bandori-team-builder/single-song-algorithm*.md"
 ---
 
 # Medley Correctness and Delivery Rules
 
+- Single-song weighted-order, formation, event and output semantics follow [Single-Song Team Builder](../../documents/bandori-team-builder/single-song-algorithm.md). Changes to shared foundations must retain both mode contracts.
 - Preserve the versioned normalized-input and scoring contracts in [Medley Rules and Scoring](../../documents/bandori-team-builder/medley-foundation.md). Rust internals follow Rust naming conventions; serialized names follow the existing wire contract.
 - `exact` requires complete search or justified safe pruning. Time/resource exhaustion must preserve `incomplete` and its reason. Unproven or numerically unsafe bounds cannot prune; finding a high score or several solutions does not prove optimality or a complete ranking. Follow [Medley Search](../../documents/bandori-team-builder/medley-search.md).
 - Match verification to the affected boundary: source normalization/scoring, search completeness, or Worker/WASM delivery. Preserve independent exhaustive/reference checks and equality cases for changed scoring or bounds; performance gains do not excuse weaker proof semantics. Rust test/reference-only edits need relevant native tests and formatting/lint checks, not automatic WASM checks; prose-only edits need documentation review.

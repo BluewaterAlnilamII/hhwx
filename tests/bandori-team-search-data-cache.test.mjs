@@ -207,7 +207,7 @@ test("request integrity reports missing selected, event, area-item, external-ski
   );
 });
 
-test("team search worker wires cache revalidation, retry, and cache generations without a manifest", async () => {
+test("team search worker wires cache revalidation, retry, and refreshed snapshots without a manifest", async () => {
   const source = await readFile(
     new URL("../src/app/[locale]/bandori/teambuilder/team-search-worker.ts", import.meta.url),
     "utf8",
@@ -215,13 +215,11 @@ test("team search worker wires cache revalidation, retry, and cache generations 
 
   assert.match(source, /cache:\s*requestCache/);
   assert.match(source, /withIntegrityRefreshRetry/);
-  assert.match(source, /master-\$\{masterSnapshot\.generation\}/);
-  assert.match(source, /chart-\$\{chartSnapshot\.generation\}/);
-  assert.match(source, /TEAM_SEARCH_WORKER_ALGORITHM_REVISION = "regional-skill-fallback-v1"/);
-  assert.equal(
-    [...source.matchAll(/chartCacheKey:\s*\[\s*TEAM_SEARCH_WORKER_ALGORITHM_REVISION/g)].length,
-    1,
-  );
+  assert.match(source, /masterSnapshot\.value/);
+  assert.match(source, /chartSnapshot\.value\.chart/);
+  // Each WASM run prepares its own scoring state. The retired TypeScript
+  // algorithm's prepared-chart cache and its manual generation key are gone.
+  assert.doesNotMatch(source, /chartCacheKey|searchBandoriBestTeams/);
   assert.doesNotMatch(source, /requestJsonCache/);
   assert.doesNotMatch(source, /manifest/iu);
 });

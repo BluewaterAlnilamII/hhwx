@@ -16,7 +16,7 @@ const { values } = parseArgs({ options: {
   archive: { type: "string", default: join(root, "temp/medley-regression-fixtures") },
   teams: { type: "string", default: "2026-08-31T01-34-50.319Z" },
 } });
-assert(values.main, "pass --main <clean main worktree>");
+assert(values.main, "pass --main <clean historical checkout containing the retired single-song engine>");
 const mainRoot = resolve(values.main);
 const archive = resolve(values.archive);
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
@@ -29,7 +29,7 @@ const measuredSources = [
   [mainRoot, "src/lib/bandori/team-builder/core/chart.ts"],
 ].map(([cwd, path]) => ({ implementation: cwd === root ? "greenfield" : "main", path, sha256: hash(readFileSync(join(cwd, path))) }));
 assert.equal(git(mainRoot, ["diff", "HEAD", "--", "src/lib/bandori/team-builder/core", "src/lib/bandori-team-calculator.ts"]), "");
-assert.equal(git(mainRoot, ["rev-parse", "HEAD"]), git(mainRoot, ["rev-parse", "main"]));
+// The baseline is an explicit historical checkout; current production has retired this engine.
 const mainScoring = await import(pathToFileURL(join(mainRoot, "src/lib/bandori/team-builder/core/scoring.ts")).href);
 const mainEvaluation = await import(pathToFileURL(join(mainRoot, "src/lib/bandori/team-builder/core/team-evaluation.ts")).href);
 

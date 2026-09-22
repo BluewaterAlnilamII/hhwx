@@ -101,6 +101,62 @@ function buildAreaConfigurations(ownedAreaItemIds: ReadonlySet<number>): AreaIte
   return [...unique.values()];
 }
 
+/** Shared owned roster normalization for single-song and medley search. */
+export function buildSearchRoster(source: Record<string, unknown>, path: string) {
+  const profile = decodeMedleyProfile(source.profilePayload, `${path}.profilePayload`);
+  const cardsById = readRecord(source.cardsById, `${path}.cardsById`, "INVALID_MASTER");
+  const charactersById = readRecord(source.charactersById, `${path}.charactersById`, "INVALID_MASTER");
+  const skillsById = readRecord(source.skillsById, `${path}.skillsById`, "INVALID_MASTER");
+  const areaItemsById = readRecord(source.areaItemsById, `${path}.areaItemsById`, "INVALID_MASTER");
+  const characterBonuses = new Map(
+    profile.characterBonuses.map((bonus) => [bonus.characterId, bonus]),
+  );
+
+  const calculatedCards: CalculatedProfileCardV1[] = [];
+  const cards = profile.cards.map((state, instanceId) => {
+    const cardPath = `${path}.cardsById.${state.cardId}`;
+    const cardMaster = resolveSourceCardMaster(
+      requireSourceMaster(cardsById, state.cardId, `${path}.cardsById`),
+      profile.server,
+      cardPath,
+    );
+    const provisionalCharacterId = Number(cardMaster.characterId);
+    if (!Number.isSafeInteger(provisionalCharacterId) || provisionalCharacterId <= 0) {
+      failInput("INVALID_MASTER", `${cardPath}.characterId`, "must be a positive integer");
+    }
+    const card = calculateProfileCard(
+      state,
+      cardMaster,
+      requireSourceMaster(charactersById, provisionalCharacterId, `${path}.charactersById`),
+      characterBonuses,
+      cardPath,
+    );
+    calculatedCards.push(card);
+    const skillPath = `${path}.skillsById.${card.skillId}`;
+    const skillMaster = requireSourceMaster(skillsById, card.skillId, `${path}.skillsById`);
+    return {
+      instanceId,
+      masterCardId: card.cardId,
+      characterId: card.characterId,
+      bandId: card.bandId,
+      attribute: card.attribute,
+      isExcluded: card.isExcluded,
+      characterParameter: card.characterParameter,
+      eventParameter: calculateCardEventParameter(card, source.eventBonus),
+      skillContexts: resolveSkillContexts(card, skillMaster, profile.server, skillPath),
+    };
+  });
+
+  const areaItems = profile.areaItems.map((state) => calculateProfileAreaItem(
+    state,
+    requireSourceMaster(areaItemsById, state.areaItemId, `${path}.areaItemsById`),
+    profile.server,
+    `${path}.areaItemsById.${state.areaItemId}`,
+  ));
+  const ownedAreaItemIds = new Set(areaItems.map((item) => item.areaItemId));
+  return { profile, calculatedCards, cards, areaItems, areaConfigurations: buildAreaConfigurations(ownedAreaItemIds) };
+}
+
 /** Build the normalized Rust search request from the current HHWX profile payload and raw masters. */
 export function buildMedleySearchInput(
   value: unknown,
@@ -140,56 +196,8 @@ export function buildMedleySearchInput(
     failInput("UNSUPPORTED_SCHEMA", `${path}.schemaVersion`, "unsupported medley-search source schema");
   }
 
-  const profile = decodeMedleyProfile(source.profilePayload, `${path}.profilePayload`);
-  const cardsById = readRecord(source.cardsById, `${path}.cardsById`, "INVALID_MASTER");
-  const charactersById = readRecord(source.charactersById, `${path}.charactersById`, "INVALID_MASTER");
-  const skillsById = readRecord(source.skillsById, `${path}.skillsById`, "INVALID_MASTER");
-  const areaItemsById = readRecord(source.areaItemsById, `${path}.areaItemsById`, "INVALID_MASTER");
+  const { cards, areaItems, areaConfigurations } = buildSearchRoster(source, path);
   const songsById = readRecord(source.songsById, `${path}.songsById`, "INVALID_MASTER");
-  const characterBonuses = new Map(
-    profile.characterBonuses.map((bonus) => [bonus.characterId, bonus]),
-  );
-
-  const cards = profile.cards.map((state, instanceId) => {
-    const cardPath = `${path}.cardsById.${state.cardId}`;
-    const cardMaster = resolveSourceCardMaster(
-      requireSourceMaster(cardsById, state.cardId, `${path}.cardsById`),
-      profile.server,
-      cardPath,
-    );
-    const provisionalCharacterId = Number(cardMaster.characterId);
-    if (!Number.isSafeInteger(provisionalCharacterId) || provisionalCharacterId <= 0) {
-      failInput("INVALID_MASTER", `${cardPath}.characterId`, "must be a positive integer");
-    }
-    const card = calculateProfileCard(
-      state,
-      cardMaster,
-      requireSourceMaster(charactersById, provisionalCharacterId, `${path}.charactersById`),
-      characterBonuses,
-      cardPath,
-    );
-    const skillPath = `${path}.skillsById.${card.skillId}`;
-    const skillMaster = requireSourceMaster(skillsById, card.skillId, `${path}.skillsById`);
-    return {
-      instanceId,
-      masterCardId: card.cardId,
-      characterId: card.characterId,
-      bandId: card.bandId,
-      attribute: card.attribute,
-      isExcluded: card.isExcluded,
-      characterParameter: card.characterParameter,
-      eventParameter: calculateCardEventParameter(card, source.eventBonus),
-      skillContexts: resolveSkillContexts(card, skillMaster, profile.server, skillPath),
-    };
-  });
-
-  const areaItems = profile.areaItems.map((state) => calculateProfileAreaItem(
-    state,
-    requireSourceMaster(areaItemsById, state.areaItemId, `${path}.areaItemsById`),
-    profile.server,
-    `${path}.areaItemsById.${state.areaItemId}`,
-  ));
-  const ownedAreaItemIds = new Set(areaItems.map((item) => item.areaItemId));
   const songSelections = readSongSelections(source.songs, `${path}.songs`);
 
   return {
@@ -201,7 +209,7 @@ export function buildMedleySearchInput(
     ),
     cards,
     areaItems,
-    areaConfigurations: buildAreaConfigurations(ownedAreaItemIds),
+    areaConfigurations,
     songs: buildSongs(songSelections, songsById, `${path}.songs`),
   };
 }

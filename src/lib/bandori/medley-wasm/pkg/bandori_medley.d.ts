@@ -7,11 +7,17 @@
  */
 export function runMedleySearchJson(input_json: string, memory_budget_bytes: number, stop_reason_callback: Function, incumbent_json_callback: Function, search_finished_callback: Function): string;
 
+/**
+ * One-team entry using the same resource-control and hydration boundary.
+ */
+export function runSingleSearchJson(input_json: string, memory_budget_bytes: number, stop_reason_callback: Function, incumbent_json_callback: Function, search_finished_callback: Function): string;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly runMedleySearchJson: (a: number, b: number, c: number, d: any, e: any, f: any) => [number, number, number, number];
+    readonly runSingleSearchJson: (a: number, b: number, c: number, d: any, e: any, f: any) => [number, number, number, number];
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;

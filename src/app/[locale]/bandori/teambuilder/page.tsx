@@ -237,6 +237,7 @@ type TeamBuilderData = {
 const EMPTY_CARD_METADATA: Record<string, CardMetadata | undefined> = {};
 
 type OtherPlayerDraft = {
+  conditionSatisfied: boolean;
   skillId: string;
   skillLevel: string;
 };
@@ -280,6 +281,7 @@ const MAX_SEARCH_DURATION_SECONDS = 3_600;
 const DEFAULT_PERFECT_RATE = "100";
 const NO_EVENT_BANNER_URL = "/res/530.png";
 const TEAMBUILDER_LIVE_PREFERENCES_STORAGE_KEY = "hhwx-bandori-teambuilder-live-preferences:v1";
+const TEAMBUILDER_PROFILE_PREFERENCE_STORAGE_KEY = "hhwx-bandori-teambuilder-selected-profile:v1";
 const DIFFICULTIES: BandoriTeamSearchDifficulty[] = ["easy", "normal", "hard", "expert", "special"];
 const DIFFICULTY_KEYS: Record<BandoriTeamSearchDifficulty, string> = {
   easy: "0",
@@ -348,10 +350,10 @@ const RESULT_PLACEMENT_LABELS: Record<ResultPlacementOption, string> = {
 const ENCORE_SKILL_SOURCE_OPTIONS: EncoreSkillSource[] = ["self", "other1", "other2", "other3", "other4"];
 const OTHER_PLAYER_SKILL_LEVEL_OPTIONS = ["1", "2", "3", "4", "5"];
 const DEFAULT_OTHER_PLAYERS: OtherPlayerDraft[] = [
-  { skillId: "69", skillLevel: "5" },
-  { skillId: "69", skillLevel: "1" },
-  { skillId: "66", skillLevel: "5" },
-  { skillId: "66", skillLevel: "1" },
+  { skillId: "69", skillLevel: "5", conditionSatisfied: true },
+  { skillId: "69", skillLevel: "1", conditionSatisfied: true },
+  { skillId: "66", skillLevel: "5", conditionSatisfied: true },
+  { skillId: "66", skillLevel: "1", conditionSatisfied: true },
 ];
 const AREA_ITEM_PARAMETER_LABELS: Record<"performance" | "technique" | "visual", string> = {
   performance: "Performance",
@@ -733,6 +735,18 @@ function isLiveType(value: unknown): value is LiveType {
   return value === "free" || value === "multi" || value === "challenge" || value === "versus";
 }
 
+function resolveLiveType(preferred: LiveType, eventType: BandoriTeamSearchEventType): LiveType {
+  const available = allowedLiveTypes(eventType);
+  return available.includes(preferred) ? preferred : available.includes("multi") ? "multi" : available[0];
+}
+
+function resolveDifficulty(
+  preferred: BandoriTeamSearchDifficulty,
+  available: readonly BandoriTeamSearchDifficulty[],
+): BandoriTeamSearchDifficulty {
+  return available.includes(preferred) ? preferred : available[available.length - 1] ?? preferred;
+}
+
 function isEncoreSkillSource(value: unknown): value is EncoreSkillSource {
   return typeof value === "string" && (ENCORE_SKILL_SOURCE_OPTIONS as string[]).includes(value);
 }
@@ -806,7 +820,7 @@ function normalizeOtherPlayersPreference(value: unknown): OtherPlayerDraft[] | u
     return undefined;
   }
 
-  const players = value.map((player) => {
+  const players = value.map((player): OtherPlayerDraft | null => {
     if (typeof player !== "object" || player === null) {
       return null;
     }
@@ -815,7 +829,7 @@ function normalizeOtherPlayersPreference(value: unknown): OtherPlayerDraft[] | u
     const skillLevel = typeof candidate.skillLevel === "string" && OTHER_PLAYER_SKILL_LEVEL_OPTIONS.includes(candidate.skillLevel)
       ? candidate.skillLevel
       : null;
-    return skillId && skillLevel ? { skillId, skillLevel } : null;
+    return skillId && skillLevel ? { skillId, skillLevel, conditionSatisfied: candidate.conditionSatisfied !== false } : null;
   });
   return players.every((player): player is OtherPlayerDraft => player !== null)
     ? players
@@ -889,6 +903,45 @@ function writeLivePreferences(patch: LivePreferenceState): void {
   } catch {
     // Optional persistence must not interrupt the current live configuration.
   }
+}
+
+function readProfilePreference(userId: string): ProfileChoice | null {
+  if (typeof window === "undefined" || !userId) return null;
+  try {
+    const value: unknown = JSON.parse(window.localStorage.getItem(`${TEAMBUILDER_PROFILE_PREFERENCE_STORAGE_KEY}:${userId}`) ?? "null");
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const record = value as Partial<ProfileChoice>;
+    return (record.source === "cloud" || record.source === "local") && typeof record.id === "string" && record.id.trim()
+      ? { source: record.source, id: record.id.trim() }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeProfilePreference(userId: string, choice: ProfileChoice): void {
+  if (typeof window === "undefined" || !userId) return;
+  try {
+    window.localStorage.setItem(`${TEAMBUILDER_PROFILE_PREFERENCE_STORAGE_KEY}:${userId}`, JSON.stringify(choice));
+  } catch {
+    // Optional persistence must not interrupt profile selection.
+  }
+}
+
+function resolveProfileChoice(
+  current: ProfileChoice | null,
+  saved: ProfileChoice | null,
+  cloudProfiles: readonly { id: string }[],
+  localProfiles: readonly { id: string }[],
+): ProfileChoice | null {
+  for (const choice of [current, saved]) {
+    if (choice && (choice.source === "cloud" ? cloudProfiles : localProfiles).some((profile) => profile.id === choice.id)) {
+      return choice;
+    }
+  }
+  if (cloudProfiles[0]) return { source: "cloud", id: cloudProfiles[0].id };
+  if (localProfiles[0]) return { source: "local", id: localProfiles[0].id };
+  return null;
 }
 
 function shouldShowParameterBonus(eventType: BandoriTeamSearchEventType): boolean {
@@ -968,10 +1021,10 @@ function buildBoundedEarlyStopReason(
   secondsLabel: string,
   maxSearchDurationSeconds?: string,
 ): string {
-  if (isMedleySearchResponse(result) && result.incompleteReason === "memory_exhausted") {
+  if (result.incompleteReason === "memory_exhausted") {
     return proofT("reasonParts.memoryLimit", {
       limitLabel: proofT("upperLimitLabel", {
-        limit: `${Math.floor(result.stats.memoryBudgetBytes / (1024 * 1024))} MiB`,
+        limit: `${isMedleySearchResponse(result) ? Math.floor(result.stats.memoryBudgetBytes / (1024 * 1024)) : 1024} MiB`,
       }),
     });
   }
@@ -1003,12 +1056,10 @@ function buildSearchCompletionSummary(
   const medleyResult = isMedleySearchResponse(result) ? result : null;
   const elapsedLabel = medleyResult
     ? formatSearchElapsedMs(medleyResult.stats.elapsedMs) ?? "0ms"
-    : `${result.stats.elapsedMs}ms`;
+    : formatSearchElapsedMs(result.stats.elapsedMs) ?? "0ms";
   const parts = [proofT("completedElapsed", { elapsed: elapsedLabel })];
-  if (medleyResult?.status === "exact") {
-    parts.push(proofT("exact"));
-  } else if (medleyResult?.status === "incomplete"
-    || (!isMedleySearchResponse(result) && result.stats.searchMode === "bounded")) {
+  if (result.status !== "exact" && (medleyResult?.status === "incomplete"
+    || (!isMedleySearchResponse(result) && result.stats.searchMode === "bounded"))) {
     parts.push(proofT("boundedStop", {
       reason: buildBoundedEarlyStopReason(
         result,
@@ -1046,11 +1097,8 @@ function buildSearchProgressSummary(progress: BandoriMedleyFrontendProgressDto, 
 }
 
 function getSearchProofStatusLabel(result: TeamBuilderSearchResponse, proofT: TeamBuilderTranslator): string | null {
-  if (!isMedleySearchResponse(result)) {
+  if (!isMedleySearchResponse(result) || result.status === "exact") {
     return null;
-  }
-  if (result.status === "exact") {
-    return proofT("exact");
   }
   return proofT("notExact");
 }
@@ -1068,16 +1116,17 @@ function buildSkillOrderDisplay(
   actorT: TeamBuilderTranslator,
   skillOrderActors?: BandoriTeamSearchSkillOrderActor[],
   skillOrderCardInstanceKeys?: string[],
+  separator = " -> ",
 ): string {
   if (skillOrderActors && skillOrderActors.length > 0) {
-    return skillOrderActors.map((actor) => getSkillOrderActorLabel(actor, actorT)).join(" -> ");
+    return skillOrderActors.map((actor) => getSkillOrderActorLabel(actor, actorT)).join(separator);
   }
   if (skillOrderCardInstanceKeys && skillOrderCardInstanceKeys.length > 0) {
     const positionByCardKey = new Map(displayedCards.map((card, index) => [getDisplayCardKey(card), index + 1]));
-    return skillOrderCardInstanceKeys.map((cardKey) => positionByCardKey.get(cardKey) ?? "?").join(" -> ");
+    return skillOrderCardInstanceKeys.map((cardKey) => positionByCardKey.get(cardKey) ?? "?").join(separator);
   }
   const positionByCardId = new Map(displayedCards.map((card, index) => [card.cardId, index + 1]));
-  return skillOrderCardIds.map((cardId) => positionByCardId.get(cardId) ?? "?").join(" -> ");
+  return skillOrderCardIds.map((cardId) => positionByCardId.get(cardId) ?? "?").join(separator);
 }
 
 function StepButton({
@@ -1531,7 +1580,7 @@ function MultiLiveSettingsPanel({
       <div className="space-y-3">
         {otherPlayers.map((player, index) => (
           <div key={index} className="grid gap-2 rounded-2xl bg-[var(--theme-color-panel-background)] p-3 lg:grid-cols-[5rem_1fr_auto] lg:items-center">
-            <div className="text-sm font-semibold text-[var(--theme-color-text-muted)]">{labelsT("leaderWithIndex", { index: index + 1 })}</div>
+            <div className="text-sm font-semibold text-[var(--theme-color-text-muted)]">{labelsT("leaderWithIndex", { index: index + 2 })}</div>
             <SelectInput
               value={player.skillId}
               onChange={(event) => updatePlayer(index, { skillId: event.target.value })}
@@ -1550,6 +1599,10 @@ function MultiLiveSettingsPanel({
               options={OTHER_PLAYER_SKILL_LEVEL_OPTIONS}
               onChange={(value) => updatePlayer(index, { skillLevel: value })}
             />
+            <label className="flex items-center gap-2 text-xs lg:col-span-3">
+              <input type="checkbox" checked={player.conditionSatisfied === true} onChange={(event) => updatePlayer(index, { conditionSatisfied: event.target.checked })} />
+              {labelsT("externalSkillCondition")}
+            </label>
           </div>
         ))}
       </div>
@@ -1607,7 +1660,14 @@ function ResultCard({
   const displayedTargetValue = result.target === "eventPoint" && displayedEventPoint !== null
     ? displayedEventPoint
     : result.targetValue;
-  const displayedCards = orderResultCardsWithLeaderCenter(result.cards, result.leaderCardId, result.leaderCardInstanceKey);
+  const displayedCards = result.orderModel ? result.cards : orderResultCardsWithLeaderCenter(result.cards, result.leaderCardId, result.leaderCardInstanceKey);
+  const peakFormation = result.peakFormationCardIds && buildSkillOrderDisplay(result.peakFormationCardIds, displayedCards, actorT, undefined, result.peakFormationCardInstanceKeys, " / ");
+  const changedFormation = result.peakFormationCardInstanceKeys?.some((key, i) => key !== getDisplayCardKey(displayedCards[i]));
+  const formatOrderProbability = (count: number) => <span className="inline-flex items-baseline gap-1 whitespace-nowrap">
+    {result.orderModel ? new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 2 }).format(count / result.maxScoreOrderTotal) : null}
+    <span className="text-xs">{labelsT("orderProbabilityFraction", { count, total: result.maxScoreOrderTotal })}</span>
+  </span>;
+  const peakExpectation = <span className="whitespace-nowrap text-xs">{labelsT("peakExpectation", { score: formatNumber(result.peakAverageScore ?? 0, locale) })}</span>;
   const skillOrderDisplay = buildSkillOrderDisplay(result.skillOrderCardIds, displayedCards, actorT, result.skillOrderActors, result.skillOrderCardInstanceKeys);
   const targetLabel = isScoreLinkedEventPointTarget(result.eventType, result.liveType) && result.target === "eventPoint"
     ? targetsT("scoreAndEventPoint")
@@ -1615,34 +1675,36 @@ function ResultCard({
 
   return (
     <article className="rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-4 shadow-xs">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex items-center gap-4">
-          <div className="w-12 text-right text-lg font-bold text-[var(--theme-color-text-default)]">#{result.rank}</div>
-          <div>
-            <div className="text-xl font-bold text-[var(--theme-color-text-default)]">{formatNumber(displayedTargetValue, locale)}</div>
-            <div className="mt-1 text-xs font-semibold text-[var(--theme-color-text-muted)]">
-              {targetLabel} / {eventTypesT(result.eventType)} / {getLiveLabel(result.liveType, result.eventType, liveLabels)}
+      <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-start lg:justify-between">
+        <div className="flex min-w-0 items-center gap-4 lg:basis-64 lg:grow">
+          <div className="w-12 shrink-0 text-right text-lg font-bold text-[var(--theme-color-text-default)]">#{result.rank}</div>
+          <div className="min-w-0">
+            <div className="whitespace-nowrap text-xl font-bold text-[var(--theme-color-text-default)]">{formatNumber(displayedTargetValue, locale)}</div>
+            <div className="mt-1 flex flex-wrap gap-x-1 text-xs font-semibold text-[var(--theme-color-text-muted)]">
+              <span className="whitespace-nowrap">{targetLabel}</span>
+              <span className="whitespace-nowrap">/ {eventTypesT(result.eventType)}</span>
+              <span className="whitespace-nowrap">/ {getLiveLabel(result.liveType, result.eventType, liveLabels)}</span>
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-2 text-center text-xs sm:grid-cols-5">
-          <div className="rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2">
-            <div className="font-semibold text-[var(--theme-color-text-muted)]">{labelsT("averageScore")}</div>
+        <div className="flex flex-wrap gap-2 text-center text-xs sm:flex-nowrap lg:shrink-0">
+          <div className="flex-1 whitespace-nowrap rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2">
+            <div className="font-semibold text-[var(--theme-color-text-muted)]">{labelsT(result.orderModel ? "expectedScore" : "averageScore")}</div>
             <div className="mt-1 font-bold text-[var(--theme-color-text-default)]">{formatNumber(result.averageScore, locale)}</div>
           </div>
-          <div className="rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2">
+          <div className="flex-1 whitespace-nowrap rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2">
             <div className="font-semibold text-[var(--theme-color-text-muted)]">{labelsT("eventPoint")}</div>
             <div className="mt-1 font-bold text-[var(--theme-color-text-default)]">{formatNumber(displayedEventPoint, locale)}</div>
           </div>
-          <div className="rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2">
+          <div className="flex-1 whitespace-nowrap rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2">
             <div className="font-semibold text-[var(--theme-color-text-muted)]">{labelsT("totalPower")}</div>
-            <div className="mt-1 font-bold text-[var(--theme-color-text-default)]">{formatNumber(result.totalPower, locale)}</div>
+            <div className="mt-1 font-bold text-[var(--theme-color-text-default)]">{formatNumber(getBandoriPowerDisplayValue(result.totalPower), locale)}</div>
           </div>
-          <div className="rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2">
+          <div className="flex-1 whitespace-nowrap rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2">
             <div className="font-semibold text-[var(--theme-color-text-muted)]">{labelsT("roomScore")}</div>
             <div className="mt-1 font-bold text-[var(--theme-color-text-default)]">{formatNumber(result.roomScore, locale)}</div>
           </div>
-          <div className="rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2">
+          <div className="flex-1 whitespace-nowrap rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2">
             <div className="font-semibold text-[var(--theme-color-text-muted)]">{labelsT("bonus")}</div>
             <div className="mt-1 font-bold text-[var(--theme-color-text-default)]">{formatPercent(result.pointBonusRate * 100)}</div>
           </div>
@@ -1650,9 +1712,10 @@ function ResultCard({
       </div>
 
       <div className="mt-4 flex flex-wrap items-start gap-2 overflow-visible">
-        {displayedCards.map((card) => (
+        {displayedCards.map((card, index) => (
           <TeamBuilderCardTile
             key={getDisplayCardKey(card)}
+            badge={result.orderModel ? String(index + 1) : undefined}
             card={card}
             metadata={cardMetadata[String(card.cardId)]}
             characters={characters}
@@ -1664,12 +1727,10 @@ function ResultCard({
       </div>
 
       <div className="mt-4 grid gap-3 text-sm text-[var(--theme-color-text-muted)] lg:grid-cols-2">
-        <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3">
-          <div className="font-semibold text-[var(--theme-color-text-default)]">{labelsT("scoreRange")}</div>
-          <div className="mt-1">
-            {formatNumber(result.minScore, locale)} / {formatNumber(result.averageScore, locale)} / {formatNumber(result.maxScore, locale)}
-          </div>
-        </div>
+        {result.playerFormation ? <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3">
+          <div className="font-semibold text-[var(--theme-color-text-default)]">{labelsT("playerFormation")}</div>
+          <div className="mt-1">{result.playerFormation.map(player => player === 1 ? labelsT("selfPlayer") : labelsT("otherPlayer", { index: player })).join(" / ")}</div>
+        </div> : null}
         <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3">
           <div className="font-semibold text-[var(--theme-color-text-default)]">{labelsT("areaItemConfiguration")}</div>
           <div className="mt-1">
@@ -1678,15 +1739,38 @@ function ResultCard({
           </div>
         </div>
         <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3">
-          <div className="font-semibold text-[var(--theme-color-text-default)]">{labelsT("bestSkillOrder")}</div>
-          <div className="mt-1 break-all">{skillOrderDisplay}</div>
-        </div>
-        <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3">
-          <div className="font-semibold text-[var(--theme-color-text-default)]">{labelsT("bestOrderProbability")}</div>
+          <div className="font-semibold text-[var(--theme-color-text-default)]">{labelsT("scoreRange")}</div>
           <div className="mt-1">
-            {result.maxScoreOrderCount}/{result.maxScoreOrderTotal}
+            {labelsT.rich("scoreRangeValues", {
+              minimum: formatNumber(result.minScore, locale),
+              maximum: formatNumber(result.maxScore, locale),
+              value: (chunks) => <span className="inline-block whitespace-nowrap">{chunks}</span>,
+            })}
           </div>
         </div>
+        {result.liveType !== "multi" ? <>
+          <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3">
+            <div className="font-semibold text-[var(--theme-color-text-default)]">{labelsT(result.orderModel ? "maximumScorePlan" : "bestSkillOrder")}</div>
+            {changedFormation ? <div className="mt-1 flex flex-wrap items-baseline gap-x-1">
+              <span className="whitespace-nowrap">{labelsT("peakFormation")}</span>
+              <span className="whitespace-nowrap">{peakFormation}</span>
+              {peakExpectation}
+            </div> : null}
+            <div className="mt-1 flex flex-wrap items-baseline gap-x-1">
+              {result.orderModel ? <span className="whitespace-nowrap">{labelsT("activationOrder")}</span> : null}
+              <span className="whitespace-nowrap">{skillOrderDisplay}</span>
+            </div>
+          </div>
+          <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3">
+            <div className="font-semibold text-[var(--theme-color-text-default)]">{labelsT(result.orderModel ? "maximumScoreProbability" : "bestOrderProbability")}</div>
+            <div className="mt-1">
+              {changedFormation && result.currentMaxScoreOrderCount !== undefined ? <>
+                <div><span className="whitespace-nowrap">{labelsT("currentFormation")}</span> {formatOrderProbability(result.currentMaxScoreOrderCount)}</div>
+                <div className="mt-1"><span className="whitespace-nowrap">{labelsT("peakFormation")}</span> {formatOrderProbability(result.maxScoreOrderCount)}</div>
+              </> : formatOrderProbability(result.maxScoreOrderCount)}
+            </div>
+          </div>
+        </> : null}
         {result.supportBandPower !== null ? (
           <div className="rounded-xl bg-[var(--theme-color-panel-background)] p-3">
             <div className="font-semibold text-[var(--theme-color-text-default)]">{labelsT("supportTeam")}</div>
@@ -1738,10 +1822,10 @@ function MedleyProgressCard({
           return (
             <section key={team.slot} className="rounded-2xl border border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-panel-background)] p-3">
               <div className="text-sm font-bold text-[var(--theme-color-text-default)]">
-                {labelsT("firstSong", { index: team.slot + 1 })} / {songTitle}
+                {progress.kind === "medley" ? <>{labelsT("firstSong", { index: team.slot + 1 })} / {songTitle}</> : labelsT("expectedScore")}
               </div>
               <div className="mt-1 text-xs font-semibold text-[var(--theme-color-text-muted)]">
-                {labelsT("averageScore")} {formatNumber(team.averageScore, locale)}
+                {labelsT(progress.kind === "single" ? "expectedScore" : "averageScore")} {formatNumber(team.averageScore, locale)}
               </div>
               <div className="mt-3 flex flex-wrap items-start gap-2 overflow-visible">
                 {displayedCards.map((card) => (
@@ -1946,7 +2030,7 @@ function getCardCharacterLabel(
   return pickBandoriCharacterDisplayName(character, preferredServer, contextServer);
 }
 
-function TeamBuilderPanel() {
+function TeamBuilderPanel({ userId }: { userId: string }) {
   const locale = useLocale() as AppLocale;
   const preferredServer = useBandoriPreferredServer();
   const messages = useMessages();
@@ -2024,12 +2108,12 @@ function TeamBuilderPanel() {
   const [medleySongIds, setMedleySongIds] = useState<MedleySongIdTuple>(() => initialLivePreferences.medleySongIds ?? DEFAULT_MEDLEY_SONG_IDS);
   const [activeMedleySongSlot, setActiveMedleySongSlot] = useState(0);
   const [medleySongSource, setMedleySongSource] = useState<MedleySongSource>("custom");
-  const [medleyDifficulties, setMedleyDifficulties] = useState<MedleyDifficultyTuple>(() => (
+  const [preferredMedleyDifficulties, setPreferredMedleyDifficulties] = useState<MedleyDifficultyTuple>(() => (
     initialLivePreferences.medleyDifficulties ?? DEFAULT_MEDLEY_DIFFICULTIES
   ));
-  const [difficulty, setDifficulty] = useState<BandoriTeamSearchDifficulty>(() => initialLivePreferences.difficulty ?? DEFAULT_DIFFICULTY);
+  const [preferredDifficulty, setPreferredDifficulty] = useState<BandoriTeamSearchDifficulty>(() => initialLivePreferences.difficulty ?? DEFAULT_DIFFICULTY);
   const [perfectRate, setPerfectRate] = useState(() => initialLivePreferences.perfectRate ?? DEFAULT_PERFECT_RATE);
-  const [liveType, setLiveType] = useState<LiveType>(() => initialLivePreferences.liveType ?? "multi");
+  const [preferredLiveType, setPreferredLiveType] = useState<LiveType>(() => initialLivePreferences.liveType ?? "multi");
   const eventFormula: EventFormulaOption = "2";
   const liveBoostCount: LiveBoostCountOption = "3";
   const challengeCpCost: ChallengeCpCostOption = "1600";
@@ -2077,6 +2161,7 @@ function TeamBuilderPanel() {
     cleanup?: () => void;
   }>());
   const profilePayloadCacheRef = useRef(new Map<string, UserGameProfilePayload>());
+  const loadDataRequestRef = useRef(0);
   const selectedProfileCacheKey = profileChoice ? `${profileChoice.source}:${profileChoice.id}` : "";
 
   const [referenceNow] = useState(() => Date.now());
@@ -2107,6 +2192,7 @@ function TeamBuilderPanel() {
   const recommendedEventStatus = recommendedEvent ? getEventStatus(recommendedEvent, referenceNow) : "unknown";
   const selectedEventSwitcherId = selectedEventId ?? (recommendedEvent ? String(recommendedEvent.eventId) : "none");
   const availableLiveTypes = useMemo(() => allowedLiveTypes(selectedEventType), [selectedEventType]);
+  const liveType = resolveLiveType(preferredLiveType, selectedEventType);
   const liveTypeLabels = useMemo<Record<LiveType, string>>(() => ({
     free: getLiveLabel("free", selectedEventType, liveLabelMap),
     multi: getLiveLabel("multi", selectedEventType, liveLabelMap),
@@ -2114,7 +2200,7 @@ function TeamBuilderPanel() {
     versus: getLiveLabel("versus", selectedEventType, liveLabelMap),
   }), [liveLabelMap, selectedEventType]);
   const updateLiveType = useCallback((value: LiveType) => {
-    setLiveType(value);
+    setPreferredLiveType(value);
     writeLivePreferences({ liveType: value });
   }, []);
   const updateSongId = useCallback((value: string) => {
@@ -2122,7 +2208,7 @@ function TeamBuilderPanel() {
     writeLivePreferences({ songId: value });
   }, []);
   const updateDifficulty = useCallback((value: BandoriTeamSearchDifficulty) => {
-    setDifficulty(value);
+    setPreferredDifficulty(value);
     writeLivePreferences({ difficulty: value });
   }, []);
   const updateMedleySongId = useCallback((slotIndex: number, value: string) => {
@@ -2133,11 +2219,11 @@ function TeamBuilderPanel() {
     writeLivePreferences({ medleySongIds: next });
   }, [medleySongIds]);
   const updateMedleyDifficulty = useCallback((slotIndex: number, value: BandoriTeamSearchDifficulty) => {
-    const next = [...medleyDifficulties] as MedleyDifficultyTuple;
+    const next = [...preferredMedleyDifficulties] as MedleyDifficultyTuple;
     next[slotIndex] = value;
-    setMedleyDifficulties(next);
+    setPreferredMedleyDifficulties(next);
     writeLivePreferences({ medleyDifficulties: next });
-  }, [medleyDifficulties]);
+  }, [preferredMedleyDifficulties]);
   const updatePerfectRate = useCallback((value: string) => {
     setPerfectRate(value);
     writeLivePreferences({ perfectRate: value });
@@ -2162,6 +2248,10 @@ function TeamBuilderPanel() {
     setOtherPlayers(value);
     writeLivePreferences({ otherPlayers: value });
   }, []);
+  const updateProfileChoice = useCallback((value: ProfileChoice) => {
+    setProfileChoice(value);
+    writeProfilePreference(userId, value);
+  }, [userId]);
   const updateCardPreferences = useCallback((updater: (current: TeamBuilderCardPreferences) => TeamBuilderCardPreferences) => {
     setCardPreferences((current) => {
       const next = normalizeCardPreferences(updater(current));
@@ -2386,6 +2476,12 @@ function TeamBuilderPanel() {
   const selectedMedleySongs = useMemo(() => (
     medleySongIds.map((id) => data.songs[id] ?? null)
   ), [data.songs, medleySongIds]);
+  const medleyDifficulties = useMemo(() => (
+    preferredMedleyDifficulties.map((preferred, index) => resolveDifficulty(
+      preferred,
+      DIFFICULTIES.filter((item) => getSongDifficulty(selectedMedleySongs[index], item)),
+    )) as MedleyDifficultyTuple
+  ), [preferredMedleyDifficulties, selectedMedleySongs]);
   const activeMedleySong = selectedMedleySongs[activeMedleySongSlot] ?? null;
   const activeMedleyDifficulty = medleyDifficulties[activeMedleySongSlot];
   const activeMedleySongDifficulties = useMemo(() => (
@@ -2394,6 +2490,7 @@ function TeamBuilderPanel() {
   const selectedSongDifficulties = useMemo(() => (
     DIFFICULTIES.filter((item) => getSongDifficulty(selectedSong, item))
   ), [selectedSong]);
+  const difficulty = resolveDifficulty(preferredDifficulty, selectedSongDifficulties);
   const allProfiles = useMemo(() => [
     ...data.cloudProfiles.map((profile) => ({
       type: "cloud" as const,
@@ -2567,6 +2664,7 @@ function TeamBuilderPanel() {
   }, [calculationStartedAt, submitting]);
 
   const loadData = useCallback(async () => {
+    const requestId = ++loadDataRequestRef.current;
     if (
       (!masterEventsLoaded && masterEventsError === null)
       || (!masterMusicLoaded && masterMusicError === null)
@@ -2587,6 +2685,7 @@ function TeamBuilderPanel() {
         requestJson<{ payload: Record<string, CharacterMaster | undefined> }>("/api/bandori/master/characters", undefined, false, requestMessages),
         requestJson<{ payload: Record<string, SkillMaster | undefined> }>("/api/bandori/master/skills", undefined, false, requestMessages),
       ]);
+      if (requestId !== loadDataRequestRef.current) return;
       const supportedEvents = masterEvents.filter((event) => SUPPORTED_EVENT_TYPES.has(event.eventType));
       setData({
         cloudProfiles,
@@ -2596,14 +2695,14 @@ function TeamBuilderPanel() {
         characters: charactersResponse.payload,
         skills: skillsResponse.payload,
       });
-      const firstProfile = cloudProfiles[0] ?? localProfiles[0];
-      if (firstProfile) {
-        setProfileChoice(firstProfile.id.startsWith("local_") ? { source: "local", id: firstProfile.id } : { source: "cloud", id: firstProfile.id });
-      }
+      const savedProfile = readProfilePreference(userId);
+      setProfileChoice((current) => resolveProfileChoice(current, savedProfile, cloudProfiles, localProfiles));
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : errorsT("loadFailed"));
+      if (requestId === loadDataRequestRef.current) {
+        setError(loadError instanceof Error ? loadError.message : errorsT("loadFailed"));
+      }
     } finally {
-      setLoading(false);
+      if (requestId === loadDataRequestRef.current) setLoading(false);
     }
   }, [
     errorsT,
@@ -2614,6 +2713,7 @@ function TeamBuilderPanel() {
     masterMusicError,
     masterMusicLoaded,
     requestMessages,
+    userId,
   ]);
 
   const retryLoadData = useCallback(() => {
@@ -2639,6 +2739,7 @@ function TeamBuilderPanel() {
 
   useEffect(() => {
     void loadData();
+    return () => { loadDataRequestRef.current += 1; };
   }, [loadData]);
 
   useEffect(() => {
@@ -2758,14 +2859,7 @@ function TeamBuilderPanel() {
   }, [selectedProfileCacheKey]);
 
   useEffect(() => {
-    if (!availableLiveTypes.includes(liveType)) {
-      setLiveType(availableLiveTypes.includes("multi") ? "multi" : availableLiveTypes[0] ?? "free");
-    }
-  }, [availableLiveTypes, liveType]);
-
-  useEffect(() => {
     if (isMedleyEvent) {
-      setLiveType("free");
       setResultLimit("1");
       setMaxSearchDurationSeconds(DEFAULT_MEDLEY_SEARCH_DURATION_SECONDS);
       return;
@@ -2803,40 +2897,6 @@ function TeamBuilderPanel() {
       setSongId(eventSongOptions[0].id);
     }
   }, [eventSongOptions, shouldLimitSongsToEventSongs, songId]);
-
-  useEffect(() => {
-    if (selectedSongDifficulties.length > 0 && !selectedSongDifficulties.includes(difficulty)) {
-      const nextDifficulty = selectedSongDifficulties[selectedSongDifficulties.length - 1];
-      setDifficulty(nextDifficulty);
-      writeLivePreferences({ difficulty: nextDifficulty });
-    }
-  }, [difficulty, selectedSongDifficulties]);
-
-  useEffect(() => {
-    if (!isMedleyEvent || activeMedleySongDifficulties.length === 0 || activeMedleySongDifficulties.includes(activeMedleyDifficulty)) {
-      return;
-    }
-    updateMedleyDifficulty(activeMedleySongSlot, activeMedleySongDifficulties[activeMedleySongDifficulties.length - 1]);
-  }, [activeMedleyDifficulty, activeMedleySongDifficulties, activeMedleySongSlot, isMedleyEvent, updateMedleyDifficulty]);
-
-  useEffect(() => {
-    if (!isMedleyEvent) {
-      return;
-    }
-    let changed = false;
-    const nextDifficulties = [...medleyDifficulties] as MedleyDifficultyTuple;
-    selectedMedleySongs.forEach((song, index) => {
-      const availableDifficulties = DIFFICULTIES.filter((item) => getSongDifficulty(song, item));
-      if (availableDifficulties.length > 0 && !availableDifficulties.includes(nextDifficulties[index])) {
-        nextDifficulties[index] = availableDifficulties[availableDifficulties.length - 1];
-        changed = true;
-      }
-    });
-    if (changed) {
-      setMedleyDifficulties(nextDifficulties);
-      writeLivePreferences({ medleyDifficulties: nextDifficulties });
-    }
-  }, [isMedleyEvent, medleyDifficulties, selectedMedleySongs]);
 
   const resultEventPointMode = useMemo(() => {
     const singleResult = result && !isMedleySearchResponse(result)
@@ -2955,7 +3015,7 @@ function TeamBuilderPanel() {
     setResult(null);
     setMedleyProgress(null);
     setMedleyResultInputSnapshot(medleyInputSnapshot);
-    const shouldShowMedleyProgress = isMedleyEvent && medleyCalculationMode === "maximize";
+    const shouldShowMedleyProgress = !isMedleyEvent || medleyCalculationMode === "maximize";
     try {
       const response = await postTeamSearchWorkerMessage({
         type: "search",
@@ -2979,13 +3039,14 @@ function TeamBuilderPanel() {
           otherPlayerSkills: otherPlayers.map((player) => ({
             skillId: Number(player.skillId),
             skillLevel: Number(player.skillLevel),
+            conditionSatisfied: player.conditionSatisfied === true,
           })),
         },
         song: {
           songId: Number(isMedleyEvent && medleyInputSnapshot ? medleyInputSnapshot.medleySongIds[0] : songId),
           difficulty: isMedleyEvent && medleyInputSnapshot ? medleyInputSnapshot.medleyDifficulties[0] : difficulty,
           perfectRate: Math.max(0, Math.min(1, Number(perfectRate) / 100)),
-          perfectRatePercentText: isMedleyEvent ? perfectRate : undefined,
+          perfectRatePercentText: perfectRate,
         },
         songs: isMedleyEvent && medleyInputSnapshot
           ? medleyInputSnapshot.medleySongIds.map((id, index) => ({
@@ -3248,7 +3309,7 @@ function TeamBuilderPanel() {
                 <button
                   type="button"
                   key={`${profile.type}:${profile.id}`}
-                  onClick={() => setProfileChoice({ source: profile.type, id: profile.id })}
+                  onClick={() => updateProfileChoice({ source: profile.type, id: profile.id })}
                   className={`rounded-2xl border bg-[var(--theme-color-control-background)] p-4 text-left shadow-xs transition ${
                     selected ? "border-[var(--theme-color-selection-subtle-ring)] ring-2 ring-[var(--theme-color-selection-subtle-ring)]" : "border-[var(--theme-color-border-subtle)] hover:border-[var(--theme-color-action-secondary-border)]"
                   }`}
@@ -3672,7 +3733,7 @@ export default function BandoriTeamBuilderPage() {
       ) : profileError ? (
         <AccountErrorState message={profileError} />
       ) : profile?.emailVerified ? (
-        <TeamBuilderPanel />
+        <TeamBuilderPanel key={userId} userId={userId} />
       ) : (
         <section className="rounded-2xl border border-[var(--theme-color-semantic-warning-border)] bg-[var(--theme-color-semantic-warning-background)] p-6 shadow-xs">
           <h2 className="text-xl font-semibold text-[var(--theme-color-semantic-warning-foreground)]">{t("verifyTitle")}</h2>

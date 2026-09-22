@@ -95,9 +95,9 @@ hhwx/
 - `bandori/events/`：活动目录、API 契约与服务、路由/区服/状态辅助逻辑、横幅代理和活动评论目标校验。
 - `bandori/event-tracker/`：Event Tracker 的档线、TOP10、实时序列、投影、历史与预测契约/服务，由活动、歌曲和月度追踪模式共同使用。
 - `bandori/chart-simulator/`：无损谱面编译、带版本的 Worker 传输、定位状态重建、原生演出／效果／音频运行时，以及 CDN manifest 解析；谱面模拟器实体资源不进入 Web 仓库，而是通过逻辑路径解析，同时这里不包含区服选择。
-- `bandori/medley-foundation/`：校验 HHWX 档案／主数据，并投影到带版本的 Rust 组曲计分与搜索契约。
-- `bandori/medley-wasm/pkg/`：Rust 组曲搜索与结果补算生成的浏览器包，由组队计算器 Worker 加载。
-- `bandori/team-builder/`：TypeScript 单曲计算器。`core/` 包含计算基础设施和共享领域常量，`single/` 包含单曲精确搜索编排；组曲计分与穷尽搜索在 Rust 中运行。
+- `bandori/medley-foundation/`：共享 HHWX 档案／主数据、卡牌、技能和谱面规范化，以及带版本的组曲计分／搜索契约。
+- `bandori/medley-wasm/pkg/`：组曲与单曲 Rust 搜索及结果补算的生成浏览器绑定，由组队 Worker 加载。
+- `bandori/team-builder/`：单曲 UI 设置、活动策略和来源适配器；`core/calculator.ts` 保留通用卡牌计算。两种组队模式使用共享 Rust 计分／搜索包，原 TypeScript `single/` 引擎已退役。
 - `comments/`：与目标类型无关的评论契约、表情/贴纸目录、内容解析和特权持久化服务；各目标类型的存在性与可见性校验留在各自领域中。
 - `api-*.ts`：API 响应约定和缓存策略。
 - `bestdori-profile-codec.ts` 和 `user-game-*-server.ts`：游戏档案兼容、同步和服务端持久化逻辑。

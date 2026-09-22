@@ -17,7 +17,7 @@ fn invalid(
     Err(SearchError::new(code, path, message))
 }
 
-fn validate_probability(probability: ExactProbabilityV1) -> bool {
+pub(crate) fn validate_probability(probability: ExactProbabilityV1) -> bool {
     if probability.decimal_scale > 9 {
         return false;
     }
@@ -35,7 +35,7 @@ fn is_non_negative_number(value: f64) -> bool {
     value.is_finite() && value >= 0.0 && !value.is_sign_negative()
 }
 
-fn validate_skill(skill: ResolvedScoreSkillV1, path: &str) -> Result<(), SearchError> {
+pub(crate) fn validate_skill(skill: ResolvedScoreSkillV1, path: &str) -> Result<(), SearchError> {
     if skill.master_skill_id == 0
         || !(1..=5).contains(&skill.skill_level)
         || !skill.duration_seconds.is_finite()
@@ -118,7 +118,7 @@ fn validate_skill_contexts(
     Ok(())
 }
 
-fn validate_song(song: &MedleySongV1, song_index: usize) -> Result<(), SearchError> {
+pub(crate) fn validate_song(song: &MedleySongV1, song_index: usize) -> Result<(), SearchError> {
     let path = format!("songs[{song_index}]");
     if usize::from(song.slot) != song_index || song.song_id == 0 || song.play_level == 0 {
         return invalid(
@@ -195,29 +195,12 @@ fn validate_song(song: &MedleySongV1, song_index: usize) -> Result<(), SearchErr
     Ok(())
 }
 
-pub(crate) fn validate_input(input: &MedleySearchInputV1) -> Result<(), SearchError> {
-    if input.schema_version != SEARCH_INPUT_SCHEMA_VERSION {
-        return invalid(
-            SearchErrorCode::UnsupportedSchema,
-            "schemaVersion",
-            format!("expected {SEARCH_INPUT_SCHEMA_VERSION}"),
-        );
-    }
-    if input.scoring_rules_version != SCORING_RULES_VERSION {
-        return invalid(
-            SearchErrorCode::UnsupportedRules,
-            "scoringRulesVersion",
-            format!("expected {SCORING_RULES_VERSION}"),
-        );
-    }
-    if !validate_probability(input.perfect_rate) {
-        return invalid(
-            SearchErrorCode::InvalidPerfectRate,
-            "perfectRate",
-            "probability must be canonical, at most nine decimal places, and within 0..=1",
-        );
-    }
-    if u32::try_from(input.cards.len()).is_err() {
+pub(crate) fn validate_roster(
+    cards: &[crate::SearchCardV1],
+    area_items: &[crate::SearchAreaItemV1],
+    area_configurations: &[crate::AreaItemConfigurationV1],
+) -> Result<(), SearchError> {
+    if u32::try_from(cards.len()).is_err() {
         return invalid(
             SearchErrorCode::CountOverflow,
             "cards",
@@ -225,8 +208,8 @@ pub(crate) fn validate_input(input: &MedleySearchInputV1) -> Result<(), SearchEr
         );
     }
 
-    let mut master_card_ids = HashSet::with_capacity(input.cards.len());
-    for (index, card) in input.cards.iter().enumerate() {
+    let mut master_card_ids = HashSet::with_capacity(cards.len());
+    for (index, card) in cards.iter().enumerate() {
         let path = format!("cards[{index}]");
         if card.instance_id as usize != index {
             return invalid(
@@ -264,8 +247,7 @@ pub(crate) fn validate_input(input: &MedleySearchInputV1) -> Result<(), SearchEr
         validate_skill_contexts(card.skill_contexts, &format!("{path}.skillContexts"))?;
     }
 
-    if u32::try_from(input.area_items.len()).is_err()
-        || u32::try_from(input.area_configurations.len()).is_err()
+    if u32::try_from(area_items.len()).is_err() || u32::try_from(area_configurations.len()).is_err()
     {
         return invalid(
             SearchErrorCode::CountOverflow,
@@ -273,8 +255,8 @@ pub(crate) fn validate_input(input: &MedleySearchInputV1) -> Result<(), SearchEr
             "area-item and configuration counts must fit the normalized u32 index contract",
         );
     }
-    let mut area_item_ids = HashSet::with_capacity(input.area_items.len());
-    for (index, item) in input.area_items.iter().enumerate() {
+    let mut area_item_ids = HashSet::with_capacity(area_items.len());
+    for (index, item) in area_items.iter().enumerate() {
         let path = format!("areaItems[{index}]");
         if item.area_item_id == 0 || !area_item_ids.insert(item.area_item_id) {
             return invalid(
@@ -302,15 +284,15 @@ pub(crate) fn validate_input(input: &MedleySearchInputV1) -> Result<(), SearchEr
             );
         }
     }
-    if input.area_configurations.is_empty() {
+    if area_configurations.is_empty() {
         return invalid(
             SearchErrorCode::InvalidAreaConfiguration,
             "areaConfigurations",
             "at least one legal shared configuration is required; it may contain no items",
         );
     }
-    let mut configurations = HashSet::with_capacity(input.area_configurations.len());
-    for (index, configuration) in input.area_configurations.iter().enumerate() {
+    let mut configurations = HashSet::with_capacity(area_configurations.len());
+    for (index, configuration) in area_configurations.iter().enumerate() {
         let path = format!("areaConfigurations[{index}].selectedAreaItemIds");
         let mut selected_ids = HashSet::with_capacity(configuration.selected_area_item_ids.len());
         for area_item_id in &configuration.selected_area_item_ids {
@@ -337,6 +319,33 @@ pub(crate) fn validate_input(input: &MedleySearchInputV1) -> Result<(), SearchEr
             );
         }
     }
+
+    Ok(())
+}
+
+pub(crate) fn validate_input(input: &MedleySearchInputV1) -> Result<(), SearchError> {
+    if input.schema_version != SEARCH_INPUT_SCHEMA_VERSION {
+        return invalid(
+            SearchErrorCode::UnsupportedSchema,
+            "schemaVersion",
+            format!("expected {SEARCH_INPUT_SCHEMA_VERSION}"),
+        );
+    }
+    if input.scoring_rules_version != SCORING_RULES_VERSION {
+        return invalid(
+            SearchErrorCode::UnsupportedRules,
+            "scoringRulesVersion",
+            format!("expected {SCORING_RULES_VERSION}"),
+        );
+    }
+    if !validate_probability(input.perfect_rate) {
+        return invalid(
+            SearchErrorCode::InvalidPerfectRate,
+            "perfectRate",
+            "probability must be canonical, at most nine decimal places, and within 0..=1",
+        );
+    }
+    validate_roster(&input.cards, &input.area_items, &input.area_configurations)?;
 
     let mut total_notes = 0_u32;
     for (song_index, song) in input.songs.iter().enumerate() {
