@@ -62,6 +62,32 @@ test("card tooltip clamps horizontally using its actual width", () => {
   });
 });
 
+test("above preference uses available space while the default stays below", () => {
+  for (const [top, height, expectedPlacement] of [
+    [200, 100, "above"],
+    [20, 100, "below"],
+    [400, 500, "above"],
+    [100, 500, "below"],
+  ]) {
+    const input = {
+      anchorRect: rect({ left: 280, top, width: 24, height: 24 }),
+      tooltipWidth: 256,
+      tooltipHeight: height,
+      viewportWidth: 320,
+      viewportHeight: 640,
+    };
+    const position = getBandoriCardTooltipPosition({ ...input, preferredPlacement: "above" });
+    assert.equal(position.placement, expectedPlacement);
+    assert.ok(position.top >= 12);
+    assert.ok(position.top + height <= 628);
+    assert.equal(position.left, 52);
+    if (top === 200) {
+      assert.equal(position.top, 96);
+      assert.equal(getBandoriCardTooltipPosition(input).placement, "below");
+    }
+  }
+});
+
 test("card details link opens safely in a new tab", async () => {
   const tooltip = await readSource("src/components/bandori/BandoriCardHoverTooltip.tsx");
   const detailLink = tooltip.match(/<Link[\s\S]*?<\/Link>/u)?.[0];
