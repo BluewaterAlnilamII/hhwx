@@ -70,7 +70,7 @@
 3. 同一个物理卡牌实例不能出现在两支队伍中；
 4. 每首歌保留输入位置，允许歌曲重复，不允许换序。
 
-将 `hhwx-medley-bestdori-v4` 按固定运算顺序精确计算、结果取整数值的 binary64 分数记作 `score(q, Ts, s)`，目标为：
+将 `hhwx-medley-bestdori-v5` 按固定运算顺序精确计算、结果取整数值的 binary64 分数记作 `score(q, Ts, s)`，目标为：
 
 ```text
 S(q, T0, T1, T2) = (score(q, T0, 0) + score(q, T1, 1))

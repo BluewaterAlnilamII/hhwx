@@ -10,7 +10,7 @@ import { resolveBestdoriScoreSkill } from "../medley-foundation/skills";
 import { failInput, readRecord } from "../medley-foundation/errors";
 
 export const SINGLE_SEARCH_INPUT_VERSION = "hhwx-single-search-input-v1" as const;
-export const SINGLE_SCORING_RULES_VERSION = "hhwx-single-medley-foundation-v4" as const;
+export const SINGLE_SCORING_RULES_VERSION = "hhwx-single-medley-foundation-v5" as const;
 
 export type SingleEventRuleV1 = { kind: "none" } | { kind: "normal"; base: number; divisor: number; formula: number } | { kind: "challenge"; modern: boolean };
 export type SingleSearchInputV1 = {

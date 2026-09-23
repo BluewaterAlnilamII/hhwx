@@ -102,7 +102,7 @@ test("committed WASM proves infeasibility when fewer than fifteen cards are elig
 });
 
 test("committed WASM rejects obsolete and unknown scoring rules before search", () => {
-  for (const scoringRulesVersion of ["hhwx-medley-bestdori-v3", "unsupported"]) {
+  for (const scoringRulesVersion of ["hhwx-medley-bestdori-v3", "hhwx-medley-bestdori-v4", "unsupported"]) {
     assert.throws(() => run({ ...input, scoringRulesVersion }), (error) => {
       const parsed = JSON.parse(error);
       assert.equal(parsed.code, "UNSUPPORTED_RULES");
@@ -110,4 +110,25 @@ test("committed WASM rejects obsolete and unknown scoring rules before search", 
       return true;
     });
   }
+});
+
+test("medley search scores continued-PERFECT skills regardless of master effect order", () => {
+  const score = { activateEffectValue: 90, activateCondition: "good" };
+  const continued = { activateEffectValue: 110, activateCondition: "perfect" };
+  const scores = [];
+  for (const effects of [
+    { score, score_continued_note_judge: continued },
+    { score_continued_note_judge: continued, score },
+  ]) {
+    const variant = structuredClone(source);
+    variant.skillsById[1].activationEffect.activateEffectTypes = effects;
+    const normalized = buildMedleySearchInput(variant);
+    assert.deepEqual(normalized.cards[0].skillContexts.mixed.behavior, {
+      kind: "continued_perfect", activeScoreUpPercent: 110, fallbackScoreUpPercent: 90,
+    });
+    const result = run(normalized);
+    assert.equal(result.outcome.status, "exact");
+    scores.push(result.outcome.best.totalAverageScore);
+  }
+  assert.equal(scores[0], scores[1]);
 });

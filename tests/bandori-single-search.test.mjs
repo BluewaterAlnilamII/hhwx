@@ -582,8 +582,8 @@ test("power display preserves fractional scoring inputs and native display conve
 
 test("single WASM rejects obsolete parameter and fixed-window rules before search", () => {
   const input = small();
-  assert.equal(input.scoringRulesVersion, "hhwx-single-medley-foundation-v4");
-  for (const scoringRulesVersion of ["hhwx-single-medley-foundation-v1", "hhwx-single-medley-foundation-v2", "hhwx-single-medley-foundation-v3", "unsupported"]) {
+  assert.equal(input.scoringRulesVersion, "hhwx-single-medley-foundation-v5");
+  for (const scoringRulesVersion of ["hhwx-single-medley-foundation-v1", "hhwx-single-medley-foundation-v2", "hhwx-single-medley-foundation-v3", "hhwx-single-medley-foundation-v4", "unsupported"]) {
     assert.throws(() => run({ ...input, scoringRulesVersion }), /unsupported single-song input or scoring version/);
   }
 });

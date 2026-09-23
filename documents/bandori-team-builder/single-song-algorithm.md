@@ -79,7 +79,7 @@ Tables are reused for expectation and retained-result maximum/probability calcul
 
 ## Scoring scope
 
-Character parameters follow medley v4: floor the potential bonus and combined collection/training mission bonus separately. Single-song rules are now `hhwx-single-medley-foundation-v4`, adding cooperative weighted formation optimization to v3. Regenerate normalized inputs with the current adapter; historical v3 uniform-room outputs are not equivalent baselines for cooperative results. Saved profiles are unchanged.
+Character parameters retain the separate potential and combined collection/training mission floors introduced in medley v4. Single-song rules are now `hhwx-single-medley-foundation-v5`, correcting continued-PERFECT skill normalization for sorted master effect keys; v4 introduced cooperative weighted formation optimization. Regenerate normalized inputs with the current adapter; historical v3 uniform-room outputs and v4 continued-skill outputs are not equivalent baselines. Saved profiles are unchanged.
 
 Team power retains its fractional part for scoring, constraints and ranking. Only the displayed total and card overlays use the shared float32-then-truncate power helper. Mission support displays `floor(rawSupportPower)` while Pt uses the original value. Score expectation remains unrounded internally; the general integer formatter is unchanged. This is presentation alignment, not native float32 scoring emulation.
 
@@ -160,9 +160,9 @@ Correctness comparisons reuse frozen input bytes and verified baseline outputs, 
 
 - [`single-source.ts`](../../src/lib/bandori/team-builder/single-source.ts) bridges UI event/settings policy to shared medley roster/chart normalization.
 - [`single.rs`](../../crates/bandori-medley-search/src/single.rs), `single_score.rs`, `single_upper.rs` and `single_event.rs` own one-team search. The common scorer remains `exact_score.rs`.
-- Normalized versions: `hhwx-single-search-input-v1` and `hhwx-single-medley-foundation-v4`; obsolete and unknown versions fail validation.
+- Normalized versions: `hhwx-single-search-input-v1` and `hhwx-single-medley-foundation-v5`; obsolete and unknown versions fail validation.
 - `runSingleSearchJson` ships through the existing `medley-wasm/pkg/` package. Regenerate after shipped Rust changes; rebuild the Worker import graph and WASM asset together.
 - Public profile/master/chart APIs and persisted card IDs are unchanged. The UI enables external skill conditions by default, including when older live preferences omit `conditionSatisfied`; an explicitly saved false remains false. The UI always sends a boolean. Low-level adapter callers that omit the field still receive the base skill effect. The old callable TypeScript search export is removed; `bandori-team-search.ts` retains display/settings types only. Historical comparisons require an explicit clean pre-retirement checkout.
-- Medley uses `hhwx-medley-bestdori-v4`; its input schema, uniform-order scoring, three-song search and output semantics remain unchanged.
+- Medley uses `hhwx-medley-bestdori-v5`; its input schema, uniform-order model, three-song search and output shape remain unchanged, while affected skill scores may change.
 
 Run `npm run test:team-builder` for the actual generated binding against independent note/formation/order enumeration, regional fallback and zero, endpoints, Fever, combo limits, Pt, support, cooperative inputs and stop/error paths. Rust tests compare search and every partial bound with complete enumeration. Run affected shared-source and medley binding regressions; see [Medley Testing](medley-testing.md). Browser verification must execute the real Worker and regenerated WASM, including progress, terminal status, cancellation and result display. Builds alone do not prove those paths.

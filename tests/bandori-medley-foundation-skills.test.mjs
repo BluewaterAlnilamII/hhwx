@@ -82,30 +82,30 @@ test("regional duration and unified values resolve from raw skill master", () =>
   });
 });
 
-test("life-named Bestdori keys remain ordinary source-ordered score rows", () => {
+test("life-named score effects keep the current no-life choice in either order", () => {
   const first = { activateEffectValue: regional(160) };
   const second = { activateEffectValue: regional(110) };
-  const resolved = resolveBestdoriScoreSkill({
-    skillId: 82,
-    skillLevel: 5,
-    skillMaster: skillWithEffects({
-      score_over_life: first,
-      score_under_life: second,
-    }),
-    context: { sameBandId: null, sameAttribute: null },
-    server: 3,
-  });
-
-  assert.deepEqual(resolved.behavior, { kind: "score", scoreUpPercent: 160 });
+  for (const effects of [
+    { score_over_life: first, score_under_life: second },
+    { score_under_life: second, score_over_life: first },
+  ]) {
+    const resolved = resolveBestdoriScoreSkill({
+      skillId: 82,
+      skillLevel: 5,
+      skillMaster: skillWithEffects(effects),
+      context: { sameBandId: null, sameAttribute: null },
+      server: 3,
+    });
+    assert.deepEqual(resolved.behavior, { kind: "score", scoreUpPercent: 160 });
+  }
 });
 
-test("a zero-valued first score row keeps the HHWX normalization policy", () => {
+test("an explicit zero score remains valid", () => {
   const resolved = resolveBestdoriScoreSkill({
     skillId: 83,
     skillLevel: 1,
     skillMaster: skillWithEffects({
       score: { activateEffectValue: regional(0) },
-      score_only_perfect: { activateEffectValue: regional(100) },
     }),
     context: { sameBandId: null, sameAttribute: null },
     server: 0,
@@ -114,22 +114,43 @@ test("a zero-valued first score row keeps the HHWX normalization policy", () => 
 });
 
 test("continued fallback and the rate-up flag resolve independently", () => {
-  const continued = resolveBestdoriScoreSkill({
-    skillId: 90,
-    skillLevel: 1,
-    skillMaster: skillWithEffects({
-      score_continued_note_judge: { activateEffectValue: regional(115) },
-      score: { activateEffectValue: regional(80) },
-    }),
-    context: { sameBandId: null, sameAttribute: null },
-    server: 0,
-  });
-  assert.deepEqual(continued.behavior, {
-    kind: "continued_perfect",
-    activeScoreUpPercent: 115,
-    fallbackScoreUpPercent: 80,
-  });
-  assert.equal(continued.isRateUpWithPerfect, false);
+  for (const effects of [
+    { score_continued_note_judge: { activateEffectValue: regional(110) }, score: { activateEffectValue: regional(90) } },
+    { score: { activateEffectValue: regional(90) }, score_continued_note_judge: { activateEffectValue: regional(110) } },
+  ]) {
+    const continued = resolveBestdoriScoreSkill({
+      skillId: 26,
+      skillLevel: 5,
+      skillMaster: skillWithEffects(effects),
+      context: { sameBandId: null, sameAttribute: null },
+      server: 3,
+    });
+    assert.deepEqual(continued.behavior, {
+      kind: "continued_perfect",
+      activeScoreUpPercent: 110,
+      fallbackScoreUpPercent: 90,
+    });
+    assert.equal(continued.isRateUpWithPerfect, false);
+  }
+
+  for (const effects of [
+    { score_continued_note_judge: { activateEffectValue: regional(95) }, score: { activateEffectValue: regional(80) } },
+    { score: { activateEffectValue: regional(80) }, score_continued_note_judge: { activateEffectValue: regional(95) } },
+  ]) {
+    const skillMaster = skillWithEffects(effects, {
+      unificationActivateConditionBandId: 1,
+      unificationActivateEffectValue: regional(115),
+    });
+    const resolve = (sameBandId) => resolveBestdoriScoreSkill({
+      skillId: 43,
+      skillLevel: 5,
+      skillMaster,
+      context: { sameBandId, sameAttribute: null },
+      server: 0,
+    }).behavior;
+    assert.deepEqual(resolve(null), { kind: "continued_perfect", activeScoreUpPercent: 95, fallbackScoreUpPercent: 80 });
+    assert.deepEqual(resolve(1), { kind: "continued_perfect", activeScoreUpPercent: 115, fallbackScoreUpPercent: 80 });
+  }
 
   const crescendo = resolveBestdoriScoreSkill({
     skillId: 91,
@@ -182,4 +203,18 @@ test("malformed selected skill rows fail closed", () => {
     context: { sameBandId: null, sameAttribute: null },
     server: 0,
   }), /INVALID_SKILL.*unificationActivateEffectValue.*non-negative/u);
+
+  for (const effects of [
+    { score: { activateEffectValue: regional(0) }, score_only_perfect: { activateEffectValue: regional(100) } },
+    { score_continued_note_judge: { activateEffectValue: regional(110) }, score: { activateEffectValue: [null, null, null, null] } },
+    { score: { activateEffectValue: regional(90) }, score_new: { activateEffectValue: regional(120) } },
+  ]) {
+    assert.throws(() => resolveBestdoriScoreSkill({
+      skillId: 26,
+      skillLevel: 5,
+      skillMaster: skillWithEffects(effects),
+      context: { sameBandId: null, sameAttribute: null },
+      server: 0,
+    }), /INVALID_SKILL/u);
+  }
 });

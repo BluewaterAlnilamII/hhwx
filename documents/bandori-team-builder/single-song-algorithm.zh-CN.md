@@ -79,7 +79,7 @@ start[w+1] = max(triggerTime[w+1], end[w] + 0.75)
 
 ## 计分范围
 
-角色参数对齐组曲 v4：潜能加成与收集／培养任务合计加成分别向下取整。单曲规则升级为 `hhwx-single-medley-foundation-v4`，在 v3 上加入协力加权站位优化。规范输入使用当前适配器重新生成，旧 v3 均匀房间结果不能作为协力新结果的等值基线；存档格式不变。
+角色参数保留组曲 v4 引入的潜能加成与收集／培养任务合计加成分别取整。单曲规则升级为 `hhwx-single-medley-foundation-v5`，修正主数据效果字段排序后的持续 PERFECT 技能解析；v4 曾加入协力加权站位优化。规范输入须用当前适配器重新生成；旧 v3 均匀房间结果和 v4 的持续技能结果不能作为等值基线。存档格式不变。
 
 综合力保留小数参与计分、约束和排序；只在总合力显示及卡片数字上使用共用的 float32 转换后截断函数。任务支援显示 `floor(rawSupportPower)`，Pt 仍使用原值。分数期望在内部不取整，通用整数格式化函数不变。这是显示对齐，不是原生 float32 计分模拟。
 
@@ -160,9 +160,9 @@ PERFECT／GREAT 效果、持续 PERFECT 与增长技能沿用组曲解析化简�
 
 - [`single-source.ts`](../../src/lib/bandori/team-builder/single-source.ts) 将 UI 活动／设置策略接入共享组曲卡库／谱面规范化。
 - [`single.rs`](../../crates/bandori-medley-search/src/single.rs)、`single_score.rs`、`single_upper.rs`、`single_event.rs` 负责单队搜索，共同计分仍在 `exact_score.rs`。
-- 规范化版本为 `hhwx-single-search-input-v1`、`hhwx-single-medley-foundation-v4`，旧版本及未知版本校验失败。
+- 规范化版本为 `hhwx-single-search-input-v1`、`hhwx-single-medley-foundation-v5`，旧版本及未知版本校验失败。
 - `runSingleSearchJson` 通过现有 `medley-wasm/pkg/` 交付。生产 Rust 改动后须重建，Worker 导入图与 WASM 资源共同更新。
 - 公开档案／主数据／谱面 API 及持久化卡牌 ID 不变。页面默认开启外部技能条件，旧演出偏好缺少 `conditionSatisfied` 时也按开启迁移；已明确保存的 false 仍为 false。页面始终发送布尔值；底层适配器调用方若省略该字段，仍按基础技能效果处理。旧 TypeScript 可调用搜索导出删除，`bandori-team-search.ts` 只保留展示／设置类型。历史比较必须显式指定干净的退役前检出。
-- 组曲使用 `hhwx-medley-bestdori-v4`；输入 schema、均匀顺序计分、三曲搜索和输出语义保持不变。
+- 组曲使用 `hhwx-medley-bestdori-v5`；输入 schema、均匀顺序模型、三曲搜索和输出结构不变，受影响技能的分数可能变化。
 
 `npm run test:team-builder` 使用实际生成绑定，对照独立逐音符／站位／顺序枚举，覆盖区服回退与零值、端点、Fever、Combo 上限、Pt、支援、协力输入和中止／错误。Rust 测试对照完整枚举验证搜索及每个部分分支上界。共享来源和组曲绑定受影响时继续回归，见[组曲测试](medley-testing.zh-CN.md)。浏览器必须实际运行 Worker 和重建后的 WASM，检查进度、最终状态、取消与展示；仅构建不能证明这些路径。
