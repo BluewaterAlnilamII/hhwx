@@ -73,11 +73,16 @@ function readRawScoreEffects(
 ): RawScoreEffect[] {
   const effects: RawScoreEffect[] = [];
   for (const [type, rawEffect] of Object.entries(effectTypes)) {
-    if (!SCORE_EFFECT_TYPES.has(type) || !isRecord(rawEffect)) continue;
+    if (type.startsWith("score") && !SCORE_EFFECT_TYPES.has(type) && type !== RATE_UP_EFFECT_TYPE) {
+      failInput("INVALID_SKILL", `${path}.${type}`, "unsupported score effect");
+    }
+    if (!SCORE_EFFECT_TYPES.has(type)) continue;
+    if (!isRecord(rawEffect)) {
+      failInput("INVALID_SKILL", `${path}.${type}`, "score effect must be an object");
+    }
     const valuePercent = regionalNumber(rawEffect.activateEffectValue, server);
-    if (valuePercent === null) continue;
-    if (valuePercent < 0) {
-      failInput("INVALID_SKILL", `${path}.${type}.activateEffectValue`, "must be non-negative");
+    if (valuePercent === null || valuePercent < 0) {
+      failInput("INVALID_SKILL", `${path}.${type}.activateEffectValue`, "must resolve to a non-negative number");
     }
     effects.push({
       type,
@@ -109,7 +114,7 @@ function resolveBehavior(primary: RawScoreEffect, fallback: RawScoreEffect | nul
         failInput(
           "INVALID_SKILL",
           "activationEffect.activateEffectTypes.score_continued_note_judge",
-          "continued score effects require a later ordinary fallback effect",
+          "continued score effects require an ordinary score fallback effect",
         );
       }
       return {
@@ -173,10 +178,19 @@ export function resolveBestdoriScoreSkill(options: {
     options.server,
     `${path}.activationEffect.activateEffectTypes`,
   );
-  const primary = scoreEffects[0] ?? null;
-  const fallback = primary?.type === "score_continued_note_judge"
-    ? scoreEffects.slice(1).find((effect) => effect.type !== "score_continued_note_judge") ?? null
-    : null;
+  let primary = scoreEffects[0] ?? null;
+  let fallback: RawScoreEffect | null = null;
+  if (scoreEffects.length > 1) {
+    const byType = new Map(scoreEffects.map((effect) => [effect.type, effect]));
+    if (scoreEffects.length === 2 && byType.has("score_continued_note_judge") && byType.has("score")) {
+      primary = byType.get("score_continued_note_judge")!;
+      fallback = byType.get("score")!;
+    } else if (scoreEffects.length === 2 && byType.has("score_over_life") && byType.has("score_under_life")) {
+      primary = byType.get("score_over_life")!;
+    } else {
+      failInput("INVALID_SKILL", `${path}.activationEffect.activateEffectTypes`, "unsupported combined score effects");
+    }
+  }
 
   const unifiedValue = regionalNumber(activationEffect.unificationActivateEffectValue, options.server);
   if (unifiedValue !== null && unifiedValue < 0) {

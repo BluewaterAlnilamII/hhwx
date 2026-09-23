@@ -70,7 +70,7 @@ A legal medley `(q, T0, T1, T2)` satisfies all of the following:
 3. No physical card instance occurs in two teams.
 4. Each song remains in its input slot; repeated songs are allowed and slots are never reordered.
 
-For the exact integer-valued binary64 score `score(q, Ts, s)` defined by `hhwx-medley-bestdori-v4` and its fixed operation order, the objective is
+For the exact integer-valued binary64 score `score(q, Ts, s)` defined by `hhwx-medley-bestdori-v5` and its fixed operation order, the objective is
 
 ```text
 S(q, T0, T1, T2) = (score(q, T0, 0) + score(q, T1, 1))

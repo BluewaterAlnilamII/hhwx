@@ -101,7 +101,7 @@ character parameter = 1,530 + 182 = 1,712
 
 Potential and mission bonuses are floored separately; collection and training mission rates are combined before the mission floor. Equal P/T/V values do not select another rule.
 
-This parameter rule is versioned as `hhwx-medley-bestdori-v4`. The former `v3` combined potential and mission rates before flooring, which could overcount card parameters and their downstream area-item/event contributions. Rebuild older normalized inputs from their source profiles and masters; changing only their version label does not correct their precomputed parameters. Saved profile formats are unchanged. Deploy the TypeScript adapter and regenerated WASM package together so their rule versions agree.
+The current rules version is `hhwx-medley-bestdori-v5`. It retains the separate parameter floors introduced in `v4` and corrects continued-PERFECT skill normalization for master artifacts whose effect keys are sorted. The former `v3` combined potential and mission rates before flooring, which could overcount card parameters and their downstream area-item/event contributions. Rebuild older normalized inputs from their source profiles and masters; changing only their version label does not correct precomputed values. Saved profile formats are unchanged. Deploy the TypeScript adapter and regenerated WASM package together so their rule versions agree.
 
 Event contribution is calculated independently for each card and parameter. The adapter takes the first matching percentage, in source order, from each of the event's attribute, character, member-card (`situationId`, the master card ID) and rarity-plus-master-rank lists, then adds those four rates. The event-wide `parameterPercent` and its separate performance, technique and visual room rates are added only when both the matched attribute percentage and matched character percentage are greater than zero. The resulting rate multiplies the card's `characterParameter`; this contribution is not separately floored.
 
@@ -117,7 +117,7 @@ Area-item and event contributions preserve JavaScript number operation order and
 
 ## 6. Skills and chart normalization
 
-Skills are resolved only after the five team members are known because a team-wide unification value may depend on them. The primary effect is the first recognized score row, in source order, whose regional value can be resolved; an explicit zero remains valid. Resolved primary and unification percentages must be nonnegative. When the source defines a valid unification value, it replaces that primary percentage if either its configured band condition or its configured attribute condition matches the complete team. For a continued-PERFECT primary effect, the fallback is the first later recognized, non-continued score row. Supported normalized behaviors are:
+Skills are resolved only after the five team members are known because a team-wide unification value may depend on them. A single recognized score effect is the primary effect. When both `score_continued_note_judge` and ordinary `score` are present, the continued effect is primary and `score` is its fallback, regardless of serialized key order. A `score_over_life` plus `score_under_life` pair selects `score_over_life` under the existing no-life model. Other combinations of score effects and unknown `score*` effects fail closed. Each recognized score effect must have a resolvable, nonnegative regional value; an explicit zero remains valid. A valid unification value replaces only the primary percentage if either its configured band condition or attribute condition matches the complete team. Supported normalized behaviors are:
 
 - `neutral`;
 - ordinary `score`;
@@ -126,7 +126,7 @@ Skills are resolved only after the five team members are known because a team-wi
 - `continued_perfect`, with active and fallback rates;
 - `great_or_worse_half`.
 
-An ordinary score skill may also use `isRateUpWithPerfect`; its increase and cap are fixed by the scoring rule rather than supplied by the caller. There is no life input or life state. Source rows named `score_over_life` or `score_under_life` are read in source order as ordinary score rows without checking a life threshold.
+An ordinary score skill may also use `isRateUpWithPerfect`; its increase and cap are fixed by the scoring rule rather than supplied by the caller. There is no life input or life state. Life-named score effects are treated as ordinary score effects without checking a life threshold.
 
 The chart normalizer keeps:
 

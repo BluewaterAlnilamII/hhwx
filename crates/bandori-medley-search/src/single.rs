@@ -16,7 +16,7 @@ use crate::{
 };
 
 pub const SINGLE_INPUT_VERSION: &str = "hhwx-single-search-input-v1";
-pub const SINGLE_RULES_VERSION: &str = "hhwx-single-medley-foundation-v4";
+pub const SINGLE_RULES_VERSION: &str = "hhwx-single-medley-foundation-v5";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
