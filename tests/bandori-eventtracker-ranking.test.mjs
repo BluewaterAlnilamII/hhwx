@@ -11,6 +11,8 @@ import {
   TOP10_RANKING_SELECTION,
 } from "../src/app/[locale]/bandori/events/_tracker/tracker-tier-preference.ts";
 import {
+  getComparisonTierOptions,
+  getMainTrackerTierOptions,
   isSongRankingDisabledEventType,
   resolveMainTrackerTier,
 } from "../src/app/[locale]/bandori/events/_tracker/tracker-model.ts";
@@ -48,9 +50,14 @@ test("all tracker modes accept TOP10 and reject retired UI tiers", () => {
   }
 });
 
-test("legacy CN T1500 fallback remains scoped to the affected event range", () => {
-  assert.equal(resolveMainTrackerTier(3, "event", 312, 1500), 1000);
-  assert.equal(resolveMainTrackerTier(3, "event", 311, 1500), 1500);
+test("CN T1500 is selectable for backfilled events 310 and 311", () => {
+  for (const [eventId, available] of [[309, false], [310, true], [311, true], [312, false], [313, false], [314, true]]) {
+    const comparisonConfig = { id: String(eventId), targetType: "event", targetId: eventId, tier: 1500, enabled: true };
+    assert.equal(getMainTrackerTierOptions(3, "event", eventId).includes(1500), available);
+    assert.equal(getComparisonTierOptions(3, comparisonConfig, EVENT_TRACKER_TIERS).includes(1500), available);
+    assert.equal(resolveMainTrackerTier(3, "event", eventId, 1500), available ? 1500 : 1000);
+  }
+
   assert.equal(resolveMainTrackerTier(0, "event", 312, 1500), 1500);
   assert.equal(resolveMainTrackerTier(3, "monthly", 312, 1500), 1500);
 });
