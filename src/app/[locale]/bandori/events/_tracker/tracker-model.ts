@@ -54,7 +54,7 @@ export const ZOOM_WIDTH_MULTIPLIERS = [1, 2, 4, 8, 16, 32] as const;
 const TOOLTIP_TIME_TOLERANCE_MS = 5 * 60_000;
 const EVENT_TIER_1000 = 1000;
 const EVENT_TIER_1500 = 1500;
-const CN_T1500_BACKFILL_EVENT_ID = 311;
+const CN_T1500_BACKFILL_EVENT_IDS = new Set([310, 311]);
 const CN_T1500_LEGACY_EVENT_ID_LIMIT = 313;
 const EVENT_TYPES_WITHOUT_SONG_RANKING = new Set([
   "story",
@@ -205,7 +205,7 @@ function hasComparisonConfig(
 function isLegacyCnEventWithoutT1500(server: BandoriServer, targetId: number): boolean {
   return server === 3
     && targetId <= CN_T1500_LEGACY_EVENT_ID_LIMIT
-    && targetId !== CN_T1500_BACKFILL_EVENT_ID;
+    && !CN_T1500_BACKFILL_EVENT_IDS.has(targetId);
 }
 
 function resolveLegacyCnEventTier(
