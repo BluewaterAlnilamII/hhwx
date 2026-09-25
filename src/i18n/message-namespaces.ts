@@ -4,6 +4,7 @@ export const MESSAGE_NAMESPACES = [
   "comments",
   "navigation",
   "serviceStatus",
+  "testFeatures",
   "auth",
   "account",
   "bandori",

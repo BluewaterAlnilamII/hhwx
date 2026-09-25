@@ -7,6 +7,7 @@
   "items": {
     "home": "首页",
     "serviceStatus": "服务状态",
+    "testFeatures": "测试功能",
     "othello": "黑白棋",
     "calendar": "日历",
     "tracker": "活动追踪",
@@ -41,6 +42,7 @@
       "pause": "暂停",
       "retry": "重新播放",
       "progress": "播放进度",
+      "loopRange": "循环区间：{start} 至 {end}",
       "repeatOne": "单曲循环",
       "repeatAll": "列表循环",
       "repeatOff": "关闭循环",

@@ -20,13 +20,18 @@ export type MusicPlayerStatus =
 
 export type MusicPlayerItem = {
   id: string;
-  provider: "bandori";
+  provider: "bandori" | "falcom";
   providerTrackId: string;
   title: string;
   artist: string | null;
   sourceUrl: string;
   artworkUrl: string | null;
   durationSeconds: number | null;
+  // End is exclusive, matching AudioBufferSourceNode.loopEnd.
+  loop?: {
+    startSeconds: number;
+    endSeconds: number;
+  };
 };
 
 export type MusicPlayerQueueSnapshot = {
@@ -89,7 +94,7 @@ function isHttpUrl(value: unknown): value is string {
 }
 
 function parseMusicPlayerItem(value: unknown): MusicPlayerItem | null {
-  if (!isRecord(value) || !hasExactKeys(value, [
+  const keys = [
     "id",
     "provider",
     "providerTrackId",
@@ -98,13 +103,17 @@ function parseMusicPlayerItem(value: unknown): MusicPlayerItem | null {
     "sourceUrl",
     "artworkUrl",
     "durationSeconds",
-  ])) {
+  ];
+  if (!isRecord(value) || (
+    !hasExactKeys(value, keys)
+    && !hasExactKeys(value, [...keys, "loop"])
+  )) {
     return null;
   }
 
   if (
     !isSafeIdentifier(value.id)
-    || value.provider !== "bandori"
+    || (value.provider !== "bandori" && value.provider !== "falcom")
     || !isSafeIdentifier(value.providerTrackId)
     || !isSafeText(value.title)
     || (value.artist !== null && (typeof value.artist !== "string" || value.artist.length > 512))
@@ -122,6 +131,20 @@ function parseMusicPlayerItem(value: unknown): MusicPlayerItem | null {
     return null;
   }
 
+  if ("loop" in value && (
+    !isRecord(value.loop)
+    || !hasExactKeys(value.loop, ["startSeconds", "endSeconds"])
+    || typeof value.loop.startSeconds !== "number"
+    || !Number.isFinite(value.loop.startSeconds)
+    || value.loop.startSeconds < 0
+    || typeof value.loop.endSeconds !== "number"
+    || !Number.isFinite(value.loop.endSeconds)
+    || value.loop.endSeconds <= value.loop.startSeconds
+    || (value.durationSeconds !== null && value.loop.endSeconds > value.durationSeconds)
+  )) {
+    return null;
+  }
+
   return {
     id: value.id,
     provider: value.provider,
@@ -131,6 +154,7 @@ function parseMusicPlayerItem(value: unknown): MusicPlayerItem | null {
     sourceUrl: value.sourceUrl,
     artworkUrl: value.artworkUrl,
     durationSeconds: value.durationSeconds,
+    ...("loop" in value ? { loop: value.loop as NonNullable<MusicPlayerItem["loop"]> } : {}),
   };
 }
 

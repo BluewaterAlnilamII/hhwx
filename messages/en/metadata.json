@@ -6,6 +6,10 @@
     "title": "Service Status",
     "description": "Current status of HHWX cutoff tracking, user fetching, data building, and asset building services."
   },
+  "testFeatures": {
+    "title": "Test Features",
+    "description": "Try seamless single-track looping in the HHWX music player."
+  },
   "othello": {
     "title": "Othello",
     "description": "Play Othello with the members of Hello, Happy World!"

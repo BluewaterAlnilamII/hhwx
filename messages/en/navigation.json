@@ -7,6 +7,7 @@
   "items": {
     "home": "Home",
     "serviceStatus": "Service Status",
+    "testFeatures": "Test Features",
     "othello": "Othello",
     "calendar": "Calendar",
     "tracker": "Event Tracker",
@@ -41,6 +42,7 @@
       "pause": "Pause",
       "retry": "Play again",
       "progress": "Playback progress",
+      "loopRange": "Loop range: {start} to {end}",
       "repeatOne": "Repeat one song",
       "repeatAll": "Repeat playlist",
       "repeatOff": "Repeat off",

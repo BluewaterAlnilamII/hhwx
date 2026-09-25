@@ -175,6 +175,11 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
   const safeCurrentTime = Math.min(safeDuration || currentTime, Math.max(0, currentTime));
   const displayedCurrentTime = seekPreviewTime ?? safeCurrentTime;
   const progressPercent = safeDuration > 0 ? (displayedCurrentTime / safeDuration) * 100 : 0;
+  const loop = currentTrack.loop && safeDuration >= currentTrack.loop.endSeconds
+    ? currentTrack.loop
+    : null;
+  const loopStartPercent = loop ? (loop.startSeconds / safeDuration) * 100 : null;
+  const loopEndPercent = loop ? (loop.endSeconds / safeDuration) * 100 : null;
   const repeatModeLabel = repeatMode === "one"
     ? t("repeatOne")
     : repeatMode === "all"
@@ -248,11 +253,28 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
           <span>{formatPlaybackTime(safeDuration)}</span>
         </div>
         <div className={`relative h-5 ${isError ? "cursor-not-allowed" : ""}`}>
-          <div className={`absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 overflow-hidden rounded-full ${isError ? "bg-[var(--theme-color-semantic-danger-background)]" : "bg-[var(--theme-color-range-track-background)]"}`}>
-            <div
-              className={`h-full rounded-full bg-[var(--theme-color-action-accent-background)] ${seekPreviewTime === null ? "transition-[width] duration-150" : ""}`}
+          <div aria-hidden="true" className={`pointer-events-none absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full ${isError ? "bg-[var(--theme-color-semantic-danger-background)]" : "bg-[var(--theme-color-range-track-background)]"}`}>
+            {loopStartPercent !== null && loopEndPercent !== null ? (
+              <div className="absolute inset-y-0 left-2 right-2">
+                <span
+                  className="absolute inset-y-0 rounded-full bg-[color-mix(in_srgb,var(--theme-color-selection-strong-background)_18%,transparent)]"
+                  style={{ left: `${loopStartPercent}%`, width: `${loopEndPercent - loopStartPercent}%` }}
+                />
+              </div>
+            ) : null}
+            <span
+              className={`absolute inset-y-0 left-0 rounded-full bg-[var(--theme-color-action-accent-background)] ${seekPreviewTime === null ? "transition-[width] duration-150" : ""}`}
               style={{ width: isError ? "0%" : `${progressPercent}%` }}
             />
+            <div className="absolute inset-y-0 left-2 right-2">
+              {[loopStartPercent, loopEndPercent].map((percentage, index) => percentage === null ? null : (
+                <span
+                  key={index}
+                  className="absolute top-1/2 h-4 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--theme-color-selection-strong-background)] ring-2 ring-[var(--theme-color-floating-background)]"
+                  style={{ left: `${percentage}%` }}
+                />
+              ))}
+            </div>
           </div>
           <input
             type="range"
@@ -276,7 +298,16 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
             onBlur={() => commitSeekPreview()}
             className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
             aria-label={t("progress")}
+            aria-describedby={loop ? "toolbar-music-player-loop-range" : undefined}
           />
+          {loop ? (
+            <span id="toolbar-music-player-loop-range" className="sr-only">
+              {t("loopRange", {
+                start: formatPlaybackTime(loop.startSeconds),
+                end: formatPlaybackTime(loop.endSeconds),
+              })}
+            </span>
+          ) : null}
         </div>
       </div>
 

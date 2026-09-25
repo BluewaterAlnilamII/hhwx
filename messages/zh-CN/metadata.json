@@ -6,6 +6,10 @@
     "title": "服务状态",
     "description": "查看 HHWX 分数追踪、用户抓取、数据构建和资源构建的当前服务状态。"
   },
+  "testFeatures": {
+    "title": "测试功能",
+    "description": "体验 HHWX 音乐播放器的无缝单曲循环功能。"
+  },
   "othello": {
     "title": "黑白棋",
     "description": "与 Hello, Happy World! 的成员们来一场黑白棋对决吧！"

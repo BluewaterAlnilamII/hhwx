@@ -56,6 +56,50 @@ test("music player queue snapshot round-trips only durable queue state", () => {
   assert.doesNotMatch(serialized, /currentTime|"duration":|status|error/u);
 });
 
+test("optional loop points preserve old queues and reject invalid ranges", () => {
+  const oldQueue = createMusicPlayerQueueSnapshot([ITEM], 0, 1234);
+  assert.deepEqual(parseMusicPlayerQueueSnapshot(JSON.stringify(oldQueue)), oldQueue);
+
+  const loopedItem = {
+    ...ITEM,
+    loop: { startSeconds: 15, endSeconds: 80 },
+  };
+  const loopedQueue = createMusicPlayerQueueSnapshot([loopedItem], 0, 1234);
+  assert.deepEqual(parseMusicPlayerQueueSnapshot(JSON.stringify(loopedQueue)), loopedQueue);
+  for (const loop of [
+    { startSeconds: -1, endSeconds: 80 },
+    { startSeconds: 80, endSeconds: 80 },
+    { startSeconds: 15, endSeconds: 300 },
+    { startSeconds: 15, endSeconds: Infinity },
+  ]) {
+    assert.equal(parseMusicPlayerQueueSnapshot(JSON.stringify({
+      ...loopedQueue,
+      items: [{ ...loopedItem, loop }],
+    })), null);
+  }
+});
+
+test("Falcom loop tracks survive queue persistence without admitting unknown providers", () => {
+  const item = {
+    ...ITEM,
+    id: "falcom:ed6210",
+    provider: "falcom",
+    providerTrackId: "ed6210",
+    title: "空を見上げて",
+    artist: null,
+    sourceUrl: "https://cdn.hhwx.org/hhwx/music/falcom-sound-team-jdk/ed6210_%E7%A9%BA%E3%82%92%E8%A6%8B%E4%B8%8A%E3%81%92%E3%81%A6_v1.mp3",
+    artworkUrl: null,
+    durationSeconds: 160.709021,
+    loop: { startSeconds: 1_012_726 / 48_000, endSeconds: 6_895_279 / 48_000 },
+  };
+  const snapshot = createMusicPlayerQueueSnapshot([item], 0, 1234);
+  assert.deepEqual(parseMusicPlayerQueueSnapshot(JSON.stringify(snapshot)), snapshot);
+  assert.equal(parseMusicPlayerQueueSnapshot(JSON.stringify({
+    ...snapshot,
+    items: [{ ...item, provider: "unknown" }],
+  })), null);
+});
+
 test("music player queue parser rejects version drift and unsafe sources", () => {
   const snapshot = createMusicPlayerQueueSnapshot([ITEM], 0, 1234);
   assert.equal(parseMusicPlayerQueueSnapshot(JSON.stringify({ ...snapshot, version: 2 })), null);
