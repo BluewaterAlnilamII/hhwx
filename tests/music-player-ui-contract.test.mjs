@@ -154,31 +154,30 @@ test("Media Session metadata starts with real playback and then follows the trac
   const onPauseStart = host.indexOf("onPause={() => {", onPlayingStart);
   assert.ok(onPlayingStart >= 0 && onPauseStart > onPlayingStart);
   const onPlayingHandler = host.slice(onPlayingStart, onPauseStart);
+  const markPlayingStart = host.indexOf("function markMusicPlaying(");
+  const markPlayingEnd = host.indexOf("function updateMediaSessionMetadata(", markPlayingStart);
+  const markPlaying = host.slice(markPlayingStart, markPlayingEnd);
   assert.equal(
-    host.match(/hasPlayedMusicInDocumentRef\.current = true/gu)?.length,
+    host.match(/hasPlayed\.current = true/gu)?.length,
     1,
     "only actual playback may open the Media Session metadata gate",
   );
 
-  const firstPlaybackGateIndex = onPlayingHandler.indexOf(
-    "if (!hasPlayedMusicInDocumentRef.current)",
-  );
-  const markPlayedIndex = onPlayingHandler.indexOf(
-    "hasPlayedMusicInDocumentRef.current = true",
-  );
-  const firstPublishIndex = onPlayingHandler.indexOf(
-    "updateMediaSessionMetadata(activeTrack)",
-  );
+  const firstPlaybackGateIndex = markPlaying.indexOf("if (!hasPlayed.current)");
+  const markPlayedIndex = markPlaying.indexOf("hasPlayed.current = true");
+  const firstPublishIndex = markPlaying.indexOf("updateMediaSessionMetadata(track)");
   assert.ok(
     firstPlaybackGateIndex >= 0
       && firstPlaybackGateIndex < markPlayedIndex
       && markPlayedIndex < firstPublishIndex,
-    "the first onPlaying event must publish the active track exactly after playback begins",
+    "the first actual playback must publish Media Session metadata",
   );
   assert.match(
     onPlayingHandler,
     /audio\.paused[\s\S]*?audio\.getAttribute\("src"\) !== activeTrack\.sourceUrl/u,
   );
+  assert.match(onPlayingHandler, /markMusicPlaying\(activeTrack, hasPlayedMusicInDocumentRef\)/u);
+  assert.match(host, /loopAudio\.start\(command\.type === "restart"\);[\s\S]*?markMusicPlaying\(activeTrack, hasPlayedMusicInDocumentRef\)/u);
   assert.match(host, /playbackState = hasActiveTrack \? "paused" : "none"/u);
 });
 
@@ -205,7 +204,7 @@ test("player host refreshes persisted Bandori artwork from the current asset ind
   assert.match(host, /useBandoriMusicAssetIndex\(hasBandoriQueueItems\)/u);
   assert.match(host, /buildBandoriMusicPlayerArtworkUpdates\(queue, musicAssetIndex\)/u);
   assert.match(host, /refreshQueueArtwork/u);
-  assert.match(host, /\[currentTrackId, currentTrackSourceUrl\]/u);
+  assert.match(host, /\[currentTrackId, currentTrackSourceUrl, loopStartSeconds, loopEndSeconds\]/u);
 });
 
 test("progress scrubbing previews locally and commits one seek when the interaction ends", async () => {

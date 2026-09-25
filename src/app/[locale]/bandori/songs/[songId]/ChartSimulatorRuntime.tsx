@@ -3011,10 +3011,8 @@ export default function ChartSimulatorRuntime({
             aria-hidden="true"
             className="pointer-events-none absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 overflow-visible rounded-full bg-[var(--theme-color-range-track-background)]"
           >
-            {/* The native 16px range thumb travels between centers inset 8px
-                from each edge. Keep every time-based overlay on that axis. */}
-            <div className="absolute inset-y-0 left-2 right-2">
-              {loopStartPercentage !== null && loopEndPercentage !== null ? (
+            {loopStartPercentage !== null && loopEndPercentage !== null ? (
+              <div className="absolute inset-y-0 left-2 right-2">
                 <span
                   className="absolute inset-y-0 rounded-full bg-[color-mix(in_srgb,var(--theme-color-selection-strong-background)_18%,transparent)]"
                   style={{
@@ -3022,11 +3020,14 @@ export default function ChartSimulatorRuntime({
                     width: `${Math.max(0, loopEndPercentage - loopStartPercentage)}%`,
                   }}
                 />
-              ) : null}
-              <span
-                className="absolute inset-y-0 left-0 rounded-full bg-[var(--theme-color-action-accent-background)]"
-                style={{ width: `${playbackPercentage}%` }}
-              />
+              </div>
+            ) : null}
+            <span
+              className="absolute inset-y-0 left-0 rounded-full bg-[var(--theme-color-action-accent-background)]"
+              style={{ width: `${playbackPercentage}%` }}
+            />
+            {/* The native 16px thumb centers are inset 8px from each edge. */}
+            <div className="absolute inset-y-0 left-2 right-2">
               {loopStartPercentage !== null ? (
                 <span
                   className="absolute top-1/2 h-5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--theme-color-selection-strong-background)] ring-2 ring-[var(--theme-color-panel-background)]"

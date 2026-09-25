@@ -120,7 +120,9 @@ function hasSameActiveTrack(
   return activeItem !== null
     && incomingActiveItem !== null
     && activeItem.id === incomingActiveItem.id
-    && activeItem.sourceUrl === incomingActiveItem.sourceUrl;
+    && activeItem.sourceUrl === incomingActiveItem.sourceUrl
+    && activeItem.loop?.startSeconds === incomingActiveItem.loop?.startSeconds
+    && activeItem.loop?.endSeconds === incomingActiveItem.loop?.endSeconds;
 }
 
 export const useMusicPlayerStore = create<MusicPlayerStore>((set, get) => ({

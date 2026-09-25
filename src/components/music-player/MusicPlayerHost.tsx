@@ -16,25 +16,38 @@ import {
   createMusicPlayerTabId,
 } from "@/lib/music-player-tab-coordinator";
 import { seekMusicPlayerAudio } from "@/lib/music-player-seek";
+import { createMusicPlayerLoopAudio } from "@/lib/music-player-loop-audio";
 import {
   selectMusicPlayerCurrentTrack,
   useMusicPlayerStore,
 } from "@/store/useMusicPlayerStore";
 
 type PlaybackCoordinator = ReturnType<typeof createMusicPlayerPlaybackCoordinator>;
+type LoopAudio = ReturnType<typeof createMusicPlayerLoopAudio>;
 
-function updateMediaSessionPosition(audio: HTMLAudioElement): void {
-  if (!("mediaSession" in navigator) || !Number.isFinite(audio.duration) || audio.duration <= 0) {
+function updateMediaSessionPosition(position: number, duration: number, playbackRate = 1): void {
+  if (!("mediaSession" in navigator) || !Number.isFinite(duration) || duration <= 0) {
     return;
   }
   try {
     navigator.mediaSession.setPositionState({
-      duration: audio.duration,
-      playbackRate: audio.playbackRate,
-      position: Math.min(audio.duration, Math.max(0, audio.currentTime)),
+      duration,
+      playbackRate,
+      position: Math.min(duration, Math.max(0, position)),
     });
   } catch {
     // Media Session support differs across browsers; playback does not depend on it.
+  }
+}
+
+function markMusicPlaying(track: MusicPlayerItem, hasPlayed: { current: boolean }): void {
+  if (!hasPlayed.current) {
+    hasPlayed.current = true;
+    updateMediaSessionMetadata(track);
+  }
+  useMusicPlayerStore.getState().setPlaybackStatus("playing");
+  if ("mediaSession" in navigator) {
+    navigator.mediaSession.playbackState = "playing";
   }
 }
 
@@ -63,7 +76,7 @@ function applyAudioSeek(
 ): void {
   const nextPosition = seekMusicPlayerAudio(audio, positionSeconds, preferFastSeek);
   useMusicPlayerStore.getState().setPlaybackTime(nextPosition, audio.duration);
-  updateMediaSessionPosition(audio);
+  updateMediaSessionPosition(nextPosition, audio.duration, audio.playbackRate);
 }
 
 export default function MusicPlayerHost() {
@@ -72,6 +85,7 @@ export default function MusicPlayerHost() {
   > | null>(null);
   playbackAudioSessionRef.current ??= createMusicPlaybackBrowserAudioSession();
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const loopAudioRef = useRef<LoopAudio | null>(null);
   const coordinatorRef = useRef<PlaybackCoordinator | null>(null);
   const handledCommandIdRef = useRef(0);
   const playAttemptIdRef = useRef(0);
@@ -84,6 +98,8 @@ export default function MusicPlayerHost() {
   const { value: musicAssetIndex } = useBandoriMusicAssetIndex(hasBandoriQueueItems);
   const currentTrackId = currentTrack?.id ?? null;
   const currentTrackSourceUrl = currentTrack?.sourceUrl ?? null;
+  const loopStartSeconds = currentTrack?.loop?.startSeconds ?? null;
+  const loopEndSeconds = currentTrack?.loop?.endSeconds ?? null;
   const command = useMusicPlayerStore((state) => state.command);
   const volume = useMusicPlayerStore((state) => state.volume);
   const muted = useMusicPlayerStore((state) => state.muted);
@@ -134,15 +150,19 @@ export default function MusicPlayerHost() {
         if (audio && !audio.paused) {
           audio.pause();
         }
+        loopAudioRef.current?.pause();
         const state = useMusicPlayerStore.getState();
         if (state.currentIndex !== null && state.status !== "error") {
           state.setPlaybackStatus("paused");
         }
+        if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused";
       },
     );
 
     return () => {
       playbackAudioSessionRef.current?.setActive(false);
+      loopAudioRef.current?.dispose();
+      loopAudioRef.current = null;
       coordinatorRef.current?.dispose();
       coordinatorRef.current = null;
     };
@@ -155,6 +175,8 @@ export default function MusicPlayerHost() {
     }
 
     playAttemptIdRef.current += 1;
+    loopAudioRef.current?.dispose();
+    loopAudioRef.current = null;
     audio.pause();
     audio.currentTime = 0;
 
@@ -165,9 +187,33 @@ export default function MusicPlayerHost() {
       return;
     }
 
+    if (loopStartSeconds !== null && loopEndSeconds !== null) {
+      const loopAudio = createMusicPlayerLoopAudio(
+        currentTrackSourceUrl,
+        { startSeconds: loopStartSeconds, endSeconds: loopEndSeconds },
+        (position, duration) => {
+          if (loopAudioRef.current !== loopAudio) return;
+          useMusicPlayerStore.getState().setPlaybackTime(position, duration);
+          updateMediaSessionPosition(position, duration);
+        },
+        () => {
+          if (loopAudioRef.current === loopAudio) {
+            useMusicPlayerStore.getState().handleTrackEnded();
+          }
+        },
+      );
+      const state = useMusicPlayerStore.getState();
+      loopAudio.setRepeatOne(state.repeatMode === "one");
+      loopAudio.setVolume(state.muted ? 0 : state.volume);
+      loopAudioRef.current = loopAudio;
+      audio.removeAttribute("src");
+      audio.load();
+      return;
+    }
+
     audio.src = currentTrackSourceUrl;
     audio.load();
-  }, [currentTrackId, currentTrackSourceUrl]);
+  }, [currentTrackId, currentTrackSourceUrl, loopStartSeconds, loopEndSeconds]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -175,6 +221,7 @@ export default function MusicPlayerHost() {
       audio.volume = volume;
       audio.muted = muted;
     }
+    loopAudioRef.current?.setVolume(muted ? 0 : volume);
   }, [muted, volume]);
 
   useEffect(() => {
@@ -182,6 +229,7 @@ export default function MusicPlayerHost() {
     if (audio) {
       audio.loop = repeatMode === "one";
     }
+    loopAudioRef.current?.setRepeatOne(repeatMode === "one");
   }, [repeatMode]);
 
   useEffect(() => {
@@ -199,6 +247,8 @@ export default function MusicPlayerHost() {
       playbackAudioSessionRef.current?.setActive(false);
       playAttemptIdRef.current += 1;
       audio.pause();
+      loopAudioRef.current?.dispose();
+      loopAudioRef.current = null;
       audio.currentTime = 0;
       audio.removeAttribute("src");
       audio.load();
@@ -208,11 +258,21 @@ export default function MusicPlayerHost() {
     if (command.type === "pause") {
       playAttemptIdRef.current += 1;
       audio.pause();
+      loopAudioRef.current?.pause();
+      if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused";
       return;
     }
 
     if (command.type === "seek") {
-      applyAudioSeek(audio, command.positionSeconds ?? 0);
+      const loopAudio = loopAudioRef.current;
+      if (loopAudio) {
+        const position = loopAudio.seek(command.positionSeconds ?? 0);
+        const duration = loopAudio.getDuration();
+        useMusicPlayerStore.getState().setPlaybackTime(position, duration || undefined);
+        updateMediaSessionPosition(position, duration);
+      } else {
+        applyAudioSeek(audio, command.positionSeconds ?? 0);
+      }
       return;
     }
 
@@ -226,18 +286,39 @@ export default function MusicPlayerHost() {
       // WebKit uses the playback audio-session category to keep music eligible
       // for iOS lock-screen controls and background playback.
       playbackAudioSessionRef.current?.setActive(true);
-      if (audio.getAttribute("src") !== currentTrack.sourceUrl) {
-        audio.src = currentTrack.sourceUrl;
-      }
-      if (command.type === "restart") {
-        audio.pause();
-        audio.load();
-        audio.currentTime = 0;
-      }
-
       coordinatorRef.current?.claimPlayback();
       useMusicPlayerStore.getState().setPlaybackStatus("loading");
       try {
+        const loopAudio = loopAudioRef.current;
+        if (loopAudio) {
+          try {
+            await loopAudio.prepare();
+            if (playAttemptIdRef.current !== attemptId || loopAudioRef.current !== loopAudio) return;
+            const activeTrack = selectMusicPlayerCurrentTrack(useMusicPlayerStore.getState());
+            if (
+              activeTrack?.id !== currentTrack.id
+              || activeTrack.sourceUrl !== currentTrack.sourceUrl
+              || activeTrack.loop?.startSeconds !== currentTrack.loop?.startSeconds
+              || activeTrack.loop?.endSeconds !== currentTrack.loop?.endSeconds
+            ) return;
+            loopAudio.start(command.type === "restart");
+            markMusicPlaying(activeTrack, hasPlayedMusicInDocumentRef);
+            return;
+          } catch {
+            if (playAttemptIdRef.current !== attemptId || loopAudioRef.current !== loopAudio) return;
+            loopAudio.dispose();
+            loopAudioRef.current = null;
+          }
+        }
+        if (audio.getAttribute("src") !== currentTrack.sourceUrl) {
+          audio.src = currentTrack.sourceUrl;
+        }
+        audio.loop = useMusicPlayerStore.getState().repeatMode === "one";
+        if (command.type === "restart") {
+          audio.pause();
+          audio.load();
+          audio.currentTime = 0;
+        }
         await audio.play();
         if (playAttemptIdRef.current !== attemptId) {
           audio.pause();
@@ -276,7 +357,13 @@ export default function MusicPlayerHost() {
     safeSetActionHandler("nexttrack", () => useMusicPlayerStore.getState().requestNext());
     safeSetActionHandler("seekto", (details) => {
       const audio = audioRef.current;
-      if (audio && details.seekTime !== undefined) {
+      const loopAudio = loopAudioRef.current;
+      if (loopAudio && details.seekTime !== undefined) {
+        const position = loopAudio.seek(details.seekTime);
+        const duration = loopAudio.getDuration();
+        useMusicPlayerStore.getState().setPlaybackTime(position, duration || undefined);
+        updateMediaSessionPosition(position, duration);
+      } else if (audio && details.seekTime !== undefined) {
         applyAudioSeek(audio, details.seekTime, details.fastSeek === true);
       }
     });
@@ -315,25 +402,30 @@ export default function MusicPlayerHost() {
       aria-hidden="true"
       preload="metadata"
       onLoadedMetadata={(event) => {
+        if (loopAudioRef.current) return;
         const audio = event.currentTarget;
         useMusicPlayerStore.getState().setPlaybackTime(audio.currentTime, audio.duration);
-        updateMediaSessionPosition(audio);
+        updateMediaSessionPosition(audio.currentTime, audio.duration, audio.playbackRate);
       }}
       onDurationChange={(event) => {
+        if (loopAudioRef.current) return;
         const audio = event.currentTarget;
         useMusicPlayerStore.getState().setPlaybackTime(audio.currentTime, audio.duration);
       }}
       onTimeUpdate={(event) => {
+        if (loopAudioRef.current) return;
         const audio = event.currentTarget;
         useMusicPlayerStore.getState().setPlaybackTime(audio.currentTime, audio.duration);
-        updateMediaSessionPosition(audio);
+        updateMediaSessionPosition(audio.currentTime, audio.duration, audio.playbackRate);
       }}
       onWaiting={(event) => {
+        if (loopAudioRef.current) return;
         if (!event.currentTarget.paused) {
           useMusicPlayerStore.getState().setPlaybackStatus("loading");
         }
       }}
       onPlaying={() => {
+        if (loopAudioRef.current) return;
         const audio = audioRef.current;
         const activeTrack = selectMusicPlayerCurrentTrack(useMusicPlayerStore.getState());
         if (
@@ -345,16 +437,10 @@ export default function MusicPlayerHost() {
           return;
         }
 
-        if (!hasPlayedMusicInDocumentRef.current) {
-          hasPlayedMusicInDocumentRef.current = true;
-          updateMediaSessionMetadata(activeTrack);
-        }
-        useMusicPlayerStore.getState().setPlaybackStatus("playing");
-        if ("mediaSession" in navigator) {
-          navigator.mediaSession.playbackState = "playing";
-        }
+        markMusicPlaying(activeTrack, hasPlayedMusicInDocumentRef);
       }}
       onPause={() => {
+        if (loopAudioRef.current) return;
         const state = useMusicPlayerStore.getState();
         const hasActiveTrack = state.currentIndex !== null;
         if (hasActiveTrack && state.status !== "error" && state.status !== "ended") {
@@ -364,8 +450,12 @@ export default function MusicPlayerHost() {
           navigator.mediaSession.playbackState = hasActiveTrack ? "paused" : "none";
         }
       }}
-      onEnded={() => useMusicPlayerStore.getState().handleTrackEnded()}
-      onError={() => useMusicPlayerStore.getState().setPlaybackStatus("error")}
+      onEnded={() => {
+        if (!loopAudioRef.current) useMusicPlayerStore.getState().handleTrackEnded();
+      }}
+      onError={() => {
+        if (!loopAudioRef.current) useMusicPlayerStore.getState().setPlaybackStatus("error");
+      }}
     />
   );
 }

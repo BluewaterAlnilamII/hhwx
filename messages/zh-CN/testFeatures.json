@@ -1,0 +1,6 @@
+{
+  "title": "测试功能",
+  "seamlessLoopTitle": "无缝单曲循环测试",
+  "instruction": "在顶部播放器中启用单曲循环以无缝循环播放",
+  "composer": "作曲：{name}"
+}

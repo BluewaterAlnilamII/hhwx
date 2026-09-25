@@ -171,6 +171,22 @@ test("external source changes reset playback even when the track ID is unchanged
   assert.equal(state.command, null);
 });
 
+test("external loop-point changes reset the active playback position", () => {
+  resetStore();
+  useMusicPlayerStore.getState().playQueueFromStart([FIRST_ITEM], 0);
+  useMusicPlayerStore.getState().setPlaybackStatus("playing");
+  useMusicPlayerStore.getState().setPlaybackTime(42, 100);
+
+  useMusicPlayerStore.getState().applyExternalQueueSnapshot(
+    createMusicPlayerQueueSnapshot([{
+      ...FIRST_ITEM,
+      loop: { startSeconds: 10, endSeconds: 80 },
+    }], 0),
+  );
+  assert.equal(useMusicPlayerStore.getState().currentTime, 0);
+  assert.equal(useMusicPlayerStore.getState().status, "paused");
+});
+
 test("external track changes and queue clearing reset playback", () => {
   resetStore();
   useMusicPlayerStore.getState().playQueueFromStart([FIRST_ITEM, SECOND_ITEM], 0);
