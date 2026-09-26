@@ -16,7 +16,7 @@ const COMPOSER_CREDITS: Record<string, string> = {
   ed6305: "石橋渡 / 神藤由東大 / 宇仁菅孝宏",
   ed6425: "宇仁菅孝宏",
   ed6550: "石橋渡 / 神藤由東大 / 宇仁菅孝宏",
-  ed6549: "宇仁菅孝宏",
+  ed6105: "園田隼人",
 };
 const TRACKS: MusicPlayerItem[] = [
   {
@@ -75,15 +75,15 @@ const TRACKS: MusicPlayerItem[] = [
     loop: { startSeconds: 2_163_672 / SAMPLE_RATE, endSeconds: 8_252_796 / SAMPLE_RATE },
   },
   {
-    id: "falcom:ed6549",
+    id: "falcom:ed6105",
     provider: "falcom",
-    providerTrackId: "ed6549",
-    title: "絆の在り処",
+    providerTrackId: "ed6105",
+    title: "陽だまりにて和む猫(Original)",
     artist: FALCOM_ARTIST,
-    sourceUrl: `${FALCOM_MUSIC_BASE_URL}/${encodeURIComponent("ed6549_絆の在り処_v1.mp3")}`,
+    sourceUrl: `${FALCOM_MUSIC_BASE_URL}/${encodeURIComponent("ed6105_陽だまりにて和む猫(Original)_v1.mp3")}`,
     artworkUrl: null,
-    durationSeconds: 170.735854,
-    loop: { startSeconds: 995_689 / SAMPLE_RATE, endSeconds: 7_425_461 / SAMPLE_RATE },
+    durationSeconds: 167.2275,
+    loop: { startSeconds: 362_976 / SAMPLE_RATE, endSeconds: 7_491_584 / SAMPLE_RATE },
   },
 ];
 
