@@ -9,28 +9,81 @@ import { useMusicPlayerStore } from "@/store/useMusicPlayerStore";
 
 const SAMPLE_RATE = 48_000;
 const FALCOM_MUSIC_BASE_URL = "https://cdn.hhwx.org/hhwx/music/falcom-sound-team-jdk";
+const FALCOM_ARTIST = "Falcom Sound Team jdk";
+const COMPOSER_CREDITS: Record<string, string> = {
+  ed6210: "宇仁菅孝宏",
+  ed6304: "石橋渡 / 古口駿太郎",
+  ed6305: "石橋渡 / 神藤由東大 / 宇仁菅孝宏",
+  ed6425: "宇仁菅孝宏",
+  ed6550: "石橋渡 / 神藤由東大 / 宇仁菅孝宏",
+  ed6549: "宇仁菅孝宏",
+};
 const TRACKS: MusicPlayerItem[] = [
   {
     id: "falcom:ed6210",
     provider: "falcom",
     providerTrackId: "ed6210",
     title: "空を見上げて",
-    artist: null,
-    sourceUrl: `${FALCOM_MUSIC_BASE_URL}/${encodeURIComponent("ed6210_空を見上げて_v1.mp3")}`,
+    artist: FALCOM_ARTIST,
+    sourceUrl: `${FALCOM_MUSIC_BASE_URL}/${encodeURIComponent("ed6210_空を見上げて_v2.mp3")}`,
     artworkUrl: null,
     durationSeconds: 160.709021,
     loop: { startSeconds: 1_012_726 / SAMPLE_RATE, endSeconds: 6_895_279 / SAMPLE_RATE },
+  },
+  {
+    id: "falcom:ed6304",
+    provider: "falcom",
+    providerTrackId: "ed6304",
+    title: "レイストン要塞",
+    artist: FALCOM_ARTIST,
+    sourceUrl: `${FALCOM_MUSIC_BASE_URL}/${encodeURIComponent("ed6304_レイストン要塞_v1.mp3")}`,
+    artworkUrl: null,
+    durationSeconds: 149.252042,
+    loop: { startSeconds: 372_713 / SAMPLE_RATE, endSeconds: 6_575_880 / SAMPLE_RATE },
+  },
+  {
+    id: "falcom:ed6305",
+    provider: "falcom",
+    providerTrackId: "ed6305",
+    title: "虚ろなる光の封土",
+    artist: FALCOM_ARTIST,
+    sourceUrl: `${FALCOM_MUSIC_BASE_URL}/${encodeURIComponent("ed6305_虚ろなる光の封土_v1.mp3")}`,
+    artworkUrl: null,
+    durationSeconds: 297.797625,
+    loop: { startSeconds: 560_513 / SAMPLE_RATE, endSeconds: 13_575_535 / SAMPLE_RATE },
+  },
+  {
+    id: "falcom:ed6425",
+    provider: "falcom",
+    providerTrackId: "ed6425",
+    title: "Fateful confrontation",
+    artist: FALCOM_ARTIST,
+    sourceUrl: `${FALCOM_MUSIC_BASE_URL}/${encodeURIComponent("ed6425_Fateful confrontation_v1.mp3")}`,
+    artworkUrl: null,
+    durationSeconds: 171.947563,
+    loop: { startSeconds: 516_132 / SAMPLE_RATE, endSeconds: 7_432_452 / SAMPLE_RATE },
   },
   {
     id: "falcom:ed6550",
     provider: "falcom",
     providerTrackId: "ed6550",
     title: "銀の意志 Super Arrange Ver.",
-    artist: null,
-    sourceUrl: `${FALCOM_MUSIC_BASE_URL}/${encodeURIComponent("ed6550_銀の意志 Super Arrange Ver._v1.mp3")}`,
+    artist: FALCOM_ARTIST,
+    sourceUrl: `${FALCOM_MUSIC_BASE_URL}/${encodeURIComponent("ed6550_銀の意志 Super Arrange Ver._v2.mp3")}`,
     artworkUrl: null,
     durationSeconds: 181.12,
     loop: { startSeconds: 2_163_672 / SAMPLE_RATE, endSeconds: 8_252_796 / SAMPLE_RATE },
+  },
+  {
+    id: "falcom:ed6549",
+    provider: "falcom",
+    providerTrackId: "ed6549",
+    title: "絆の在り処",
+    artist: FALCOM_ARTIST,
+    sourceUrl: `${FALCOM_MUSIC_BASE_URL}/${encodeURIComponent("ed6549_絆の在り処_v1.mp3")}`,
+    artworkUrl: null,
+    durationSeconds: 170.735854,
+    loop: { startSeconds: 995_689 / SAMPLE_RATE, endSeconds: 7_425_461 / SAMPLE_RATE },
   },
 ];
 
@@ -54,7 +107,7 @@ export default function TestFeaturesPanel() {
               <div className="min-w-0">
                 <div className="text-base font-semibold text-[var(--theme-color-text-default)]">{track.title}</div>
                 <div className="mt-1 text-sm text-[var(--theme-color-text-muted)]">
-                  {t("composer", { name: "Falcom Sound Team jdk" })}
+                  {t("composer", { name: `${FALCOM_ARTIST} / ${COMPOSER_CREDITS[track.providerTrackId]}` })}
                 </div>
               </div>
               <button
