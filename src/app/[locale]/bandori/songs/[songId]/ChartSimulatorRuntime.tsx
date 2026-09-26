@@ -3012,7 +3012,7 @@ export default function ChartSimulatorRuntime({
             className="pointer-events-none absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 overflow-visible rounded-full bg-[var(--theme-color-range-track-background)]"
           >
             {loopStartPercentage !== null && loopEndPercentage !== null ? (
-              <div className="absolute inset-y-0 left-2 right-2">
+              <div className="absolute inset-0">
                 <span
                   className="absolute inset-y-0 rounded-full bg-[color-mix(in_srgb,var(--theme-color-selection-strong-background)_18%,transparent)]"
                   style={{
@@ -3026,8 +3026,7 @@ export default function ChartSimulatorRuntime({
               className="absolute inset-y-0 left-0 rounded-full bg-[var(--theme-color-action-accent-background)]"
               style={{ width: `${playbackPercentage}%` }}
             />
-            {/* The native 16px thumb centers are inset 8px from each edge. */}
-            <div className="absolute inset-y-0 left-2 right-2">
+            <div className="absolute inset-0">
               {loopStartPercentage !== null ? (
                 <span
                   className="absolute top-1/2 h-5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--theme-color-selection-strong-background)] ring-2 ring-[var(--theme-color-panel-background)]"
@@ -3042,6 +3041,7 @@ export default function ChartSimulatorRuntime({
               ) : null}
             </div>
           </div>
+          {/* Extend by half a thumb on each side so its center follows the full visual track. */}
           <input
             type="range"
             min={0}
@@ -3055,7 +3055,7 @@ export default function ChartSimulatorRuntime({
             onChange={(event) => previewScrub(Number(event.currentTarget.value))}
             onPointerUp={commitScrub}
             onBlur={commitScrub}
-            className="absolute inset-0 z-10 h-8 w-full cursor-pointer appearance-none rounded-full bg-transparent outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-[var(--theme-color-action-accent-background)] [&::-moz-range-thumb]:shadow-md [&::-moz-range-track]:h-2 [&::-moz-range-track]:bg-transparent [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:-mt-1 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-[var(--theme-color-action-accent-background)] [&::-webkit-slider-thumb]:shadow-md"
+            className="absolute inset-y-0 -left-2 z-10 m-0 h-8 w-[calc(100%+1rem)] cursor-pointer appearance-none rounded-full border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] [&::-moz-range-thumb]:box-border [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-[var(--theme-color-action-accent-background)] [&::-moz-range-thumb]:shadow-md [&::-moz-range-track]:h-2 [&::-moz-range-track]:bg-transparent [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:-mt-1 [&::-webkit-slider-thumb]:box-border [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-[var(--theme-color-action-accent-background)] [&::-webkit-slider-thumb]:shadow-md"
           />
         </div>
         <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">

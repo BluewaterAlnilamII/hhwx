@@ -255,7 +255,7 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
         <div className={`relative h-5 ${isError ? "cursor-not-allowed" : ""}`}>
           <div aria-hidden="true" className={`pointer-events-none absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full ${isError ? "bg-[var(--theme-color-semantic-danger-background)]" : "bg-[var(--theme-color-range-track-background)]"}`}>
             {loopStartPercent !== null && loopEndPercent !== null ? (
-              <div className="absolute inset-y-0 left-2 right-2">
+              <div className="absolute inset-0">
                 <span
                   className="absolute inset-y-0 rounded-full bg-[color-mix(in_srgb,var(--theme-color-selection-strong-background)_18%,transparent)]"
                   style={{ left: `${loopStartPercent}%`, width: `${loopEndPercent - loopStartPercent}%` }}
@@ -266,7 +266,7 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
               className={`absolute inset-y-0 left-0 rounded-full bg-[var(--theme-color-action-accent-background)] ${seekPreviewTime === null ? "transition-[width] duration-150" : ""}`}
               style={{ width: isError ? "0%" : `${progressPercent}%` }}
             />
-            <div className="absolute inset-y-0 left-2 right-2">
+            <div className="absolute inset-0">
               {[loopStartPercent, loopEndPercent].map((percentage, index) => percentage === null ? null : (
                 <span
                   key={index}
@@ -276,6 +276,7 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
               ))}
             </div>
           </div>
+          {/* Extend by half a thumb on each side so its center follows the full visual track. */}
           <input
             type="range"
             min={0}
@@ -296,7 +297,7 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
             onPointerCancel={cancelSeekPreview}
             onKeyUp={handleSeekKeyUp}
             onBlur={() => commitSeekPreview()}
-            className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+            className="absolute inset-y-0 -left-2 m-0 h-full w-[calc(100%+1rem)] cursor-pointer appearance-none border-0 p-0 opacity-0 disabled:cursor-not-allowed [&::-moz-range-thumb]:box-border [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:border-0 [&::-webkit-slider-thumb]:box-border [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:border-0"
             aria-label={t("progress")}
             aria-describedby={loop ? "toolbar-music-player-loop-range" : undefined}
           />

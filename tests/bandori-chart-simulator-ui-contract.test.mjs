@@ -477,7 +477,8 @@ test("range looping reuses the serialized seek handoff without claiming a gaples
   assert.match(runtime, /loopStartPercentage !== null && loopEndPercentage !== null/u);
   assert.match(runtime, /loopStartPercentage !== null[\s\S]*loopEndPercentage !== null/u);
   assert.match(runtime, /className="absolute inset-y-0 left-0 rounded-full bg-\[var\(--theme-color-action-accent-background\)\]"\s+style=\{\{ width: `\$\{playbackPercentage\}%` \}\}\s*\/>/u);
-  assert.match(runtime, /native 16px thumb centers are inset 8px from each edge[\s\S]*className="absolute inset-y-0 left-2 right-2"[\s\S]*left: `\$\{loopStartPercentage\}%`[\s\S]*left: `\$\{loopEndPercentage\}%`/u);
+  assert.match(runtime, /className="absolute inset-0"[\s\S]*left: `\$\{loopStartPercentage\}%`[\s\S]*left: `\$\{loopEndPercentage\}%`/u);
+  assert.match(runtime, /-left-2[^"\n]*w-\[calc\(100%\+1rem\)\]/u);
   assert.doesNotMatch(runtime, /等待设置终点|循环中|waiting for loop/iu);
   assert.doesNotMatch(runtime, /isBandoriSimulatorLoopAvailable|isLoopUnavailable/u);
 });
