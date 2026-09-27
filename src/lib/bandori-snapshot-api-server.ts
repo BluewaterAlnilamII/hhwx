@@ -66,9 +66,16 @@ type SnapshotJsonObjectCacheOptions<T> = {
 
 export type BandoriVerifiedGzipDescriptor = {
   key: string;
-  semanticSha256: string;
+  semanticSha256?: string;
   compressedSha256: string;
   compressedSize: number;
+  jsonSha256?: string;
+  jsonSize?: number;
+};
+
+type VerifiedJsonReadOptions = R2ObjectReadOptions & {
+  expectedSha256?: string;
+  expectedSize?: number;
 };
 
 type SnapshotVerifiedGzipCacheOptions<T, TDescriptor extends BandoriVerifiedGzipDescriptor> = {
@@ -212,8 +219,8 @@ async function readLocalObject(
   }
 }
 
-export function createBandoriSnapshotObjectSource(
-  options: SnapshotObjectSourceOptions,
+export function createSnapshotObjectSource(
+  options: SnapshotObjectSourceOptions & { getR2Config: () => R2S3ReaderConfig },
 ): BandoriSnapshotObjectSource {
   const localRoot = process.env[options.localStoreEnvironmentName]?.trim();
   if (localRoot) {
@@ -232,7 +239,7 @@ export function createBandoriSnapshotObjectSource(
     };
   }
 
-  const config = getPrivateR2Config(options.privateR2ReadLabel);
+  const config = options.getR2Config();
   return {
     scope: `r2:${configScope(config)}`,
     read: (objectKey, readOptions = {}) => fetchR2Object(
@@ -244,12 +251,21 @@ export function createBandoriSnapshotObjectSource(
   };
 }
 
+export function createBandoriSnapshotObjectSource(
+  options: SnapshotObjectSourceOptions,
+): BandoriSnapshotObjectSource {
+  return createSnapshotObjectSource({
+    ...options,
+    getR2Config: () => getPrivateR2Config(options.privateR2ReadLabel),
+  });
+}
+
 export function createBandoriSnapshotJsonObjectCache<T>(
   options: SnapshotJsonObjectCacheOptions<T>,
 ): (
   source: BandoriSnapshotObjectSource,
   objectKey: string,
-  readOptions?: R2ObjectReadOptions,
+  readOptions?: VerifiedJsonReadOptions,
 ) => Promise<T | null> {
   if (!Number.isInteger(options.maxEntries) || options.maxEntries < 1) {
     throw new Error("Bandori JSON object cache must retain at least one entry");
@@ -276,7 +292,12 @@ export function createBandoriSnapshotJsonObjectCache<T>(
     }
   };
   return async (source, objectKey, readOptions = {}) => {
-    const cacheKey = `${source.scope}\u0000${objectKey}`;
+    const { expectedSha256, expectedSize, ...transportOptions } = readOptions;
+    if ((expectedSha256 !== undefined && !/^[a-f0-9]{64}$/u.test(expectedSha256))
+      || (expectedSize !== undefined && (!Number.isSafeInteger(expectedSize) || expectedSize < 1 || expectedSize > options.maxBytes))) {
+      throw new Error(`${options.readLabel} descriptor is invalid`);
+    }
+    const cacheKey = `${source.scope}\u0000${objectKey}\u0000${expectedSha256 ?? ""}\u0000${expectedSize ?? ""}`;
     const existing = cache.get(cacheKey);
     if (existing && (!existing.isResolved || existing.expiresAt > Date.now())) {
       cache.delete(cacheKey);
@@ -286,8 +307,8 @@ export function createBandoriSnapshotJsonObjectCache<T>(
     if (existing) cache.delete(cacheKey);
     const promise = (async () => {
       const response = await source.read(objectKey, {
-        ...readOptions,
-        maxBytes: options.maxBytes,
+        ...transportOptions,
+        maxBytes: expectedSize ?? options.maxBytes,
       });
       if (response.status === 404 && options.allowNotFound) return null;
       if (!response.ok) {
@@ -295,10 +316,18 @@ export function createBandoriSnapshotJsonObjectCache<T>(
       }
       validateDeclaredLength(
         response,
-        null,
+        expectedSize ?? null,
         options.maxBytes,
         `${options.readLabel} is too large`,
       );
+      if (expectedSha256 !== undefined || expectedSize !== undefined) {
+        const bytes = Buffer.from(await response.arrayBuffer());
+        if (bytes.length > options.maxBytes || (expectedSize !== undefined && bytes.length !== expectedSize)
+          || (expectedSha256 !== undefined && createHash("sha256").update(bytes).digest("hex") !== expectedSha256)) {
+          throw new Error(`${options.readLabel} hash/size mismatch`);
+        }
+        return options.parse(JSON.parse(bytes.toString("utf8")));
+      }
       return options.parse(await response.json<unknown>());
     })();
     const entry: JsonCacheEntry = {
@@ -377,6 +406,8 @@ export function createBandoriSnapshotVerifiedGzipJsonCache<
       !Number.isSafeInteger(descriptor.compressedSize)
       || descriptor.compressedSize < 1
       || descriptor.compressedSize > options.maxCompressedBytes
+      || (descriptor.jsonSize !== undefined && (!Number.isSafeInteger(descriptor.jsonSize) || descriptor.jsonSize < 1 || descriptor.jsonSize > options.maxDecompressedBytes))
+      || (descriptor.jsonSha256 !== undefined && !/^[a-f0-9]{64}$/u.test(descriptor.jsonSha256))
     ) {
       throw new Error(`${options.datasetLabel} compressed size is invalid: ${cacheKey}`);
     }
@@ -424,6 +455,10 @@ export function createBandoriSnapshotVerifiedGzipJsonCache<
         decompressed = gunzipSync(compressed, { maxOutputLength: options.maxDecompressedBytes });
       } catch (error) {
         throw new Error(`${options.datasetLabel} is corrupt: ${cacheKey}`, { cause: error });
+      }
+      if ((descriptor.jsonSize !== undefined && decompressed.length !== descriptor.jsonSize)
+        || (descriptor.jsonSha256 !== undefined && createHash("sha256").update(decompressed).digest("hex") !== descriptor.jsonSha256)) {
+        throw new Error(`${options.datasetLabel} JSON byte hash/size mismatch: ${cacheKey}`);
       }
       let raw: unknown;
       try {
