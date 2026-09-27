@@ -87,6 +87,9 @@ jobs:
       - name: Test Costumes API
         run: npm run test:bandori-costumes
 
+      - name: Test OurNotes master API
+        run: npm run test:ournotes-master
+
       - name: Test Bandori TOP10 tracker
         run: npm run test:bandori-tracker-topdata
 

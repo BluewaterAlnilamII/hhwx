@@ -10,6 +10,32 @@ import {
   createBandoriSnapshotVerifiedGzipJsonCache,
 } from "../src/lib/bandori-snapshot-api-server.ts";
 
+test("verified JSON descriptors are checked and are part of cache identity", async () => {
+  const body = Buffer.from('{"value":1}');
+  const sha256 = createHash("sha256").update(body).digest("hex");
+  let reads = 0;
+  const source = { scope: "verified-json", read: async () => { reads++; return objectResponse(body); } };
+  const read = createBandoriSnapshotJsonObjectCache({ maxEntries: 1, maxBytes: 100, ttlMs: 60_000, readLabel: "verified JSON", parse: (value) => value });
+  assert.deepEqual(await read(source, "manifest.json", { expectedSha256: sha256, expectedSize: body.length }), { value: 1 });
+  await read(source, "manifest.json", { expectedSha256: sha256, expectedSize: body.length });
+  assert.equal(reads, 1);
+  await assert.rejects(read(source, "manifest.json", { expectedSha256: "0".repeat(64), expectedSize: body.length }), /hash\/size/);
+  assert.equal(reads, 2);
+});
+
+test("gzip verifies JSON byte identity separately from semantic identity", async () => {
+  const raw = Buffer.from('{ "value": 1 }');
+  const compressed = gzipSync(raw);
+  const descriptor = { key: "pack.gz", compressedSize: compressed.length, compressedSha256: createHash("sha256").update(compressed).digest("hex"),
+    jsonSize: raw.length, jsonSha256: createHash("sha256").update(raw).digest("hex") };
+  const read = createBandoriSnapshotVerifiedGzipJsonCache({ maxEntries: 2, maxCacheBytes: 1000, maxCompressedBytes: 1000, maxDecompressedBytes: 1000,
+    datasetLabel: "byte verified gzip", verifySemanticHash: false, parse: (value) => value });
+  const source = { scope: "byte-hash", read: async () => objectResponse(compressed) };
+  assert.deepEqual(await read(source, "pack", descriptor), { value: 1 });
+  await assert.rejects(read(source, "pack", { ...descriptor, jsonSha256: createHash("sha256").update('{"value":1}').digest("hex") }), /JSON byte hash\/size/);
+  await assert.rejects(read(source, "pack", { ...descriptor, jsonSize: raw.length - 1 }), /JSON byte hash\/size/);
+});
+
 function objectResponse(body) {
   return {
     ok: true,

@@ -59,6 +59,8 @@ Important rules:
 
 `GET /api/status` exposes the latest status of the four Bandori backend services across JP/EN/TW/CN. The Node server collects it every 60 seconds using the existing private user-fetcher configuration. See [service status](documents/service-status.md) for the response contract and deployment requirements.
 
+`/api/ournotes/master/` provides read-only member/support card lists and details, characters, and bands. Configure the independent server-only `OURNOTES_*` storage values; see the [OurNotes master API contract](documents/ournotes-master-api.md). These APIs read master data independently of image delivery.
+
 ## Scripts
 
 ```bash
