@@ -1,4 +1,10 @@
-import { readOurNotesMasterInputs } from "../master-server";
+import {
+  createBandoriSnapshotPointerCache, createBandoriSnapshotVerifiedGzipJsonCache,
+  type BandoriSnapshotObjectSource,
+} from "@/lib/bandori-snapshot-api-server";
+import { getOurNotesSource } from "../master-server";
+import { OURNOTES_SOURCE_SERVERS, OURNOTES_MAX_JSON_BYTES, OurNotesDataError, ourNotesRecord, requireOurNotes } from "../master-contract";
+import { ourNotesPointerKey, parseOurNotesPointer, type OurNotesPackDescriptor } from "./api-contract";
 import type { OurNotesServer } from "../master-contract";
 import { mergeOurNotesCards, type OurNotesCardKind, type OurNotesCardSummary } from "./api-contract";
 
@@ -17,7 +23,7 @@ function select<T extends OurNotesCardSummary>(records: Record<string, T>, serve
   return result;
 }
 async function readCards(kind: OurNotesCardKind, server?: OurNotesServer): Promise<Cards> {
-  const inputs = await readOurNotesMasterInputs(`${kind}_cards`);
+  const inputs = await readOurNotesCardInputs(kind);
   let entry = cache[kind];
   if (!entry || !inputs.every((value, index) => value === entry!.inputs[index])) {
     entry = { inputs, cards: mergeOurNotesCards(inputs, kind), selected: new Map() };
@@ -39,4 +45,30 @@ export async function readOurNotesCards(kind: OurNotesCardKind, server?: OurNote
 export async function readOurNotesCard(kind: OurNotesCardKind, id: string, server?: OurNotesServer) {
   const records = (await readCards(kind, server)).details;
   return Object.hasOwn(records, id) ? records[id] : null;
+}
+
+const pointers = OURNOTES_SOURCE_SERVERS.map((server) => createBandoriSnapshotPointerCache({
+  pointerKey: ourNotesPointerKey(server), pointerTtlMs: 60_000,
+  pointerReadLabel: "OurNotes Cards pointer", parse: (raw) => parseOurNotesPointer(raw, server),
+}));
+const readPack = createBandoriSnapshotVerifiedGzipJsonCache<unknown, OurNotesPackDescriptor>({
+  maxEntries: 16, maxCacheBytes: 64 * 1024 * 1024,
+  maxCompressedBytes: OURNOTES_MAX_JSON_BYTES, maxDecompressedBytes: OURNOTES_MAX_JSON_BYTES,
+  datasetLabel: "OurNotes Cards pack",
+  parse: (raw, descriptor, kind) => {
+    const row = ourNotesRecord(raw);
+    requireOurNotes(row.schema === "ournotes-card-projection-v2" && row.kind === kind
+      && Array.isArray(row.cards) && row.cards.length === descriptor.recordCount);
+    return raw;
+  },
+});
+export async function readOurNotesCardInputs(kind: OurNotesCardKind, source?: BandoriSnapshotObjectSource): Promise<unknown[]> {
+  try {
+    const store = source ?? getOurNotesSource();
+    const current = await Promise.all(pointers.map((read) => read(store)));
+    return await Promise.all(current.map((pointer) => readPack(store, kind, pointer.datasets[`${kind}_cards`], { timeoutMs: 15_000 })));
+  } catch (error) {
+    if (error instanceof OurNotesDataError) throw error;
+    throw new OurNotesDataError("OurNotes Cards source is unavailable");
+  }
 }

@@ -85,6 +85,8 @@ type SnapshotVerifiedGzipCacheOptions<T, TDescriptor extends BandoriVerifiedGzip
   maxDecompressedBytes: number;
   datasetLabel: string;
   verifySemanticHash?: boolean;
+  // Reuse verified bytes across immutable paths; the parser must not depend on descriptor.key.
+  cacheByContent?: boolean;
   parse: (value: unknown, descriptor: TDescriptor, cacheKey: string) => T;
   estimateBytes?: (value: T, decompressedBytes: number) => number;
 };
@@ -393,7 +395,7 @@ export function createBandoriSnapshotVerifiedGzipJsonCache<
   ) => [
     sourceScope,
     cacheKey,
-    canonicalJson(descriptor),
+    canonicalJson(options.cacheByContent ? { ...descriptor, key: "" } : descriptor),
   ].join("\u0000");
 
   const read: BandoriVerifiedGzipJsonCacheReader<T, TDescriptor> = async (

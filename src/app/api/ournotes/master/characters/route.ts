@@ -1,6 +1,6 @@
 import { jsonSuccess } from "@/lib/api-response";
 import { SNAPSHOT_HTTP_CACHE_POLICY, withHttpCachePolicy } from "@/lib/api-cache";
-import { readOurNotesCatalog } from "@/lib/ournotes/master-server";
+import { readOurNotesCatalog } from "@/lib/ournotes/catalogs-server";
 import { ourNotesRouteError, rejectOurNotesCatalogQuery } from "@/lib/ournotes/master-api-query";
 
 export const dynamic = "force-dynamic";

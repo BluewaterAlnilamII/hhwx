@@ -1,5 +1,6 @@
 import {
   OURNOTES_MAX_RECORDS, OURNOTES_SLOT_SOURCES,
+  ourNotesHash, ourNotesSize, type OurNotesSourceServer, type OurNotesObjectDescriptor,
   ourNotesInteger, ourNotesLocales, ourNotesRecord, ourNotesString, ourNotesText, requireOurNotes,
   type OurNotesText,
 } from "../master-contract";
@@ -136,4 +137,38 @@ export function mergeOurNotesCards(inputs: unknown[], kind: OurNotesCardKind): {
     details[id] = { ...summary, growth };
   }
   return { summaries, details };
+}
+
+export type OurNotesPackDescriptor = {
+  key: string; semanticSha256: string; compressedSha256: string;
+  compressedSize: number; jsonSize: number; recordCount: number;
+};
+export type OurNotesPointer = {
+  artifactGeneration: string;
+  artifact: OurNotesObjectDescriptor;
+  datasets: Record<"member_cards" | "support_cards", OurNotesPackDescriptor>;
+};
+export function ourNotesPointerKey(server: OurNotesSourceServer): string {
+  return `ournotes/master/cards-v1/${server}/api/active.json`;
+}
+export function parseOurNotesPointer(value: unknown, server: OurNotesSourceServer): OurNotesPointer {
+  const row = ourNotesRecord(value);
+  requireOurNotes(row.schema === "ournotes-cards-api-pointer-v1" && row.server === server);
+  ourNotesInteger(row.generation, 1);
+  ourNotesString(row.updatedAt);
+  const artifactGeneration = ourNotesHash(row.artifactGeneration);
+  const artifact = ourNotesRecord(row.artifact);
+  const artifactKey = `ournotes/master/${server}/${artifactGeneration}/manifest.json`;
+  requireOurNotes(artifact.key === artifactKey);
+  const rawDatasets = ourNotesRecord(row.datasets);
+  requireOurNotes(Object.keys(rawDatasets).sort().join() === "member_cards,support_cards");
+  const datasets = {} as OurNotesPointer["datasets"];
+  for (const kind of ["member_cards", "support_cards"] as const) {
+    const pack = ourNotesRecord(rawDatasets[kind]);
+    const compressedSha256 = ourNotesHash(pack.compressedSha256);
+    const key = `ournotes/master/cards-v1/${server}/api/packs/${kind}/${compressedSha256}.json.gz`;
+    requireOurNotes(pack.key === key);
+    datasets[kind] = { key, compressedSha256, semanticSha256: ourNotesHash(pack.semanticSha256), compressedSize: ourNotesSize(pack.compressedSize), jsonSize: ourNotesSize(pack.jsonSize), recordCount: ourNotesSize(pack.recordCount, OURNOTES_MAX_RECORDS) };
+  }
+  return { artifactGeneration, artifact: { key: artifactKey, sha256: ourNotesHash(artifact.sha256), size: ourNotesSize(artifact.size, 1024 * 1024) }, datasets };
 }
