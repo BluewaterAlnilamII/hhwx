@@ -92,7 +92,7 @@ hhwx/
 - `auth-*.ts`, `supabase-*.ts`, `turnstile-server.ts`, and `turnstile-public.ts`: authentication, security verification, and server/public wrappers.
 - Remaining root-level `bandori-*.ts` and `calendar-*.ts`: shared cross-domain infrastructure and compatibility entry points that do not belong to one feature folder.
 - `bandori/cards/`: Card catalogs, regional materialization, API contracts/services, release/training rules, generated Card metadata, layouts, and profile-card helpers.
-- `ournotes/`: OurNotes source/slot contracts, private master readers, shared catalogs, and HTTP query/error handling; `cards/` owns card projection, merging, and selection.
+- `ournotes/`: shared source/slot contracts, generic private master discovery and dataset readers, and HTTP query/error handling. `catalogs-contract.ts`/`catalogs-server.ts` own character/band validation and merging; `cards/` owns its independent snapshot contract, reader, card projection, merging, and selection.
 - `bandori/costumes/`: Costumes metadata validation, regional materialization, and private snapshot API readers. Media extraction belongs to the assets-builder.
 - `bandori/events/`: event catalogs, API contracts/services, route/region/status helpers, banner proxy logic, and event-specific comment target validation.
 - `bandori/event-tracker/`: Event Tracker cutoff, TOP10, live-series, projection, history, and prediction contracts/services shared by event, song, and monthly tracker modes.

@@ -11,8 +11,8 @@ import { GET as characters } from "../src/app/api/ournotes/master/characters/rou
 import { GET as bands } from "../src/app/api/ournotes/master/bands/route.ts";
 import { mergeOurNotesCards } from "../src/lib/ournotes/cards/api-contract.ts";
 import { readOurNotesMasterInputs } from "../src/lib/ournotes/master-server.ts";
-import { mergeOurNotesCatalog } from "../src/lib/ournotes/master-contract.ts";
-import { readOurNotesCards } from "../src/lib/ournotes/cards/api-server.ts";
+import { mergeOurNotesCatalog } from "../src/lib/ournotes/catalogs-contract.ts";
+import { readOurNotesCardInputs, readOurNotesCards } from "../src/lib/ournotes/cards/api-server.ts";
 import { ourNotesRouteError } from "../src/lib/ournotes/master-api-query.ts";
 
 const fixture = JSON.parse(await readFile(new URL("fixtures/ournotes-master.json", import.meta.url), "utf8"));
@@ -40,11 +40,11 @@ function regions() {
   });
 }
 
-function storeObjects(inputs = regions()) {
+function storeObjects(inputs = regions(), revision = "ournotes-cards-v3") {
   const objects = new Map();
   inputs.forEach((input, index) => {
     const server = servers[index];
-    const generation = hash(encoded([server, input]));
+    const generation = hash(encoded([server, input, revision]));
     const prefix = `ournotes/master/${server}/${generation}`;
     const files = ["source/MasterManifest.json", ...fixture.tables.flatMap((table) => [`source/${table}.bin`, `raw/${table}.json`])]
       .map((path) => ({ path, sha256: hash("{}"), size: 2 }));
@@ -61,9 +61,10 @@ function storeObjects(inputs = regions()) {
         datasets[dataset] = { key, compressedSha256: hash(gzip), compressedSize: gzip.length, semanticSha256: hash(json), jsonSize: json.length, recordCount: data.cards.length };
       }
     }
-    const manifest = encoded({ schema: "ournotes-master-artifact-v1", revision: "ournotes-cards-v3", generation, server, selectedTables: fixture.tables, files });
+    const manifest = encoded({ schema: "ournotes-master-artifact-v1", revision, generation, server, selectedTables: fixture.tables, files });
     const artifact = { key: `${prefix}/manifest.json`, sha256: hash(manifest), size: manifest.length };
     objects.set(artifact.key, manifest);
+    objects.set(`ournotes/master/${server}/active/manifest.json`, manifest);
     objects.set(pointerKey(server), encoded({ schema: "ournotes-cards-api-pointer-v1", server, generation: 1, updatedAt: "2026-09-27T00:00:00Z", artifactGeneration: generation, artifact, datasets }));
   });
   return objects;
@@ -208,27 +209,15 @@ test("query and ID errors are explicit, uncached and independent of storage", as
   assert.equal((await list(request("cards/snapshot"), context("snapshot"))).status, 404);
 });
 
-test("invalid source bytes, revisions, paths and pack descriptors return sanitized 503", async () => {
+test("invalid Cards bytes, schemas, paths and pack descriptors return sanitized 503", async () => {
   const edits = [
     (objects) => objects.delete(pointerKey("tw")),
-    (objects) => editPointer(objects, (p) => { p.artifact.sha256 = "0".repeat(64); }),
+    (objects) => editPointer(objects, (p) => { p.schema = "unknown"; }),
     (objects) => editPointer(objects, (p) => { p.artifact.key = "ournotes/master/jp/../private"; }),
     (objects) => editPointer(objects, (p) => { p.datasets.member_cards.recordCount += 1; }),
     (objects) => editPointer(objects, (p) => { p.datasets.member_cards.compressedSize = 17 * 1024 * 1024; }),
     (objects) => editPointer(objects, (p) => { p.datasets.member_cards.semanticSha256 = "0".repeat(64); }),
     (objects) => editPointer(objects, (p) => { objects.set(p.datasets.member_cards.key, Buffer.from("damaged")); }),
-    (objects) => editPointer(objects, (p) => {
-      const manifest = JSON.parse(objects.get(p.artifact.key));
-      manifest.revision = "unknown";
-      const body = encoded(manifest); objects.set(p.artifact.key, body);
-      p.artifact.sha256 = hash(body); p.artifact.size = body.length;
-    }),
-    (objects) => editPointer(objects, (p) => {
-      const manifest = JSON.parse(objects.get(p.artifact.key));
-      manifest.files.find((file) => file.path === "normalized/member_cards.json").sha256 = "0".repeat(64);
-      const body = encoded(manifest); objects.set(p.artifact.key, body);
-      p.artifact.sha256 = hash(body); p.artifact.size = body.length;
-    }),
   ];
   for (const edit of edits) {
     await withStore(regions(), edit, async () => {
@@ -281,17 +270,17 @@ test("concurrent reads reuse four sources, warm reads do no IO, and pointer chan
     return { ok: true, status: 200, headers: new Headers({ "content-length": String(body.length) }),
       arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.length), json: async () => JSON.parse(body) };
   } };
-  const batches = await Promise.all(Array.from({ length: 6 }, () => readOurNotesMasterInputs("member_cards", source)));
-  assert.equal(calls.length, 12); // Four pointers, manifests and packs; cn_intl makes no request.
+  const batches = await Promise.all(Array.from({ length: 6 }, () => readOurNotesCardInputs("member", source)));
+  assert.equal(calls.length, 8); // Four pointers and packs; cn_intl makes no request.
   assert.ok(batches.every((batch) => batch.every((value, i) => value === batches[0][i])));
-  await readOurNotesMasterInputs("member_cards", source);
-  assert.equal(calls.length, 12);
+  await readOurNotesCardInputs("member", source);
+  assert.equal(calls.length, 8);
   input[2].member_cards.cards[0].name["zh-CN"] = "updated";
   input[2].member_cards.cards[0].source._nameTextID = "Synthetic_Card_Name_Override";
   for (const [key, bytes] of storeObjects(input)) objects.set(key, bytes);
   now += 60_001;
-  const updated = await readOurNotesMasterInputs("member_cards", source);
-  assert.equal(calls.length, 18); // Four pointers plus the changed TW manifest and pack.
+  const updated = await readOurNotesCardInputs("member", source);
+  assert.equal(calls.length, 13); // Four pointers plus the changed TW pack.
   assert.equal(mergeOurNotesCards(updated, "member").summaries["1"].name[3], "updated");
 });
 
@@ -308,20 +297,23 @@ test("every dataset has a read deadline and timed-out reads recover without pois
       return { ok: true, status: 200, headers: new Headers(),
         arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.length), json: async () => JSON.parse(body) };
     } };
+    const read = () => dataset.endsWith("_cards") ? readOurNotesCardInputs(dataset.replace("_cards", ""), source) : readOurNotesMasterInputs(dataset, source);
     let failure;
-    await assert.rejects(readOurNotesMasterInputs(dataset, source), (error) => { failure = error; return true; });
+    await assert.rejects(read(), (error) => { failure = error; return true; });
     const response = ourNotesRouteError(failure);
     assert.equal(response.status, 503);
     assert.match(response.headers.get("cache-control"), /no-store/);
     assert.deepEqual(await response.json(), { success: false, error: { code: "OURNOTES_MASTER_UNAVAILABLE", message: "OurNotes master data is unavailable" } });
-    assert.equal(calls.length, 12);
+    const failedCalls = calls.length;
+    assert.ok(failedCalls > 4 && failedCalls <= 8);
     assert.ok(calls.every(({ timeoutMs }) => timeoutMs === 15_000));
     fail = false;
-    const recovered = await readOurNotesMasterInputs(dataset, source);
-    assert.equal(calls.length, 16);
+    const recovered = await read();
+    const recoveredCalls = calls.length;
+    assert.equal(recoveredCalls - failedCalls, failedCalls - 4);
     assert.equal(recovered.length, 4);
-    await readOurNotesMasterInputs(dataset, source);
-    assert.equal(calls.length, 16);
+    await read();
+    assert.equal(calls.length, recoveredCalls);
   }
 });
 
@@ -335,4 +327,78 @@ test("production refuses local-store overrides without touching storage", async 
     if (beforeStore === undefined) delete process.env.OURNOTES_MASTER_LOCAL_STORE_ROOT; else process.env.OURNOTES_MASTER_LOCAL_STORE_ROOT = beforeStore;
   });
   assert.equal((await bands(request("bands"))).status, 503);
+});
+
+function memorySource(objects, calls = []) {
+  return { scope: randomUUID(), read: async (key, options) => {
+    calls.push(key);
+    const body = objects.get(key);
+    assert.ok(body, `unexpected dependency: ${key}`);
+    assert.ok(body.length <= options.maxBytes);
+    return { ok: true, status: 200, headers: new Headers(),
+      arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.length), json: async () => JSON.parse(body) };
+  } };
+}
+
+test("master catalogs and Cards snapshots have independent discovery and failures", async () => {
+  await withStore(regions(), (objects) => {
+    for (const key of objects.keys()) if (key.includes("/cards-v1/")) objects.delete(key);
+  }, async () => {
+    assert.equal((await characters(request("characters"))).status, 200);
+    assert.equal((await bands(request("bands"))).status, 200);
+    assert.equal((await list(request("cards/member"), context())).status, 503);
+  });
+  await withStore(regions(), (objects) => {
+    for (const key of objects.keys()) if (!key.includes("/cards-v1/")) objects.delete(key);
+  }, async () => {
+    assert.equal((await list(request("cards/member"), context())).status, 200);
+    assert.equal((await characters(request("characters"))).status, 503);
+  });
+});
+
+test("unrelated datasets and producer revisions preserve readers and content caches", async (t) => {
+  let now = Date.now(); t.mock.method(Date, "now", () => now);
+  const inputs = regions(), objects = storeObjects(inputs), calls = [];
+  const source = memorySource(objects, calls);
+  const before = await readOurNotesMasterInputs("characters", source);
+  const oldCards = await readOurNotesCardInputs("member", source);
+  for (const [key, body] of storeObjects(inputs, "new-producer-recipe")) objects.set(key, body);
+  for (const server of servers) {
+    const key = `ournotes/master/${server}/active/manifest.json`;
+    const manifest = JSON.parse(objects.get(key));
+    manifest.selectedTables.push("MasterFutureModule");
+    manifest.files.push({ path: "normalized/future_module.json", sha256: hash("{}"), size: 2 });
+    objects.set(key, encoded(manifest));
+  }
+  now += 60_001;
+  const start = calls.length;
+  const after = await readOurNotesMasterInputs("characters", source);
+  const cards = await readOurNotesCardInputs("member", source);
+  assert.ok(after.every((value, i) => value === before[i]));
+  assert.ok(cards.every((value, i) => value === oldCards[i]));
+  assert.equal(calls.length - start, 8); // Only the four master roots and four Cards roots.
+  await assert.rejects(readOurNotesMasterInputs("unpublished_module", source));
+  assert.ok((await readOurNotesMasterInputs("characters", source)).every((value, i) => value === before[i]));
+});
+
+test("generic master retains schema, source, path, dependency and byte validation", async () => {
+  for (const mutate of [
+    (m) => { m.schema = "unknown"; },
+    (m) => { m.server = "jp"; },
+    (m) => { m.generation = "../escape"; },
+    (m) => { m.files.push(m.files[0]); },
+    (m) => { m.files[0].path = "raw/../private"; },
+    (m) => { m.files = m.files.filter((f) => f.path !== "normalized/characters.json.gz"); },
+    (m) => { m.files.find((f) => f.path === "normalized/characters.json").sha256 = "0".repeat(64); },
+    (m) => { m.files.find((f) => f.path === "normalized/characters.json.gz").size += 1; },
+    (m) => { m.files.find((f) => f.path === "normalized/characters.json").size = 17 * 1024 * 1024; },
+  ]) {
+    await withStore(regions(), (objects) => {
+      const key = "ournotes/master/tw/active/manifest.json";
+      const manifest = JSON.parse(objects.get(key)); mutate(manifest); objects.set(key, encoded(manifest));
+    }, async () => {
+      assert.equal((await characters(request("characters"))).status, 503);
+      assert.equal((await list(request("cards/member"), context())).status, 200);
+    });
+  }
 });

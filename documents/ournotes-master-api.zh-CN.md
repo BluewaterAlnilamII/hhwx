@@ -94,7 +94,9 @@
 
 按 `.env.example` 配置仅服务端使用的私有 R2 只读凭据：`OURNOTES_R2_ENDPOINT`、`OURNOTES_PRIVATE_R2_BUCKET`、`OURNOTES_R2_ACCESS_KEY_ID`、`OURNOTES_R2_SECRET_ACCESS_KEY`。不回退 Bandori 凭据或公开 CDN。`OURNOTES_MASTER_LOCAL_STORE_ROOT` 仅用于开发/测试，生产拒绝启用。
 
-读取先固定各服 `ournotes/master/cards-v1/{server}/api/active.json`，校验 artifact 描述符，再取不可变卡包/目录。要求 `ournotes-cards-v3` artifact 的已知 16 表/41 文件布局；卡牌投影仍为 `ournotes-card-projection-v2`。角色/乐队取该 artifact 登记的 normalized 文件，压缩和解压后字节 hash 分别验证，不与卡包 semantic hash 混用。Web 不下载原始 `MasterText`。
+Cards 固定各服 `ournotes/master/cards-v1/{server}/api/active.json`，直接验证自己的不可变 pack：schema、压缩 hash/size、semantic hash、解压限制和数量。角色/乐队通过 `ournotes/master/{server}/active/manifest.json` 定位自己的 normalized 文件，分别验证压缩与解压后的字节 hash/size。两类 reader 均不限制 producer 配方修订或完整原始表/文件集合。共用层负责存储和有界内容缓存，Cards 与 catalogs 各自负责验证、合并和响应缓存；相同已验证数据内容可跨归档 generation 复用。Web 不下载原始 `MasterText`。
+
+启用此 reader 前须先初始化通用 master 入口。公开 URL、字段及五槽语义保持不变；新增独立数据集无需修改既有 reader，实际依赖缺失或未知数据 schema 仍失败。本次结构纠正不新增技能 API。
 
 运行 `npm run test:ournotes-master` 检查小型本地 fixture、路由合同、损坏失败、五槽筛选与缓存复用。公共读取工具改动还需相关 Bandori 回归及 typecheck、lint、build。Fixture 仅保留带版本/hash 来源的选定元数据，不含完整 master 表或凭据。
 
