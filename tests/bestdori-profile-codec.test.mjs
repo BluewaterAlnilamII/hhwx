@@ -140,7 +140,7 @@ test("profile payload storage codecs preserve high card IDs", async () => {
 test("character potential and mission compact IDs remain raw uint16 values", () => {
   const characterPotentials = [
     { characterId: 1, performanceLevel: 10, techniqueLevel: 20, visualLevel: 30 },
-    { characterId: 50, performanceLevel: null, techniqueLevel: 40, visualLevel: 50 },
+    { characterId: 50, performanceLevel: null, techniqueLevel: 40, visualLevel: 55 },
   ];
   const characterMissionBonuses = [
     { characterId: 1, bonusType: "TRAINING", performance: 1, technique: 2, visual: 3 },

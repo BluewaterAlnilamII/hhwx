@@ -213,9 +213,8 @@ effective bonus, not proof of an actual potential level of zero. Mission totals
 cannot be split into training and collection from this response.
 
 The JP example yields potential 55 (5.5%), confirmed against its returned bonus
-points; this view does not clamp values to the game-profile editor's existing
-50-level input limit. The editor and its components are unchanged. Omitted
-protobuf append messages and uint fields default to zero; malformed values do not.
+points. The game-profile editor also accepts potential levels through 55.
+Omitted protobuf append messages and uint fields default to zero; malformed values do not.
 
 The main-band heading displays its power inline; private profiles replace only the
 value with "Private". Card powers include the selected area items and reuse the

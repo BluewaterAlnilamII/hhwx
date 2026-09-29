@@ -67,10 +67,8 @@ type CharacterRecord = {
 };
 
 type AreaItemMetadata = {
-  areaItemId: number;
   areaItemName: Array<string | null>;
   level?: Array<number | null>;
-  source?: string;
 };
 
 type ItemsPayload = {
@@ -221,7 +219,7 @@ async function requestProfilePayload(profileId: string, messages: ItemPageMessag
 async function requestMetadata(): Promise<MetadataPayload> {
   const [charactersResponse, areaItemsResponse] = await Promise.all([
     fetch("/api/bandori/characters"),
-    fetch("/api/bandori/area-items"),
+    fetch("/api/bandori/master/areaItems"),
   ]);
 
   const [charactersPayload, areaItemsPayload] = await Promise.all([
@@ -231,12 +229,12 @@ async function requestMetadata(): Promise<MetadataPayload> {
 
   const characterData = parseApiSuccessData<{ characters?: CharacterRecord[] }>(charactersPayload);
   const areaItemData = parseApiSuccessData<{
-    areaItems?: Record<string, AreaItemMetadata>;
+    payload?: Record<string, AreaItemMetadata>;
   }>(areaItemsPayload);
 
   return {
     characters: Array.isArray(characterData?.characters) ? characterData.characters : [],
-    areaItems: areaItemData?.areaItems ?? {},
+    areaItems: areaItemData?.payload ?? {},
   };
 }
 
@@ -647,7 +645,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
   function updatePotential(characterId: number, field: "performanceLevel" | "techniqueLevel" | "visualLevel", value: number) {
     setItems((current) => {
       const existing = current.characterPotentials.find((record) => record.characterId === characterId) ?? createPotential(characterId);
-      const nextRecord = { ...existing, [field]: clampInteger(value, 0, 50) };
+      const nextRecord = { ...existing, [field]: clampInteger(value, 0, 55) };
       const hasRecord = current.characterPotentials.some((record) => record.characterId === characterId);
       return {
         ...current,
@@ -897,7 +895,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
                             values={potentialValues}
                             baseline={baselinePotentialValues}
                             disabled={!editing || saving}
-                            max={50}
+                            max={55}
                             labels={labels.bonusFields}
                             onChange={(field, value) => updatePotential(row.characterId, `${field}Level` as "performanceLevel" | "techniqueLevel" | "visualLevel", value)}
                           />
