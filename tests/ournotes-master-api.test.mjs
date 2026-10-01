@@ -9,6 +9,9 @@ import { GET as list } from "../src/app/api/ournotes/master/cards/[kind]/route.t
 import { GET as detail } from "../src/app/api/ournotes/master/cards/[kind]/[cardId]/route.ts";
 import { GET as characters } from "../src/app/api/ournotes/master/characters/route.ts";
 import { GET as bands } from "../src/app/api/ournotes/master/bands/route.ts";
+import { GET as skills } from "../src/app/api/ournotes/master/skills/route.ts";
+import { mergeOurNotesSkills } from "../src/lib/ournotes/skills-contract.ts";
+import { readOurNotesSkills } from "../src/lib/ournotes/skills-server.ts";
 import { mergeOurNotesCards } from "../src/lib/ournotes/cards/api-contract.ts";
 import { readOurNotesMasterInputs } from "../src/lib/ournotes/master-server.ts";
 import { mergeOurNotesCatalog } from "../src/lib/ournotes/catalogs-contract.ts";
@@ -16,6 +19,7 @@ import { readOurNotesCardInputs, readOurNotesCards } from "../src/lib/ournotes/c
 import { ourNotesRouteError } from "../src/lib/ournotes/master-api-query.ts";
 
 const fixture = JSON.parse(await readFile(new URL("fixtures/ournotes-master.json", import.meta.url), "utf8"));
+const skillFixture = JSON.parse(await readFile(new URL("fixtures/ournotes-skills.json", import.meta.url), "utf8"));
 const servers = ["jp", "en", "tw", "kr"];
 const locales = ["ja", "en", "zh-TW", "zh-CN", "ko"];
 const hash = (value) => createHash("sha256").update(value).digest("hex");
@@ -27,8 +31,9 @@ const request = (path) => new Request(`http://localhost/api/ournotes/master/${pa
 const context = (kind = "member", cardId = "1") => ({ params: Promise.resolve({ kind, cardId }) });
 
 function regions() {
-  return servers.map((server) => {
+  return servers.map((server, index) => {
     const data = structuredClone(fixture.datasets);
+    data.skills = structuredClone(skillFixture.datasets[index]);
     if (server === "jp") data.support_cards.cards = data.support_cards.cards.filter((card) => card.id !== 70);
     for (const card of data.member_cards.cards) {
       for (const locale of locales) card.name[locale] = `${server}:${locale}`;
@@ -286,7 +291,7 @@ test("concurrent reads reuse four sources, warm reads do no IO, and pointer chan
 
 test("every dataset has a read deadline and timed-out reads recover without poisoning the cache", async () => {
   const objects = storeObjects();
-  for (const dataset of ["member_cards", "support_cards", "characters", "bands"]) {
+  for (const dataset of ["member_cards", "support_cards", "characters", "bands", "skills"]) {
     const calls = [];
     let fail = true;
     const source = { scope: randomUUID(), read: async (key, options) => {
@@ -346,6 +351,7 @@ test("master catalogs and Cards snapshots have independent discovery and failure
   }, async () => {
     assert.equal((await characters(request("characters"))).status, 200);
     assert.equal((await bands(request("bands"))).status, 200);
+    assert.equal((await skills(request("skills"))).status, 200);
     assert.equal((await list(request("cards/member"), context())).status, 503);
   });
   await withStore(regions(), (objects) => {
@@ -353,7 +359,146 @@ test("master catalogs and Cards snapshots have independent discovery and failure
   }, async () => {
     assert.equal((await list(request("cards/member"), context())).status, 200);
     assert.equal((await characters(request("characters"))).status, 503);
+    assert.equal((await skills(request("skills"))).status, 503);
   });
+});
+
+test("skills preserve fixed grade arrays and merge localized templates with parameter remapping", async () => {
+  const inputs = regions();
+  for (const [index, input] of inputs.entries()) {
+    const row = input.skills.live["1"];
+    row.privateOnly = "must-not-be-public";
+    const parameters = [["10", "11", "12", "13", "14"], ["25", "26", "27", "28", "29"]];
+    row.descriptionParameters = index === 1 ? parameters.toReversed() : parameters;
+    for (const locale of locales) {
+      row.skillName[locale] = `${servers[index]}:${locale}`;
+      row.description[locale] = `${servers[index]}:${locale}:{${index === 1 || (index === 2 && locale === "zh-CN") ? 1 : 0}}%`;
+    }
+  }
+  await withStore(inputs, null, async () => {
+    const response = await skills(request("skills"));
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("cache-control"), /public/);
+    const { data } = await response.json();
+    assert.deepEqual(Object.keys(data).sort(), ["gekisou", "gekisouSupport", "leader", "live", "support"]);
+    const fieldOrders = {
+      leader: ["skillName", "description", "descriptionParameters", "effects", "skillIconId"],
+      live: ["skillName", "description", "descriptionParameters", "effects", "skillIconId", "skillCategories", "displaySkillCategories"],
+      gekisou: ["skillName", "description", "descriptionParameters", "effects", "skillIconId", "skillCategories", "displaySkillCategories", "gekisouMissionType"],
+      support: ["skillName", "description", "descriptionParameters", "effects", "skillIconId", "displaySkillCategories"],
+      gekisouSupport: ["skillName", "description", "descriptionParameters", "effects", "skillIconId", "displaySkillCategories", "gekisouMissionType", "gekisouSupportSkillExecTiming"],
+    };
+    for (const kind of Object.keys(data)) {
+      assert.ok(data[kind]["1"]);
+      assert.deepEqual(Object.keys(data[kind]["1"]), fieldOrders[kind]);
+      assert.equal(data[kind]["1"].description.length, 5);
+      for (const effect of data[kind]["1"].effects) {
+        assert.equal(effect.effectValue.length, 5);
+        assert.equal(Object.hasOwn(effect, "level"), false);
+      }
+      assert.equal(Object.hasOwn(data[kind]["1"], "id"), false);
+      assert.equal(Object.hasOwn(data[kind]["1"], "kind"), false);
+    }
+    assert.deepEqual(data.live["1"].skillName, ["jp:ja", "en:en", "tw:zh-TW", "tw:zh-CN", "kr:ko"]);
+    assert.deepEqual(data.live["1"].description, ["jp:ja:{0}%", "en:en:{0}%", "tw:zh-TW:{0}%", "tw:zh-CN:{1}%", "kr:ko:{0}%"]);
+    assert.deepEqual(data.live["1"].descriptionParameters, [["10", "11", "12", "13", "14"], ["25", "26", "27", "28", "29"]]);
+    assert.deepEqual(data.leader["90146"].description, ["", "", "", "", ""]);
+    assert.deepEqual(data.leader["90146"].effects, []);
+    assert.deepEqual(data.leader["90146"].descriptionParameters, []);
+    assert.equal(JSON.stringify(data).includes("must-not-be-public"), false);
+    assert.strictEqual(await readOurNotesSkills(), await readOurNotesSkills());
+  });
+  delete inputs[0].skills.live["1"];
+  // Keep this family nonempty while testing a source-specific missing ID.
+  inputs[0].skills.live["2"] = structuredClone(inputs[1].skills.live["1"]);
+  inputs[2].skills.live["1"].description["zh-CN"] = "";
+  const merged = mergeOurNotesSkills(inputs.map((input) => input.skills));
+  assert.equal(merged.live["1"].skillName[0], "");
+  assert.equal(merged.live["1"].description[3], "");
+  for (const query of ["server=0", "locale=ja", "level=5", "unknown=1"])
+    assert.equal((await skills(request(`skills?${query}`))).status, 400);
+});
+
+test("skills keep raw effects separate from native display values and conditional wording", () => {
+  const data = mergeOurNotesSkills(skillFixture.datasets);
+  const render = (skill, level, slot) => skill.description[slot].replace(/\{(\d+)\}/gu, (_, index) => skill.descriptionParameters[Number(index)][level - 1]);
+  const support = data.support["1"];
+  assert.deepEqual(support.effects[0].effectValue, [250, 500, 750, 1000, 1500]);
+  assert.deepEqual(support.effects[0].activationTimeSecond, [0, 0, 0, 0, 0]);
+  assert.equal(render(support, 1, 3), "装配此技能的成员的演出技能发动时间延长0.25秒\n若为「MyGO!!!!!」成员，\n则演出技能发动时间延长0.5秒");
+  assert.equal(render(support, 5, 3), "装配此技能的成员的演出技能发动时间延长1.5秒\n若为「MyGO!!!!!」成员，\n则演出技能发动时间延长3秒");
+  assert.equal(render(data.gekisou["2"], 1, 3), "JUST激奏开始后2秒内\nJUST获得量提升2");
+  assert.equal(render(data.gekisou["2"], 5, 3), "JUST激奏期间\nJUST获得量提升2");
+  const effect = data.gekisouSupport["67"].effects[0];
+  assert.deepEqual(effect.effectValue, [2, 2, 2, 2, 2]);
+  assert.deepEqual(Object.keys(effect.skillConditions), ["1", "2", "3", "4", "5"]);
+  assert.equal(render(data.gekisouSupport["67"], 4, 0).match(/null/gu).length, 2);
+  assert.deepEqual(data.gekisouSupport["76"].effects[0].effectValue, [0, 0, 0, 0, 0]);
+  for (const effect of data.gekisou["22"].effects) {
+    assert.deepEqual(effect.skillReleaseConditions, {
+      1: [], 2: [], 3: [], 4: [],
+      5: [[{ conditionType: 7013, conditionValues: [], conditionTargets: [], isPositive: true }]],
+    });
+  }
+  assert.deepEqual(data.gekisou["22"].description.slice(1), ["", "", "", ""]);
+});
+
+test("invalid skills fail only the skills read and never expose partial templates", async () => {
+  for (const mutate of [
+    (s) => { s.live["1"].description.en = "{effects[0].value}"; },
+    (s) => { s.live["1"].description.en = "<color=#fff>10</color>"; },
+    (s) => { s.live["1"].description.en = "{999}"; },
+    (s) => { s.live["1"].descriptionParameters[0].pop(); },
+    (s) => { s.live["1"].skillIconId += 1; },
+    (s) => { s.live["1"].effects[0].effectValue.pop(); },
+    (s) => { s.live["1"].effects[0].effectValue[0] += 1; },
+    (s) => { s.live["1"].effects[0].effectValue[0] = NaN; },
+    (s) => { delete s.gekisouSupport["67"].effects[0].skillConditions["5"]; },
+    (s) => { s.gekisou["1"].effects[0].skillReleaseConditions = { 1: [], 2: [], 3: [], 4: [] }; },
+    (s) => { s.support["1"].effects[0].skillConditions[0][0].isPositive = 1; },
+    (s) => { delete s.live["1"].skillCategories; },
+    (s) => { s.support["0"] = s.support["1"]; },
+  ]) {
+    const inputs = regions(); mutate(inputs[1].skills);
+    await withStore(inputs, null, async () => {
+      const response = await skills(request("skills"));
+      assert.equal(response.status, 503);
+      assert.match(response.headers.get("cache-control"), /no-store/);
+      assert.deepEqual(await response.json(), { success: false, error: { code: "OURNOTES_MASTER_UNAVAILABLE", message: "OurNotes master data is unavailable" } });
+      assert.equal((await characters(request("characters"))).status, 200);
+      assert.equal((await bands(request("bands"))).status, 200);
+      assert.equal((await list(request("cards/member"), context())).status, 200);
+    });
+  }
+  await withStore(regions(), (objects) => {
+    for (const key of objects.keys()) if (key.endsWith("/skills.json.gz")) objects.delete(key);
+  }, async () => {
+    assert.equal((await skills(request("skills"))).status, 503);
+    assert.equal((await bands(request("bands"))).status, 200);
+  });
+});
+
+test("a skills update fetches only the changed skills content and reuses other modules", async (t) => {
+  let now = Date.now(); t.mock.method(Date, "now", () => now);
+  const inputs = regions(), objects = storeObjects(inputs), calls = [];
+  const source = memorySource(objects, calls);
+  const beforeSkills = await readOurNotesMasterInputs("skills", source);
+  const beforeCharacters = await readOurNotesMasterInputs("characters", source);
+  assert.ok(calls.every((key) => key.endsWith("/active/manifest.json") || /\/(skills|characters)\.json\.gz$/.test(key)));
+  for (const [key, body] of storeObjects(inputs, "new-skill-recipe")) objects.set(key, body);
+  now += 60_001;
+  const start = calls.length;
+  assert.ok((await readOurNotesMasterInputs("skills", source)).every((value, i) => value === beforeSkills[i]));
+  assert.equal(calls.length - start, 4);
+  inputs[2].skills.live["1"].description["zh-CN"] = "changed";
+  for (const [key, body] of storeObjects(inputs, "new-skill-recipe")) objects.set(key, body);
+  now += 60_001;
+  const updatedAt = calls.length;
+  const afterSkills = await readOurNotesMasterInputs("skills", source);
+  assert.notStrictEqual(afterSkills[2], beforeSkills[2]);
+  assert.equal(calls.length - updatedAt, 5);
+  assert.ok((await readOurNotesMasterInputs("characters", source)).every((value, i) => value === beforeCharacters[i]));
+  assert.equal(calls.length - updatedAt, 5);
 });
 
 test("unrelated datasets and producer revisions preserve readers and content caches", async (t) => {
