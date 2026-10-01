@@ -16,10 +16,11 @@ All paths below start with `/api/ournotes/master`.
 | `/cards/support/{cardId}` | One support detail | Optional `server=0..4` |
 | `/characters` | Shared character ID map | None |
 | `/bands` | Shared band ID map | None |
+| `/skills` | Five skill-kind ID maps, described below | None |
 
 Success uses `{ "success": true, "data": ... }`. Map keys are positive decimal IDs. Member and support IDs are separate namespaces. Card IDs must be positive safe integers without leading zeros. There are no `all`/`main` aliases, directory details, pagination, language selectors or arbitrary field expansion.
 
-Without `server`, cards merge all four actual sources. With exactly one numeric `server`, only cards present in that source remain, and `serverExtensions` is removed. Localized fields and raw times retain all five slots. `characters` and `bands` remain shared catalogs and reject queries.
+Without `server`, cards merge all four actual sources. With exactly one numeric `server`, only cards present in that source remain, and `serverExtensions` is removed. Localized fields and raw times retain all five slots. `characters`, `bands` and `skills` remain shared catalogs and reject queries.
 
 | Slot / `server` | Public identity | Actual master source | Text column |
 |---|---|---|---|
@@ -50,7 +51,7 @@ Member `name` is omitted only when every present source uses the same `_nameText
 
 Nonregional fields must agree across records with the same kind/ID. Conflicts fail the affected read instead of silently selecting one source. There is no speculative field override registry. Missing source records are allowed; failure to read a required source is not treated as absence.
 
-Lists and details contain the same top-level skill ID fields. Unset references remain `0`; numbered support slots are neither removed nor reordered. This release does not provide full skill descriptions, effect formulas or a skills API.
+Lists and details contain the same top-level skill ID fields. Unset references remain `0`; numbered support slots are neither removed nor reordered. Resolve nonzero IDs through the corresponding Skills namespace; skill records are not copied into cards.
 
 Details include the summary fields plus `growth`:
 
@@ -70,6 +71,203 @@ Growth rows preserve source order and raw numbers, without percentage conversion
 - Support rank: `rank`, `limitLevel`, `requiredRankUpItemCount`, `supportSkill01Level`, `supportSkill02Level`, `gekisouSupportSkill01Level`, `gekisouSupportSkill02Level`, `cardTypeLinkBonusRate`.
 
 Lists exclude growth rows and full skill records. Raw master rows, private paths, source descriptors and credentials never enter public responses. The public `startAt` name and flat skill IDs are Web projections; the private card pack schema and its `startAtRaw`, `skills` and `id` fields remain unchanged.
+
+## Skills
+
+`GET /api/ournotes/master/skills` returns `data` with five independent ID maps: `leader`, `live`, `gekisou`, `support`, and `gekisouSupport`. IDs can repeat across these namespaces. Member references select the first three; the numbered support references select the last two. Records do not repeat their ID or kind.
+
+Skill record fields are emitted in the order listed below; fields outside a kind's scope are omitted. Consumers read by field name.
+
+| Field | Scope / meaning |
+|---|---|
+| `skillName` | Five localized names, resolved from the original name text reference |
+| `description` | Five localized plain-text templates with numbered `{n}` placeholders |
+| `descriptionParameters` | Parameter index to five display strings in grade 1–5 order |
+| `effects` | Ordered effects with original game values and expanded conditions/targets |
+| `skillIconId` | Original integer icon ID; no image URL or availability guarantee |
+| `skillCategories` | Original array; live and gekisou only |
+| `displaySkillCategories` | Original array; all except leader |
+| `gekisouMissionType` | Original integer; gekisou and gekisouSupport only |
+| `gekisouSupportSkillExecTiming` | Original integer; gekisouSupport only |
+
+Templates use the authoritative source text: JP-ja, EN-en, TW-zh-TW/zh-CN, KR-ko. The producer processes native expressions and recognized color tags; newlines become `\n`. Results that stay constant across grades are inlined. Varying results become display-string arrays; identical arrays can share a parameter across language slots. To render grade `level`, replace each `{n}` with `descriptionParameters[n][level - 1]`. Web only combines slots and remaps parameter indices; it does not evaluate game expressions. Missing translations remain `""`.
+
+Display strings and structured numbers are separate. For example, support/1 retains `effects[0].effectValue: [250,500,750,1000,1500]`; the native description displays `["0.25","0.5","0.75","1","1.5"]`. Formatting never changes raw values. Native branch wording, including a grade switching to “during JUST gekisou”, is also a display parameter. There are no added unit, scale, precision, permanent or bonus fields.
+
+```ts
+type LevelNumber = [number, number, number, number, number];
+type SkillTarget = {
+  skillTargetType: number;
+  bandId?: number;
+  cardType?: number;
+  judgement?: number;
+  liveMusicType?: number;
+  gekisouMissionType?: number;
+  liveSkillCategories?: number[];
+};
+type SkillConditionAtLevel = {
+  conditionType: number;
+  conditionValues: number[];
+  conditionTargets: SkillTarget[];
+  isPositive: boolean;
+};
+type SkillCondition = {
+  conditionType: LevelNumber;
+  conditionValues: LevelNumber[];
+  conditionTargets: SkillTarget[];
+  isPositive: boolean;
+};
+type ConditionGroup = SkillCondition[][];
+type SkillEffect = {
+  skillEffectType: number;
+  effectValue: LevelNumber;
+  effectExecuteLimitCount: LevelNumber;
+  effectExecuteLimitResetConditions: ConditionGroup;
+  skillTargets: SkillTarget[];
+  skillConditions: ConditionGroup | Record<string, SkillConditionAtLevel[][]>;
+  skillCumulativeCondition: {
+    skillCumulativeConditionType: LevelNumber;
+    conditionValues: LevelNumber[];
+    conditionTargets: SkillTarget[];
+    maxCumulativeCount: LevelNumber;
+  } | null;
+  activationTimeSecond?: LevelNumber;
+  maxEffectValue?: LevelNumber;
+  effectLimitCount?: LevelNumber;
+  skillReleaseConditions?: ConditionGroup | Record<string, SkillConditionAtLevel[][]>;
+  skillTriggerType?: LevelNumber;
+  skillTriggerConditions?: ConditionGroup;
+};
+```
+
+Field names follow the game metadata and existing client relationship properties in camelCase. Values and enum codes remain unchanged. Every grade-dependent numeric field is a five-item array ordered by the original grades 1–5, including constant arrays such as `[2,2,2,2,2]`. Each source must have all five grades with the same effect count. There is no repeated level list. Effect order is preserved, including repeated effect types. `skillEffectType` and target selectors remain scalar identities.
+
+Leader effects omit timing/release fields. All other kinds include `activationTimeSecond`, `maxEffectValue`, `effectLimitCount` and `skillReleaseConditions`. Gekisou, support and gekisouSupport additionally include `skillTriggerType` and `skillTriggerConditions`; live has neither. Zero-valued effects, empty relationships and null cumulative conditions remain present.
+
+### Effect field responsibilities
+
+The following table explains existing game fields without changing their names, types, kind-specific scope or raw values. Numeric arrays select the corresponding skill grade from 1 through 5.
+
+| Field | Meaning and zero/empty values |
+|---|---|
+| `skillEffectType` | Effect kind, which determines how its values and targets are interpreted; native codes are listed below. `0` is the game's `None` and its record is retained |
+| `effectValue` | Native magnitude, increment or result code, as determined by the effect kind. For example, `15000` stores extension milliseconds. `0` does not mean that an effect is absent: the `13005` kind itself specifies conversion to JUST |
+| `activationTimeSecond` | Execution duration of this effect, in the original seconds. A positive value supplies a duration; `0` imposes no positive-duration timer limit. Its behavior still depends on triggers, release conditions and effect kind, so it cannot universally mean permanent. This is separate from the extension amount of `15000` |
+| `maxEffectValue` | Native magnitude cap for effects that use one, typically cumulative score increases; it uses the same native representation as that effect's `effectValue`. In the current catalog, `0` configures no additional cap and must not clamp `effectValue` to zero |
+| `effectLimitCount` | Number of effect applications that can be consumed during one execution, such as three gekisou COMBO protections. `0` sets no such limit; this is separate from the number of effect executions |
+| `effectExecuteLimitCount` | Number of executions allowed for the same effect. Positive values limit the execution count, which configured reset conditions can reset; `0` sets no execution-count cap. This remains separate from `effectLimitCount` and `maxCumulativeCount` |
+| `effectExecuteLimitResetConditions` | Condition groups that reset the execution count, such as a gekisou section starting or completing. `[]` configures no additional reset conditions; it does not indicate that a reset event has occurred |
+| `skillTargets` | Explicit selectors for the effect itself. `[]` supplies no explicit filter; the effect kind and owning skill determine the actual target. An empty array does not imply the whole team. `15000` affects the member equipping that support skill |
+| `skillConditions` | Eligibility conditions for the effect, such as a LIFE threshold, formation requirement or equipped member's band. `[]` adds no eligibility conditions; skill activation and other configuration still apply |
+| `skillTriggerType` | Event-driven execution or sustained checking. Current values are `1 = OneShot` and `2 = Sustained`, as described below |
+| `skillTriggerConditions` | Triggers for conditional skills, such as the member's own live skill activating, a gekisou section starting or a target judgement count. `[]` configures no trigger condition and supplies no new default trigger event |
+| `skillReleaseConditions` | Conditions that release the effect, such as a gekisou section completing. `[]` adds no release conditions; duration, application count and the owning skill's lifecycle can still end the effect |
+| `skillCumulativeCondition` | Cumulative configuration: what is counted, its numeric requirements and the maximum accumulation count. `null` means that this configuration is absent |
+
+### Condition, cumulative and target fields
+
+| Field | Meaning and empty values |
+|---|---|
+| `conditionType` | Condition kind, which determines the check and parameter meanings; native codes are listed below |
+| `conditionValues` | Native numeric parameters in their original positional order, such as a LIFE threshold, judgement count or N in an every-N accumulation. `[]` means that the condition requires no additional numeric parameters, not that the condition is absent. Grade arrays follow the axis rule below |
+| `conditionTargets` | Explicit selectors checked by this condition, separate from the effect's `skillTargets`. `[]` adds no filter; the condition kind determines the subject. For example, `4010` already identifies the equipped member's own live skill |
+| `isPositive` | `true` requires the entire condition check to be true; `false` requires it to be false. Negating “all formation members match” means “not all match”, not “all do not match” |
+| `skillCumulativeConditionType` | Accumulation method, such as every N target judgements, every N matching formation members, or every N distinct bands or attributes; native codes are listed below |
+| `maxCumulativeCount` | Native accumulation-count cap, separate from execution and application counts. Original values such as `4`, `5` and `999999` remain unchanged; large values do not become infinity flags |
+| `skillTargetType` | Selector kind. Current values are `3 = Member`, `4 = Judgement` and `5 = GekisouMission` |
+| `bandId` | Band ID resolved through the Bands catalog; for example, `2` is Ave Mujica. This is neither a skill ID nor a skill grade |
+| `cardType` | Member attribute selector using the native CardType integers listed below |
+| `judgement` | Native judgement selector: `1 = Miss`, `2 = Bad`, `3 = Good`, `4 = Great`, `5 = Perfect`, `6 = Just`. Do not substitute another simulator's enum order |
+| `liveMusicType` | Song attribute selector from the game's `LiveMusicType`; current targets use `1 = Red`. This remains separate from live modes, bands and judgements |
+| `gekisouMissionType` | Gekisou type selector: `1 = Combo`, `2 = Luck`, `3 = JustCount`, corresponding to COMBO, LUCK and JUST gekisou |
+| `liveSkillCategories` | Live-skill category selector array from the game's `SkillCategory`: `1 = Score`, `2 = Life`, `3 = Judgement`. This is separate from `displaySkillCategories` |
+
+### Game codes used by the current catalog
+
+These are the codes and native enum names actually present in the catalog verified on 2026-10-01, rather than a speculative expansion to all game enums. Meanings follow the metadata and corresponding behavior. The API neither renumbers codes nor adds enum-name fields.
+
+| `skillTriggerType` | Native enum | Meaning |
+|---|---|---|
+| 1 | `OneShot` | Execute an effect once per trigger event. It may remain active after execution; executions across the song depend on execution limits and reset conditions |
+| 2 | `Sustained` | Maintain the effect while its configured trigger conditions remain satisfied, subject to eligibility, duration and release conditions |
+
+| `skillEffectType` | Native enum | Meaning |
+|---|---|---|
+| 0 | `None` | Original record with no effect kind |
+| 1000 | `BPMemberAllParameterUp` | Increase all member parameters |
+| 1001 | `BPMemberTechniqueUp` | Increase member technique |
+| 1002 | `BPMemberVisualUp` | Increase member visual |
+| 1003 | `BPMemberPerformanceUp` | Increase member performance |
+| 1503 | `BPCumulativeMemberPerformanceUp` | Current records increase performance for members with LUCK-type gekisou skills. Their `skillCumulativeCondition` is null; the enum name alone must not create cumulative configuration |
+| 2000 | `BPNoteScoreFactorUp` | Increase note score |
+| 2001 | `BPCumulativeNoteScoreFactorUp` | Cumulatively increase note score |
+| 2004 | `BPTargetJudgementNoteScoreFactorUp` | Increase score for target note judgements |
+| 3001 | `IntLifeRecoveryFixed` | Recover a fixed amount of LIFE |
+| 3003 | `LifeGuard` | Protect LIFE |
+| 3004 | `LifeDamageReductionPercent` | Reduce LIFE damage |
+| 4004 | `BPJudgementRelaxPercentGreaterEquals` | Widen the judgement window for the selected judgement and better |
+| 11001 | `BPGekisouLuckGaugeFactorUp` | Increase the LUCK draw-gauge accumulation multiplier |
+| 11002 | `IntAddGekisouLuckPoint` | Add LUCK points |
+| 11003 | `BPGekisouLuckGaugePercentUp` | Add a proportion of the LUCK draw gauge |
+| 11005 | `GekisouLuckMinimumResult` | Set a minimum LUCK draw result |
+| 12000 | `IntGekisouComboBonusUp` | Add gekisou COMBO |
+| 12004 | `GekisouComboProtect` | Prevent target judgements from resetting gekisou COMBO |
+| 12006 | `TargetJudgementConvert` | Convert target judgements to the native judgement specified by `effectValue` |
+| 13000 | `IntJustCountBonusUp` | Increase JUST gain |
+| 13002 | `IntCumulativeJustCountBonusUp` | Cumulatively increase JUST gain |
+| 13005 | `NoteJudgementConvertToJust` | Convert target judgements to JUST; the effect kind specifies the result |
+| 15000 | `MSLiveSkillDurationExtension` | Extend the equipped member's own live-skill duration |
+
+Native `BP` values use a denominator of 10000: for example, raw `10000` displays as `100%`. `Int` kinds retain native integer increments. Kind `15000` stores milliseconds, so `1250` displays as `1.25` seconds. `12006` uses native judgement codes, such as `5` for PERFECT; current `11005` result codes `2` and `3` mean LUCKY and SUPER LUCKY and are not replaced with internal client result enums. Native description rounding and wording come from `description` and `descriptionParameters`. Current `3004` raw value `2000` displays as `20%`. These explanations neither change structured values nor add unit or conversion fields.
+
+| `conditionType` | Native enum | Check |
+|---|---|---|
+| 1030 | `NoteJudgementTargetCount` | Reach the configured count of target judgements |
+| 2001 | `LifeGreaterEqual` | LIFE is greater than or equal to the configured value |
+| 2003 | `LifeLessEqual` | LIFE is less than or equal to the configured value |
+| 3000 | `FormationMemberTargetAny` | At least one formation member matches the targets |
+| 3001 | `FormationMemberTargetAll` | All formation members match the targets |
+| 4010 | `SameMemberLiveSkillActivated` | The equipped member's own live skill activates |
+| 4011 | `ProbabilityExecute` | Check the configured percentage probability: raw `10` means `10%`, rather than a BP value with denominator 10000 |
+| 4012 | `PlayTargetMusicType` | Play a song with a matching attribute |
+| 5000 | `SnapMemberTarget` | The member equipping the support skill matches the targets |
+| 7000 | `GekisouLuckLotResult` | The LUCK draw result matches the configuration |
+| 7005 | `GekisouComboCountGreaterEqual` | Gekisou COMBO is greater than or equal to the configured count |
+| 7010 | `GekisouRangeStart` | The corresponding gekisou section starts |
+| 7013 | `GekisouRangeComplete` | A gekisou section completes |
+| 7020 | `GekisouRangePlaying` | The corresponding gekisou section is in progress |
+| 7021 | `GekisouLuckRushPlaying` | LUCK RUSH is in progress |
+| 8000 | `ScoreRankUp` | The score rank increases |
+
+| `skillCumulativeConditionType` | Native enum | Accumulation |
+|---|---|---|
+| 1000 | `NoteJudgementTargetEqualsPerN` | Once per N target judgements |
+| 3000 | `FormationMemberTargetMemberPerN` | Once per N formation members matching the targets |
+| 3004 | `FormationMemberBandPerN` | Once per N distinct bands in the formation |
+| 3005 | `FormationMemberMemberTypePerN` | Once per N distinct member attributes in the formation |
+| 7001 | `GekisouComboPerN` | Once per N gekisou COMBO |
+
+For `support/12`, both `15000` effects have eligibility condition `5000` with target `skillTargetType: 3, bandId: 2`. The first uses `isPositive: false` for non-Ave Mujica members; the second uses `true` for Ave Mujica members. These branches are mutually exclusive. Both use trigger `4010` with `OneShot`. Grade 1 extends the duration by `1250` / `2500` milliseconds, and grade 5 by `2500` / `5000` milliseconds; only the matching branch applies, rather than adding both. Its `activationTimeSecond: 0` adds no positive-duration timer for the support effect, `effectExecuteLimitCount: 0` does not cap executions, and `15000` still identifies the equipped member despite empty explicit targets.
+
+The same `activationTimeSecond: 0` at grade 5 of gekisou/2 accompanies `Sustained` and a JUST-gekisou-in-progress condition, maintaining the effect during that section. `effectLimitCount: 3` on gekisouSupport/86 allows three COMBO protections during one execution. `effectExecuteLimitCount: 4` on gekisouSupport/76 permits at most four conversions and resets on its configured gekisou-start condition. These remain distinct counts and do not imply a shared permanent rule.
+
+Condition groups retain the native outer OR / inner AND order and `isPositive`. In `conditionValues: [[10,20,30,40,60]]`, the outer axis is the original condition-value position and the inner axis is grade. When native condition structure/order changes across grades, `skillConditions` or `skillReleaseConditions` becomes a map with keys `"1"` through `"5"`; each entry contains native single-grade conditions. This is required by gekisouSupport/67 and /72 for `skillConditions`, and by JP 1.0.4 gekisou/22 for `skillReleaseConditions` (empty at grades 1–4; condition type 7013 at grade 5). Other fields do not use override maps. Targets preserve used selectors and omit unrelated defaults such as `judgement=-1`; unused character/tag/gekisou-category selectors are not added.
+
+Shared icon/category/timing fields and projected effects must agree across present sources. Names, templates and display parameters may differ. Missing IDs in a source are allowed. There is no cross-source comparison of raw rows, relationship IDs, versions, hashes or a second grade set. Validated input identity reuses the existing merge cache.
+
+Reserved headers with no effects and no authoritative description remain with `effects: []`, five empty description slots and `descriptionParameters: []`. Unreferenced skills and native None effects remain. Supported null references or out-of-range description indices use the client's explicit fallback, or literal text `null`. GekisouSupport 67 (grades 4–5) and 72 (grades 2–5) retain those substitutions without changing conditions. Unsupported syntax, unknown projected target fields and missing required records fail construction. This catalog describes configuration; it does not promise a full client simulation or add detail/level/attributes endpoints.
+
+The new producer recipe is `ournotes-skills-v2`; historical artifact layouts remain verifiable. The Web draft requires the new private effects/template format and cannot read old grade-to-description artifacts. Publish all four new generations and verify signed private reads before deploying Web; rollback must keep the reader and private format matched. No production deployment is implied by local verification.
+
+The existing `cardType` integer has these official labels; it is separate from Skills:
+
+| Value | English | Simplified Chinese |
+|---|---|---|
+| 1 | Ruby | 绯红 |
+| 2 | Azure | 绀碧 |
+| 3 | Jade | 翡翠 |
+| 4 | Amber | 琉金 |
+| 5 | Violet | 紫苑 |
 
 ## Shared catalogs and images
 
@@ -94,10 +292,10 @@ Success reuses `SNAPSHOT_HTTP_CACHE_POLICY`: browser `max-age=300, stale-while-r
 
 Use server-only, read-only private R2 credentials from `.env.example`: `OURNOTES_R2_ENDPOINT`, `OURNOTES_PRIVATE_R2_BUCKET`, `OURNOTES_R2_ACCESS_KEY_ID`, and `OURNOTES_R2_SECRET_ACCESS_KEY`. No Bandori credential or public CDN fallback is used. `OURNOTES_MASTER_LOCAL_STORE_ROOT` is for development/tests only and is rejected in production.
 
-Cards pin each source's `ournotes/master/cards-v1/{server}/api/active.json` and verify their own immutable packs (schema, compressed hash/size, semantic hash, decompression limit and record count). Characters/bands discover their named normalized files through `ournotes/master/{server}/active/manifest.json` and verify compressed/plain byte hashes and sizes. Neither reader requires a producer recipe revision or an exact source-table/file inventory. Shared readers own storage and bounded content caches; Cards and catalogs own their respective validation, merging and response caches. Identical verified dataset content can be reused across archive generations. Web never downloads raw `MasterText`.
+Cards pin each source's `ournotes/master/cards-v1/{server}/api/active.json` and verify their own immutable packs (schema, compressed hash/size, semantic hash, decompression limit and record count). Characters/bands/skills discover their named normalized files through `ournotes/master/{server}/active/manifest.json` and verify compressed/plain byte hashes and sizes. Neither reader requires a producer recipe revision or an exact source-table/file inventory. Shared readers own storage and bounded content caches; Cards, catalogs and Skills own their respective validation, merging and response caches. Identical verified dataset content can be reused across archive generations. Web never downloads raw `MasterText`.
 
-The generic master roots must be initialized before deploying these readers. Public URLs, fields and five-slot semantics are unchanged. New independent datasets do not require changing existing readers; missing required data and unknown data schemas still fail. This structural correction does not add a skills API.
+The generic master roots must be initialized before deploying these readers. Existing URLs, fields and five-slot semantics are unchanged. New independent datasets do not require changing existing readers; missing required data and unknown data schemas still fail. A failed Skills read does not fail Cards, Characters or Bands reads.
 
 Run `npm run test:ournotes-master` for the bounded local fixture, route contracts, corruption failures, five-slot selection and cache reuse. Shared-reader changes also require the relevant Bandori tests, typecheck, lint and build. The fixture contains selected metadata with version/hash provenance, no complete master tables or credentials.
 
-Deployment order is compatible assets consumer, producer publication of all four v3 master artifacts, then Web activation. Verify signed reads from the Web host, all six endpoints, query-aware edge caching and no-store errors. Master readiness is independent of image jobs. Local tests do not replace production verification.
+For Skills, publish all four verified producer artifacts and verify signed reads before activating Web. Existing assets consumers and media need no update for this dataset. Verify all seven endpoints, query-aware card caching and no-store errors. Master readiness is independent of image jobs. Local tests do not replace production verification.

@@ -1,0 +1,7198 @@
+{
+  "provenance": [
+    {
+      "server": "jp",
+      "manifestSha256": "e30d743db7379302463adee53119eb26c906f37d776c61c7e3080b0c4e41b045",
+      "revision": "ournotes-skills-v2",
+      "generation": "2e30a25b660c10dff516c0e48f2cfc17c64fb896d5b84b2148007393777fadfd"
+    },
+    {
+      "server": "en",
+      "manifestSha256": "3fc60bdb0260c1c129676586d0cf4229976c95de4fa8bf564d3f3b71c666c668",
+      "revision": "ournotes-skills-v2",
+      "generation": "2772c8016deb9e24336f323b3dcb29edb825ea8014399eee484d6fe96abaaa72"
+    },
+    {
+      "server": "tw",
+      "manifestSha256": "8c16d6183cff44eae237dc4b2030c3cce08b7d86cfbe00e6055b97b4fd434673",
+      "revision": "ournotes-skills-v2",
+      "generation": "6d1b21ef2a28a7b6d5c0be664d2d69e79ab8a89a59a9b851f97c9adb7aa767f4"
+    },
+    {
+      "server": "kr",
+      "manifestSha256": "deaac1b2d6d86eb7762521a8539ba0bc4763d2c7581b32587a1f88f0899b49e9",
+      "revision": "ournotes-skills-v2",
+      "generation": "a2dbf67fce0f0a7212766cd6f5343a484236da44f1a7559c82e08f542fdcad91"
+    }
+  ],
+  "selection": "Selected real skills with all five original grades; includes reserved leader and composite condition order. Projected by Rust skills-v2 from retained 2026-09-28 sources.",
+  "datasets": [
+    {
+      "leader": {
+        "1": {
+          "description": {
+            "en": "",
+            "ja": "MyGO!!!!!メンバーの\n全パラメータを{0}%UP",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "4",
+              "7",
+              "10",
+              "14",
+              "24"
+            ]
+          ],
+          "effects": [
+            {
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectValue": [
+                400,
+                700,
+                1000,
+                1400,
+                2400
+              ],
+              "skillConditions": [],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 1000,
+              "skillTargets": [
+                {
+                  "bandId": 1,
+                  "skillTargetType": 3
+                }
+              ]
+            }
+          ],
+          "skillIconId": 18,
+          "skillName": {
+            "en": "",
+            "ja": "MyGO!!!!!全パラメータUP",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          }
+        },
+        "90146": {
+          "description": {
+            "en": "",
+            "ja": "",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [],
+          "effects": [],
+          "skillIconId": 16,
+          "skillName": {
+            "en": "",
+            "ja": "紅赤オンリー・テクニックUP",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          }
+        }
+      },
+      "live": {
+        "1": {
+          "description": {
+            "en": "",
+            "ja": "【シンプル】5秒間 スコア{0}%UP",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "10",
+              "20",
+              "30",
+              "40",
+              "70"
+            ]
+          ],
+          "displaySkillCategories": [
+            1
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                5,
+                5,
+                5,
+                5,
+                5
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                1000,
+                2000,
+                3000,
+                4000,
+                7000
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 2000,
+              "skillReleaseConditions": [],
+              "skillTargets": []
+            }
+          ],
+          "skillCategories": [
+            1
+          ],
+          "skillIconId": 7,
+          "skillName": {
+            "en": "",
+            "ja": "スコアUP",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          }
+        }
+      },
+      "gekisou": {
+        "1": {
+          "description": {
+            "en": "",
+            "ja": "{0}{1}\nJUST数獲得量1UP",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "JUST撃奏開始から",
+              "JUST撃奏開始から",
+              "JUST撃奏開始から",
+              "JUST撃奏開始から",
+              ""
+            ],
+            [
+              "2秒間",
+              "3秒間",
+              "4秒間",
+              "5秒間",
+              "JUST撃奏中"
+            ]
+          ],
+          "displaySkillCategories": [
+            1
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                2,
+                3,
+                4,
+                5,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 13000,
+              "skillReleaseConditions": [],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7020
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                2
+              ]
+            }
+          ],
+          "gekisouMissionType": 3,
+          "skillCategories": [
+            1
+          ],
+          "skillIconId": 13,
+          "skillName": {
+            "en": "",
+            "ja": "JUST数獲得量UP",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          }
+        },
+        "2": {
+          "description": {
+            "en": "",
+            "ja": "{0}{1}\nJUST数獲得量2UP",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "JUST撃奏開始から",
+              "JUST撃奏開始から",
+              "JUST撃奏開始から",
+              "JUST撃奏開始から",
+              ""
+            ],
+            [
+              "2秒間",
+              "3秒間",
+              "4秒間",
+              "5秒間",
+              "JUST撃奏中"
+            ]
+          ],
+          "displaySkillCategories": [
+            1
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                2,
+                3,
+                4,
+                5,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                2,
+                2,
+                2,
+                2,
+                2
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 13000,
+              "skillReleaseConditions": [],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7020
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                2
+              ]
+            }
+          ],
+          "gekisouMissionType": 3,
+          "skillCategories": [
+            1
+          ],
+          "skillIconId": 13,
+          "skillName": {
+            "en": "",
+            "ja": "JUST数獲得量UP",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          }
+        },
+        "22": {
+          "description": {
+            "en": "",
+            "ja": "{0}{1}\n抽選ゲージ獲得量200%UP\nBAD以下のライフ減少を20%軽減する",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "LUCK撃奏開始から",
+              "LUCK撃奏開始から",
+              "LUCK撃奏開始から",
+              "LUCK撃奏開始から",
+              ""
+            ],
+            [
+              "3秒間",
+              "4秒間",
+              "5秒間",
+              "6秒間",
+              "LUCK撃奏中"
+            ]
+          ],
+          "displaySkillCategories": [
+            2
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                3.0,
+                4.0,
+                5.0,
+                6.0,
+                0.0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                20000,
+                20000,
+                20000,
+                20000,
+                20000
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 11001,
+              "skillReleaseConditions": {
+                "1": [],
+                "2": [],
+                "3": [],
+                "4": [],
+                "5": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 7013,
+                      "conditionValues": [],
+                      "isPositive": true
+                    }
+                  ]
+                ]
+              },
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 2,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7020
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                2
+              ]
+            },
+            {
+              "activationTimeSecond": [
+                3.0,
+                4.0,
+                5.0,
+                6.0,
+                0.0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                2000,
+                2000,
+                2000,
+                2000,
+                2000
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 3004,
+              "skillReleaseConditions": {
+                "1": [],
+                "2": [],
+                "3": [],
+                "4": [],
+                "5": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 7013,
+                      "conditionValues": [],
+                      "isPositive": true
+                    }
+                  ]
+                ]
+              },
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 2,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7020
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                2
+              ]
+            }
+          ],
+          "gekisouMissionType": 2,
+          "skillCategories": [
+            2
+          ],
+          "skillIconId": 8,
+          "skillName": {
+            "en": "",
+            "ja": "LUCK抽選ゲージ獲得量UP＆BAD以下ライフ減少軽減",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          }
+        }
+      },
+      "support": {
+        "1": {
+          "description": {
+            "en": "",
+            "ja": "セットしたメンバーのライブスキル発動時間{0}秒延長\n「MyGO!!!!!」メンバーの場合\nライブスキル発動時間{1}秒延長",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "0.25",
+              "0.5",
+              "0.75",
+              "1",
+              "1.5"
+            ],
+            [
+              "0.5",
+              "1",
+              "1.5",
+              "2",
+              "3"
+            ]
+          ],
+          "displaySkillCategories": [],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                250,
+                500,
+                750,
+                1000,
+                1500
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": false
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 15000,
+              "skillReleaseConditions": [],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      4010,
+                      4010,
+                      4010,
+                      4010,
+                      4010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                500,
+                1000,
+                1500,
+                2000,
+                3000
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 15000,
+              "skillReleaseConditions": [],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      4010,
+                      4010,
+                      4010,
+                      4010,
+                      4010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            }
+          ],
+          "skillIconId": 17,
+          "skillName": {
+            "en": "",
+            "ja": "ライブスキル延長(MyGO!!!!!ボーナス)",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          }
+        }
+      },
+      "gekisouSupport": {
+        "1": {
+          "description": {
+            "en": "",
+            "ja": "JUST撃奏中、JUST判定1回ごとに\nスコア1%ずつUP（最大{0}%）\n「MyGO!!!!!」メンバーの場合\nスコア3%ずつUP",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "3",
+              "5",
+              "7.5",
+              "10",
+              "20"
+            ]
+          ],
+          "displaySkillCategories": [
+            1
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                100,
+                100,
+                100,
+                100,
+                100
+              ],
+              "maxEffectValue": [
+                300,
+                500,
+                750,
+                1000,
+                2000
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": false
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": {
+                "conditionTargets": [
+                  {
+                    "judgement": 6,
+                    "skillTargetType": 4
+                  }
+                ],
+                "conditionValues": [
+                  [
+                    1,
+                    1,
+                    1,
+                    1,
+                    1
+                  ]
+                ],
+                "maxCumulativeCount": [
+                  999999,
+                  999999,
+                  999999,
+                  999999,
+                  999999
+                ],
+                "skillCumulativeConditionType": [
+                  1000,
+                  1000,
+                  1000,
+                  1000,
+                  1000
+                ]
+              },
+              "skillEffectType": 2001,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                300,
+                300,
+                300,
+                300,
+                300
+              ],
+              "maxEffectValue": [
+                300,
+                500,
+                750,
+                1000,
+                2000
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": {
+                "conditionTargets": [
+                  {
+                    "judgement": 6,
+                    "skillTargetType": 4
+                  }
+                ],
+                "conditionValues": [
+                  [
+                    1,
+                    1,
+                    1,
+                    1,
+                    1
+                  ]
+                ],
+                "maxCumulativeCount": [
+                  999999,
+                  999999,
+                  999999,
+                  999999,
+                  999999
+                ],
+                "skillCumulativeConditionType": [
+                  1000,
+                  1000,
+                  1000,
+                  1000,
+                  1000
+                ]
+              },
+              "skillEffectType": 2001,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            }
+          ],
+          "gekisouMissionType": 3,
+          "gekisouSupportSkillExecTiming": 1,
+          "skillIconId": 7,
+          "skillName": {
+            "en": "",
+            "ja": "JUSTスコアUP(MyGO!!!!!ボーナス)",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          }
+        },
+        "67": {
+          "description": {
+            "en": "",
+            "ja": "LUCK撃奏開始時{0}%で発動、抽選結果がLUCKY以上になる（1回まで）\n「{1}」メンバーの場合\nSUPER LUCKY以上になる",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "10",
+              "20",
+              "30",
+              "null",
+              "null"
+            ],
+            [
+              "Ave Mujica",
+              "Ave Mujica",
+              "Ave Mujica",
+              "null",
+              "null"
+            ]
+          ],
+          "displaySkillCategories": [
+            3
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "effectValue": [
+                2,
+                2,
+                2,
+                2,
+                2
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": {
+                "1": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        10
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": false
+                    }
+                  ]
+                ],
+                "2": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        20
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": false
+                    }
+                  ]
+                ],
+                "3": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        30
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": false
+                    }
+                  ]
+                ],
+                "4": [
+                  [
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": false
+                    },
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        40
+                      ],
+                      "isPositive": true
+                    }
+                  ]
+                ],
+                "5": [
+                  [
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": false
+                    },
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        60
+                      ],
+                      "isPositive": true
+                    }
+                  ]
+                ]
+              },
+              "skillCumulativeCondition": null,
+              "skillEffectType": 11005,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 2,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "effectValue": [
+                3,
+                3,
+                3,
+                3,
+                3
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": {
+                "1": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        10
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": true
+                    }
+                  ]
+                ],
+                "2": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        20
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": true
+                    }
+                  ]
+                ],
+                "3": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        30
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": true
+                    }
+                  ]
+                ],
+                "4": [
+                  [
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        40
+                      ],
+                      "isPositive": true
+                    }
+                  ]
+                ],
+                "5": [
+                  [
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        60
+                      ],
+                      "isPositive": true
+                    }
+                  ]
+                ]
+              },
+              "skillCumulativeCondition": null,
+              "skillEffectType": 11005,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 2,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            }
+          ],
+          "gekisouMissionType": 2,
+          "gekisouSupportSkillExecTiming": 1,
+          "skillIconId": 12,
+          "skillName": {
+            "en": "",
+            "ja": "LUCK抽選サポート(Ave Mujicaボーナス)",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          }
+        },
+        "76": {
+          "description": {
+            "en": "",
+            "ja": "JUST撃奏中、PERFECT{0}回ごとに次のPERFECTをJUSTに変換（最大4回）\n「MyGO!!!!!」メンバーの場合\n{1}回ごとに発動",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "75",
+              "70",
+              "65",
+              "60",
+              "50"
+            ],
+            [
+              "55",
+              "50",
+              "45",
+              "40",
+              "30"
+            ]
+          ],
+          "displaySkillCategories": [
+            3
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                99999,
+                99999,
+                99999,
+                99999,
+                99999
+              ],
+              "effectExecuteLimitCount": [
+                4,
+                4,
+                4,
+                4,
+                4
+              ],
+              "effectExecuteLimitResetConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "effectLimitCount": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "effectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": false
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 13005,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [
+                {
+                  "judgement": 5,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 4,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 3,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 2,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 1,
+                  "skillTargetType": 4
+                }
+              ],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7020,
+                      7020,
+                      7020,
+                      7020,
+                      7020
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  },
+                  {
+                    "conditionTargets": [
+                      {
+                        "judgement": 5,
+                        "skillTargetType": 4
+                      }
+                    ],
+                    "conditionType": [
+                      1030,
+                      1030,
+                      1030,
+                      1030,
+                      1030
+                    ],
+                    "conditionValues": [
+                      [
+                        75,
+                        70,
+                        65,
+                        60,
+                        50
+                      ]
+                    ],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "activationTimeSecond": [
+                99999,
+                99999,
+                99999,
+                99999,
+                99999
+              ],
+              "effectExecuteLimitCount": [
+                4,
+                4,
+                4,
+                4,
+                4
+              ],
+              "effectExecuteLimitResetConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "effectLimitCount": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "effectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 13005,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [
+                {
+                  "judgement": 5,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 4,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 3,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 2,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 1,
+                  "skillTargetType": 4
+                }
+              ],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7020,
+                      7020,
+                      7020,
+                      7020,
+                      7020
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  },
+                  {
+                    "conditionTargets": [
+                      {
+                        "judgement": 5,
+                        "skillTargetType": 4
+                      }
+                    ],
+                    "conditionType": [
+                      1030,
+                      1030,
+                      1030,
+                      1030,
+                      1030
+                    ],
+                    "conditionValues": [
+                      [
+                        55,
+                        50,
+                        45,
+                        40,
+                        30
+                      ]
+                    ],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            }
+          ],
+          "gekisouMissionType": 3,
+          "gekisouSupportSkillExecTiming": 1,
+          "skillIconId": 11,
+          "skillName": {
+            "en": "",
+            "ja": "JUSTタイミングサポート(MyGO!!!!!ボーナス)",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          }
+        }
+      }
+    },
+    {
+      "leader": {
+        "1": {
+          "description": {
+            "en": "MyGO!!!!! Member's\nall parameters +{0}%",
+            "ja": "",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "4",
+              "7",
+              "10",
+              "14",
+              "24"
+            ]
+          ],
+          "effects": [
+            {
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectValue": [
+                400,
+                700,
+                1000,
+                1400,
+                2400
+              ],
+              "skillConditions": [],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 1000,
+              "skillTargets": [
+                {
+                  "bandId": 1,
+                  "skillTargetType": 3
+                }
+              ]
+            }
+          ],
+          "skillIconId": 18,
+          "skillName": {
+            "en": "MyGO!!!!! All Parameters UP",
+            "ja": "MyGO!!!!!全パラメータUP",
+            "ko": "MyGO!!!!! 전체 능력치 UP",
+            "zh-CN": "MyGO!!!!!全部能力值UP",
+            "zh-TW": "MyGO!!!!!所有能力值UP"
+          }
+        },
+        "90146": {
+          "description": {
+            "en": "",
+            "ja": "",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [],
+          "effects": [],
+          "skillIconId": 16,
+          "skillName": {
+            "en": "Ruby Only Technique UP",
+            "ja": "紅赤オンリー・テクニックUP",
+            "ko": "레드 전용·테크닉 UP",
+            "zh-CN": "仅限绯红・技巧值UP",
+            "zh-TW": "僅限緋紅·技巧值UP"
+          }
+        }
+      },
+      "live": {
+        "1": {
+          "description": {
+            "en": "[Simple] For 5 seconds, increases Score by {0}%.",
+            "ja": "",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "10",
+              "20",
+              "30",
+              "40",
+              "70"
+            ]
+          ],
+          "displaySkillCategories": [
+            1
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                5,
+                5,
+                5,
+                5,
+                5
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                1000,
+                2000,
+                3000,
+                4000,
+                7000
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 2000,
+              "skillReleaseConditions": [],
+              "skillTargets": []
+            }
+          ],
+          "skillCategories": [
+            1
+          ],
+          "skillIconId": 7,
+          "skillName": {
+            "en": "Score UP",
+            "ja": "スコアUP",
+            "ko": "스코어 UP",
+            "zh-CN": "得分UP",
+            "zh-TW": "分數UP"
+          }
+        }
+      },
+      "gekisou": {
+        "1": {
+          "description": {
+            "en": "{0} {1}\n, JUST Count gain +1",
+            "ja": "",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "From the start of JUST GEKISO, ",
+              "From the start of JUST GEKISO, ",
+              "From the start of JUST GEKISO, ",
+              "From the start of JUST GEKISO, ",
+              ""
+            ],
+            [
+              "for 2 sec.",
+              "for 3 sec.",
+              "for 4 sec.",
+              "for 5 sec.",
+              "During JUST GEKISO"
+            ]
+          ],
+          "displaySkillCategories": [
+            1
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                2,
+                3,
+                4,
+                5,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 13000,
+              "skillReleaseConditions": [],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7020
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                2
+              ]
+            }
+          ],
+          "gekisouMissionType": 3,
+          "skillCategories": [
+            1
+          ],
+          "skillIconId": 13,
+          "skillName": {
+            "en": "JUST Count Gain Boost",
+            "ja": "JUST数獲得量UP",
+            "ko": "JUST 획득량 UP",
+            "zh-CN": "JUST获得量UP",
+            "zh-TW": "JUST獲得量UP"
+          }
+        },
+        "2": {
+          "description": {
+            "en": "{0} {1}\n, JUST Count gain +2",
+            "ja": "",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "From the start of JUST GEKISO, ",
+              "From the start of JUST GEKISO, ",
+              "From the start of JUST GEKISO, ",
+              "From the start of JUST GEKISO, ",
+              ""
+            ],
+            [
+              "for 2 sec.",
+              "for 3 sec.",
+              "for 4 sec.",
+              "for 5 sec.",
+              "During JUST GEKISO"
+            ]
+          ],
+          "displaySkillCategories": [
+            1
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                2,
+                3,
+                4,
+                5,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                2,
+                2,
+                2,
+                2,
+                2
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 13000,
+              "skillReleaseConditions": [],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7020
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                2
+              ]
+            }
+          ],
+          "gekisouMissionType": 3,
+          "skillCategories": [
+            1
+          ],
+          "skillIconId": 13,
+          "skillName": {
+            "en": "JUST Count Gain Boost",
+            "ja": "JUST数獲得量UP",
+            "ko": "JUST 획득량 UP",
+            "zh-CN": "JUST获得量UP",
+            "zh-TW": "JUST獲得量UP"
+          }
+        }
+      },
+      "support": {
+        "1": {
+          "description": {
+            "en": "Extends the equipped member's LIVE Skill duration by {0} sec.\nIf the equipped member is a \"MyGO!!!!!\" member,\nextends it by {1} sec.",
+            "ja": "",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "0.25",
+              "0.5",
+              "0.75",
+              "1",
+              "1.5"
+            ],
+            [
+              "0.5",
+              "1",
+              "1.5",
+              "2",
+              "3"
+            ]
+          ],
+          "displaySkillCategories": [],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                250,
+                500,
+                750,
+                1000,
+                1500
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": false
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 15000,
+              "skillReleaseConditions": [],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      4010,
+                      4010,
+                      4010,
+                      4010,
+                      4010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                500,
+                1000,
+                1500,
+                2000,
+                3000
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 15000,
+              "skillReleaseConditions": [],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      4010,
+                      4010,
+                      4010,
+                      4010,
+                      4010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            }
+          ],
+          "skillIconId": 17,
+          "skillName": {
+            "en": "LIVE Skill Duration Up (MyGO!!!!! Bonus)",
+            "ja": "ライブスキル延長(MyGO!!!!!ボーナス)",
+            "ko": "라이브 스킬 지속시간 연장 (MyGO!!!!! 보너스)",
+            "zh-CN": "演出技能延长（MyGO!!!!!加成）",
+            "zh-TW": "演出技能延長（MyGO!!!!!加成）"
+          }
+        }
+      },
+      "gekisouSupport": {
+        "1": {
+          "description": {
+            "en": "During JUST GEKISO, for every 1 JUST HIT(s),\nScore +1% each time (max +{0}%).\nFor \"MyGO!!!!!\" Members,\nScore +3% each time.",
+            "ja": "",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "3",
+              "5",
+              "8",
+              "10",
+              "20"
+            ]
+          ],
+          "displaySkillCategories": [
+            1
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                100,
+                100,
+                100,
+                100,
+                100
+              ],
+              "maxEffectValue": [
+                300,
+                500,
+                750,
+                1000,
+                2000
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": false
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": {
+                "conditionTargets": [
+                  {
+                    "judgement": 6,
+                    "skillTargetType": 4
+                  }
+                ],
+                "conditionValues": [
+                  [
+                    1,
+                    1,
+                    1,
+                    1,
+                    1
+                  ]
+                ],
+                "maxCumulativeCount": [
+                  999999,
+                  999999,
+                  999999,
+                  999999,
+                  999999
+                ],
+                "skillCumulativeConditionType": [
+                  1000,
+                  1000,
+                  1000,
+                  1000,
+                  1000
+                ]
+              },
+              "skillEffectType": 2001,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                300,
+                300,
+                300,
+                300,
+                300
+              ],
+              "maxEffectValue": [
+                300,
+                500,
+                750,
+                1000,
+                2000
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": {
+                "conditionTargets": [
+                  {
+                    "judgement": 6,
+                    "skillTargetType": 4
+                  }
+                ],
+                "conditionValues": [
+                  [
+                    1,
+                    1,
+                    1,
+                    1,
+                    1
+                  ]
+                ],
+                "maxCumulativeCount": [
+                  999999,
+                  999999,
+                  999999,
+                  999999,
+                  999999
+                ],
+                "skillCumulativeConditionType": [
+                  1000,
+                  1000,
+                  1000,
+                  1000,
+                  1000
+                ]
+              },
+              "skillEffectType": 2001,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            }
+          ],
+          "gekisouMissionType": 3,
+          "gekisouSupportSkillExecTiming": 1,
+          "skillIconId": 7,
+          "skillName": {
+            "en": "JUST Score UP (MyGO!!!!! Bonus)",
+            "ja": "JUSTスコアUP(MyGO!!!!!ボーナス)",
+            "ko": "JUST 스코어 UP (MyGO!!!!! 보너스)",
+            "zh-CN": "JUST得分UP（MyGO!!!!!加成）",
+            "zh-TW": "JUST分數UP（MyGO!!!!!加成）"
+          }
+        },
+        "67": {
+          "description": {
+            "en": "At the start of LUCK GEKISO, activates at a {0}% chance, making the draw result LUCKY or higher (up to 1 time(s)).\nFor \"{1}\" Members, the draw result becomes\nSUPER LUCKY or higher.",
+            "ja": "",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "10",
+              "20",
+              "30",
+              "null",
+              "null"
+            ],
+            [
+              "Ave Mujica",
+              "Ave Mujica",
+              "Ave Mujica",
+              "null",
+              "null"
+            ]
+          ],
+          "displaySkillCategories": [
+            3
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "effectValue": [
+                2,
+                2,
+                2,
+                2,
+                2
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": {
+                "1": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        10
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": false
+                    }
+                  ]
+                ],
+                "2": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        20
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": false
+                    }
+                  ]
+                ],
+                "3": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        30
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": false
+                    }
+                  ]
+                ],
+                "4": [
+                  [
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": false
+                    },
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        40
+                      ],
+                      "isPositive": true
+                    }
+                  ]
+                ],
+                "5": [
+                  [
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": false
+                    },
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        60
+                      ],
+                      "isPositive": true
+                    }
+                  ]
+                ]
+              },
+              "skillCumulativeCondition": null,
+              "skillEffectType": 11005,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 2,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "effectValue": [
+                3,
+                3,
+                3,
+                3,
+                3
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": {
+                "1": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        10
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": true
+                    }
+                  ]
+                ],
+                "2": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        20
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": true
+                    }
+                  ]
+                ],
+                "3": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        30
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": true
+                    }
+                  ]
+                ],
+                "4": [
+                  [
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        40
+                      ],
+                      "isPositive": true
+                    }
+                  ]
+                ],
+                "5": [
+                  [
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        60
+                      ],
+                      "isPositive": true
+                    }
+                  ]
+                ]
+              },
+              "skillCumulativeCondition": null,
+              "skillEffectType": 11005,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 2,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            }
+          ],
+          "gekisouMissionType": 2,
+          "gekisouSupportSkillExecTiming": 1,
+          "skillIconId": 12,
+          "skillName": {
+            "en": "LUCK Trigger Support (Ave Mujica Bonus)",
+            "ja": "LUCK抽選サポート(Ave Mujicaボーナス)",
+            "ko": "LUCK 추첨 서포트 (Ave Mujica 보너스)",
+            "zh-CN": "LUCK抽选辅助（Ave Mujica加成）",
+            "zh-TW": "LUCK抽選支援（Ave Mujica加成）"
+          }
+        },
+        "76": {
+          "description": {
+            "en": "During JUST GEKISO, for every {0} PERFECT HITs, the next PERFECT HIT becomes JUST (up to 4 times).\nFor \"MyGO!!!!!\" Members, activates every\n{1} PERFECT HITs.",
+            "ja": "",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "75",
+              "70",
+              "65",
+              "60",
+              "50"
+            ],
+            [
+              "55",
+              "50",
+              "45",
+              "40",
+              "30"
+            ]
+          ],
+          "displaySkillCategories": [
+            3
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                99999,
+                99999,
+                99999,
+                99999,
+                99999
+              ],
+              "effectExecuteLimitCount": [
+                4,
+                4,
+                4,
+                4,
+                4
+              ],
+              "effectExecuteLimitResetConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "effectLimitCount": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "effectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": false
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 13005,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [
+                {
+                  "judgement": 5,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 4,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 3,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 2,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 1,
+                  "skillTargetType": 4
+                }
+              ],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7020,
+                      7020,
+                      7020,
+                      7020,
+                      7020
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  },
+                  {
+                    "conditionTargets": [
+                      {
+                        "judgement": 5,
+                        "skillTargetType": 4
+                      }
+                    ],
+                    "conditionType": [
+                      1030,
+                      1030,
+                      1030,
+                      1030,
+                      1030
+                    ],
+                    "conditionValues": [
+                      [
+                        75,
+                        70,
+                        65,
+                        60,
+                        50
+                      ]
+                    ],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "activationTimeSecond": [
+                99999,
+                99999,
+                99999,
+                99999,
+                99999
+              ],
+              "effectExecuteLimitCount": [
+                4,
+                4,
+                4,
+                4,
+                4
+              ],
+              "effectExecuteLimitResetConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "effectLimitCount": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "effectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 13005,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [
+                {
+                  "judgement": 5,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 4,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 3,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 2,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 1,
+                  "skillTargetType": 4
+                }
+              ],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7020,
+                      7020,
+                      7020,
+                      7020,
+                      7020
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  },
+                  {
+                    "conditionTargets": [
+                      {
+                        "judgement": 5,
+                        "skillTargetType": 4
+                      }
+                    ],
+                    "conditionType": [
+                      1030,
+                      1030,
+                      1030,
+                      1030,
+                      1030
+                    ],
+                    "conditionValues": [
+                      [
+                        55,
+                        50,
+                        45,
+                        40,
+                        30
+                      ]
+                    ],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            }
+          ],
+          "gekisouMissionType": 3,
+          "gekisouSupportSkillExecTiming": 1,
+          "skillIconId": 11,
+          "skillName": {
+            "en": "JUST Timing Support (MyGO!!!!! Bonus)",
+            "ja": "JUSTタイミングサポート(MyGO!!!!!ボーナス)",
+            "ko": "JUST 타이밍 서포트 (MyGO!!!!! 보너스)",
+            "zh-CN": "JUST时机辅助（MyGO!!!!!加成）",
+            "zh-TW": "JUST時機支援（MyGO!!!!!加成）"
+          }
+        }
+      }
+    },
+    {
+      "leader": {
+        "1": {
+          "description": {
+            "en": "",
+            "ja": "",
+            "ko": "",
+            "zh-CN": "MyGO!!!!!成员的\n全部能力值提升{0}%",
+            "zh-TW": "MyGO!!!!!團員的\n所有能力值{0}%UP"
+          },
+          "descriptionParameters": [
+            [
+              "4",
+              "7",
+              "10",
+              "14",
+              "24"
+            ]
+          ],
+          "effects": [
+            {
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectValue": [
+                400,
+                700,
+                1000,
+                1400,
+                2400
+              ],
+              "skillConditions": [],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 1000,
+              "skillTargets": [
+                {
+                  "bandId": 1,
+                  "skillTargetType": 3
+                }
+              ]
+            }
+          ],
+          "skillIconId": 18,
+          "skillName": {
+            "en": "MyGO!!!!! All Parameters UP",
+            "ja": "MyGO!!!!!全パラメータUP",
+            "ko": "MyGO!!!!! 전체 능력치 UP",
+            "zh-CN": "MyGO!!!!!全部能力值UP",
+            "zh-TW": "MyGO!!!!!所有能力值UP"
+          }
+        },
+        "90146": {
+          "description": {
+            "en": "",
+            "ja": "",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [],
+          "effects": [],
+          "skillIconId": 16,
+          "skillName": {
+            "en": "Ruby Only Technique UP",
+            "ja": "紅赤オンリー・テクニックUP",
+            "ko": "레드 전용·테크닉 UP",
+            "zh-CN": "仅限绯红・技巧值UP",
+            "zh-TW": "僅限緋紅·技巧值UP"
+          }
+        }
+      },
+      "live": {
+        "1": {
+          "description": {
+            "en": "",
+            "ja": "",
+            "ko": "",
+            "zh-CN": "【简单】5秒内得分提升{0}%",
+            "zh-TW": "【SIMPLE】5秒內，分數{0}%UP"
+          },
+          "descriptionParameters": [
+            [
+              "10",
+              "20",
+              "30",
+              "40",
+              "70"
+            ]
+          ],
+          "displaySkillCategories": [
+            1
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                5,
+                5,
+                5,
+                5,
+                5
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                1000,
+                2000,
+                3000,
+                4000,
+                7000
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 2000,
+              "skillReleaseConditions": [],
+              "skillTargets": []
+            }
+          ],
+          "skillCategories": [
+            1
+          ],
+          "skillIconId": 7,
+          "skillName": {
+            "en": "Score UP",
+            "ja": "スコアUP",
+            "ko": "스코어 UP",
+            "zh-CN": "得分UP",
+            "zh-TW": "分數UP"
+          }
+        }
+      },
+      "gekisou": {
+        "1": {
+          "description": {
+            "en": "",
+            "ja": "",
+            "ko": "",
+            "zh-CN": "{2}{3}\nJUST获得量提升1",
+            "zh-TW": "{0}{1}，\nJUST獲得量1UP"
+          },
+          "descriptionParameters": [
+            [
+              "自JUST激奏開始",
+              "自JUST激奏開始",
+              "自JUST激奏開始",
+              "自JUST激奏開始",
+              ""
+            ],
+            [
+              "2秒內",
+              "3秒內",
+              "4秒內",
+              "5秒內",
+              "在JUST激奏中"
+            ],
+            [
+              "JUST激奏开始后",
+              "JUST激奏开始后",
+              "JUST激奏开始后",
+              "JUST激奏开始后",
+              ""
+            ],
+            [
+              "2秒内",
+              "3秒内",
+              "4秒内",
+              "5秒内",
+              "JUST激奏期间"
+            ]
+          ],
+          "displaySkillCategories": [
+            1
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                2,
+                3,
+                4,
+                5,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 13000,
+              "skillReleaseConditions": [],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7020
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                2
+              ]
+            }
+          ],
+          "gekisouMissionType": 3,
+          "skillCategories": [
+            1
+          ],
+          "skillIconId": 13,
+          "skillName": {
+            "en": "JUST Count Gain Boost",
+            "ja": "JUST数獲得量UP",
+            "ko": "JUST 획득량 UP",
+            "zh-CN": "JUST获得量UP",
+            "zh-TW": "JUST獲得量UP"
+          }
+        },
+        "2": {
+          "description": {
+            "en": "",
+            "ja": "",
+            "ko": "",
+            "zh-CN": "{2}{3}\nJUST获得量提升2",
+            "zh-TW": "{0}{1}，\nJUST獲得量2UP"
+          },
+          "descriptionParameters": [
+            [
+              "自JUST激奏開始",
+              "自JUST激奏開始",
+              "自JUST激奏開始",
+              "自JUST激奏開始",
+              ""
+            ],
+            [
+              "2秒內",
+              "3秒內",
+              "4秒內",
+              "5秒內",
+              "在JUST激奏中"
+            ],
+            [
+              "JUST激奏开始后",
+              "JUST激奏开始后",
+              "JUST激奏开始后",
+              "JUST激奏开始后",
+              ""
+            ],
+            [
+              "2秒内",
+              "3秒内",
+              "4秒内",
+              "5秒内",
+              "JUST激奏期间"
+            ]
+          ],
+          "displaySkillCategories": [
+            1
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                2,
+                3,
+                4,
+                5,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                2,
+                2,
+                2,
+                2,
+                2
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 13000,
+              "skillReleaseConditions": [],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7020
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                2
+              ]
+            }
+          ],
+          "gekisouMissionType": 3,
+          "skillCategories": [
+            1
+          ],
+          "skillIconId": 13,
+          "skillName": {
+            "en": "JUST Count Gain Boost",
+            "ja": "JUST数獲得量UP",
+            "ko": "JUST 획득량 UP",
+            "zh-CN": "JUST获得量UP",
+            "zh-TW": "JUST獲得量UP"
+          }
+        }
+      },
+      "support": {
+        "1": {
+          "description": {
+            "en": "",
+            "ja": "",
+            "ko": "",
+            "zh-CN": "装配此技能的成员的演出技能发动时间延长{0}秒\n若为「MyGO!!!!!」成员，\n则演出技能发动时间延长{1}秒",
+            "zh-TW": "設定團員的演出技能發動時間延長{0}秒\n若為「MyGO!!!!!」團員，\n演出技能延長{1}秒"
+          },
+          "descriptionParameters": [
+            [
+              "0.25",
+              "0.5",
+              "0.75",
+              "1",
+              "1.5"
+            ],
+            [
+              "0.5",
+              "1",
+              "1.5",
+              "2",
+              "3"
+            ]
+          ],
+          "displaySkillCategories": [],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                250,
+                500,
+                750,
+                1000,
+                1500
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": false
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 15000,
+              "skillReleaseConditions": [],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      4010,
+                      4010,
+                      4010,
+                      4010,
+                      4010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                500,
+                1000,
+                1500,
+                2000,
+                3000
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 15000,
+              "skillReleaseConditions": [],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      4010,
+                      4010,
+                      4010,
+                      4010,
+                      4010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            }
+          ],
+          "skillIconId": 17,
+          "skillName": {
+            "en": "LIVE Skill Duration Up (MyGO!!!!! Bonus)",
+            "ja": "ライブスキル延長(MyGO!!!!!ボーナス)",
+            "ko": "라이브 스킬 지속시간 연장 (MyGO!!!!! 보너스)",
+            "zh-CN": "演出技能延长（MyGO!!!!!加成）",
+            "zh-TW": "演出技能延長（MyGO!!!!!加成）"
+          }
+        }
+      },
+      "gekisouSupport": {
+        "1": {
+          "description": {
+            "en": "",
+            "ja": "",
+            "ko": "",
+            "zh-CN": "JUST激奏期间，每达成1次JUST判定\n得分提升1%（最高{0}%）\n若为「MyGO!!!!!」成员\n则得分提升3%",
+            "zh-TW": "在JUST激奏中，每達到1次JUST判定，\n分數1%UP（最多{0}%）\n若為「MyGO!!!!!」團員，\n分數則3%UP"
+          },
+          "descriptionParameters": [
+            [
+              "3",
+              "5",
+              "8",
+              "10",
+              "20"
+            ]
+          ],
+          "displaySkillCategories": [
+            1
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                100,
+                100,
+                100,
+                100,
+                100
+              ],
+              "maxEffectValue": [
+                300,
+                500,
+                750,
+                1000,
+                2000
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": false
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": {
+                "conditionTargets": [
+                  {
+                    "judgement": 6,
+                    "skillTargetType": 4
+                  }
+                ],
+                "conditionValues": [
+                  [
+                    1,
+                    1,
+                    1,
+                    1,
+                    1
+                  ]
+                ],
+                "maxCumulativeCount": [
+                  999999,
+                  999999,
+                  999999,
+                  999999,
+                  999999
+                ],
+                "skillCumulativeConditionType": [
+                  1000,
+                  1000,
+                  1000,
+                  1000,
+                  1000
+                ]
+              },
+              "skillEffectType": 2001,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                300,
+                300,
+                300,
+                300,
+                300
+              ],
+              "maxEffectValue": [
+                300,
+                500,
+                750,
+                1000,
+                2000
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": {
+                "conditionTargets": [
+                  {
+                    "judgement": 6,
+                    "skillTargetType": 4
+                  }
+                ],
+                "conditionValues": [
+                  [
+                    1,
+                    1,
+                    1,
+                    1,
+                    1
+                  ]
+                ],
+                "maxCumulativeCount": [
+                  999999,
+                  999999,
+                  999999,
+                  999999,
+                  999999
+                ],
+                "skillCumulativeConditionType": [
+                  1000,
+                  1000,
+                  1000,
+                  1000,
+                  1000
+                ]
+              },
+              "skillEffectType": 2001,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            }
+          ],
+          "gekisouMissionType": 3,
+          "gekisouSupportSkillExecTiming": 1,
+          "skillIconId": 7,
+          "skillName": {
+            "en": "JUST Score UP (MyGO!!!!! Bonus)",
+            "ja": "JUSTスコアUP(MyGO!!!!!ボーナス)",
+            "ko": "JUST 스코어 UP (MyGO!!!!! 보너스)",
+            "zh-CN": "JUST得分UP（MyGO!!!!!加成）",
+            "zh-TW": "JUST分數UP（MyGO!!!!!加成）"
+          }
+        },
+        "67": {
+          "description": {
+            "en": "",
+            "ja": "",
+            "ko": "",
+            "zh-CN": "LUCK激奏开始时有{0}%的概率发动，使抽选结果保底为LUCKY（最多1次）\n若为「{1}」成员\n结果保底为SUPER LUCKY",
+            "zh-TW": "LUCK激奏開始時，有{0}%的機率發動，抽選結果必定在LUCKY以上（最多1次）\n「若為{1}」團員，\n則抽選結果必定在SUPER LUCKY以上"
+          },
+          "descriptionParameters": [
+            [
+              "10",
+              "20",
+              "30",
+              "null",
+              "null"
+            ],
+            [
+              "Ave Mujica",
+              "Ave Mujica",
+              "Ave Mujica",
+              "null",
+              "null"
+            ]
+          ],
+          "displaySkillCategories": [
+            3
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "effectValue": [
+                2,
+                2,
+                2,
+                2,
+                2
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": {
+                "1": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        10
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": false
+                    }
+                  ]
+                ],
+                "2": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        20
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": false
+                    }
+                  ]
+                ],
+                "3": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        30
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": false
+                    }
+                  ]
+                ],
+                "4": [
+                  [
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": false
+                    },
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        40
+                      ],
+                      "isPositive": true
+                    }
+                  ]
+                ],
+                "5": [
+                  [
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": false
+                    },
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        60
+                      ],
+                      "isPositive": true
+                    }
+                  ]
+                ]
+              },
+              "skillCumulativeCondition": null,
+              "skillEffectType": 11005,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 2,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "effectValue": [
+                3,
+                3,
+                3,
+                3,
+                3
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": {
+                "1": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        10
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": true
+                    }
+                  ]
+                ],
+                "2": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        20
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": true
+                    }
+                  ]
+                ],
+                "3": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        30
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": true
+                    }
+                  ]
+                ],
+                "4": [
+                  [
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        40
+                      ],
+                      "isPositive": true
+                    }
+                  ]
+                ],
+                "5": [
+                  [
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        60
+                      ],
+                      "isPositive": true
+                    }
+                  ]
+                ]
+              },
+              "skillCumulativeCondition": null,
+              "skillEffectType": 11005,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 2,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            }
+          ],
+          "gekisouMissionType": 2,
+          "gekisouSupportSkillExecTiming": 1,
+          "skillIconId": 12,
+          "skillName": {
+            "en": "LUCK Trigger Support (Ave Mujica Bonus)",
+            "ja": "LUCK抽選サポート(Ave Mujicaボーナス)",
+            "ko": "LUCK 추첨 서포트 (Ave Mujica 보너스)",
+            "zh-CN": "LUCK抽选辅助（Ave Mujica加成）",
+            "zh-TW": "LUCK抽選支援（Ave Mujica加成）"
+          }
+        },
+        "76": {
+          "description": {
+            "en": "",
+            "ja": "",
+            "ko": "",
+            "zh-CN": "JUST激奏期间，每达成{0}次PERFECT，将下一次PERFECT转化为JUST（最多4次）\n若为「MyGO!!!!!」成员\n则每{1}次发动",
+            "zh-TW": "在JUST激奏中，每達到{0}次PERFECT，之後的PERFECT便會轉換為JUST（最多4次）\n若為「MyGO!!!!!」團員，\n則每達到{1}次便會發動"
+          },
+          "descriptionParameters": [
+            [
+              "75",
+              "70",
+              "65",
+              "60",
+              "50"
+            ],
+            [
+              "55",
+              "50",
+              "45",
+              "40",
+              "30"
+            ]
+          ],
+          "displaySkillCategories": [
+            3
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                99999,
+                99999,
+                99999,
+                99999,
+                99999
+              ],
+              "effectExecuteLimitCount": [
+                4,
+                4,
+                4,
+                4,
+                4
+              ],
+              "effectExecuteLimitResetConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "effectLimitCount": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "effectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": false
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 13005,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [
+                {
+                  "judgement": 5,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 4,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 3,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 2,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 1,
+                  "skillTargetType": 4
+                }
+              ],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7020,
+                      7020,
+                      7020,
+                      7020,
+                      7020
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  },
+                  {
+                    "conditionTargets": [
+                      {
+                        "judgement": 5,
+                        "skillTargetType": 4
+                      }
+                    ],
+                    "conditionType": [
+                      1030,
+                      1030,
+                      1030,
+                      1030,
+                      1030
+                    ],
+                    "conditionValues": [
+                      [
+                        75,
+                        70,
+                        65,
+                        60,
+                        50
+                      ]
+                    ],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "activationTimeSecond": [
+                99999,
+                99999,
+                99999,
+                99999,
+                99999
+              ],
+              "effectExecuteLimitCount": [
+                4,
+                4,
+                4,
+                4,
+                4
+              ],
+              "effectExecuteLimitResetConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "effectLimitCount": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "effectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 13005,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [
+                {
+                  "judgement": 5,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 4,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 3,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 2,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 1,
+                  "skillTargetType": 4
+                }
+              ],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7020,
+                      7020,
+                      7020,
+                      7020,
+                      7020
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  },
+                  {
+                    "conditionTargets": [
+                      {
+                        "judgement": 5,
+                        "skillTargetType": 4
+                      }
+                    ],
+                    "conditionType": [
+                      1030,
+                      1030,
+                      1030,
+                      1030,
+                      1030
+                    ],
+                    "conditionValues": [
+                      [
+                        55,
+                        50,
+                        45,
+                        40,
+                        30
+                      ]
+                    ],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            }
+          ],
+          "gekisouMissionType": 3,
+          "gekisouSupportSkillExecTiming": 1,
+          "skillIconId": 11,
+          "skillName": {
+            "en": "JUST Timing Support (MyGO!!!!! Bonus)",
+            "ja": "JUSTタイミングサポート(MyGO!!!!!ボーナス)",
+            "ko": "JUST 타이밍 서포트 (MyGO!!!!! 보너스)",
+            "zh-CN": "JUST时机辅助（MyGO!!!!!加成）",
+            "zh-TW": "JUST時機支援（MyGO!!!!!加成）"
+          }
+        }
+      }
+    },
+    {
+      "leader": {
+        "1": {
+          "description": {
+            "en": "",
+            "ja": "",
+            "ko": "MyGO!!!!! 멤버의\n전체 능력치 {0}% UP",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "4",
+              "7",
+              "10",
+              "14",
+              "24"
+            ]
+          ],
+          "effects": [
+            {
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectValue": [
+                400,
+                700,
+                1000,
+                1400,
+                2400
+              ],
+              "skillConditions": [],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 1000,
+              "skillTargets": [
+                {
+                  "bandId": 1,
+                  "skillTargetType": 3
+                }
+              ]
+            }
+          ],
+          "skillIconId": 18,
+          "skillName": {
+            "en": "MyGO!!!!! All Parameters UP",
+            "ja": "MyGO!!!!!全パラメータUP",
+            "ko": "MyGO!!!!! 전체 능력치 UP",
+            "zh-CN": "MyGO!!!!!全部能力值UP",
+            "zh-TW": "MyGO!!!!!所有能力值UP"
+          }
+        },
+        "90146": {
+          "description": {
+            "en": "",
+            "ja": "",
+            "ko": "",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [],
+          "effects": [],
+          "skillIconId": 16,
+          "skillName": {
+            "en": "Ruby Only Technique UP",
+            "ja": "紅赤オンリー・テクニックUP",
+            "ko": "레드 전용·테크닉 UP",
+            "zh-CN": "仅限绯红・技巧值UP",
+            "zh-TW": "僅限緋紅·技巧值UP"
+          }
+        }
+      },
+      "live": {
+        "1": {
+          "description": {
+            "en": "",
+            "ja": "",
+            "ko": "[심플] 5초간, 스코어 {0}% UP",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "10",
+              "20",
+              "30",
+              "40",
+              "70"
+            ]
+          ],
+          "displaySkillCategories": [
+            1
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                5,
+                5,
+                5,
+                5,
+                5
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                1000,
+                2000,
+                3000,
+                4000,
+                7000
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 2000,
+              "skillReleaseConditions": [],
+              "skillTargets": []
+            }
+          ],
+          "skillCategories": [
+            1
+          ],
+          "skillIconId": 7,
+          "skillName": {
+            "en": "Score UP",
+            "ja": "スコアUP",
+            "ko": "스코어 UP",
+            "zh-CN": "得分UP",
+            "zh-TW": "分數UP"
+          }
+        }
+      },
+      "gekisou": {
+        "1": {
+          "description": {
+            "en": "",
+            "ja": "",
+            "ko": "{0}{1}\nJUST 획득량 1 UP",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "JUST 격주 시작부터 ",
+              "JUST 격주 시작부터 ",
+              "JUST 격주 시작부터 ",
+              "JUST 격주 시작부터 ",
+              ""
+            ],
+            [
+              "2초간",
+              "3초간",
+              "4초간",
+              "5초간",
+              "JUST 격주 중"
+            ]
+          ],
+          "displaySkillCategories": [
+            1
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                2,
+                3,
+                4,
+                5,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 13000,
+              "skillReleaseConditions": [],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7020
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                2
+              ]
+            }
+          ],
+          "gekisouMissionType": 3,
+          "skillCategories": [
+            1
+          ],
+          "skillIconId": 13,
+          "skillName": {
+            "en": "JUST Count Gain Boost",
+            "ja": "JUST数獲得量UP",
+            "ko": "JUST 획득량 UP",
+            "zh-CN": "JUST获得量UP",
+            "zh-TW": "JUST獲得量UP"
+          }
+        },
+        "2": {
+          "description": {
+            "en": "",
+            "ja": "",
+            "ko": "{0}{1}\nJUST 획득량 2 UP",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "JUST 격주 시작부터 ",
+              "JUST 격주 시작부터 ",
+              "JUST 격주 시작부터 ",
+              "JUST 격주 시작부터 ",
+              ""
+            ],
+            [
+              "2초간",
+              "3초간",
+              "4초간",
+              "5초간",
+              "JUST 격주 중"
+            ]
+          ],
+          "displaySkillCategories": [
+            1
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                2,
+                3,
+                4,
+                5,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                2,
+                2,
+                2,
+                2,
+                2
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 13000,
+              "skillReleaseConditions": [],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7020
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                2
+              ]
+            }
+          ],
+          "gekisouMissionType": 3,
+          "skillCategories": [
+            1
+          ],
+          "skillIconId": 13,
+          "skillName": {
+            "en": "JUST Count Gain Boost",
+            "ja": "JUST数獲得量UP",
+            "ko": "JUST 획득량 UP",
+            "zh-CN": "JUST获得量UP",
+            "zh-TW": "JUST獲得量UP"
+          }
+        }
+      },
+      "support": {
+        "1": {
+          "description": {
+            "en": "",
+            "ja": "",
+            "ko": "장착한 멤버의 라이브 스킬 발동 시간 {0}초 연장\n「MyGO!!!!!」 멤버일 경우,\n라이브 스킬 발동 시간 {1}초 연장",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "0.25",
+              "0.5",
+              "0.75",
+              "1",
+              "1.5"
+            ],
+            [
+              "0.5",
+              "1",
+              "1.5",
+              "2",
+              "3"
+            ]
+          ],
+          "displaySkillCategories": [],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                250,
+                500,
+                750,
+                1000,
+                1500
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": false
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 15000,
+              "skillReleaseConditions": [],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      4010,
+                      4010,
+                      4010,
+                      4010,
+                      4010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                500,
+                1000,
+                1500,
+                2000,
+                3000
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 15000,
+              "skillReleaseConditions": [],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      4010,
+                      4010,
+                      4010,
+                      4010,
+                      4010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            }
+          ],
+          "skillIconId": 17,
+          "skillName": {
+            "en": "LIVE Skill Duration Up (MyGO!!!!! Bonus)",
+            "ja": "ライブスキル延長(MyGO!!!!!ボーナス)",
+            "ko": "라이브 스킬 지속시간 연장 (MyGO!!!!! 보너스)",
+            "zh-CN": "演出技能延长（MyGO!!!!!加成）",
+            "zh-TW": "演出技能延長（MyGO!!!!!加成）"
+          }
+        }
+      },
+      "gekisouSupport": {
+        "1": {
+          "description": {
+            "en": "",
+            "ja": "",
+            "ko": "JUST 격주 중 JUST 판정 1회마다\n스코어 1%씩 UP(최대 {0}%)\n「MyGO!!!!!」 멤버일 경우\n스코어 3%씩 UP",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "3",
+              "5",
+              "8",
+              "10",
+              "20"
+            ]
+          ],
+          "displaySkillCategories": [
+            1
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                100,
+                100,
+                100,
+                100,
+                100
+              ],
+              "maxEffectValue": [
+                300,
+                500,
+                750,
+                1000,
+                2000
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": false
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": {
+                "conditionTargets": [
+                  {
+                    "judgement": 6,
+                    "skillTargetType": 4
+                  }
+                ],
+                "conditionValues": [
+                  [
+                    1,
+                    1,
+                    1,
+                    1,
+                    1
+                  ]
+                ],
+                "maxCumulativeCount": [
+                  999999,
+                  999999,
+                  999999,
+                  999999,
+                  999999
+                ],
+                "skillCumulativeConditionType": [
+                  1000,
+                  1000,
+                  1000,
+                  1000,
+                  1000
+                ]
+              },
+              "skillEffectType": 2001,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectValue": [
+                300,
+                300,
+                300,
+                300,
+                300
+              ],
+              "maxEffectValue": [
+                300,
+                500,
+                750,
+                1000,
+                2000
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": {
+                "conditionTargets": [
+                  {
+                    "judgement": 6,
+                    "skillTargetType": 4
+                  }
+                ],
+                "conditionValues": [
+                  [
+                    1,
+                    1,
+                    1,
+                    1,
+                    1
+                  ]
+                ],
+                "maxCumulativeCount": [
+                  999999,
+                  999999,
+                  999999,
+                  999999,
+                  999999
+                ],
+                "skillCumulativeConditionType": [
+                  1000,
+                  1000,
+                  1000,
+                  1000,
+                  1000
+                ]
+              },
+              "skillEffectType": 2001,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            }
+          ],
+          "gekisouMissionType": 3,
+          "gekisouSupportSkillExecTiming": 1,
+          "skillIconId": 7,
+          "skillName": {
+            "en": "JUST Score UP (MyGO!!!!! Bonus)",
+            "ja": "JUSTスコアUP(MyGO!!!!!ボーナス)",
+            "ko": "JUST 스코어 UP (MyGO!!!!! 보너스)",
+            "zh-CN": "JUST得分UP（MyGO!!!!!加成）",
+            "zh-TW": "JUST分數UP（MyGO!!!!!加成）"
+          }
+        },
+        "67": {
+          "description": {
+            "en": "",
+            "ja": "",
+            "ko": "LUCK 격주 시작 시, {0}% 확률로 발동, 추첨 결과가 LUCKY 이상으로 된다(1회까지)\n「{1}」 멤버일 경우\nSUPER LUCKY 이상으로 된다",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "10",
+              "20",
+              "30",
+              "null",
+              "null"
+            ],
+            [
+              "Ave Mujica",
+              "Ave Mujica",
+              "Ave Mujica",
+              "null",
+              "null"
+            ]
+          ],
+          "displaySkillCategories": [
+            3
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "effectValue": [
+                2,
+                2,
+                2,
+                2,
+                2
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": {
+                "1": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        10
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": false
+                    }
+                  ]
+                ],
+                "2": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        20
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": false
+                    }
+                  ]
+                ],
+                "3": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        30
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": false
+                    }
+                  ]
+                ],
+                "4": [
+                  [
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": false
+                    },
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        40
+                      ],
+                      "isPositive": true
+                    }
+                  ]
+                ],
+                "5": [
+                  [
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": false
+                    },
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        60
+                      ],
+                      "isPositive": true
+                    }
+                  ]
+                ]
+              },
+              "skillCumulativeCondition": null,
+              "skillEffectType": 11005,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 2,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "activationTimeSecond": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitCount": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "effectExecuteLimitResetConditions": [],
+              "effectLimitCount": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "effectValue": [
+                3,
+                3,
+                3,
+                3,
+                3
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": {
+                "1": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        10
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": true
+                    }
+                  ]
+                ],
+                "2": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        20
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": true
+                    }
+                  ]
+                ],
+                "3": [
+                  [
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        30
+                      ],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": true
+                    }
+                  ]
+                ],
+                "4": [
+                  [
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        40
+                      ],
+                      "isPositive": true
+                    }
+                  ]
+                ],
+                "5": [
+                  [
+                    {
+                      "conditionTargets": [
+                        {
+                          "bandId": 2,
+                          "skillTargetType": 3
+                        }
+                      ],
+                      "conditionType": 5000,
+                      "conditionValues": [],
+                      "isPositive": true
+                    },
+                    {
+                      "conditionTargets": [],
+                      "conditionType": 4011,
+                      "conditionValues": [
+                        60
+                      ],
+                      "isPositive": true
+                    }
+                  ]
+                ]
+              },
+              "skillCumulativeCondition": null,
+              "skillEffectType": 11005,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 2,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            }
+          ],
+          "gekisouMissionType": 2,
+          "gekisouSupportSkillExecTiming": 1,
+          "skillIconId": 12,
+          "skillName": {
+            "en": "LUCK Trigger Support (Ave Mujica Bonus)",
+            "ja": "LUCK抽選サポート(Ave Mujicaボーナス)",
+            "ko": "LUCK 추첨 서포트 (Ave Mujica 보너스)",
+            "zh-CN": "LUCK抽选辅助（Ave Mujica加成）",
+            "zh-TW": "LUCK抽選支援（Ave Mujica加成）"
+          }
+        },
+        "76": {
+          "description": {
+            "en": "",
+            "ja": "",
+            "ko": "JUST 격주 중 PERFECT {0}회마다 다음 PERFECT를 JUST로 변환(최대 4회)\n「MyGO!!!!!」 멤버일 경우\n{1}회마다 발동",
+            "zh-CN": "",
+            "zh-TW": ""
+          },
+          "descriptionParameters": [
+            [
+              "75",
+              "70",
+              "65",
+              "60",
+              "50"
+            ],
+            [
+              "55",
+              "50",
+              "45",
+              "40",
+              "30"
+            ]
+          ],
+          "displaySkillCategories": [
+            3
+          ],
+          "effects": [
+            {
+              "activationTimeSecond": [
+                99999,
+                99999,
+                99999,
+                99999,
+                99999
+              ],
+              "effectExecuteLimitCount": [
+                4,
+                4,
+                4,
+                4,
+                4
+              ],
+              "effectExecuteLimitResetConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "effectLimitCount": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "effectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": false
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 13005,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [
+                {
+                  "judgement": 5,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 4,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 3,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 2,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 1,
+                  "skillTargetType": 4
+                }
+              ],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7020,
+                      7020,
+                      7020,
+                      7020,
+                      7020
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  },
+                  {
+                    "conditionTargets": [
+                      {
+                        "judgement": 5,
+                        "skillTargetType": 4
+                      }
+                    ],
+                    "conditionType": [
+                      1030,
+                      1030,
+                      1030,
+                      1030,
+                      1030
+                    ],
+                    "conditionValues": [
+                      [
+                        75,
+                        70,
+                        65,
+                        60,
+                        50
+                      ]
+                    ],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "activationTimeSecond": [
+                99999,
+                99999,
+                99999,
+                99999,
+                99999
+              ],
+              "effectExecuteLimitCount": [
+                4,
+                4,
+                4,
+                4,
+                4
+              ],
+              "effectExecuteLimitResetConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7010,
+                      7010,
+                      7010,
+                      7010,
+                      7010
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "effectLimitCount": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "effectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "maxEffectValue": [
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "skillConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "bandId": 1,
+                        "skillTargetType": 3
+                      }
+                    ],
+                    "conditionType": [
+                      5000,
+                      5000,
+                      5000,
+                      5000,
+                      5000
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillCumulativeCondition": null,
+              "skillEffectType": 13005,
+              "skillReleaseConditions": [
+                [
+                  {
+                    "conditionTargets": [],
+                    "conditionType": [
+                      7013,
+                      7013,
+                      7013,
+                      7013,
+                      7013
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTargets": [
+                {
+                  "judgement": 5,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 4,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 3,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 2,
+                  "skillTargetType": 4
+                },
+                {
+                  "judgement": 1,
+                  "skillTargetType": 4
+                }
+              ],
+              "skillTriggerConditions": [
+                [
+                  {
+                    "conditionTargets": [
+                      {
+                        "gekisouMissionType": 3,
+                        "skillTargetType": 5
+                      }
+                    ],
+                    "conditionType": [
+                      7020,
+                      7020,
+                      7020,
+                      7020,
+                      7020
+                    ],
+                    "conditionValues": [],
+                    "isPositive": true
+                  },
+                  {
+                    "conditionTargets": [
+                      {
+                        "judgement": 5,
+                        "skillTargetType": 4
+                      }
+                    ],
+                    "conditionType": [
+                      1030,
+                      1030,
+                      1030,
+                      1030,
+                      1030
+                    ],
+                    "conditionValues": [
+                      [
+                        55,
+                        50,
+                        45,
+                        40,
+                        30
+                      ]
+                    ],
+                    "isPositive": true
+                  }
+                ]
+              ],
+              "skillTriggerType": [
+                1,
+                1,
+                1,
+                1,
+                1
+              ]
+            }
+          ],
+          "gekisouMissionType": 3,
+          "gekisouSupportSkillExecTiming": 1,
+          "skillIconId": 11,
+          "skillName": {
+            "en": "JUST Timing Support (MyGO!!!!! Bonus)",
+            "ja": "JUSTタイミングサポート(MyGO!!!!!ボーナス)",
+            "ko": "JUST 타이밍 서포트 (MyGO!!!!! 보너스)",
+            "zh-CN": "JUST时机辅助（MyGO!!!!!加成）",
+            "zh-TW": "JUST時機支援（MyGO!!!!!加成）"
+          }
+        }
+      }
+    }
+  ],
+  "additionalSource": {
+    "server": "jp",
+    "revision": "ournotes-skills-v2",
+    "generation": "cbc96977884f0e75281960558625fba984c3566435f4e9f23f24a7faba0076d9",
+    "masterVersion": "1.0.0.300/52355a9de56a475f691b10ef58acba58",
+    "clientVersion": "1.0.4",
+    "manifestSha256": "f4534fe8bf340b7a9bd99eb9b43ab384e9e3895a7e1eb3113cbb371e65780735",
+    "selection": "JP-only gekisou/22 and its grade-dependent release conditions"
+  }
+}
