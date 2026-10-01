@@ -35,6 +35,20 @@ function toAuthenticatedRequestUser(user: User, emailVerified: boolean): Authent
   };
 }
 
+export async function requireAuthenticatedUserId(request: Request): Promise<string> {
+  const { data, error } = await createServerSupabaseClient().auth.getClaims(parseBearerToken(request));
+  const claims = data?.claims;
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (error || !claims || !supabaseUrl
+    || claims.iss !== `${new URL(supabaseUrl).origin}/auth/v1`
+    || claims.aud !== "authenticated" || claims.role !== "authenticated"
+    || typeof claims.sub !== "string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/iu.test(claims.sub)
+    || typeof claims.exp !== "number" || !Number.isFinite(claims.exp) || claims.exp <= Date.now() / 1000) {
+    throw new ApiRouteError(401, "AUTHENTICATION_FAILED", "认证失败");
+  }
+  return claims.sub.toLowerCase();
+}
+
 export async function requireAuthenticatedUser(request: Request): Promise<AuthenticatedRequestUser> {
   const serviceClient = createServerSupabaseClient();
   const token = parseBearerToken(request);

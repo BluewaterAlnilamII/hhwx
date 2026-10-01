@@ -31,7 +31,19 @@
     "EMPTY_COMMENT": "评论内容不能为空",
     "COMMENT_TOO_LONG": "评论内容过长",
     "COMMENT_CREATE_FAILED": "评论发送失败",
-    "DEFAULT": "{message}"
+    "DEFAULT": "{message}",
+    "INVALID_LOGIN_REQUEST": "登录任务参数无效",
+    "USER_SNAPSHOT_UNAVAILABLE": "游戏档案自动同步暂不可用",
+    "LOGIN_TASK_ACTIVE": "同步服务繁忙，请稍后再试",
+    "LOGIN_TASK_BUSY": "同步服务繁忙，请稍后再试",
+    "LOGIN_ACCOUNT_BUSY": "该 Bilibili 账号正在同步，请稍后再试",
+    "LOGIN_TASK_NOT_FOUND": "登录任务已过期，请重新同步",
+    "LOGIN_TASK_EXPIRED": "登录任务已过期，请重新同步",
+    "LOGIN_UPSTREAM_UNAVAILABLE": "官方登录服务暂不可用，请稍后再试",
+    "TRACKER_SERVICE_FAILED": "同步服务暂不可用，可重试当前任务",
+    "TRACKER_SERVICE_NOT_CONFIGURED": "游戏账号同步服务尚未配置",
+    "TRACKER_SERVICE_INVALID_RESPONSE": "同步服务返回格式无效",
+    "LOGIN_NOT_COMPLETED": "请先完成登录"
   },
   "fallback": {
     "requestFailed": "请求失败（HTTP {status}）",

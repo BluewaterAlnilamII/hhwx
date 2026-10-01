@@ -102,7 +102,7 @@ hhwx/
 - `bandori/team-builder/`：单曲 UI 设置、活动策略和来源适配器；`core/calculator.ts` 保留通用卡牌计算。两种组队模式使用共享 Rust 计分／搜索包，原 TypeScript `single/` 引擎已退役。
 - `comments/`：与目标类型无关的评论契约、表情/贴纸目录、内容解析和特权持久化服务；各目标类型的存在性与可见性校验留在各自领域中。
 - `api-*.ts`：API 响应约定和缓存策略。
-- `bestdori-profile-codec.ts` 和 `user-game-*-server.ts`：游戏档案兼容、同步和服务端持久化逻辑。
+- `bestdori-profile-codec.ts` 和 `user-game-*-server.ts`：游戏档案兼容、同步和服务端持久化逻辑。 `user-game-snapshot-fetcher.ts` 负责仅供服务端使用的私有 user-fetcher start/confirm 连接；账号面板不轮询，也不接收游戏凭据。
 - `characters.ts`、`othello.ts` 和 `ai/`：黑白棋和角色逻辑。
 
 ## scripts

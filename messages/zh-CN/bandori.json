@@ -376,7 +376,9 @@
       "uidManagement": {
         "title": "UID 管理",
         "quota": "自动档案 {count}/{limit}",
-        "syncWarning": "同步会请求游戏接口，可能让该 UID 当前登录中的游戏客户端掉线一次",
+        "syncWarning": "同步需要您在弹出窗口中完成一次对应的 Bilibili 账号登录。您将授权 HHWX 进行一次游戏账号登录，并保存其中所有的卡牌、区域道具、角色加成及称号信息",
+        "syncDisclaimer": "本功能仅供个人学习研究，请遵循 Bilibili 平台和游戏相关规定。使用本功能所产生的一切后果由用户自行承担",
+        "syncConsent": "我已知晓并同意以上内容",
         "syncUnavailable": "游戏档案自动同步暂不可用，请使用手动档案",
         "syncPaused": "同步已暂停",
         "loading": "正在读取...",
@@ -391,7 +393,14 @@
         "resync": "重新同步",
         "syncing": "同步中",
         "unbind": "解绑",
-        "unbinding": "解绑中"
+        "unbinding": "解绑中",
+        "loginPopupBlocked": "请允许弹出窗口后重新同步",
+        "loginWindowClosed": "登录窗口已关闭，请重新同步",
+        "loginMismatch": "此 Bilibili 账号下的游戏角色与目标 UID 不匹配，请使用正确账号重新同步",
+        "loginExpired": "登录任务已过期，请重新同步",
+        "loginMaintenance": "游戏暂不可用，请稍后重新同步",
+        "confirmLogin": "我已登录",
+        "cancelLogin": "取消同步"
       },
       "manual": {
         "title": "手动档案",
@@ -432,7 +441,7 @@
         "bound": "绑定成功。",
         "transferred": "绑定成功，该 UID 已从旧账号转移到当前账号。",
         "unbound": "UID {uid} 已解绑，对应自动同步档案已删除。",
-        "synced": "UID {uid} 已同步。",
+        "synced": "UID {uid} 已同步",
         "manualCreated": "云端手动档案已创建。",
         "imported": "Bestdori 档案已导入到云端。",
         "copiedToCloud": "档案已拷贝为云端手动档案。",
@@ -442,7 +451,7 @@
       "confirm": {
         "unbind": "确认解绑游戏 UID {uid}？解绑会删除该 UID 与当前网页账号的绑定关系，并同时删除对应的自动同步档案{profileName}。",
         "profileNameSuffix": "「{profileName}」",
-        "sync": "本次同步会读取该游戏 UID 的卡牌、区域道具、角色潜能和角色任务加成数据。\n\n由于游戏接口机制，同步过程中可能会导致该 UID 当前登录中的游戏客户端掉线一次。确认继续同步？",
+        "sync": "本次同步需在 Bilibili 官方页面登录，并读取匹配角色的卡牌、区域道具、角色潜能和任务加成数据。\n\n系统会检查安卓和 iOS 角色，可能使该 Bilibili 账号已登录的游戏客户端掉线。确认继续？",
         "delete": "确认删除档案「{profileName}」？"
       },
       "errors": {

@@ -516,6 +516,8 @@ begin
     raise exception 'web_user_id is required';
   end if;
 
+  perform pg_advisory_xact_lock(hashtext(p_game_uid)::bigint);
+
   delete from public.user_game_bindings
   where game_uid = p_game_uid
     and web_user_id = p_web_user_id;

@@ -102,7 +102,7 @@ hhwx/
 - `bandori/team-builder/`: single-song UI settings, event policy and source adapter; `core/calculator.ts` remains the general card calculator. Both song modes use the shared Rust scorer/search package; the former TypeScript `single/` engine is retired.
 - `comments/`: target-agnostic comment contracts, emoji/stamp catalogs, content parsing, and privileged comment persistence service. Each target type keeps its existence and visibility validation in its own domain.
 - `api-*.ts`: API response conventions and cache policies.
-- `bestdori-profile-codec.ts` and `user-game-*-server.ts`: game profile compatibility, sync, and server-side persistence logic.
+- `bestdori-profile-codec.ts` and `user-game-*-server.ts`: game profile compatibility, sync, and server-side persistence logic. `user-game-snapshot-fetcher.ts` owns the server-only start/confirm connection to the private user-fetcher; the account panel never polls or receives game credentials.
 - `characters.ts`, `othello.ts`, and `ai/`: Othello and character logic.
 
 ## scripts
