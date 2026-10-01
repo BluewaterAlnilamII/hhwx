@@ -2,7 +2,7 @@
 
 [简体中文](ournotes-master-api.zh-CN.md)
 
-Implemented for the first OurNotes API release; production activation is a separate deployment step. These public, read-only routes follow the existing Bandori response, private snapshot reader and HTTP cache conventions. No login is required. `member` and `support` are metadata terms; the game displays support cards as snapshots.
+These public, read-only routes follow the existing Bandori response, private snapshot reader and HTTP cache conventions. No login is required. `member` and `support` are metadata terms; the game displays support cards as snapshots.
 
 ## Routes and selection
 
@@ -257,7 +257,7 @@ Shared icon/category/timing fields and projected effects must agree across prese
 
 Reserved headers with no effects and no authoritative description remain with `effects: []`, five empty description slots and `descriptionParameters: []`. Unreferenced skills and native None effects remain. Supported null references or out-of-range description indices use the client's explicit fallback, or literal text `null`. GekisouSupport 67 (grades 4–5) and 72 (grades 2–5) retain those substitutions without changing conditions. Unsupported syntax, unknown projected target fields and missing required records fail construction. This catalog describes configuration; it does not promise a full client simulation or add detail/level/attributes endpoints.
 
-The new producer recipe is `ournotes-skills-v2`; historical artifact layouts remain verifiable. The Web draft requires the new private effects/template format and cannot read old grade-to-description artifacts. Publish all four new generations and verify signed private reads before deploying Web; rollback must keep the reader and private format matched. No production deployment is implied by local verification.
+The producer recipe is `ournotes-skills-v2`; historical artifact layouts remain verifiable. The Skills reader requires the private effects/template format and cannot read old grade-to-description artifacts. Publish all four new generations and verify signed private reads before deploying Web; rollback must keep the reader and private format matched. No production deployment is implied by local verification.
 
 The existing `cardType` integer has these official labels; it is separate from Skills:
 
