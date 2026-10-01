@@ -376,7 +376,8 @@
       "uidManagement": {
         "title": "UID 管理",
         "quota": "自动档案 {count}/{limit}",
-        "syncWarning": "同步需要您在弹出窗口中完成一次对应的 Bilibili 账号登录。您将授权 HHWX 进行一次游戏账号登录，并保存其中所有的卡牌、区域道具、角色加成及称号信息",
+        "syncWarning": "同步需要您在弹出窗口中完成一次对应的 Bilibili 账号登录，并在5分钟内点击“我已登录”按钮提交",
+        "syncAuthorization": "您将授权 HHWX 进行一次游戏账号登录，并保存其中所有的卡牌、区域道具、角色加成及称号信息。HHWX 不会记录和保存其他一切账号和游戏数据",
         "syncDisclaimer": "本功能仅供个人学习研究，请遵循 Bilibili 平台和游戏相关规定。使用本功能所产生的一切后果由用户自行承担",
         "syncConsent": "我已知晓并同意以上内容",
         "syncUnavailable": "游戏档案自动同步暂不可用，请使用手动档案",
@@ -392,6 +393,7 @@
         "sync": "同步生成",
         "resync": "重新同步",
         "syncing": "同步中",
+        "generatingLoginLink": "生成链接中",
         "unbind": "解绑",
         "unbinding": "解绑中",
         "loginPopupBlocked": "请允许弹出窗口后重新同步",
