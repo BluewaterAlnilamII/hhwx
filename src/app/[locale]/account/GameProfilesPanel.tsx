@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Copy, Download, FileJson, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import LoadingIndicator, { LoadingSpinner } from "@/components/LoadingIndicator";
@@ -150,8 +150,9 @@ export default function GameProfilesPanel() {
   const [busyAction, setBusyAction] = useState<BusyAction | null>(null);
   const [syncingUid, setSyncingUid] = useState<string | null>(null);
   const [syncConsent, setSyncConsent] = useState(false);
+  const syncConsentId = useId();
   const [loginTask, setLoginTask] = useState<(GameProfileLoginTask & { expiresAt: number }) | null>(null);
-  const [loginError, setLoginError] = useState<{ gameUid: string; message: string } | null>(null);
+  const [syncNotice, setSyncNotice] = useState<{ gameUid: string; message: string; kind: "success" | "error" } | null>(null);
   const loginAction = useRef<AbortController | null>(null);
   const loginWindow = useRef<Window | null>(null);
   const loginWindowNavigated = useRef(false);
@@ -377,7 +378,7 @@ export default function GameProfilesPanel() {
     closeLoginWindow();
     setLoginTask(null);
     setSyncingUid(null);
-    setLoginError(message ? { gameUid, message } : null);
+    setSyncNotice(message ? { gameUid, message, kind: "error" } : null);
   }, [closeLoginWindow]);
 
   const syncAutoProfile = useCallback(async (targetUid: string) => {
@@ -426,7 +427,7 @@ export default function GameProfilesPanel() {
     const controller = new AbortController();
     loginAction.current = controller;
     setSyncingUid(loginTask.gameUid);
-    setLoginError(null);
+    setSyncNotice(null);
     try {
       const profile = await requestGameJson<CloudGameProfileSummary>("/api/account/game-profiles/sync", {
         method: "POST", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(180_000)]),
@@ -435,12 +436,12 @@ export default function GameProfilesPanel() {
       if (controller.signal.aborted) return;
       setCloudProfiles((current) => [...current.filter((item) => item.id !== profile.id), profile]);
       finishLogin(loginTask.gameUid);
-      setMessage(t("messages.synced", { uid: loginTask.gameUid }));
+      setSyncNotice({ gameUid: loginTask.gameUid, message: t("messages.synced", { uid: loginTask.gameUid }), kind: "success" });
     } catch (syncError) {
       if (!controller.signal.aborted) {
         const code = syncError instanceof ApiRouteError ? syncError.code : "";
         if (["LOGIN_TASK_BUSY", "LOGIN_NOT_COMPLETED", "LOGIN_TASK_ACTIVE"].includes(code)) {
-          setLoginError({ gameUid: loginTask.gameUid, message: (syncError as Error).message });
+          setSyncNotice({ gameUid: loginTask.gameUid, message: (syncError as Error).message, kind: "error" });
         } else {
           const message = code === "LOGIN_TARGET_MISMATCH" ? t("uidManagement.loginMismatch")
             : ["LOGIN_TASK_EXPIRED", "LOGIN_TASK_NOT_FOUND"].includes(code) ? t("uidManagement.loginExpired")
@@ -715,18 +716,20 @@ export default function GameProfilesPanel() {
             <>
               <ul className="space-y-2">
                 <li className="flex gap-2"><span aria-hidden="true">·</span><span>{t("uidManagement.syncWarning")}</span></li>
+                <li className="flex gap-2"><span aria-hidden="true">·</span><span>{t("uidManagement.syncAuthorization")}</span></li>
                 <li className="flex gap-2"><span aria-hidden="true">·</span><span>{t("uidManagement.syncDisclaimer")}</span></li>
               </ul>
               <div className="mt-2 flex min-h-11 items-center gap-2">
                 <input
                   type="checkbox"
+                  id={syncConsentId}
                   aria-label={t("uidManagement.syncConsent")}
                   checked={syncConsent}
                   onChange={(event) => setSyncConsent(event.target.checked)}
                   disabled={syncingUid !== null}
                   className="h-4 w-4 shrink-0 cursor-pointer accent-[var(--theme-color-selection-strong-background)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--theme-color-focus-ring)] disabled:cursor-not-allowed"
                 />
-                <span>{t("uidManagement.syncConsent")}</span>
+                <label htmlFor={syncConsentId} className={syncingUid === null ? "cursor-pointer" : "cursor-not-allowed"}>{t("uidManagement.syncConsent")}</label>
               </div>
             </>
           ) : t("uidManagement.syncUnavailable")}
@@ -741,8 +744,7 @@ export default function GameProfilesPanel() {
               const profile = profilesByUid.get(binding.gameUid);
               const isSyncing = syncingUid === binding.gameUid;
               const rowTask = loginTask?.gameUid === binding.gameUid ? loginTask : null;
-              const rowError = loginError?.gameUid === binding.gameUid ? loginError.message : null;
-              const syncInProgress = isSyncing;
+              const rowNotice = syncNotice?.gameUid === binding.gameUid ? syncNotice : null;
               const isUnbinding = busyAction?.type === "unbind" && busyAction.gameUid === binding.gameUid;
               const syncLimitReached = !profile && autoProfileCount >= USER_GAME_AUTO_PROFILE_LIMIT;
               return (
@@ -773,13 +775,15 @@ export default function GameProfilesPanel() {
                       {syncLimitReached && (
                         <p className="mt-2 text-sm text-[var(--theme-color-semantic-warning-foreground)]">{t("uidManagement.syncLimitReached")}</p>
                       )}
-                      {rowError && <p role="alert" className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{rowError}</p>}
+                      {rowNotice && (
+                        <p role={rowNotice.kind === "error" ? "alert" : "status"} className={`mt-2 text-sm ${rowNotice.kind === "error" ? "text-[var(--theme-color-semantic-danger-foreground)]" : "text-[var(--theme-color-semantic-success-foreground)]"}`}>{rowNotice.message}</p>
+                      )}
                     </div>
                     <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:grid-cols-none sm:flex sm:flex-wrap">
                       {rowTask ? (
                         <>
                           <button type="button" onClick={confirmLogin} disabled={!syncConsent || writeBusy}
-                            className="hhwx-control inline-flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">
+                            className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[var(--theme-color-action-success-background)] px-4 text-sm font-semibold text-[var(--theme-color-action-success-foreground)] transition hover:bg-[var(--theme-color-action-success-background)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]">
                             {isSyncing && <LoadingSpinner className="text-current" />}
                             {isSyncing ? t("uidManagement.syncing") : t("uidManagement.confirmLogin")}
                           </button>
@@ -798,8 +802,8 @@ export default function GameProfilesPanel() {
                             disabled={!GAME_PROFILE_SYNC_ENABLED || !syncConsent || writeBusy || loginTask !== null || syncLimitReached}
                             className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[var(--theme-color-action-success-background)] px-4 text-sm font-semibold text-[var(--theme-color-action-success-foreground)] transition hover:bg-[var(--theme-color-action-success-background)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
                           >
-                            {syncInProgress ? <LoadingSpinner className="text-current" /> : <RefreshCw className="h-4 w-4" />}
-                            {!GAME_PROFILE_SYNC_ENABLED ? t("uidManagement.syncPaused") : syncInProgress ? t("uidManagement.syncing") : profile ? t("uidManagement.resync") : t("uidManagement.sync")}
+                            {isSyncing ? <LoadingSpinner className="text-current" /> : <RefreshCw className="h-4 w-4" />}
+                            {!GAME_PROFILE_SYNC_ENABLED ? t("uidManagement.syncPaused") : isSyncing ? t("uidManagement.generatingLoginLink") : profile ? t("uidManagement.resync") : t("uidManagement.sync")}
                           </button>
                           <button
                             type="button"
