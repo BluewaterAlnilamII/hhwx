@@ -376,7 +376,9 @@
       "uidManagement": {
         "title": "UID Management",
         "quota": "Auto profiles {count}/{limit}",
-        "syncWarning": "Syncing calls the game API and may disconnect the currently logged-in game client for this UID once",
+        "syncWarning": "Sync requires you to sign in to the corresponding Bilibili account once in the pop-up window. You will authorize HHWX to log in to the game account once and save all cards, area items, character bonuses, and titles",
+        "syncDisclaimer": "This feature is for personal learning and research only. Please comply with Bilibili’s platform rules and the game’s rules. You are responsible for all consequences of using this feature",
+        "syncConsent": "I understand and agree to the above",
         "syncUnavailable": "Automatic game profile sync is temporarily unavailable; please use manual profiles",
         "syncPaused": "Sync paused",
         "loading": "Loading...",
@@ -391,7 +393,14 @@
         "resync": "Sync again",
         "syncing": "Syncing",
         "unbind": "Unbind",
-        "unbinding": "Unbinding"
+        "unbinding": "Unbinding",
+        "loginPopupBlocked": "Allow pop-ups, then sync again",
+        "loginWindowClosed": "The login window is closed, please sync again",
+        "loginMismatch": "The game roles under this Bilibili account do not match the target UID; sign in with the correct account and sync again",
+        "loginExpired": "This login task expired; sync again",
+        "loginMaintenance": "The game is unavailable; please try again later",
+        "confirmLogin": "I've signed in",
+        "cancelLogin": "Cancel sync"
       },
       "manual": {
         "title": "Manual Profiles",
@@ -432,7 +441,7 @@
         "bound": "Binding succeeded.",
         "transferred": "Binding succeeded. This UID was transferred from the old account to the current account.",
         "unbound": "UID {uid} was unbound and the corresponding auto-sync profile was deleted.",
-        "synced": "UID {uid} synced.",
+        "synced": "UID {uid} synced",
         "manualCreated": "Cloud manual profile created.",
         "imported": "Bestdori profile imported to the cloud.",
         "copiedToCloud": "Profile copied as a cloud manual profile.",
@@ -442,7 +451,7 @@
       "confirm": {
         "unbind": "Unbind game UID {uid}? This removes the UID binding from the current web account and also deletes the corresponding auto-sync profile{profileName}.",
         "profileNameSuffix": " \"{profileName}\"",
-        "sync": "This sync will read cards, area items, character potentials, and character mission bonuses for this game UID.\n\nBecause of the game API behavior, the currently logged-in game client for this UID may be disconnected once during sync. Continue?",
+        "sync": "Sign in on the official Bilibili page to import the matching role’s cards, area items, character potential and mission bonuses.\n\nSync checks Android and iOS roles and may disconnect active game sessions for this Bilibili account. Continue?",
         "delete": "Delete profile \"{profileName}\"?"
       },
       "errors": {

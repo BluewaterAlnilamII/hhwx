@@ -691,9 +691,7 @@ async function readGameProfileRow(webUserId: string, profileId: string): Promise
   return data as UserGameProfileRow;
 }
 
-async function readGameProfileSummary(webUserId: string, profileId: string): Promise<UserGameProfileSummary> {
-  return toProfileSummary(await readGameProfileRow(webUserId, profileId));
-}
+
 
 async function writeManualGameProfilePayload(
   webUserId: string,
@@ -1060,7 +1058,7 @@ export async function copyGameProfileToManual(webUserId: string, profileId: stri
   return toProfileSummary(data as UserGameProfileRow);
 }
 
-export async function syncAutoGameProfile(webUserId: string, gameUid: string): Promise<UserGameProfileSummary> {
+export async function requireBoundGameUid(webUserId: string, gameUid: string): Promise<void> {
   const serviceClient = createServerSupabaseClient();
   const { data: binding, error: bindingError } = await serviceClient
     .from(USER_GAME_BINDINGS_TABLE)
@@ -1075,11 +1073,12 @@ export async function syncAutoGameProfile(webUserId: string, gameUid: string): P
   if (!binding) {
     throw new ApiRouteError(403, "GAME_UID_NOT_BOUND", "该游戏 UID 尚未绑定到当前账号");
   }
+}
 
-  const [snapshot, cardMaster] = await Promise.all([
-    fetchGameUserSnapshot(gameUid),
-    readBandoriCardsApiDatasetForServer(BESTDORI_CN_SERVER_ID),
-  ]);
+export async function syncAutoGameProfile(webUserId: string, gameUid: string, taskId: string): Promise<UserGameProfileSummary> {
+  const serviceClient = createServerSupabaseClient();
+  const snapshot = await fetchGameUserSnapshot(webUserId, gameUid, taskId);
+  const cardMaster = await readBandoriCardsApiDatasetForServer(BESTDORI_CN_SERVER_ID);
   const normalizedProfile = snapshotToNormalizedProfile(gameUid, snapshot, cardMaster);
   assertUsableSnapshot(gameUid, snapshot, normalizedProfile);
   const suiteUser = getSnapshotSuiteUser(snapshot);
@@ -1104,7 +1103,7 @@ export async function syncAutoGameProfile(webUserId: string, gameUid: string): P
   });
 
   if (error) {
-    throw new ApiRouteError(400, "AUTO_GAME_PROFILE_SYNC_FAILED", "保存自动档案失败", error.message);
+    throw new ApiRouteError(400, "AUTO_GAME_PROFILE_SYNC_FAILED", "保存自动档案失败");
   }
 
   const degreeIds = extractSnapshotDegreeIds(snapshot);
@@ -1115,7 +1114,7 @@ export async function syncAutoGameProfile(webUserId: string, gameUid: string): P
       p_degree_ids: degreeIds,
     });
     if (degreeMergeError) {
-      console.error("Game profile Degree merge failed:", degreeMergeError.message);
+      throw new ApiRouteError(500, "AUTO_GAME_PROFILE_SYNC_FAILED", "保存自动档案失败");
     }
   }
 
@@ -1130,11 +1129,11 @@ export async function syncAutoGameProfile(webUserId: string, gameUid: string): P
       },
     );
     if (degreeEffectMergeError) {
-      console.error("Game profile Degree effect merge failed:", degreeEffectMergeError.message);
+      throw new ApiRouteError(500, "AUTO_GAME_PROFILE_SYNC_FAILED", "保存自动档案失败");
     }
   }
 
-  return readGameProfileSummary(webUserId, (data as UserGameProfileRow).id);
+  return toProfileSummary(data as UserGameProfileRow);
 }
 
 export async function readCompressedGameProfilePayload(webUserId: string, profileId: string): Promise<CompressedGameProfilePayload> {

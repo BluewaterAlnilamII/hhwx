@@ -59,6 +59,8 @@ npm run dev
 
 `GET /api/status` 提供四类 Bandori 后端服务在 JP/EN/TW/CN 的最新状态。Node 服务端复用现有私有 user-fetcher 配置，每 60 秒采集一次。响应契约与部署要求见[服务状态](documents/service-status.zh-CN.md)。
 
+国服档案导入可在兼容私有服务配置后使用官方浏览器登录，流程及发布开关见[浏览器登录与档案同步](documents/game-profile-sync.zh-CN.md)。构建时功能开关默认关闭。
+
 `/api/ournotes/master/` 提供 member/support 卡牌列表与详情、角色及乐队的只读接口。需配置独立的服务端 `OURNOTES_*` 存储变量，详见 [OurNotes master API 合同](documents/ournotes-master-api.zh-CN.md)。这些 API 的 master 读取独立于图片提供流程。
 
 ## 脚本

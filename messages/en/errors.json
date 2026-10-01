@@ -31,7 +31,19 @@
     "EMPTY_COMMENT": "Comment content cannot be empty",
     "COMMENT_TOO_LONG": "Comment content is too long",
     "COMMENT_CREATE_FAILED": "Failed to post comment",
-    "DEFAULT": "{message}"
+    "DEFAULT": "{message}",
+    "INVALID_LOGIN_REQUEST": "Invalid login task parameters",
+    "USER_SNAPSHOT_UNAVAILABLE": "Automatic game profile sync is unavailable",
+    "LOGIN_TASK_ACTIVE": "Sync is busy; try again later",
+    "LOGIN_TASK_BUSY": "Sync is busy; try again later",
+    "LOGIN_ACCOUNT_BUSY": "This Bilibili account is already syncing; try again later",
+    "LOGIN_TASK_NOT_FOUND": "This login task expired; sync again",
+    "LOGIN_TASK_EXPIRED": "This login task expired; sync again",
+    "LOGIN_UPSTREAM_UNAVAILABLE": "Official login is unavailable; try again later",
+    "TRACKER_SERVICE_FAILED": "Sync is unavailable; you can retry this task",
+    "TRACKER_SERVICE_NOT_CONFIGURED": "Game account sync has not been configured",
+    "TRACKER_SERVICE_INVALID_RESPONSE": "The sync service returned an invalid response",
+    "LOGIN_NOT_COMPLETED": "Please finish signing in first"
   },
   "fallback": {
     "requestFailed": "Request failed (HTTP {status})",

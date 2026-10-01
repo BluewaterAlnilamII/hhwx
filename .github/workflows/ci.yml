@@ -78,6 +78,9 @@ jobs:
       - name: Test service status
         run: npm run test:service-status
 
+      - name: Test user game profile sync
+        run: node --import tsx --test tests/user-game-profile-sync.test.mjs
+
       - name: Test Bandori cards
         run: npm run test:bandori-cards
 

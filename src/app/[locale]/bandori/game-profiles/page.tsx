@@ -25,7 +25,7 @@ export default function BandoriGameProfilesPage() {
       ) : profileError ? (
         <AccountErrorState message={profileError} />
       ) : profile?.emailVerified ? (
-        <GameProfilesPanel />
+        <GameProfilesPanel key={userId} />
       ) : (
         <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-xs">
           <h2 className="text-xl font-semibold text-amber-900">{accountT("gameProfiles.verifyTitle")}</h2>

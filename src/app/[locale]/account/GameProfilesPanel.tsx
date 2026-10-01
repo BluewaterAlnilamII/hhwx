@@ -1,16 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Copy, Download, FileJson, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import LoadingIndicator, { LoadingSpinner } from "@/components/LoadingIndicator";
 import { Link } from "@/i18n/navigation";
 import { type AppLocale } from "@/i18n/routing";
 import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
-import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
+import { ApiRouteError, getApiErrorCode, getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import { normalizeBandoriServer, type BandoriServer } from "@/lib/bandori-server";
+import { getLocalizedApiErrorMessage } from "@/lib/localized-api-errors";
 import { formatLocalizedDateTime } from "@/lib/localized-format";
-import { GAME_PROFILE_SYNC_ENABLED } from "@/lib/user-game-profile-sync";
+import { GAME_PROFILE_SYNC_ENABLED, type GameProfileLoginTask } from "@/lib/user-game-profile-sync";
 import BandoriCnExclusiveNotice from "@/app/[locale]/bandori/BandoriCnExclusiveNotice";
 import type { GameAccountBinding, GameBindChallenge } from "@/lib/game-account-binding";
 import {
@@ -82,6 +83,7 @@ type RequestJsonMessages = {
   notSignedIn: string;
   requestFailed: (status: number) => string;
   invalidResponse: string;
+  apiError: (payload: unknown) => string | null;
 };
 
 const USER_GAME_BINDING_LIMIT = 5;
@@ -106,7 +108,7 @@ async function requestJson<T>(path: string, init: RequestInit | undefined, messa
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(getApiErrorMessage(payload) || messages.requestFailed(response.status));
+    throw new ApiRouteError(response.status, getApiErrorCode(payload) ?? "REQUEST_FAILED", messages.apiError(payload) || messages.requestFailed(response.status));
   }
 
   const data = parseApiSuccessData<T>(payload);
@@ -134,6 +136,7 @@ export default function GameProfilesPanel() {
   const locale = useLocale() as AppLocale;
   const t = useTranslations("bandori.gameProfiles.panel");
   const termsT = useTranslations("bandori.terms");
+  const errorT = useTranslations("errors");
   const cnExclusiveT = useTranslations("bandori.notices.cnExclusive");
   const [cloudProfiles, setCloudProfiles] = useState<CloudGameProfileSummary[]>([]);
   const [localProfiles, setLocalProfiles] = useState<LocalGameProfileSummary[]>([]);
@@ -146,6 +149,22 @@ export default function GameProfilesPanel() {
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<BusyAction | null>(null);
   const [syncingUid, setSyncingUid] = useState<string | null>(null);
+  const [syncConsent, setSyncConsent] = useState(false);
+  const [loginTask, setLoginTask] = useState<(GameProfileLoginTask & { expiresAt: number }) | null>(null);
+  const [loginError, setLoginError] = useState<{ gameUid: string; message: string } | null>(null);
+  const loginAction = useRef<AbortController | null>(null);
+  const loginWindow = useRef<Window | null>(null);
+  const loginWindowNavigated = useRef(false);
+  const closeLoginWindow = useCallback(() => {
+    // After detaching the opener, browsers may deny closing the cross-origin page.
+    if (!loginWindowNavigated.current) loginWindow.current?.close();
+    loginWindow.current = null;
+    loginWindowNavigated.current = false;
+  }, []);
+  useEffect(() => () => {
+    loginAction.current?.abort();
+    closeLoginWindow();
+  }, [closeLoginWindow]);
   const [exportedPayload, setExportedPayload] = useState<ExportedProfilePayload | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -156,7 +175,8 @@ export default function GameProfilesPanel() {
     notSignedIn: t("errors.notSignedIn"),
     requestFailed: (status) => t("errors.requestFailed", { status }),
     invalidResponse: t("errors.invalidResponse"),
-  }), [t]);
+    apiError: (payload) => getLocalizedApiErrorMessage(payload, errorT),
+  }), [errorT, t]);
   const requestGameJson = useCallback(<T,>(path: string, init?: RequestInit) => requestJson<T>(path, init, requestMessages), [requestMessages]);
   const formatDate = useCallback(
     (value: string | null) => formatLocalizedDateTime(value, locale, termsT("none")),
@@ -353,32 +373,96 @@ export default function GameProfilesPanel() {
     }
   }, [loadData, profilesByUid, requestGameJson, t]);
 
-  const syncAutoProfile = useCallback(async (targetUid: string) => {
-    if (!GAME_PROFILE_SYNC_ENABLED) return;
-    const confirmed = window.confirm(
-      t("confirm.sync"),
-    );
-    if (!confirmed) {
-      return;
-    }
+  const finishLogin = useCallback((gameUid: string, message = "") => {
+    closeLoginWindow();
+    setLoginTask(null);
+    setSyncingUid(null);
+    setLoginError(message ? { gameUid, message } : null);
+  }, [closeLoginWindow]);
 
+  const syncAutoProfile = useCallback(async (targetUid: string) => {
+    if (!GAME_PROFILE_SYNC_ENABLED || !syncConsent || busy || loginTask || loginAction.current) return;
+    finishLogin(targetUid);
+    const controller = new AbortController();
+    loginAction.current = controller;
     setSyncingUid(targetUid);
     setError("");
     setMessage("");
     setExportedPayload(null);
     try {
-      await requestGameJson<CloudGameProfileSummary>("/api/account/game-profiles/sync", {
-        method: "POST",
-        body: JSON.stringify({ gameUid: targetUid }),
+      const popup = window.open("", "_blank", "popup,width=520,height=720");
+      if (!popup) throw new ApiRouteError(400, "LOGIN_POPUP_BLOCKED", t("uidManagement.loginPopupBlocked"));
+      loginWindow.current = popup;
+      popup.opener = null;
+      const task = await requestGameJson<GameProfileLoginTask>("/api/account/game-profiles/sync", {
+        method: "POST", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]),
+        body: JSON.stringify({ action: "start", gameUid: targetUid }),
       });
-      setMessage(t("messages.synced", { uid: targetUid }));
-      await loadData();
+      if (controller.signal.aborted) return;
+      // This check covers only the same-origin blank window, before official navigation.
+      if (popup.closed) throw new ApiRouteError(400, "LOGIN_WINDOW_CLOSED", t("uidManagement.loginWindowClosed"));
+      const link = popup.document.createElement("a");
+      link.href = task.loginUrl;
+      link.target = "_self";
+      link.rel = "noreferrer";
+      link.referrerPolicy = "no-referrer";
+      popup.document.body.append(link);
+      loginWindowNavigated.current = true;
+      link.click();
+      setLoginTask({ ...task, expiresAt: Date.now() + task.expiresIn * 1000 });
     } catch (syncError) {
-      setError(syncError instanceof Error ? syncError.message : t("errors.syncFailed"));
+      if (!controller.signal.aborted) finishLogin(targetUid,
+        syncError instanceof ApiRouteError ? syncError.message : t("errors.syncFailed"));
     } finally {
-      setSyncingUid(null);
+      if (loginAction.current === controller) {
+        loginAction.current = null;
+        if (!controller.signal.aborted) setSyncingUid(null);
+      }
     }
-  }, [loadData, requestGameJson, t]);
+  }, [busy, finishLogin, loginTask, requestGameJson, syncConsent, t]);
+
+  const confirmLogin = useCallback(async () => {
+    if (!loginTask || !syncConsent || busy || loginAction.current) return;
+    const controller = new AbortController();
+    loginAction.current = controller;
+    setSyncingUid(loginTask.gameUid);
+    setLoginError(null);
+    try {
+      const profile = await requestGameJson<CloudGameProfileSummary>("/api/account/game-profiles/sync", {
+        method: "POST", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(180_000)]),
+        body: JSON.stringify({ action: "confirm", gameUid: loginTask.gameUid, taskId: loginTask.taskId }),
+      });
+      if (controller.signal.aborted) return;
+      setCloudProfiles((current) => [...current.filter((item) => item.id !== profile.id), profile]);
+      finishLogin(loginTask.gameUid);
+      setMessage(t("messages.synced", { uid: loginTask.gameUid }));
+    } catch (syncError) {
+      if (!controller.signal.aborted) {
+        const code = syncError instanceof ApiRouteError ? syncError.code : "";
+        if (["LOGIN_TASK_BUSY", "LOGIN_NOT_COMPLETED", "LOGIN_TASK_ACTIVE"].includes(code)) {
+          setLoginError({ gameUid: loginTask.gameUid, message: (syncError as Error).message });
+        } else {
+          const message = code === "LOGIN_TARGET_MISMATCH" ? t("uidManagement.loginMismatch")
+            : ["LOGIN_TASK_EXPIRED", "LOGIN_TASK_NOT_FOUND"].includes(code) ? t("uidManagement.loginExpired")
+              : code === "LOGIN_GAME_MAINTENANCE" ? t("uidManagement.loginMaintenance")
+                : t("errors.syncFailed");
+          finishLogin(loginTask.gameUid, message);
+        }
+      }
+    } finally {
+      if (loginAction.current === controller) {
+        loginAction.current = null;
+        if (!controller.signal.aborted) setSyncingUid(null);
+      }
+    }
+  }, [busy, finishLogin, loginTask, requestGameJson, syncConsent, t]);
+
+  useEffect(() => {
+    if (!loginTask || syncingUid !== null) return;
+    const timer = window.setTimeout(() => finishLogin(loginTask.gameUid, t("uidManagement.loginExpired")),
+      Math.max(0, loginTask.expiresAt - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [finishLogin, loginTask, syncingUid, t]);
 
   const createManualProfile = useCallback(async () => {
     setBusyAction({ type: "create" });
@@ -627,7 +711,25 @@ export default function GameProfilesPanel() {
           <div className="text-sm text-[var(--theme-color-text-muted)]">{t("uidManagement.quota", { count: autoProfileCount, limit: USER_GAME_AUTO_PROFILE_LIMIT })}</div>
         </div>
         <div className="mt-3 rounded-2xl border border-[var(--theme-color-semantic-warning-border)] bg-[var(--theme-color-semantic-warning-background)] px-4 py-3 text-sm leading-6 text-[var(--theme-color-semantic-warning-foreground)]">
-          {GAME_PROFILE_SYNC_ENABLED ? t("uidManagement.syncWarning") : t("uidManagement.syncUnavailable")}
+          {GAME_PROFILE_SYNC_ENABLED ? (
+            <>
+              <ul className="space-y-2">
+                <li className="flex gap-2"><span aria-hidden="true">·</span><span>{t("uidManagement.syncWarning")}</span></li>
+                <li className="flex gap-2"><span aria-hidden="true">·</span><span>{t("uidManagement.syncDisclaimer")}</span></li>
+              </ul>
+              <div className="mt-2 flex min-h-11 items-center gap-2">
+                <input
+                  type="checkbox"
+                  aria-label={t("uidManagement.syncConsent")}
+                  checked={syncConsent}
+                  onChange={(event) => setSyncConsent(event.target.checked)}
+                  disabled={syncingUid !== null}
+                  className="h-4 w-4 shrink-0 cursor-pointer accent-[var(--theme-color-selection-strong-background)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--theme-color-focus-ring)] disabled:cursor-not-allowed"
+                />
+                <span>{t("uidManagement.syncConsent")}</span>
+              </div>
+            </>
+          ) : t("uidManagement.syncUnavailable")}
         </div>
         {loading ? (
           <LoadingIndicator compact label={t("uidManagement.loading")} className="mt-3 justify-start" />
@@ -638,6 +740,9 @@ export default function GameProfilesPanel() {
             {sortedBindings.map((binding) => {
               const profile = profilesByUid.get(binding.gameUid);
               const isSyncing = syncingUid === binding.gameUid;
+              const rowTask = loginTask?.gameUid === binding.gameUid ? loginTask : null;
+              const rowError = loginError?.gameUid === binding.gameUid ? loginError.message : null;
+              const syncInProgress = isSyncing;
               const isUnbinding = busyAction?.type === "unbind" && busyAction.gameUid === binding.gameUid;
               const syncLimitReached = !profile && autoProfileCount >= USER_GAME_AUTO_PROFILE_LIMIT;
               return (
@@ -668,26 +773,45 @@ export default function GameProfilesPanel() {
                       {syncLimitReached && (
                         <p className="mt-2 text-sm text-[var(--theme-color-semantic-warning-foreground)]">{t("uidManagement.syncLimitReached")}</p>
                       )}
+                      {rowError && <p role="alert" className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{rowError}</p>}
                     </div>
                     <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:grid-cols-none sm:flex sm:flex-wrap">
-                      <button
-                        type="button"
-                        onClick={() => syncAutoProfile(binding.gameUid)}
-                        disabled={!GAME_PROFILE_SYNC_ENABLED || busy || isSyncing || syncLimitReached}
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[var(--theme-color-action-success-background)] px-4 text-sm font-semibold text-[var(--theme-color-action-success-foreground)] transition hover:bg-[var(--theme-color-action-success-background)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
-                      >
-                        {isSyncing ? <LoadingSpinner className="text-current" /> : <RefreshCw className="h-4 w-4" />}
-                        {!GAME_PROFILE_SYNC_ENABLED ? t("uidManagement.syncPaused") : isSyncing ? t("uidManagement.syncing") : profile ? t("uidManagement.resync") : t("uidManagement.sync")}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => unbindGameUid(binding.gameUid)}
-                        disabled={writeBusy}
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-control-background)] px-4 text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)] transition hover:bg-[var(--theme-color-semantic-danger-background)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
-                      >
-                        {isUnbinding ? <LoadingSpinner className="text-current" /> : <Trash2 className="h-4 w-4" />}
-                        {isUnbinding ? t("uidManagement.unbinding") : t("uidManagement.unbind")}
-                      </button>
+                      {rowTask ? (
+                        <>
+                          <button type="button" onClick={confirmLogin} disabled={!syncConsent || writeBusy}
+                            className="hhwx-control inline-flex h-10 items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">
+                            {isSyncing && <LoadingSpinner className="text-current" />}
+                            {isSyncing ? t("uidManagement.syncing") : t("uidManagement.confirmLogin")}
+                          </button>
+                          <button type="button" onClick={() => {
+                            if (!loginAction.current) finishLogin(binding.gameUid);
+                          }} disabled={writeBusy}
+                            className="hhwx-control inline-flex h-10 items-center justify-center rounded-2xl border px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">
+                            {t("uidManagement.cancelLogin")}
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => syncAutoProfile(binding.gameUid)}
+                            disabled={!GAME_PROFILE_SYNC_ENABLED || !syncConsent || writeBusy || loginTask !== null || syncLimitReached}
+                            className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[var(--theme-color-action-success-background)] px-4 text-sm font-semibold text-[var(--theme-color-action-success-foreground)] transition hover:bg-[var(--theme-color-action-success-background)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
+                          >
+                            {syncInProgress ? <LoadingSpinner className="text-current" /> : <RefreshCw className="h-4 w-4" />}
+                            {!GAME_PROFILE_SYNC_ENABLED ? t("uidManagement.syncPaused") : syncInProgress ? t("uidManagement.syncing") : profile ? t("uidManagement.resync") : t("uidManagement.sync")}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => unbindGameUid(binding.gameUid)}
+                            disabled={writeBusy}
+                            className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-control-background)] px-4 text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)] transition hover:bg-[var(--theme-color-semantic-danger-background)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
+                          >
+                            {isUnbinding ? <LoadingSpinner className="text-current" /> : <Trash2 className="h-4 w-4" />}
+                            {isUnbinding ? t("uidManagement.unbinding") : t("uidManagement.unbind")}
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>

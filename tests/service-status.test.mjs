@@ -58,7 +58,7 @@ function harness(env = {
     fetch: async (...args) => {
       const [url, options] = args;
       if (options.signal) assert.equal(requestTimeouts.get(options.signal),
-        String(url).includes("/internal/hhwx-user-fetcher/player/") ? 30_000 : 5_000);
+        String(url).includes("/user-snapshot") ? 150_000 : String(url).includes("/internal/hhwx-user-fetcher/player/") ? 30_000 : 5_000);
       requests.push(args);
       return responder(...args);
     },
@@ -112,16 +112,16 @@ test("status, player, and snapshot requests share token precedence and legacy co
     const h = harness({ HHWX_USER_FETCHER_BASE_URL: "https://backend.example", ...env });
     h.service.startServiceStatusPolling();
     await settle();
-    h.respond(() => Response.json({ profile: { userId: "1001" }, snapshot: {} }));
+    h.respond(() => Response.json({ gameUid: "1001", profile: { userId: "1001" }, snapshot: { profile: {}, suite_user: {} } }));
     if (token) {
       await h.player.fetchBandoriPlayerProfile("cn", "1001");
-      await h.snapshot.fetchGameUserSnapshot("1001");
+      await h.snapshot.fetchGameUserSnapshot("owner", "1001", "task");
       assert.equal(h.requests.length, 3);
       for (const [, options] of h.requests) assert.equal(options.headers.Authorization, `Bearer ${token}`);
     } else {
       assert.equal(h.route.GET().status, 503);
       await assert.rejects(h.player.fetchBandoriPlayerProfile("cn", "1001"), { code: "TRACKER_SERVICE_NOT_CONFIGURED" });
-      await assert.rejects(h.snapshot.fetchGameUserSnapshot("1001"), { code: "TRACKER_SERVICE_NOT_CONFIGURED" });
+      await assert.rejects(h.snapshot.fetchGameUserSnapshot("owner", "1001", "task"), { code: "TRACKER_SERVICE_NOT_CONFIGURED" });
       assert.equal(h.requests.length, 0);
     }
   }
