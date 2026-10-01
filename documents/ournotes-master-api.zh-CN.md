@@ -2,7 +2,7 @@
 
 [English](ournotes-master-api.md)
 
-首轮 OurNotes API 已实现，生产启用仍是独立部署步骤。公开只读接口沿用 Bandori 的响应、私有快照读取与 HTTP 缓存规范，无需登录。`member/support` 是元数据术语，游戏将 support 卡显示为 snapshot。
+公开只读接口沿用 Bandori 的响应、私有快照读取与 HTTP 缓存规范，无需登录。`member/support` 是元数据术语，游戏将 support 卡显示为 snapshot。
 
 ## 路径与筛选
 
@@ -257,7 +257,7 @@ Leader 效果不输出 timing/release 字段；其余类别提供 `activationTim
 
 没有效果且权威说明为空的预留头保留 `effects: []`、五个空说明槽和 `descriptionParameters: []`；未引用技能及原 None 效果也保留。已支持说明路径的空引用或越界沿用客户端指定的替代文本，未指定则保留字面文本 `null`。GekisouSupport 67（4–5 级）、72（2–5 级）保留这些结果，不修改条件。未知语法、未登记的实际目标筛选或必需记录缺失使构建失败。该目录描述游戏配置，不承诺完整模拟客户端，也不增加详情、等级或属性端点。
 
-新构建配方为 `ournotes-skills-v2`，历史产物集合仍可验证。Web 草稿要求新的私有效果/模板格式，不能读取旧逐等级正文产物。先发布四服新 generation 并验证签名私有回读，再部署 Web；回滚也须匹配读者与私有格式。本地验证不代表生产已部署。
+构建配方为 `ournotes-skills-v2`，历史产物集合仍可验证。Skills 读取器要求私有效果/模板格式，不能读取旧逐等级正文产物。先发布四服新 generation 并验证签名私有回读，再部署 Web；回滚也须匹配读者与私有格式。本地验证不代表生产已部署。
 
 既有 `cardType` 整数对应以下官方名称，与 Skills 独立：
 
