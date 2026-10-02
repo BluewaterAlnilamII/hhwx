@@ -50,6 +50,7 @@ hhwx/
 - `[locale]/auth/`: sign-in, registration, and password recovery pages.
 - `[locale]/bandori/events/`: event tracker entry and event-ID routes. Route-local event information and tracker implementations are grouped under `_info/` and `_tracker/`; the former `/bandori/eventtracker` URL is a permanent redirect handled by `src/proxy.ts`.
 - `[locale]/bandori/cards/`: server-aware Card catalog and per-card detail routes, with page-private UI grouped under `_components/`.
+- `[locale]/ournotes/cards/`: tabbed Member/Snapshot catalog and kind-scoped card detail routes.
 - `[locale]/bandori/calendar/`: regional event calendar pages.
 - `[locale]/bandori/songs/[songId]/`: public song detail and whitelist-based chart simulator UI. The complete-chart analysis implementation is retained with its UI entry disabled. Its fixed native stage loads only individually verified JP presentation resources.
 - `api/`: same-origin API routes used by the frontend.
@@ -81,6 +82,7 @@ hhwx/
 - `TurnstileChallenge.tsx`: security verification component for sensitive actions.
 - `comments/`: target-agnostic comment thread, composer, item, emoji, and stamp-picker UI.
 - `bandori/`: reusable Bandori media and selection UI shared across routes, including Card art and stamp rendering.
+- `ournotes/`: OurNotes card artwork and domain-specific filter composition. Neutral page, filter, detail and image-viewer primitives remain at the component root.
 - Other components are grouped by Othello, account, and reuse contexts.
 
 ## src/hooks
@@ -93,6 +95,7 @@ hhwx/
 - Remaining root-level `bandori-*.ts` and `calendar-*.ts`: shared cross-domain infrastructure and compatibility entry points that do not belong to one feature folder.
 - `bandori/cards/`: Card catalogs, regional materialization, API contracts/services, release/training rules, generated Card metadata, layouts, and profile-card helpers.
 - `ournotes/`: shared source/slot contracts, generic private master discovery and dataset readers, and HTTP query/error handling. `catalogs-contract.ts`/`catalogs-server.ts` own character/band validation and merging; `skills-contract.ts`/`skills-server.ts` own the independent skill catalog; `cards/` owns its independent snapshot contract, reader, card projection, merging, and selection.
+- `catalog-search.ts`, `public-asset-index-client.ts`: shared catalog tokenization and URL-keyed browser asset-index caching; domain adapters retain their own search semantics and index validation.
 - `bandori/costumes/`: Costumes metadata validation, regional materialization, and private snapshot API readers. Media extraction belongs to the assets-builder.
 - `bandori/events/`: event catalogs, API contracts/services, route/region/status helpers, banner proxy logic, and event-specific comment target validation.
 - `bandori/event-tracker/`: Event Tracker cutoff, TOP10, live-series, projection, history, and prediction contracts/services shared by event, song, and monthly tracker modes.

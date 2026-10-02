@@ -2,7 +2,8 @@
   "groups": {
     "hhwx": "HHWX",
     "game": "Game",
-    "bandori": "Bandori"
+    "bandori": "Bandori",
+    "ournotes": "OurNotes"
   },
   "items": {
     "home": "Home",
@@ -33,6 +34,8 @@
     "logout": "Log out",
     "login": "Log in",
     "switchLanguage": "Switch to {language}",
+    "bandoriPreferredServer": "Bandori preferred server",
+    "ournotesPreferredServer": "OurNotes preferred server",
     "player": {
       "openPlayer": "Open music player",
       "openEmptyPlayer": "Open empty music player",

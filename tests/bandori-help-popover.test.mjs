@@ -4,7 +4,7 @@ import test from "node:test";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
 
-const source = await readFile(new URL("../src/components/bandori/BandoriHelpPopover.tsx", import.meta.url), "utf8");
+const source = await readFile(new URL("../src/components/HelpPopover.tsx", import.meta.url), "utf8");
 const { outputText } = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
 });
@@ -33,7 +33,7 @@ test("search and info help preserve hover, pin, dismissal, and accessible names"
           useLayoutEffect() {},
         };
         if (name === "lucide-react") return { Info: "info-icon" };
-        if (name.endsWith("BandoriCardHoverTooltip")) return {};
+        if (name.endsWith("tooltip-position")) return {};
         throw new Error(`Unexpected import: ${name}`);
       },
     });

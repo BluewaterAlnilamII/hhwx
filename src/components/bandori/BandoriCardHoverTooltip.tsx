@@ -11,10 +11,9 @@ import type {
 } from "react";
 import { Link } from "@/i18n/navigation";
 import type { BandoriServerLanguageTag } from "@/lib/bandori-server";
+import { getTooltipPosition as getBandoriCardTooltipPosition, type TooltipPosition } from "@/lib/tooltip-position";
+export { getTooltipPosition as getBandoriCardTooltipPosition, TOOLTIP_GAP as BANDORI_CARD_TOOLTIP_GAP, TOOLTIP_MARGIN as BANDORI_CARD_TOOLTIP_MARGIN } from "@/lib/tooltip-position";
 import { cn } from "@/lib/utils";
-
-export const BANDORI_CARD_TOOLTIP_GAP = 4;
-export const BANDORI_CARD_TOOLTIP_MARGIN = 12;
 
 export type BandoriCardHoverTooltipProps = {
   id?: string;
@@ -48,59 +47,6 @@ export type BandoriCardHoverPopoverProps = {
   onFocus?: FocusEventHandler<HTMLDivElement>;
   onBlur?: FocusEventHandler<HTMLDivElement>;
 };
-
-type TooltipPosition = {
-  left: number;
-  top: number;
-  placement: "above" | "below";
-};
-
-type BandoriCardTooltipPositionInput = {
-  anchorRect: Pick<DOMRectReadOnly, "bottom" | "height" | "left" | "right" | "top" | "width">;
-  tooltipHeight: number;
-  tooltipWidth: number;
-  viewportHeight: number;
-  viewportWidth: number;
-  preferredPlacement?: TooltipPosition["placement"];
-  gap?: number;
-  margin?: number;
-};
-
-function clamp(value: number, minimum: number, maximum: number) {
-  return Math.min(Math.max(value, minimum), maximum);
-}
-
-export function getBandoriCardTooltipPosition({
-  anchorRect,
-  tooltipHeight,
-  tooltipWidth,
-  viewportHeight,
-  viewportWidth,
-  preferredPlacement = "below",
-  gap = BANDORI_CARD_TOOLTIP_GAP,
-  margin = BANDORI_CARD_TOOLTIP_MARGIN,
-}: BandoriCardTooltipPositionInput): TooltipPosition {
-  const availableBelow = viewportHeight - margin - anchorRect.bottom - gap;
-  const availableAbove = anchorRect.top - gap - margin;
-  const placement = preferredPlacement === "above"
-    ? (tooltipHeight <= availableAbove || availableAbove >= availableBelow ? "above" : "below")
-    : (tooltipHeight <= availableBelow || availableBelow >= availableAbove ? "below" : "above");
-  const preferredTop = placement === "below"
-    ? anchorRect.bottom + gap
-    : anchorRect.top - gap - tooltipHeight;
-  const maximumTop = Math.max(margin, viewportHeight - margin - tooltipHeight);
-  const maximumLeft = Math.max(margin, viewportWidth - margin - tooltipWidth);
-
-  return {
-    left: clamp(
-      anchorRect.left + anchorRect.width / 2 - tooltipWidth / 2,
-      margin,
-      maximumLeft,
-    ),
-    top: clamp(preferredTop, margin, maximumTop),
-    placement,
-  };
-}
 
 const BandoriCardHoverTooltip = forwardRef<HTMLDivElement, BandoriCardHoverTooltipProps>(function BandoriCardHoverTooltip({
   id,

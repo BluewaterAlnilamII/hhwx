@@ -8,6 +8,7 @@ export const MESSAGE_NAMESPACES = [
   "auth",
   "account",
   "bandori",
+  "ournotes",
   "othello",
   "errors",
 ] as const;

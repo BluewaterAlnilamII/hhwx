@@ -40,7 +40,7 @@
 | `rarity`、`cardType` | 原始整数码，不套用 Bandori 枚举 |
 | `name` | 五个本地化字符串；support 始终提供，member 按下述规则可省略 |
 | `startAt` | 五个原始 `_startAt` 字符串，不推断时区或当前开放状态 |
-| `powerMax` | 原始 `{performance, technic, visual}`，不是计算后的最终战力 |
+| `powerMax` | 原始 `{performance, technic, visual}`；成员为能力数值，留影为万分比（`3500` 显示为 `35.00%`）。不是计算后的最终战力，留影百分比不定义合计 |
 | `serverExtensions` | 仅无筛选响应：五槽 `{}` / `null`，表示来源 master 收录 / 未收录 |
 | `characterId`、`subtitle` | 仅 member：单个角色、五槽副标题 |
 | `characterIds`、`description` | 仅 support：有序角色 ID、五槽描述 |

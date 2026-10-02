@@ -40,7 +40,7 @@ Without `server`, cards merge all four actual sources. With exactly one numeric 
 | `rarity`, `cardType` | Original integer codes, without Bandori enum conversion |
 | `name` | Five localized strings; always present for support, optional for member as described below |
 | `startAt` | Five original `_startAt` strings; no inferred time zone or release availability |
-| `powerMax` | Original `{performance, technic, visual}` values; not a computed final power |
+| `powerMax` | Original `{performance, technic, visual}` values; Member uses additive power, Snapshot uses basis points (`3500` displays as `35.00%`). Not a computed final power; no total is defined for Snapshot percentages |
 | `serverExtensions` | Unfiltered responses only: five `{}` / `null` slots for master presence / absence |
 | `characterId`, `subtitle` | Member only: one character and five subtitle strings |
 | `characterIds`, `description` | Support only: ordered character IDs and five description strings |

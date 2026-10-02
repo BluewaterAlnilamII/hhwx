@@ -100,7 +100,7 @@ test("Cards list restoration and detail server switching keep their navigation s
     ),
     readFile(
       new URL(
-        "src/app/[locale]/bandori/cards/_components/BandoriCardServerSwitcher.tsx",
+        "src/components/ServerSwitcher.tsx",
         ROOT_URL,
       ),
       "utf8",
@@ -109,7 +109,7 @@ test("Cards list restoration and detail server switching keep their navigation s
 
   assert.match(cardsPage, /saveBandoriCardsListQuery\(cardsListQuery\)/u);
   assert.match(detailPage, /setCardsListHref\(readBandoriCardsListHref\(\)\)/u);
-  assert.match(detailPage, /<Link href=\{cardsListHref\}/u);
+  assert.match(detailPage, /<DetailHeader backHref=\{cardsListHref\}/u);
   assert.match(detailPage, /onChange=\{handleServerChange\}/u);
   assert.match(detailPage, /buildBandoriCardDetailHref\(/u);
   assert.match(serverSwitcher, /<Link[\s\S]*?replace=\{replace\}/u);
@@ -303,7 +303,7 @@ test("the global content shell owns the compact mobile page gutter", async () =>
       "utf8",
     ),
     readFile(
-      new URL("src/app/[locale]/bandori/BandoriPageShell.tsx", ROOT_URL),
+      new URL("src/components/PageShell.tsx", ROOT_URL),
       "utf8",
     ),
     readFile(

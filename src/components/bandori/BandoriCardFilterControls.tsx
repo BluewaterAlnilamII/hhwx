@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Search, X } from "lucide-react";
+import { ArrowDownWideNarrow, ArrowUpNarrowWide } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
   buildBandoriCardAttributeIconUrl,
@@ -11,7 +10,7 @@ import {
 } from "@/lib/bandori-builtin-resources";
 import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
 import BandoriSearchHelp from "./BandoriSearchHelp";
-import BandoriFilterResultCount from "./BandoriFilterResultCount";
+import { CatalogSearchToolbar, FilterRow, SelectionButton, ToggleAllButton } from "@/components/FilterControls";
 import {
   BANDORI_CARD_ATTRIBUTES,
   BANDORI_CARD_CATALOG_TYPES,
@@ -52,70 +51,6 @@ function areAllSelected<T>(selectedValues: readonly T[], availableValues: readon
   return availableValues.length > 0 && availableValues.every((value) => selectedValues.includes(value));
 }
 
-function SelectionButton({
-  isSelected,
-  title,
-  ariaLabel,
-  children,
-  onClick,
-  className = "",
-}: {
-  isSelected: boolean;
-  title: string;
-  ariaLabel?: string;
-  children: ReactNode;
-  onClick: () => void;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      title={title}
-      aria-label={ariaLabel}
-      aria-pressed={isSelected}
-      onClick={onClick}
-      className={`hhwx-control inline-flex h-9 min-w-9 items-center justify-center rounded-full border px-2 text-sm font-semibold transition ${className}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function ToggleAllButton({
-  isSelected,
-  allLabel,
-  selectAllLabel,
-  clearAllLabel,
-  onClick,
-}: {
-  isSelected: boolean;
-  allLabel: string;
-  selectAllLabel: string;
-  clearAllLabel: string;
-  onClick: () => void;
-}) {
-  return (
-    <SelectionButton
-      isSelected={isSelected}
-      title={isSelected ? clearAllLabel : selectAllLabel}
-      ariaLabel={isSelected ? clearAllLabel : selectAllLabel}
-      onClick={onClick}
-      className="min-w-13 px-3 text-xs"
-    >
-      {allLabel}
-    </SelectionButton>
-  );
-}
-
-function FilterRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="grid gap-2 sm:grid-cols-[5.5rem_1fr] sm:items-start">
-      <div className="hhwx-filter-label pt-2 text-sm font-medium text-[var(--theme-color-text-muted)]">{label}</div>
-      <div className="flex min-w-0 flex-wrap items-center gap-2">{children}</div>
-    </div>
-  );
-}
-
 export default function BandoriCardFilterControls<TSortBy extends string>({
   className = "",
   filter,
@@ -133,10 +68,6 @@ export default function BandoriCardFilterControls<TSortBy extends string>({
   const typeT = useTranslations("bandori.cards.types");
   const selectedTypes = filter.types ?? [...BANDORI_CARD_CATALOG_TYPES];
   const typeOptions = BANDORI_CARD_CATALOG_TYPES.map((value) => ({ value, label: typeT(value) }));
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (searchInputRef.current) searchInputRef.current.value = filter.query;
-  }, [filter.query]);
   const allLabel = t("actions.all");
   const bandLabel = t("rows.band");
   const attributeLabel = t("rows.attribute");
@@ -146,67 +77,8 @@ export default function BandoriCardFilterControls<TSortBy extends string>({
 
   return (
     <div className={`hhwx-panel border p-4 ${className}`}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <form
-          role="search"
-          className="flex min-w-0 flex-1 gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            const query = searchInputRef.current?.value.trim() ?? "";
-            if (query !== filter.query) onFilterChange({ query });
-          }}
-        >
-          <div className="relative min-w-0 flex-1">
-            <Search className="hhwx-filter-search-icon pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--theme-color-text-muted)]" aria-hidden="true" />
-            <input
-              ref={searchInputRef}
-              type="search"
-              defaultValue={filter.query}
-              onInput={(event) => {
-                if (
-                  event.currentTarget.value === ""
-                  && filter.query !== ""
-                  && !(event.nativeEvent as InputEvent).isComposing
-                ) onFilterChange({ query: "" });
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter") return;
-                event.stopPropagation();
-                if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) {
-                  event.preventDefault();
-                }
-              }}
-              enterKeyHint="search"
-              aria-label={t("searchPlaceholder")}
-              placeholder={t("searchPlaceholder")}
-              className="hhwx-control h-10 w-full rounded-xl border pl-9 pr-3 text-sm transition"
-            />
-          </div>
-          <button
-            type="submit"
-            aria-label={t("actions.search")}
-            className="hhwx-control inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition"
-          >
-            <Search className="h-4 w-4" aria-hidden="true" />
-          </button>
-          <BandoriSearchHelp kind="cards" />
-        </form>
-        <div className="flex items-center gap-2">
-          <BandoriFilterResultCount label={resultCountLabel} />
-          <button
-            type="button"
-            onClick={() => {
-              if (searchInputRef.current) searchInputRef.current.value = "";
-              onClearFilter();
-            }}
-            className="hhwx-control inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition"
-          >
-            <X className="h-4 w-4" aria-hidden="true" />
-            {t("actions.clear")}
-          </button>
-        </div>
-      </div>
+      <CatalogSearchToolbar query={filter.query} placeholder={t("searchPlaceholder")} searchLabel={t("actions.search")} clearLabel={t("actions.clear")}
+        resultCountLabel={resultCountLabel} help={<BandoriSearchHelp kind="cards" />} onQueryChange={(query) => onFilterChange({ query })} onClear={onClearFilter} />
 
       <div className="mt-4 space-y-3">
         <FilterRow label={serverLabel}>
