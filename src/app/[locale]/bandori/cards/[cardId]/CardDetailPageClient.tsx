@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArrowLeft, ClipboardList, Images, Play } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ClipboardList, Images, Play } from "lucide-react";
+import { DetailHeader, DetailStats, RegionalDetailRow } from "@/components/DetailLayout";
 import Heading from "@/components/Heading";
 import LoadingPlaceholder from "@/components/LoadingPlaceholder";
 import LoadingIndicator from "@/components/LoadingIndicator";
@@ -9,7 +10,7 @@ import { BandoriDetailColumns, BandoriDetailRow as SingleDetailRow } from "@/com
 import { useBandoriCharactersMaster } from "@/hooks/useBandoriCharactersMaster";
 import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { useBandoriSkillsMaster } from "@/hooks/useBandoriSkillsMaster";
-import { Link, useRouter } from "@/i18n/navigation";
+import { useRouter } from "@/i18n/navigation";
 import {
   normalizeBandoriCardCatalogType,
   type BandoriCardCatalogType,
@@ -100,27 +101,6 @@ function calculateMaxCardStats(cardId: number, card: BandoriCardMaster): CardSta
   } catch {
     return null;
   }
-}
-
-function RegionalDetailRow({
-  label,
-  currentValue,
-  jpValue,
-}: {
-  label: string;
-  currentValue: ReactNode;
-  jpValue?: ReactNode | null;
-}) {
-  return (
-    <SingleDetailRow label={label}>
-      <span className="block">{currentValue}</span>
-      {jpValue ? (
-        <span className="mt-1 block font-medium text-[var(--theme-color-text-muted)] opacity-70">
-          {jpValue}
-        </span>
-      ) : null}
-    </SingleDetailRow>
-  );
 }
 
 function ServerTaggedValue({ value, server }: { value: string; server: BandoriServer }) {
@@ -299,29 +279,10 @@ export default function CardDetailPageClient({
   return (
     <BandoriPageShell contentClassName="max-w-6xl">
       <article className="hhwx-panel border p-4 sm:p-6">
-        <Link href={cardsListHref} className="hhwx-text-link inline-flex items-center gap-2 text-sm font-black transition">
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          {t("detail.back")}
-        </Link>
-        <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-          <div className="min-w-0">
-            <Heading as="h1" visualRole="page" className="wrap-break-word tracking-tight">
-              {charactersMaster.loading ? <LoadingPlaceholder label={commonT("states.loading")} className="h-9 w-full min-w-48 max-w-xl" /> : <>{characterName} - {cardName}</>}
-            </Heading>
-            <div className="mt-2 flex min-h-5 flex-wrap items-baseline gap-x-3 gap-y-1 text-sm leading-5 text-[var(--theme-color-text-muted)]">
-              <span className="font-black uppercase tracking-[0.18em]">#{cardId}</span>
-              {jpReferenceName ? (
-                <span lang="ja" className="font-semibold">{jpReferenceName}</span>
-              ) : null}
-            </div>
-          </div>
-          <BandoriCardServerSwitcher
-            selectedServer={selectedServer}
-            availableServers={availableServers}
-            label={t("detail.server")}
-            onChange={handleServerChange}
-          />
-        </div>
+        <DetailHeader backHref={cardsListHref} backLabel={t("detail.back")} id={cardId} reference={jpReferenceName}
+          title={charactersMaster.loading ? <LoadingPlaceholder label={commonT("states.loading")} className="h-9 w-full min-w-48 max-w-xl" /> : <>{characterName} - {cardName}</>}
+          serverSwitcher={<BandoriCardServerSwitcher selectedServer={selectedServer} availableServers={availableServers}
+            label={t("detail.server")} onChange={handleServerChange} />} />
 
         {charactersMaster.error || skillsMaster.error || assetIndexError ? (
           <div role="alert" className="mt-5 text-sm text-[var(--theme-color-semantic-danger-foreground)]">
@@ -467,26 +428,12 @@ export default function CardDetailPageClient({
             </dl>} />
           </div>
 
-          <div className="mt-6 border-t border-[var(--theme-color-border-subtle)] pt-5">
-            <div className="grid grid-cols-2 sm:grid-cols-4">
-              {[
-                ["performance", stats?.parameters[0]],
-                ["technique", stats?.parameters[1]],
-                ["visual", stats?.parameters[2]],
-                ["totalPower", stats?.totalPower],
-              ].map(([key, value], index) => (
-                <div
-                  key={String(key)}
-                  className={`border-[var(--theme-color-border-subtle)] px-3 py-3 text-center ${index % 2 === 1 ? "border-l" : ""} ${index >= 2 ? "border-t sm:border-t-0" : ""} ${index > 0 ? "sm:border-l" : "sm:border-l-0"}`}
-                >
-                  <div className="text-xs font-bold text-[var(--theme-color-text-muted)]">{t(`detail.${key}`)}</div>
-                  <div className="mt-1 text-xl font-black tabular-nums text-[var(--theme-color-text-default)]">
-                    {typeof value === "number" ? value.toLocaleString(locale) : noInformation}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <DetailStats items={[
+            ["performance", stats?.parameters[0]],
+            ["technique", stats?.parameters[1]],
+            ["visual", stats?.parameters[2]],
+            ["totalPower", stats?.totalPower],
+          ].map(([key, value]) => ({ label: t(`detail.${key}`), value: typeof value === "number" ? value.toLocaleString(locale) : noInformation }))} />
         </section>
         <BandoriCardRelatedMedia
           resourceSetName={resourceSetName}

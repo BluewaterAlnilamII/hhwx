@@ -1,0 +1,102 @@
+{
+  "cards": {
+    "title": "OurNotes 卡牌图鉴",
+    "kindLabel": "卡牌类型",
+    "kinds": {
+      "member": "成员",
+      "support": "留影"
+    },
+    "servers": {
+      "jp": "JP",
+      "en": "EN",
+      "tw": "TW",
+      "cn_intl": "CN",
+      "kr": "KR"
+    },
+    "attributes": {
+      "1": "绯红",
+      "2": "绀碧",
+      "3": "翡翠",
+      "4": "琉金",
+      "5": "紫苑"
+    },
+    "filters": {
+      "servers": "服务器",
+      "displayServer": "服务器",
+      "bands": "乐队",
+      "attributes": "属性",
+      "rarities": "稀有度",
+      "characters": "角色",
+      "sort": "排序"
+    },
+    "sort": {
+      "id": "卡牌 ID",
+      "asc": "正序",
+      "desc": "倒序"
+    },
+    "actions": {
+      "all": "全部",
+      "selectAll": "选择全部{group}",
+      "clearAll": "取消全部{group}",
+      "clear": "清空",
+      "search": "搜索",
+      "retry": "重试",
+      "more": "再显示 {count} 张",
+      "back": "返回卡牌图鉴",
+      "viewImage": "查看大图"
+    },
+    "searchPlaceholder": "搜索卡牌名称或其他条件",
+    "resultCount": "{count, plural, other {# 张卡牌}}",
+    "searchHelp": {
+      "label": "搜索规则",
+      "title": "条件规则示例：",
+      "band": "乐队：如 <code>go</code> / <code>ゆめみた</code> / <code>mujica</code>，匹配对应乐队",
+      "character": "角色：如 <code>Doloris</code> / <code>ユノ</code> / <code>长崎爽世</code>，匹配对应角色",
+      "attribute": "属性：如 <code>ruby</code> / <code>绯红</code> / <code>红</code> 匹配绯红属性",
+      "rarity": "稀有度：如 <code>SR+</code> / <code>{rarityBound}</code> 匹配 SR 及以上的卡牌",
+      "server": "可用服务器：如 <code>en</code> / <code>intl</code> / <code>ww</code> / <code>国际服</code> 匹配 EN 服可用的卡牌",
+      "id": "ID：如 <code>4</code> / <code>#4</code> 匹配 ID 为4的卡牌",
+      "name": "强制名称：如 <code>/melody</code> / <code>\"melody\"</code> 仅匹配名称中包含melody的卡牌"
+    },
+    "skillLevel": "技能等级",
+    "skillKinds": {
+      "leader": "队长技能",
+      "live": "演出技能",
+      "gekisou": "激奏技能",
+      "support": "演出支援",
+      "gekisouSupport": "激奏支援"
+    },
+    "states": {
+      "loading": "正在读取卡牌图鉴",
+      "loadFailed": "读取卡牌数据失败，请稍后重试",
+      "empty": "没有符合当前条件的卡牌",
+      "imageLoading": "正在加载图片",
+      "imageUnavailable": "图片暂不可用",
+      "textUnavailable": "当前区域暂无文本",
+      "skillUnavailable": "当前区域暂无技能说明",
+      "noSkills": "暂无技能"
+    },
+    "sections": {
+      "art": "卡面",
+      "info": "卡牌信息",
+      "skills": "技能"
+    },
+    "power": {
+      "performance": "演出",
+      "technic": "技巧",
+      "visual": "形象",
+      "total": "综合力"
+    },
+    "viewer": {
+      "close": "关闭大图",
+      "instructions": "滚轮或双指缩放，拖动查看，单击或 Esc 退出；键盘可用 + / − 缩放、Shift + 方向键移动",
+      "previous": "上一张",
+      "next": "下一张"
+    },
+    "detail": {
+      "id": "卡牌 ID",
+      "title": "卡牌标题",
+      "skillEffect": "技能效果"
+    }
+  }
+}

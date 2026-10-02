@@ -85,6 +85,11 @@ export const siteNavigationGroups: SectionSidebarNavGroup[] = [
     ],
   },
   {
+    id: "ournotes",
+    labelKey: "groups.ournotes",
+    items: [{ id: "ournotes-cards", href: "/ournotes/cards", labelKey: "items.cards", matchMode: "prefix" }],
+  },
+  {
     id: "game",
     labelKey: "groups.game",
     items: [

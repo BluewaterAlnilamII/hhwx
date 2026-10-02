@@ -27,6 +27,8 @@ import {
 } from "@/store/useBandoriPreferencesStore";
 import { useAccountProfileStore } from "@/store/useAccountProfileStore";
 import { useGameStore } from "@/store/useGameStore";
+import { useOurNotesPreferencesStore, useOurNotesPreferredServer } from "@/store/useServerPreferencesStore";
+import { OURNOTES_SERVERS, OURNOTES_SERVER_CODES } from "@/lib/ournotes/server";
 
 interface ToolbarProps {
     showDebugButton?: boolean;
@@ -61,6 +63,8 @@ function LanguageMenuContent({ pathname, currentLocale, onSelect }: LanguageMenu
     const languageT = useTranslations("common.language");
     const preferredServer = useBandoriPreferredServer();
     const setPreferredServer = useBandoriPreferencesStore((state) => state.setPreferredServer);
+    const ourNotesPreferredServer = useOurNotesPreferredServer();
+    const setOurNotesPreferredServer = useOurNotesPreferencesStore((state) => state.setPreferredServer);
     const [currentHash, setCurrentHash] = useState(() => (
         typeof window === "undefined" ? "" : window.location.hash
     ));
@@ -119,9 +123,9 @@ function LanguageMenuContent({ pathname, currentLocale, onSelect }: LanguageMenu
             </div>
             <div className="border-t border-[var(--theme-color-border-subtle)] px-5 py-3">
                 <div className="mb-2 text-xs font-semibold text-[var(--theme-color-text-muted)]">
-                    {currentLocale === "en" ? "Preferred server" : "首选服务器"}
+                    {t("bandoriPreferredServer")}
                 </div>
-                <div className="grid grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-4 gap-1.5" role="group" aria-label={t("bandoriPreferredServer")}>
                     {BANDORI_SERVERS.map((server) => {
                         const label = BANDORI_SERVER_CODES[server].toUpperCase();
                         const selected = server === preferredServer;
@@ -141,6 +145,23 @@ function LanguageMenuContent({ pathname, currentLocale, onSelect }: LanguageMenu
                             </button>
                         );
                     })}
+                </div>
+            </div>
+            <div className="border-t border-[var(--theme-color-border-subtle)] px-5 py-3">
+                <div className="mb-2 text-xs font-semibold text-[var(--theme-color-text-muted)]">
+                    {t("ournotesPreferredServer")}
+                </div>
+                <div className="flex gap-1.5" role="group" aria-label={t("ournotesPreferredServer")}>
+                    {OURNOTES_SERVERS.map((server) => (
+                        <button key={server} type="button" onClick={() => setOurNotesPreferredServer(server)}
+                            aria-pressed={server === ourNotesPreferredServer}
+                            className={`flex-1 whitespace-nowrap rounded-lg px-1.5 py-1.5 text-xs font-bold transition ${
+                                server === ourNotesPreferredServer
+                                    ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-control-foreground-pressed)]"
+                                    : "bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)]"
+                            }`}
+                        >{OURNOTES_SERVER_CODES[server].toUpperCase()}</button>
+                    ))}
                 </div>
             </div>
         </div>

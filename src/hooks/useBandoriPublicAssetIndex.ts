@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { usePublicAssetIndex as useBandoriPublicAssetIndex, type PublicAssetIndexHookResult as BandoriPublicAssetIndexHookResult } from "@/hooks/usePublicAssetIndex";
+export type { PublicAssetIndexHookResult as BandoriPublicAssetIndexHookResult } from "@/hooks/usePublicAssetIndex";
 import {
   buildBandoriPublicAssetIndexUrl,
   type BandoriCardsAssetIndex,
@@ -17,65 +18,7 @@ import {
   bandoriEventsAssetIndexStore,
   bandoriMusicAssetIndexStore,
   bandoriStampsAssetIndexStore,
-  type BandoriPublicAssetIndexStore,
-  type BandoriPublicAssetIndexStoreState,
 } from "@/lib/bandori-public-asset-index-client";
-
-const EMPTY_INDEX_STATE: BandoriPublicAssetIndexStoreState<never> = {
-  value: null,
-  loadedAt: null,
-  inFlight: null,
-  error: null,
-};
-
-export type BandoriPublicAssetIndexHookResult<T> = {
-  value: T | null;
-  loadedAt: number | null;
-  loading: boolean;
-  error: Error | null;
-  refresh: () => void;
-};
-
-function useBandoriPublicAssetIndex<T>(
-  indexUrl: string | null,
-  store: BandoriPublicAssetIndexStore<T>,
-): BandoriPublicAssetIndexHookResult<T> {
-  const subscribe = useCallback((listener: () => void) => (
-    indexUrl ? store.subscribe(indexUrl, listener) : () => undefined
-  ), [indexUrl, store]);
-  const getSnapshot = useCallback(() => (
-    indexUrl
-      ? store.getState(indexUrl)
-      : EMPTY_INDEX_STATE as BandoriPublicAssetIndexStoreState<T>
-  ), [indexUrl, store]);
-  // Hydration must start from the server's empty state, even with a warm browser cache.
-  const state = useSyncExternalStore(
-    subscribe,
-    getSnapshot,
-    () => EMPTY_INDEX_STATE as BandoriPublicAssetIndexStoreState<T>,
-  );
-
-  useEffect(() => {
-    if (!indexUrl) {
-      return;
-    }
-    void store.load(indexUrl).catch(() => undefined);
-  }, [indexUrl, store]);
-
-  const refresh = useCallback(() => {
-    if (indexUrl) {
-      void store.load(indexUrl, { refresh: true }).catch(() => undefined);
-    }
-  }, [indexUrl, store]);
-
-  return {
-    value: state.value,
-    loadedAt: state.loadedAt,
-    loading: Boolean(indexUrl) && state.value === null && state.error === null,
-    error: state.error,
-    refresh,
-  };
-}
 
 export function useBandoriCardsAssetIndex(
   enabled = true,

@@ -1,0 +1,102 @@
+{
+  "cards": {
+    "title": "OurNotes Card Catalog",
+    "kindLabel": "Card type",
+    "kinds": {
+      "member": "Member",
+      "support": "Snapshot"
+    },
+    "servers": {
+      "jp": "JP",
+      "en": "EN",
+      "tw": "TW",
+      "cn_intl": "CN",
+      "kr": "KR"
+    },
+    "attributes": {
+      "1": "Ruby",
+      "2": "Azure",
+      "3": "Jade",
+      "4": "Amber",
+      "5": "Violet"
+    },
+    "filters": {
+      "servers": "Server",
+      "displayServer": "Server",
+      "bands": "Band",
+      "attributes": "Attribute",
+      "rarities": "Rarity",
+      "characters": "Character",
+      "sort": "Sort"
+    },
+    "sort": {
+      "id": "Card ID",
+      "asc": "Ascending",
+      "desc": "Descending"
+    },
+    "actions": {
+      "all": "All",
+      "selectAll": "Select all {group}",
+      "clearAll": "Clear all {group}",
+      "clear": "Clear",
+      "search": "Search",
+      "retry": "Retry",
+      "more": "Show {count} more",
+      "back": "Back to card catalog",
+      "viewImage": "View full image"
+    },
+    "searchPlaceholder": "Search card names or other filters",
+    "resultCount": "{count, plural, one {# card} other {# cards}}",
+    "searchHelp": {
+      "label": "Search rules",
+      "title": "Filter examples:",
+      "band": "Band: e.g. <code>go</code> / <code>ゆめみた</code> / <code>mujica</code> match the corresponding band",
+      "character": "Character: e.g. <code>Doloris</code> / <code>ユノ</code> / <code>长崎爽世</code> match the corresponding character",
+      "attribute": "Attribute: e.g. <code>ruby</code> / <code>绯红</code> / <code>红</code> match Ruby cards",
+      "rarity": "Rarity: e.g. <code>SR+</code> / <code>{rarityBound}</code> match SR cards or higher",
+      "server": "Available server: e.g. <code>en</code> / <code>intl</code> / <code>ww</code> / <code>国际服</code> match cards available on EN",
+      "id": "ID: e.g. <code>4</code> / <code>#4</code> match cards with ID 4",
+      "name": "Name only: e.g. <code>/melody</code> / <code>\"melody\"</code> match only cards whose names contain melody"
+    },
+    "skillLevel": "Skill level",
+    "skillKinds": {
+      "leader": "Leader Skill",
+      "live": "LIVE Skill",
+      "gekisou": "GEKISO Skill",
+      "support": "LIVE Support",
+      "gekisouSupport": "GEKISO Support"
+    },
+    "states": {
+      "loading": "Loading the card catalog",
+      "loadFailed": "Failed to load card data. Please try again later",
+      "empty": "No cards match the current filters",
+      "imageLoading": "Loading image",
+      "imageUnavailable": "Image unavailable",
+      "textUnavailable": "No text for this region",
+      "skillUnavailable": "No skill description for this region",
+      "noSkills": "No skills"
+    },
+    "sections": {
+      "art": "Card art",
+      "info": "Card information",
+      "skills": "Skills"
+    },
+    "power": {
+      "performance": "Performance",
+      "technic": "Technic",
+      "visual": "Visual",
+      "total": "Total"
+    },
+    "viewer": {
+      "close": "Close full image",
+      "instructions": "Scroll or pinch to zoom, drag to pan, and click or press Esc to close; use + / − to zoom and Shift + arrow keys to pan",
+      "previous": "Previous image",
+      "next": "Next image"
+    },
+    "detail": {
+      "id": "Card ID",
+      "title": "Card title",
+      "skillEffect": "Skill effect"
+    }
+  }
+}

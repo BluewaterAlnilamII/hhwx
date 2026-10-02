@@ -42,7 +42,7 @@ const eventSwitcherSource = readFileSync(
   "utf8",
 );
 const serverIconSource = readFileSync(
-  new URL("../src/components/bandori/BandoriServerIcon.tsx", import.meta.url),
+  new URL("../src/components/ServerIcon.tsx", import.meta.url),
   "utf8",
 );
 const eventInfoPanelSource = readFileSync(
@@ -50,7 +50,7 @@ const eventInfoPanelSource = readFileSync(
   "utf8",
 );
 const detailLayoutSource = readFileSync(
-  new URL("../src/components/bandori/BandoriDetailLayout.tsx", import.meta.url),
+  new URL("../src/components/DetailLayout.tsx", import.meta.url),
   "utf8",
 );
 const eventStatusSummarySource = readFileSync(

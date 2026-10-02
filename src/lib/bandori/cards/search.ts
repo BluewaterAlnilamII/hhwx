@@ -12,6 +12,7 @@ import {
   type BandoriServer,
 } from "@/lib/bandori-server";
 import { resolveBandoriSkillLabelForServer } from "@/lib/bandori-skill-label";
+import { compareSearchValue } from "@/lib/catalog-search";
 import {
   BANDORI_SEARCH_SERVER_ALIASES,
   normalizeBandoriSearchText as normalizeBandoriCardSearchText,
@@ -191,10 +192,7 @@ function compileToken(token: string): SearchCondition {
       return () => false;
     }
     const hasRarityMeaning = Number.isInteger(value) && value >= 1 && value <= 5;
-    const compare = (candidate: number) => operator === ">" ? candidate > value
-      : operator === "<" ? candidate < value
-      : operator === "+" || operator === ">=" ? candidate >= value
-      : candidate <= value;
+    const compare = (candidate: number) => compareSearchValue(candidate, value, operator);
     return (entry) => (unit !== "%" && hasRarityMeaning && entry.rarity !== null && compare(entry.rarity))
       || (unit !== "*" && entry.searchSkills.some((skill) => skill.scorePercent !== null && compare(skill.scorePercent)));
   }
