@@ -119,7 +119,7 @@ hhwx/
 
 ## 贡献
 
-贡献时请确保不提交密钥，不在公开文档中写入私有部署细节，并在提交评审前运行 `npm run lint` 和 `npm run build`。见 [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md)。
+贡献时请确保不提交密钥，不在公开文档中写入私有部署细节。提交评审前，根据受影响的行为和风险选择检查，见 [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md)。
 
 ## 许可证
 

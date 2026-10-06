@@ -20,6 +20,7 @@ paths:
 
 # API Route Rules
 
+- For a new resource API, follow the relevant reference flow through production, publication, reading, and HTTP responses. Inherit applicable source, versioning/integrity, cache, validation, error, and recovery conventions at their owning layers. A matching response envelope alone does not establish consistency.
 - Routes parse and validate requests, enforce server authorization, call services, and format responses. Keep shared domain logic in its owning module. Register shared HTTP parsing, response, cache/error, or compatibility handlers in the paths above; ordinary domain utilities do not need registration.
 - Validate input type, shape, size, format, and range at the trust boundary. Numeric text must match the complete accepted syntax before conversion; reject non-finite values and require safe integers where applicable. Coercion or `parseInt()` alone is not validation.
 - New JSON APIs use success `{ success: true, data, meta? }` and failure `{ success: false, error: { code, message, details? } }` with an appropriate non-2xx failure status. Downloads, images, streams/SSE, ICS, and bodyless responses follow their protocol.
