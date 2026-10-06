@@ -17,6 +17,10 @@ import { readOurNotesMasterInputs } from "../src/lib/ournotes/master-server.ts";
 import { mergeOurNotesCatalog } from "../src/lib/ournotes/catalogs-contract.ts";
 import { readOurNotesCardInputs, readOurNotesCards } from "../src/lib/ournotes/cards/api-server.ts";
 import { ourNotesRouteError } from "../src/lib/ournotes/master-api-query.ts";
+import { GET as events } from "../src/app/api/ournotes/master/events/route.ts";
+import { GET as eventDetail } from "../src/app/api/ournotes/master/events/[eventId]/route.ts";
+import { readOurNotesEventDataset } from "../src/lib/ournotes/events/api-server.ts";
+import { OURNOTES_EVENTS_API_POINTER_KEY, parseOurNotesEventsPointer } from "../src/lib/ournotes/events/api-contract.ts";
 
 const fixture = JSON.parse(await readFile(new URL("fixtures/ournotes-master.json", import.meta.url), "utf8"));
 const skillFixture = JSON.parse(await readFile(new URL("fixtures/ournotes-skills.json", import.meta.url), "utf8"));
@@ -76,8 +80,10 @@ function storeObjects(inputs = regions(), revision = "ournotes-cards-v3") {
 }
 
 async function withStore(inputs, edit, run) {
+  return withObjectStore(storeObjects(inputs), edit, run);
+}
+async function withObjectStore(objects, edit, run) {
   const root = await mkdtemp(join(tmpdir(), "hhwx-ournotes-api-"));
-  const objects = storeObjects(inputs);
   edit?.(objects);
   for (const [key, body] of objects) {
     const path = join(root, key);
@@ -155,6 +161,513 @@ test("six endpoints preserve five-slot source semantics and expose only the agre
     assert.deepEqual(Object.keys(band).sort(), ["bandName", "colorCode"]);
     // The fixture contains no public image index or images; API reads still succeed.
   });
+});
+
+function eventViews() {
+  const resource = { resourceType: 999, resourceId: 0 };
+  const reward = { ...resource, resourceCount: 0 };
+  const ranking = { ...reward, fromRank: 1, toRank: 100 };
+  const music = { musicId: 19, challengeMusicId: 2, musicType: 99, gekisouMission1: 1, gekisouMission2: 2, gekisouMission3: 3,
+    startAt: "", endAt: "2026/10/08 20:59:59", musicRankingRewards: [ranking] };
+  const detail = {
+    eventType: 99, eventName: ["JP", "", "繁體", "简体", "KR"],
+    startAt: ["2026/09/30 18:00:00", "", "2026/10/01 18:00:00", "2026/10/01 18:00:00", "2026/10/02 18:00:00"],
+    endAt: ["", "", "", "", ""], displayEndAt: ["", "", "", "", ""],
+    imageAsset: "image", logoAsset: "", backgroundAsset: "background", bannerAsset: "banner",
+    effects: [{ resourceTypeConstraint: 0, eventBonusType: 99, characterId: 0, bandId: 0, cardType: 0, tagId: 0,
+      memberCardId: 0, supportCardId: 0, effectValue: [-100, 0, 1, 2, 3] }],
+    pickUpCards: [resource], rewardCards: [resource], serverExtensions: [{}, null, {}, {}, {}],
+    isRankingDisabled: false, isMusicRankingDisabled: true, isTotalMusicRankingDisabled: false,
+    storyChapterId: 0, eventItemId: 0, musicId: 0,
+    musics: [[music], null, [music], [music], []],
+    pointRewards: [[{ ...reward, point: 0 }], null, [], [], []],
+    pointLoopRewards: [[{ ...reward, loopStartEventPoint: 0, loopEventPoint: 10 }], null, [], [], []],
+    rankingRewards: [[ranking], null, [], [], []],
+    stories: [{ episodeId: 1, episodeNumber: 1, advId: 0, description: ["JP", "", "繁體", "简体", ""],
+      startAt: ["", "", "", "", ""], endAt: ["", "", "", "", ""],
+      unlockEpisodeNumber: 0, eventPoint: 0, characterId: 0, characterRank: 0, playerRank: 0, bandRank: 0,
+      storyFriendshipEpisodeId: 0, isAnotherEpisode: false, isExtraEpisode: false,
+      banner: "", image: "", rewards: [reward], eventRewards: [] }],
+  };
+  const summary = Object.fromEntries(["eventType", "eventName", "startAt", "endAt", "displayEndAt", "imageAsset",
+    "logoAsset", "backgroundAsset", "bannerAsset", "effects", "pickUpCards", "rewardCards", "serverExtensions"].map((key) => [key, detail[key]]));
+  summary.musics = detail.musics.map((slot) => slot === null ? null : slot.map(({ musicId }) => ({ musicId })));
+  return { events: { "1": summary }, eventDetails: { "1": detail } };
+}
+function eventObjects(views = eventViews()) {
+  const objects = new Map();
+  const datasets = {};
+  for (const [dataset, data] of Object.entries(views)) {
+    const json = encoded(data);
+    const gzip = gzipSync(json, { mtime: 0 });
+    const key = `ournotes/master/events-v1/api/packs/${dataset}/${hash(gzip)}.json.gz`;
+    objects.set(key, gzip);
+    datasets[dataset] = { key, compressedSha256: hash(gzip), semanticSha256: hash(json), compressedSize: gzip.length,
+      jsonSize: json.length, recordCount: Object.keys(data).length };
+  }
+  // Provenance and maintenance fields are owned by the producer, not the HTTP reader.
+  objects.set(OURNOTES_EVENTS_API_POINTER_KEY, encoded({ schema: "ournotes-events-api-pointer-v3", generation: 1,
+    revision: "future-producer-recipe", sourceIdentity: "producer-owned", masterSources: {},
+    datasets: { ...datasets, history: { privateOnly: true } }, recentPackKeys: {} }));
+  return objects;
+}
+function assertEventFieldOrder(event, isDetail, selected = false) {
+  const order = isDetail
+    ? ["eventType", "eventName", "startAt", "endAt", "displayEndAt", "storyChapterId", "eventItemId", "musicId",
+      "isRankingDisabled", "isMusicRankingDisabled", "isTotalMusicRankingDisabled", "imageAsset", "logoAsset", "backgroundAsset", "bannerAsset",
+      "memberBonuses", "supportBonuses", "effects", "pickUpCards", "rewardCards", "musics", "pointRewards", "pointLoopRewards", "rankingRewards", "stories", "serverExtensions"]
+    : ["eventType", "eventName", "startAt", "endAt", "displayEndAt", "imageAsset", "logoAsset", "backgroundAsset", "bannerAsset",
+      "memberBonuses", "supportBonuses", "effects", "musics", "pickUpCards", "rewardCards", "serverExtensions"];
+  assert.deepEqual(Object.keys(event), order.filter((key) => (key !== "effects" || Object.hasOwn(event, key))
+    && (key !== "serverExtensions" || !selected)));
+}
+
+test("Events project single music/time values and materialize five historical slots", async () => {
+  const views = eventViews();
+  const expected = structuredClone(views);
+  expected.events["1"].musics = [19];
+  expected.eventDetails["1"].musics = expected.eventDetails["1"].musics[0].map((music) => ({
+    ...music, musicType: "All", gekisouMission1: "Combo", gekisouMission2: "Luck", gekisouMission3: "JustCount",
+    startAt: null, endAt: "1791460799000",
+  }));
+  expected.eventDetails["1"].stories[0].startAt = expected.eventDetails["1"].stories[0].endAt = null;
+  for (const records of Object.values(expected)) {
+    records["1"].startAt = "1790758800000";
+    records["1"].endAt = records["1"].displayEndAt = null;
+    records["1"].serverExtensions = [{}, null, { startAt: "1790845200000" }, { startAt: "1790845200000" },
+      { startAt: "1790931600000", musics: [] }];
+    records["1"].memberBonuses = [];
+    records["1"].supportBonuses = [];
+    records["1"].effects = [{ resourceTypeConstraint: 0, eventBonusType: 99, effectValue: [-100, 0, 1, 2, 3] }];
+  }
+  for (const field of ["pointRewards", "pointLoopRewards", "rankingRewards"]) {
+    expected.eventDetails["1"][field] = expected.eventDetails["1"][field][0];
+    for (const slot of [2, 3, 4]) expected.eventDetails["1"].serverExtensions[slot][field] = [];
+  }
+  const dirty = structuredClone(views);
+  for (const records of Object.values(dirty)) {
+    records["1"].source = { privateOnly: true };
+    records["1"].effects[0].privateOnly = true;
+    records["1"].pickUpCards[0].privateOnly = true;
+  }
+  dirty.eventDetails["1"].stories[0].privateOnly = true;
+  dirty.eventDetails["1"].stories[0].rewards[0].privateOnly = true;
+  dirty.eventDetails["1"].musics[0][0].privateOnly = true;
+  dirty.eventDetails["1"].musics[0][0].musicRankingRewards[0].privateOnly = true;
+  await withObjectStore(eventObjects(dirty), null, async () => {
+    for (const server of [undefined, 0, 1, 2, 3, 4]) {
+      const suffix = server === undefined ? "" : `?server=${server}`;
+      const response = await events(request(`events${suffix}`));
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("cache-control"), "public, max-age=300, stale-while-revalidate=1800");
+      assert.equal(response.headers.get("cloudflare-cdn-cache-control"), "public, max-age=1800, stale-while-revalidate=86400");
+      const summary = structuredClone(expected.events["1"]);
+      const detail = structuredClone(expected.eventDetails["1"]);
+      if (server !== undefined) {
+        Object.assign(summary, summary.serverExtensions[server]);
+        Object.assign(detail, detail.serverExtensions[server]);
+        delete summary.serverExtensions; delete detail.serverExtensions;
+      }
+      const body = await response.json();
+      assert.deepEqual(body, { success: true, data: server === 1 ? {} : { "1": summary } });
+      if (server !== 1) assertEventFieldOrder(body.data["1"], false, server !== undefined);
+      const selected = await eventDetail(request(`events/1${suffix}`), { params: Promise.resolve({ eventId: "1" }) });
+      assert.equal(selected.status, server === 1 ? 404 : 200);
+      if (server !== 1) {
+        const body = await selected.json();
+        assert.deepEqual(body, { success: true, data: detail });
+        assertEventFieldOrder(body.data, true, server !== undefined);
+      }
+      else assert.match(selected.headers.get("cache-control"), /no-store/);
+    }
+    assert.equal((await eventDetail(request("events/2"), { params: Promise.resolve({ eventId: "2" }) })).status, 404);
+  });
+  await withObjectStore(eventObjects({ events: {}, eventDetails: {} }), null, async () => {
+    assert.deepEqual(await (await events(request("events"))).json(), { success: true, data: {} });
+  });
+});
+
+test("Events keep five presence slots for identical data and expose JST milliseconds with explicit null times", async () => {
+  const views = eventViews();
+  for (const dataset of ["events", "eventDetails"]) {
+    const event = views[dataset]["1"];
+    event.serverExtensions = [{}, {}, {}, {}, {}];
+    event.startAt = Array(5).fill("2026/09/30 18:00:00");
+    event.endAt = Array(5).fill("2026/10/08 20:59:59");
+    event.displayEndAt = Array(5).fill("2026/10/10 20:59:59");
+    event.musics = Array.from({ length: 5 }, () => Array.from({ length: 2 }, () => structuredClone(event.musics[0][0])));
+  }
+  for (const field of ["pointRewards", "pointLoopRewards", "rankingRewards"]) {
+    const event = views.eventDetails["1"];
+    event[field] = Array.from({ length: 5 }, () => structuredClone(event[field][0]));
+  }
+  for (const musics of views.eventDetails["1"].musics) musics[0].startAt = "2026/10/01 00:00:00";
+  const source = structuredClone(views);
+  await withObjectStore(eventObjects(views), null, async () => {
+    const summary = (await (await events(request("events"))).json()).data["1"];
+    const detail = (await (await eventDetail(request("events/1"), { params: Promise.resolve({ eventId: "1" }) })).json()).data;
+    for (const event of [summary, detail]) {
+      assert.deepEqual(event.serverExtensions, [{}, {}, {}, {}, {}]);
+      assert.deepEqual([event.startAt, event.endAt, event.displayEndAt], ["1790758800000", "1791460799000", "1791633599000"]);
+    }
+    assert.deepEqual(summary.musics, [19, 19]);
+    assert.equal(detail.musics[0].startAt, "1790780400000");
+    assert.equal(detail.musics[1].startAt, null);
+    assert.equal(detail.musics[1].endAt, "1791460799000");
+    assert.deepEqual([detail.stories[0].startAt, detail.stories[0].endAt], [null, null]);
+    const selected = (await (await eventDetail(request("events/1?server=4"), { params: Promise.resolve({ eventId: "1" }) })).json()).data;
+    const expected = { ...detail }; delete expected.serverExtensions;
+    assert.deepEqual(selected, expected);
+  });
+  assert.deepEqual(views, source);
+});
+
+test("Events retain full music/story overrides and use the first present source even when its time is unset", async () => {
+  const views = eventViews();
+  for (const dataset of ["events", "eventDetails"]) {
+    const event = views[dataset]["1"];
+    event.serverExtensions = [null, {}, {}, {}, {}];
+    event.startAt[0] = "";
+    event.musics[0] = null;
+    event.musics[1] = structuredClone([event.musics[2][0], event.musics[2][0]]);
+    event.musics[2] = structuredClone(event.musics[1]);
+    event.musics[3] = structuredClone(event.musics[1]);
+  }
+  const input = views.eventDetails["1"];
+  for (const field of ["pointRewards", "pointLoopRewards", "rankingRewards"]) {
+    const rewards = structuredClone(input[field][0]);
+    input[field] = [null, [], rewards, structuredClone(rewards), []];
+  }
+  for (const slot of [2, 3]) input.musics[slot][0].musicRankingRewards[0].resourceCount = 7;
+  input.stories[0].startAt[1] = "2026/10/01 00:00:00";
+  await withObjectStore(eventObjects(views), null, async () => {
+    const summary = (await (await events(request("events"))).json()).data["1"];
+    const detail = (await (await eventDetail(request("events/1"), { params: Promise.resolve({ eventId: "1" }) })).json()).data;
+    assert.equal(summary.startAt, null);
+    assert.equal(detail.startAt, null);
+    for (const field of ["pointRewards", "pointLoopRewards", "rankingRewards"]) assert.deepEqual(detail[field], []);
+    assert.deepEqual(summary.musics, [19, 19]);
+    assert.deepEqual(summary.serverExtensions[0], null);
+    assert.deepEqual(summary.serverExtensions[1], {});
+    assert.equal(Object.hasOwn(summary.serverExtensions[2], "musics"), false);
+    assert.equal(detail.musics[0].musicRankingRewards[0].resourceCount, 0);
+    assert.equal(detail.serverExtensions[2].musics[0].musicRankingRewards[0].resourceCount, 7);
+    assert.deepEqual(detail.serverExtensions[2], detail.serverExtensions[3]);
+    assert.equal(detail.stories[0].startAt, "1790780400000");
+    assert.equal(detail.serverExtensions[2].stories[0].startAt, null);
+    assert.deepEqual(detail.serverExtensions[2].stories[0].description, input.stories[0].description);
+    const selected = (await (await eventDetail(request("events/1?server=2"), { params: Promise.resolve({ eventId: "1" }) })).json()).data;
+    assert.equal(selected.startAt, "1790845200000");
+    assert.equal(selected.stories[0].startAt, null);
+    assert.deepEqual(selected.musics, detail.serverExtensions[2].musics);
+    for (const field of ["pointRewards", "pointLoopRewards", "rankingRewards"]) assert.deepEqual(selected[field], input[field][2]);
+    assert.equal(Object.hasOwn(selected, "serverExtensions"), false);
+    assert.equal((await eventDetail(request("events/1?server=0"), { params: Promise.resolve({ eventId: "1" }) })).status, 404);
+  });
+});
+
+test("Events preserve reward order, repeated rows and complete regional overrides", async () => {
+  const views = eventViews();
+  const input = views.eventDetails["1"];
+  const first = input.pointRewards[0][0];
+  const second = { ...first, point: 100 };
+  input.pointRewards[0] = [first, second, first];
+  input.pointRewards[2] = structuredClone(input.pointRewards[0]);
+  input.pointRewards[2][1].resourceCount = 5;
+  input.pointRewards[3] = structuredClone(input.pointRewards[2]);
+  input.pointLoopRewards[2] = input.pointLoopRewards[3] = structuredClone(input.pointLoopRewards[0]);
+  input.pointLoopRewards[4] = [{ ...input.pointLoopRewards[0][0], loopEventPoint: 20 }];
+  input.rankingRewards[2] = [{ ...input.rankingRewards[0][0], fromRank: 2 }];
+  input.rankingRewards[3] = structuredClone(input.rankingRewards[2]);
+  const source = structuredClone(views);
+  await withObjectStore(eventObjects(views), null, async () => {
+    const detail = (await (await eventDetail(request("events/1"), { params: Promise.resolve({ eventId: "1" }) })).json()).data;
+    assert.deepEqual(detail.pointRewards, [first, second, first]);
+    assert.deepEqual(detail.pointLoopRewards, input.pointLoopRewards[0]);
+    assert.deepEqual(detail.rankingRewards, input.rankingRewards[0]);
+    assert.equal(detail.serverExtensions[1], null);
+    assert.deepEqual(detail.serverExtensions[2].pointRewards, input.pointRewards[2]);
+    assert.equal(Object.hasOwn(detail.serverExtensions[2], "pointLoopRewards"), false);
+    assert.deepEqual(detail.serverExtensions[2].rankingRewards, input.rankingRewards[2]);
+    assert.deepEqual(detail.serverExtensions[2], detail.serverExtensions[3]);
+    assert.deepEqual(detail.serverExtensions[4].pointRewards, []);
+    assert.deepEqual(detail.serverExtensions[4].pointLoopRewards, input.pointLoopRewards[4]);
+    assert.deepEqual(detail.serverExtensions[4].rankingRewards, []);
+    for (const server of [2, 4]) {
+      const selected = (await (await eventDetail(request(`events/1?server=${server}`), { params: Promise.resolve({ eventId: "1" }) })).json()).data;
+      for (const field of ["pointRewards", "pointLoopRewards", "rankingRewards"]) assert.deepEqual(selected[field], input[field][server]);
+      assert.equal(Object.hasOwn(selected, "serverExtensions"), false);
+    }
+  });
+  assert.deepEqual(views, source);
+});
+
+test("Events order nested configuration, rewards and overrides without dropping zero, false or null", async () => {
+  const views = eventViews();
+  for (const dataset of ["events", "eventDetails"]) {
+    const event = views[dataset]["1"];
+    const effect = event.effects[0];
+    event.effects = [5, 3, 0, 2, 4, 1].map((eventBonusType) => ({ ...effect, resourceTypeConstraint: 2, eventBonusType, memberCardId: 61 }));
+    event.effects.push({ ...effect, memberCardId: 61 });
+  }
+  const input = views.eventDetails["1"];
+  input.musics[2] = structuredClone(input.musics[0]); input.musics[2][0].challengeMusicId = 3;
+  input.musics[3] = structuredClone(input.musics[2]);
+  input.stories[0].startAt[2] = input.stories[0].startAt[3] = "2026/10/01 00:00:00";
+  await withObjectStore(eventObjects(views), null, async () => {
+    const summary = (await (await events(request("events"))).json()).data["1"];
+    assertEventFieldOrder(summary, false);
+    for (const server of [undefined, 2]) {
+      const suffix = server === undefined ? "" : `?server=${server}`;
+      const detail = (await (await eventDetail(request(`events/1${suffix}`), { params: Promise.resolve({ eventId: "1" }) })).json()).data;
+      assertEventFieldOrder(detail, true, server !== undefined);
+      assert.deepEqual(Object.keys(detail.memberBonuses[0]), ["memberCardId", "pointPercent", "itemPercent", "parameterPercent", "performancePercent", "technicPercent", "visualPercent"]);
+      assert.deepEqual(Object.keys(detail.effects[0]), ["resourceTypeConstraint", "eventBonusType", "memberCardId", "effectValue"]);
+      assert.deepEqual(Object.keys(detail.musics[0]), ["musicId", "challengeMusicId", "musicType", "gekisouMission1", "gekisouMission2", "gekisouMission3", "startAt", "endAt", "musicRankingRewards"]);
+      assert.deepEqual(Object.keys(detail.musics[0].musicRankingRewards[0]), ["fromRank", "toRank", "resourceType", "resourceId", "resourceCount"]);
+      assert.deepEqual(Object.keys(detail.stories[0]), ["episodeId", "episodeNumber", "advId", "description", "startAt", "endAt", "isAnotherEpisode", "isExtraEpisode",
+        "unlockEpisodeNumber", "eventPoint", "characterId", "characterRank", "playerRank", "bandRank", "storyFriendshipEpisodeId", "banner", "image", "rewards", "eventRewards"]);
+      assert.equal(detail.storyChapterId, 0);
+      assert.equal(detail.isRankingDisabled, false);
+      if (server === undefined) {
+        assert.deepEqual(Object.keys(detail.pointRewards[0]), ["point", "resourceType", "resourceId", "resourceCount"]);
+        assert.deepEqual(Object.keys(detail.pointLoopRewards[0]), ["loopStartEventPoint", "loopEventPoint", "resourceType", "resourceId", "resourceCount"]);
+        assert.deepEqual(Object.keys(detail.rankingRewards[0]), ["fromRank", "toRank", "resourceType", "resourceId", "resourceCount"]);
+        assert.equal(detail.pointRewards[0].point, 0); assert.equal(detail.pointRewards[0].resourceCount, 0);
+        assert.equal(detail.stories[0].startAt, null);
+        assert.deepEqual(Object.keys(detail.serverExtensions[2]), ["startAt", "musics", "pointRewards", "pointLoopRewards", "rankingRewards", "stories"]);
+        assert.equal(detail.serverExtensions[1], null);
+      } else {
+        assert.deepEqual(detail.pointRewards, []);
+        assert.equal(detail.stories[0].startAt, "1790780400000");
+      }
+    }
+  });
+});
+
+test("Events omit only unset targets, preserving bonus type zero, distinct effects and rank values", async () => {
+  const views = eventViews();
+  const targets = { characterId: 0, bandId: 0, cardType: 0, tagId: 0, memberCardId: 61, supportCardId: 0 };
+  const effectValue = [0, 3500, 4000, 4500, 5000];
+  const effects = [
+    { resourceTypeConstraint: 2, eventBonusType: 0, ...targets, effectValue },
+    { resourceTypeConstraint: 2, eventBonusType: 2, ...targets, effectValue },
+    { resourceTypeConstraint: 3, eventBonusType: 1, ...targets, characterId: 5, bandId: 3, cardType: 2, tagId: 1, memberCardId: 0, supportCardId: 62, effectValue },
+  ];
+  views.events["1"].effects = views.eventDetails["1"].effects = effects;
+  await withObjectStore(eventObjects(views), null, async () => {
+    const summary = (await (await events(request("events"))).json()).data["1"];
+    const detail = (await (await eventDetail(request("events/1"), { params: Promise.resolve({ eventId: "1" }) })).json()).data;
+    for (const event of [summary, detail]) {
+      assert.deepEqual(event.memberBonuses, [{ memberCardId: 61, pointPercent: [0, 35, 40, 45, 50], parameterPercent: [0, 35, 40, 45, 50] }]);
+      assert.deepEqual(event.supportBonuses, [{ characterId: 5, bandId: 3, cardType: "Azure", tagId: 1, supportCardId: 62, itemPercent: [0, 35, 40, 45, 50] }]);
+      assert.equal(Object.hasOwn(event, "effects"), false);
+      assertEventFieldOrder(event, event === detail);
+    }
+    assert.deepEqual(summary.musics, [19]);
+    assert.deepEqual(detail.musics[0], { ...views.eventDetails["1"].musics[0][0], startAt: null, endAt: "1791460799000",
+      musicType: "All", gekisouMission1: "Combo", gekisouMission2: "Luck", gekisouMission3: "JustCount" });
+    assert.equal(effects[0].bandId, 0); // The private source remains complete.
+  });
+});
+
+test("Events group full targets without overwriting duplicate rules, rounding configuration or losing unsupported effects", async () => {
+  const views = eventViews();
+  const base = { ...views.events["1"].effects[0], resourceTypeConstraint: 2, eventBonusType: 0, memberCardId: 61, bandId: 3,
+    effectValue: [1500, 1750, 2000, 2250, 2500] };
+  const effects = [base, { ...base, eventBonusType: 2 }, { ...base, effectValue: [0, 1, 2, 3, 4] },
+    { ...base, eventBonusType: 3, effectValue: [200, 300, 400, 500, 600] },
+    { ...base, memberCardId: 0 }, { ...base, eventBonusType: 99 }, { ...base, resourceTypeConstraint: 1 },
+    { ...base, effectValue: [Number.MAX_SAFE_INTEGER - 1, 0, 0, 0, 0] }];
+  views.events["1"].effects = views.eventDetails["1"].effects = effects;
+  const snapshot = structuredClone(effects);
+  await withObjectStore(eventObjects(views), null, async () => {
+    const event = (await (await events(request("events"))).json()).data["1"];
+    assert.deepEqual(event.memberBonuses, [
+      { bandId: 3, memberCardId: 61, pointPercent: [15, 17.5, 20, 22.5, 25], parameterPercent: [15, 17.5, 20, 22.5, 25] },
+      { bandId: 3, memberCardId: 61, pointPercent: [0, 0.01, 0.02, 0.03, 0.04], performancePercent: [2, 3, 4, 5, 6] },
+      { bandId: 3, pointPercent: [15, 17.5, 20, 22.5, 25] },
+    ]);
+    assert.deepEqual(event.supportBonuses, []);
+    assert.deepEqual(event.effects, [
+      { resourceTypeConstraint: "MemberCard", eventBonusType: 99, bandId: 3, memberCardId: 61, effectValue: base.effectValue },
+      { resourceTypeConstraint: "Item", eventBonusType: "EventPoint", bandId: 3, memberCardId: 61, effectValue: base.effectValue },
+      { resourceTypeConstraint: "MemberCard", eventBonusType: "EventPoint", bandId: 3, memberCardId: 61, effectValue: [Number.MAX_SAFE_INTEGER - 1, 0, 0, 0, 0] },
+    ]);
+    const fields = { pointPercent: 0, itemPercent: 1, parameterPercent: 2, performancePercent: 3, technicPercent: 4, visualPercent: 5 };
+    const restored = event.memberBonuses.flatMap((group) => {
+      const target = { ...group };
+      for (const field of Object.keys(fields)) delete target[field];
+      return Object.entries(fields).flatMap(([field, eventBonusType]) => group[field] ? [{ resourceTypeConstraint: 2, eventBonusType,
+        ...target, effectValue: group[field].map((percent) => Math.round(percent * 100)) }] : []);
+    });
+    assert.deepEqual(restored.map((r) => r.effectValue), effects.slice(0, 5).map((r) => r.effectValue));
+  });
+  assert.deepEqual(effects, snapshot);
+});
+
+test("Events map every verified resource, card, music and gekisou type without dropping None or unknown codes", async () => {
+  const resourceNames = ["Item", "MemberCard", "SupportCard", "Voice", "LoginBonus", "Subscription", "GachaPoint",
+    "Music", "Stamp", "PremiumPass", "EventMedal", "LiveLaneSkin", "LiveNoteSkin", "LiveNoteEffectSkin", "LiveNoteSEGroup",
+    "VipPoint", "Degree", "Background", "Spot", "BiliChatTheme", "BiliChatBubble", "BiliChatFrame", 0, 999];
+  const resourceCodes = [...Array.from({ length: 19 }, (_, i) => i + 1), 1001, 1002, 1003, 0, 999];
+  const cardCodes = [0, 1, 2, 3, 4, 5, 98];
+  const cardNames = [undefined, "Ruby", "Azure", "Jade", "Amber", "Violet", 98];
+  const musicCodes = [0, 1, 2, 3, 4, 5, 99, 98];
+  const musicNames = ["None", "Ruby", "Azure", "Jade", "Amber", "Violet", "All", 98];
+  const missionCodes = [0, 1, 2, 3, 4, 98];
+  const missionNames = ["None", "Combo", "Luck", "JustCount", "All", 98];
+  const views = eventViews();
+  const resources = resourceCodes.map((resourceType) => ({ resourceType, resourceId: 0 }));
+  const rewards = resources.map((resource) => ({ ...resource, resourceCount: 0 }));
+  for (const dataset of ["events", "eventDetails"]) {
+    const event = views[dataset]["1"];
+    event.pickUpCards = event.rewardCards = resources;
+    event.effects = resourceCodes.map((resourceTypeConstraint) => ({ ...event.effects[0], resourceTypeConstraint }));
+    event.effects.push(...cardCodes.map((cardType) => ({ ...event.effects[0], cardType })));
+  }
+  const detail = views.eventDetails["1"];
+  const original = detail.musics[0][0];
+  detail.musics[0] = [...musicCodes.map((musicType) => ({ ...original, musicType, musicRankingRewards: rewards.map((r) => ({ ...r, fromRank: 1, toRank: 10 })) })),
+    ...missionCodes.map((code) => ({ ...original, gekisouMission1: code, gekisouMission2: code, gekisouMission3: code }))];
+  detail.pointRewards[0] = rewards.map((r) => ({ ...r, point: 0 }));
+  detail.pointLoopRewards[0] = rewards.map((r) => ({ ...r, loopStartEventPoint: 0, loopEventPoint: 10 }));
+  detail.rankingRewards[0] = rewards.map((r) => ({ ...r, fromRank: 1, toRank: 10 }));
+  detail.stories[0].rewards = detail.stories[0].eventRewards = rewards;
+  await withObjectStore(eventObjects(views), null, async () => {
+    const summary = (await (await events(request("events"))).json()).data["1"];
+    const detail = (await (await eventDetail(request("events/1"), { params: Promise.resolve({ eventId: "1" }) })).json()).data;
+    for (const event of [summary, detail]) {
+      for (const refs of [event.pickUpCards, event.rewardCards]) {
+        assert.deepEqual(refs.map((r) => r.resourceType), resourceNames);
+        assert.ok(refs.every((r) => r.resourceId === 0));
+      }
+      assert.deepEqual(event.effects.slice(0, resourceCodes.length).map((e) => e.resourceTypeConstraint), resourceNames);
+      assert.deepEqual(event.effects.slice(resourceCodes.length).map((e) => e.cardType), cardNames);
+      assert.equal(Object.hasOwn(event.effects[resourceCodes.length], "cardType"), false);
+    }
+    for (const rows of [detail.pointRewards, detail.pointLoopRewards, detail.rankingRewards,
+      detail.musics[0].musicRankingRewards, detail.stories[0].rewards, detail.stories[0].eventRewards]) {
+      assert.deepEqual(rows.map((r) => r.resourceType), resourceNames);
+      assert.ok(rows.every((r) => r.resourceId === 0 && r.resourceCount === 0));
+    }
+    assert.deepEqual(detail.musics.slice(0, musicCodes.length).map((m) => m.musicType), musicNames);
+    for (const field of ["gekisouMission1", "gekisouMission2", "gekisouMission3"]) {
+      assert.deepEqual(detail.musics.slice(musicCodes.length).map((m) => m[field]), missionNames);
+    }
+  });
+});
+
+test("Events expose verified enum names, retain unknown codes and keep music field order", async () => {
+  const views = eventViews();
+  const bonusNames = ["EventPoint", "EventItem", "ParameterAll", "ParameterPfm", "ParameterTec", "ParameterVis", 99];
+  for (const dataset of ["events", "eventDetails"]) {
+    const record = views[dataset]["1"];
+    record.eventType = 1;
+    record.effects = bonusNames.map((_, code) => ({ ...record.effects[0], eventBonusType: code === 6 ? 99 : code }));
+    views[dataset]["2"] = { ...structuredClone(record), eventType: 0 };
+    views[dataset]["3"] = { ...structuredClone(record), eventType: 99 };
+  }
+  await withObjectStore(eventObjects(views), null, async () => {
+    const summaries = (await (await events(request("events"))).json()).data;
+    assert.equal(summaries["1"].eventType, "ChallengeLive");
+    assert.equal(summaries["2"].eventType, "None");
+    assert.equal(summaries["3"].eventType, 99);
+    const detail = (await (await eventDetail(request("events/1"), { params: Promise.resolve({ eventId: "1" }) })).json()).data;
+    for (const record of [summaries["1"], detail]) {
+      assert.deepEqual(record.effects.map((effect) => effect.eventBonusType), bonusNames);
+      assertEventFieldOrder(record, record === detail);
+    }
+  });
+});
+
+test("Events promote every named bonus kind to its percentage field", async () => {
+  const views = eventViews();
+  for (const dataset of ["events", "eventDetails"]) {
+    const event = views[dataset]["1"];
+    event.effects = Array.from({ length: 6 }, (_, eventBonusType) => ({ ...event.effects[0], resourceTypeConstraint: 2, eventBonusType,
+      effectValue: [0, -1750, 2000, 2250, 2500] }));
+  }
+  await withObjectStore(eventObjects(views), null, async () => {
+    const event = (await (await events(request("events"))).json()).data["1"];
+    assert.deepEqual(event.memberBonuses, [{ pointPercent: [0, -17.5, 20, 22.5, 25], itemPercent: [0, -17.5, 20, 22.5, 25],
+      parameterPercent: [0, -17.5, 20, 22.5, 25], performancePercent: [0, -17.5, 20, 22.5, 25],
+      technicPercent: [0, -17.5, 20, 22.5, 25], visualPercent: [0, -17.5, 20, 22.5, 25] }]);
+    assert.equal(Object.hasOwn(event, "effects"), false);
+  });
+});
+
+test("Events reject invalid request syntax before storage and sanitize invalid snapshots", async () => {
+  for (const query of ["server=5", "server=03", "server=", "server=3&server=3", "locale=ja", "server=0&expand=all"]) {
+    for (const response of [await events(request(`events?${query}`)),
+      await eventDetail(request(`events/1?${query}`), { params: Promise.resolve({ eventId: "1" }) })]) {
+      assert.equal(response.status, 400);
+      assert.equal((await response.json()).success, false);
+      assert.match(response.headers.get("cache-control"), /no-store/);
+    }
+  }
+  for (const id of ["0", "01", "-1", "1junk", "9007199254740992"]) {
+    assert.equal((await eventDetail(request(`events/${id}`), { params: Promise.resolve({ eventId: id }) })).status, 404);
+  }
+  for (const mutate of [
+    (p) => { p.schema = "unknown"; },
+    (p) => { p.datasets.events.key = "private/other.json.gz"; },
+    (p) => { p.datasets.events.semanticSha256 = "0".repeat(64); },
+    (p) => { p.datasets.events.jsonSize += 1; },
+    (p) => { p.datasets.events.recordCount += 1; },
+  ]) {
+    await withObjectStore(eventObjects(), (objects) => {
+      const pointer = JSON.parse(objects.get(OURNOTES_EVENTS_API_POINTER_KEY));
+      mutate(pointer); objects.set(OURNOTES_EVENTS_API_POINTER_KEY, encoded(pointer));
+    }, async () => {
+      const response = await events(request("events"));
+      assert.equal(response.status, 503);
+      assert.match(response.headers.get("cache-control"), /no-store/);
+      assert.deepEqual(await response.json(), { success: false, error: { code: "OURNOTES_MASTER_UNAVAILABLE", message: "OurNotes master data is unavailable" } });
+    });
+  }
+  const malformed = eventViews(); malformed.events["1"].serverExtensions.pop();
+  await withObjectStore(eventObjects(malformed), null, async () => assert.equal((await events(request("events"))).status, 503));
+  for (const invalid of ["not-a-date", "2026/02/30 18:00:00"]) {
+    const malformed = eventViews(); malformed.eventDetails["1"].musics[0][0].startAt = invalid;
+    await withObjectStore(eventObjects(malformed), null, async () => {
+      const response = await eventDetail(request("events/1"), { params: Promise.resolve({ eventId: "1" }) });
+      assert.equal(response.status, 503);
+      assert.match(response.headers.get("cache-control"), /no-store/);
+    });
+  }
+});
+
+test("Events reader shares in-flight content, refreshes changed packs and ignores producer-only inputs", async (t) => {
+  let now = Date.now(); t.mock.method(Date, "now", () => now);
+  let objects = eventObjects(); const calls = [];
+  const source = { scope: `events:${randomUUID()}`, read: async (key) => {
+    calls.push(key); const body = objects.get(key); assert.ok(body, key);
+    return { ok: true, status: 200, headers: new Headers({ "content-length": String(body.length) }),
+      arrayBuffer: async () => body, json: async () => JSON.parse(body) };
+  } };
+  const [first, concurrent] = await Promise.all([readOurNotesEventDataset("events", source), readOurNotesEventDataset("events", source)]);
+  assert.strictEqual(first, concurrent); assert.equal(calls.length, 2);
+  assert.strictEqual(await readOurNotesEventDataset("events", source), first);
+  const detail = await readOurNotesEventDataset("eventDetails", source); assert.equal(calls.length, 3);
+  const changed = eventViews(); changed.events["1"].eventName = ["new", ...changed.events["1"].eventName.slice(1)];
+  objects = eventObjects(changed); now += 60_001;
+  assert.equal((await readOurNotesEventDataset("events", source))["1"].eventName[0], "new");
+  assert.equal(calls.length, 5);
+  assert.strictEqual(await readOurNotesEventDataset("eventDetails", source), detail);
+  assert.equal(calls.length, 5);
+  assert.ok(calls.every((key) => key === OURNOTES_EVENTS_API_POINTER_KEY || key.includes("/api/packs/")));
+});
+
+test("Events capacity is 32 MiB compressed and 128 MiB JSON, independent of producer budgets", () => {
+  const pointer = JSON.parse(eventObjects().get(OURNOTES_EVENTS_API_POINTER_KEY));
+  pointer.datasets.events.compressedSize = 32 * 1024 * 1024;
+  pointer.datasets.events.jsonSize = 128 * 1024 * 1024;
+  assert.doesNotThrow(() => parseOurNotesEventsPointer(pointer));
+  pointer.datasets.events.compressedSize += 1;
+  assert.throws(() => parseOurNotesEventsPointer(pointer));
+  pointer.datasets.events.compressedSize -= 1; pointer.datasets.events.jsonSize += 1;
+  assert.throws(() => parseOurNotesEventsPointer(pointer));
 });
 
 test("member names follow text references, retaining stage names without duplicating character names", () => {
