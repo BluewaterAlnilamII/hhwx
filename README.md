@@ -119,7 +119,7 @@ Please report security issues privately instead of opening a public issue. See [
 
 ## Contributing
 
-Contributions should keep secrets out of the repository, keep public docs free of private deployment details, and run `npm run lint` plus `npm run build` before review. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Contributions should keep secrets out of the repository and keep public docs free of private deployment details. Before review, select checks for the affected behavior and risks as described in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
