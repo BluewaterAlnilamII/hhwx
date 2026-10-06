@@ -17,8 +17,10 @@ All paths below start with `/api/ournotes/master`.
 | `/characters` | Shared character ID map | None |
 | `/bands` | Shared band ID map | None |
 | `/skills` | Five skill-kind ID maps, described below | None |
+| `/events` | Event summary ID map | Optional `server=0..4` |
+| `/events/{eventId}` | One event detail | Optional `server=0..4` |
 
-Success uses `{ "success": true, "data": ... }`. Map keys are positive decimal IDs. Member and support IDs are separate namespaces. Card IDs must be positive safe integers without leading zeros. There are no `all`/`main` aliases, directory details, pagination, language selectors or arbitrary field expansion.
+Success uses `{ "success": true, "data": ... }`. Map keys are positive decimal IDs. Member and support IDs are separate namespaces. Card and event IDs must be positive safe integers without leading zeros. There are no `all`/`main` aliases, directory details, pagination, language selectors or arbitrary field expansion.
 
 Without `server`, cards merge all four actual sources. With exactly one numeric `server`, only cards present in that source remain, and `serverExtensions` is removed. Localized fields and raw times retain all five slots. `characters`, `bands` and `skills` remain shared catalogs and reject queries.
 
@@ -269,6 +271,108 @@ The existing `cardType` integer has these official labels; it is separate from S
 | 4 | Amber | 琉金 |
 | 5 | Violet | 紫苑 |
 
+## Events
+
+The backend preserves one confirmed first-party history and produces the final summary/detail maps. A later master omitting an event or region does not delete its confirmed record. Web reads those final maps, validates their consumer structure, selects a server and formats HTTP responses; it does not rebuild history, join master tables or repeat cross-source consistency checks.
+
+Music, time and event reward fields use one base value from the first historically present slot in fixed `jp/en/tw/cn_intl/kr` order. Without `server`, records always include five-slot `serverExtensions` for presence and regional differences: `null` means absent, `{}` means present with the base values, and an object supplies only differing `startAt`, `endAt`, `displayEndAt`, `musics` or detail `stories`, `pointRewards`, `pointLoopRewards`, `rankingRewards`. When all five slots are present and identical, the field is `[{}, {}, {}, {}, {}]`. Arrays replace the complete base array; they do not merge by ID. A server query filters on presence, applies that slot's overrides, then removes `serverExtensions`. Explicit `null` times and `[]` collections override base values. Localized text retains its five slots. TW and `cn_intl` share records and times, with distinct Traditional/Simplified Chinese text. Missing text is `""`; missing time is `null`, and a present region's genuinely empty collection is `[]`.
+
+All Events time fields are decimal-string Unix timestamps in milliseconds or `null`, matching the Bandori Events timestamp representation. Web interprets private `yyyy/MM/dd HH:mm:ss` strings as JST (UTC+9), independently of the host timezone, and converts them after verifying the original pack. Empty source times become `null`; malformed dates fail the read. For example, `2026/09/30 18:00:00` becomes `"1790758800000"`. A timestamp identifies the same instant in every timezone; clients format it in their selected display timezone. No raw-date or ISO companion fields are added, and no release/availability state is inferred.
+
+| Summary fields | Contract |
+|---|---|
+| `eventType`, `eventName` | Native enum name (`None`, `ChallengeLive`); unknown codes retain their integer value. Five-slot name |
+| `startAt`, `endAt`, `displayEndAt` | Scalar decimal-string Unix milliseconds or `null`; regional differences use `serverExtensions` |
+| `imageAsset`, `logoAsset`, `backgroundAsset`, `bannerAsset` | Native resource strings, including empty values; no media URLs or availability promise |
+| `memberBonuses`, `supportBonuses` | Member/support target groups with rank 1–5 configuration percentages |
+| `effects` | Optional remaining rules that cannot be represented losslessly by those groups |
+| `musics` | One integer music ID array, preserving order and repeated IDs; regional differences use `serverExtensions` |
+| `pickUpCards`, `rewardCards` | Arrays of `{resourceType,resourceId}`; pickup references and actual point-reward cards remain distinct |
+| `serverExtensions` | Required five-slot presence and overrides in unfiltered responses; removed by server selection |
+
+`pickUpCards` comes from `MasterEventPickUpCard` rows associated through `_eventId`; each reference retains its card resource kind and ID. It declares an activity-associated Pickup list, not gacha probability or acquisition instructions. `rewardCards` contains distinct member/support references extracted from actual point rewards. These lists can overlap and neither replaces the complete bonus rules. Resolve `MemberCard` through `/cards/member/{id}` and `SupportCard` through `/cards/support/{id}`; their ID spaces are independent.
+
+`memberBonuses` and `supportBonuses` are arrays in first-target-appearance order within each card kind. Each row retains its complete nonzero target selectors (`characterId`, `bandId`, `cardType`, `tagId`, `memberCardId`, `supportCardId`) and the percentage fields for its actual rules. An omitted selector means no target was specified for it; multiple selectors stay together as one condition. Member/support ID spaces remain distinct.
+
+| Native bonus type | Public group field |
+|---|---|
+| `0 = EventPoint` | `pointPercent` |
+| `1 = EventItem` | `itemPercent` |
+| `2 = ParameterAll` | `parameterPercent` |
+| `3 = ParameterPfm` | `performancePercent` |
+| `4 = ParameterTec` | `technicPercent` |
+| `5 = ParameterVis` | `visualPercent` |
+
+Every percentage field is a complete five-number array for ranks 1–5, separate from the regional axis. Values are the original configuration divided by 100 without display rounding: `[1500,1750,2000,2250,2500]` becomes `[15,17.5,20,22.5,25]`. Zero and negative values remain. The game percentage display floors these values; callers may floor for matching presentation, but these arrays do not compute a player's final score, items or power. Only actual bonus fields are emitted; absent rules do not become five zeros.
+
+Rules merge only within the same card kind and identical complete target. If the current target row already has that bonus field, a new row preserves the duplicate instead of overwriting or summing it. Unknown bonus types, resource kinds outside member/support, or values that cannot recover the original integer by rounding `percent * 100` remain in optional `effects` with their original five-value `effectValue`. Those remaining rules expose the named or unknown integer `resourceTypeConstraint/eventBonusType` and nonzero targets. A rule appears in exactly one representation; `effects` is omitted when all rules are grouped. The two group arrays remain present, including when genuinely empty. IDs and quantities stay numeric; resource ID `0` in rewards remains valid. No top-level event ID is repeated.
+
+`resourceType` in every resource/reward row and `resourceTypeConstraint` in effects share the following `GameResourceType` mapping. Code `0` has no declared name and remains numeric. International-only entries are included without changing the common codes.
+
+| Code | API name | Code | API name |
+|---|---|---|---|
+| 1 | `Item` | 2 | `MemberCard` |
+| 3 | `SupportCard` | 4 | `Voice` |
+| 5 | `LoginBonus` | 6 | `Subscription` |
+| 7 | `GachaPoint` | 8 | `Music` |
+| 9 | `Stamp` | 10 | `PremiumPass` |
+| 11 | `EventMedal` | 12 | `LiveLaneSkin` |
+| 13 | `LiveNoteSkin` | 14 | `LiveNoteEffectSkin` |
+| 15 | `LiveNoteSEGroup` | 16 | `VipPoint` |
+| 17 | `Degree` | 18 | `Background` |
+| 19 | `Spot` | 1001 | `BiliChatTheme` |
+| 1002 | `BiliChatBubble` | 1003 | `BiliChatFrame` |
+
+| Field | API mapping |
+|---|---|
+| Effect `cardType` | `1 = Ruby`, `2 = Azure`, `3 = Jade`, `4 = Amber`, `5 = Violet`; original `0 = None` is an unset target and is omitted |
+| Music `musicType` | `0 = None`, the same `1..5 = Ruby/Azure/Jade/Amber/Violet`, `99 = All` |
+| Music `gekisouMission1/2/3` | `0 = None`, `1 = Combo`, `2 = Luck`, `3 = JustCount`, `4 = All` |
+
+Card/music names are public display aliases for native `Red/Blue/Green/Yellow/Purple`, as explicitly agreed. The two enums remain separate: only `LiveMusicType` declares `All = 99`. Every known mapping above is applied in HTTP output; no numeric/name pair is duplicated in a record.
+
+This grouping, compact representation, timestamp conversion and enum naming are HTTP projections: private packs retain their original integer codes, `{musicId}` summary items, five regional music/time/reward slots, raw date strings, effect values and complete effect targets. Web verifies the original pack hashes before projecting the response. No backend recipe, pointer schema or stored object changes are required; detail music objects keep `musicId` and their other fields. Summary fields follow the summary table. Detail uses its own explicit order below instead of appending its fields after the entire summary. Server selection applies overrides and removes `serverExtensions` without reordering the remaining fields. Consumers of the earlier development response must replace `musics[serverSlot]`, time-slot and event-reward-slot access with these scalar/base fields plus extension materialization, or request `?server=n`. Consumers access object fields by name; presentation order does not change field meaning or array-item order.
+
+| Detail field order | Fields, in order |
+|---|---|
+| Identity | `eventType`, `eventName` |
+| Times | `startAt`, `endAt`, `displayEndAt` |
+| References | `storyChapterId`, `eventItemId`, `musicId` |
+| Ranking configuration | `isRankingDisabled`, `isMusicRankingDisabled`, `isTotalMusicRankingDisabled` |
+| Assets | `imageAsset`, `logoAsset`, `backgroundAsset`, `bannerAsset` |
+| Bonuses | `memberBonuses`, `supportBonuses`, optional `effects` |
+| Card references | `pickUpCards`, `rewardCards` |
+| Challenges | `musics` |
+| Event rewards | `pointRewards`, `pointLoopRewards`, `rankingRewards` |
+| Episodes | `stories` |
+| Regional presence/overrides | `serverExtensions`, always last in unfiltered responses |
+
+Summary extension types admit only `startAt`, `endAt`, `displayEndAt` and integer-array `musics`. Detail extension types additionally admit `pointRewards`, `pointLoopRewards`, `rankingRewards` and `stories`, with full music objects in `musics`. Extension objects follow that field order, excluding absent fields. A slot-level `null` means the event is absent; a timestamp field's `null` remains an explicit unset-time override, not field deletion. The public types keep the extension field optional to also describe server-selected responses, while unfiltered records always provide all five slots.
+
+Nested point-reward rows emit `point` before `resourceType/resourceId/resourceCount`; loop-reward rows emit `loopStartEventPoint/loopEventPoint` first; both event and music ranking rows emit `fromRank/toRank` first. Resource references emit type then ID, and ordinary reward rows add quantity last. Music items follow the music-field list below, with ranking rewards last. Story items emit identity/number/adv reference, description and times, flags, unlock settings, assets, then their two reward arrays. Bonus rows emit target selectors in the order stated above, then existing `pointPercent`, `itemPercent`, `parameterPercent`, `performancePercent`, `technicPercent`, `visualPercent`. Optional fields are omitted without removing zero, false, null or empty-array values.
+
+Detail retains summary fields, with full music items, and adds:
+
+| Detail fields | Contract |
+|---|---|
+| `storyChapterId`, `eventItemId`, `musicId` | Native references; the event's own music reference is separate from its challenges |
+| `isRankingDisabled`, `isMusicRankingDisabled`, `isTotalMusicRankingDisabled` | Independent native booleans, not ranking RPC availability |
+| `pointRewards` | One array of `{point,resourceType,resourceId,resourceCount}`; full-array regional overrides |
+| `pointLoopRewards` | One array of `{loopStartEventPoint,loopEventPoint,resourceType,resourceId,resourceCount}`; full-array regional overrides |
+| `rankingRewards` | One array of `{fromRank,toRank,resourceType,resourceId,resourceCount}`; full-array regional overrides |
+| `musics` | One challenge array, using the item structure below; full-array regional overrides |
+| `stories` | Referenced episode metadata, using the item structure below |
+
+The three event reward collections remain distinct arrays. Regional comparison includes every row, threshold/rank range, resource type, ID and quantity in order. Repeated rows, zero quantities and genuinely empty arrays remain; a nonempty reward from another source does not replace an empty base array. A missing region remains `null` in `serverExtensions` instead of receiving another region's rewards. Only the differing collection is overridden. Song ranking rewards and the two story reward collections keep their existing locations.
+
+A detail music item contains `musicId`, `challengeMusicId`, `musicType`, `gekisouMission1`, `gekisouMission2`, `gekisouMission3`, `startAt`, `endAt` and `musicRankingRewards`. All three gekisou fields remain present even when their value is `None`; they are inside `data.musics[musicIndex]`, not in the summary's ID array. `None` means that this challenge configuration does not specify a mission type; it does not prove the underlying song has no gekisou gameplay. Its times are scalar timestamp strings or `null`; unset values are not filled from event times. Its ranking rewards are a flat array with the same row fields as `rankingRewards`. Regional comparison covers the complete music array, including challenge configuration, times and ranking rewards, even when music IDs are equal. There is no additional regional axis inside a music item, embedded song catalog or inferred music achievement.
+
+A story contains `episodeId`, `episodeNumber`, `advId`, five-slot `description`, scalar timestamp-string-or-null `startAt/endAt`, `unlockEpisodeNumber`, `eventPoint`, `characterId`, `characterRank`, `playerRank`, `bandRank`, `storyFriendshipEpisodeId`, `isAnotherEpisode`, `isExtraEpisode`, `banner`, `image`, `rewards` and `eventRewards`. Differing regional story times produce a complete `stories` array override on the event; localized descriptions remain five-slot text. The two reward arrays independently contain `{resourceType,resourceId,resourceCount}`. These are native unlock settings and resource references, not player unlock state, story text or playable media. References and zero/false/empty values are preserved; internal relationship IDs and raw source rows are not exposed.
+
+Events discover `ournotes/master/events-v1/api/active.json` with schema `ournotes-events-api-pointer-v3` and consume only the `events/eventDetails` descriptors and packs. Web validates the schema, generation, safe content-addressed pack keys, compressed/semantic hashes, sizes, record count and public structure. Producer `revision`, `sourceIdentity`, master/history provenance and `recentPackKeys` belong to backend publication/verification: Web does not recompute them or require exactly two `datasets` entries. Private dependencies do not become public endpoints. The reader accepts up to 32 MiB compressed, 128 MiB JSON and 10,000 records per pack, with bounded two-entry content caching and a 15-second read deadline. Producer capacity is independent; these reader limits alone do not raise the backend's current 16 MiB pack budget.
+
+Events add no media extraction, cutoff collection, database, locale/expand/page query or unverified Bandori-derived fields. Lists read the summary pack and details read the detail pack; filtered directories are not separately cached. Both views are pinned by one backend root, while separate HTTP requests can observe a later publication.
+
 ## Shared catalogs and images
 
 Character records contain `characterName[5]`, `shortName[5]`, `bandId`, `displayOrder`, and `colorCode`. Band records contain `bandName[5]` and `colorCode`. Names use the same fixed source/locale mapping. Structural fields must agree across sources. Cards reference characters, and characters reference bands; cards do not embed these catalogs.
@@ -282,11 +386,11 @@ Errors use `{ "success": false, "error": { "code": "...", "message": "..." } }` 
 | Status | Condition |
 |---|---|
 | 400 | Unknown, duplicate or invalid query parameter; any directory query |
-| 404 | Unknown kind, invalid ID, or card absent from the requested view |
+| 404 | Unknown card kind, invalid ID, or card/event absent from the requested view |
 | 503 | Missing configuration/source, corrupt snapshot, invalid references or conflicting data |
 | 500 | Unclassified application error |
 
-Success reuses `SNAPSHOT_HTTP_CACHE_POLICY`: browser `max-age=300, stale-while-revalidate=1800`; Cloudflare `max-age=1800, stale-while-revalidate=86400`. Edge cache keys must distinguish the card `server` query. Source pointers have a 60-second process cache. Immutable objects use bounded caches and shared in-flight reads; merged views are reused while input identities remain unchanged. TW and `cn_intl` share one input. Separate requests do not promise an atomic release across all servers or images.
+Success reuses `SNAPSHOT_HTTP_CACHE_POLICY`: browser `max-age=300, stale-while-revalidate=1800`; Cloudflare `max-age=1800, stale-while-revalidate=86400`. Edge cache keys must distinguish card/event `server` queries. Source pointers have a 60-second process cache. Immutable objects use bounded caches and shared in-flight reads; merged views are reused while input identities remain unchanged. TW and `cn_intl` share one input. Separate requests do not promise an atomic release across all servers or images.
 
 ## Server configuration and verification
 
@@ -299,3 +403,5 @@ The generic master roots must be initialized before deploying these readers. Exi
 Run `npm run test:ournotes-master` for the bounded local fixture, route contracts, corruption failures, five-slot selection and cache reuse. Shared-reader changes also require the relevant Bandori tests, typecheck, lint and build. The fixture contains selected metadata with version/hash provenance, no complete master tables or credentials.
 
 For Skills, publish all four verified producer artifacts and verify signed reads before activating Web. Existing assets consumers and media need no update for this dataset. Verify all seven endpoints, query-aware card caching and no-store errors. Master readiness is independent of image jobs. Local tests do not replace production verification.
+
+For Events, verify the backend's final root and two packs before activating Web. The existing test command also covers final-view fields, five-slot historical selection, no-store errors, corruption failures, consumer capacity and content-cache refresh. For an Events-only HTTP projection change, select its cases with `node --import tsx --test --test-name-pattern '^Events ' tests/ournotes-master-api.test.mjs`, run typecheck and lint the changed modules, then verify both dev routes and server selections against the published packs. This scope does not require a full build or unrelated suites. After deployment, verify both HTTP routes and all server selections against the exact published packs, including query-aware edge caching. This release does not require rerunning backend history/CAS/rollback/GC tests or rebuilding master/media inputs.

@@ -17,8 +17,10 @@
 | `/characters` | 共享角色 ID map | 无 |
 | `/bands` | 共享乐队 ID map | 无 |
 | `/skills` | 下述五种技能 ID map | 无 |
+| `/events` | 活动摘要 ID map | 可选 `server=0..4` |
+| `/events/{eventId}` | 单个活动详情 | 可选 `server=0..4` |
 
-成功响应为 `{ "success": true, "data": ... }`。Map key 是正整数十进制 ID；member/support 的 ID 空间独立。卡 ID 必须是无前导零的正安全整数。不提供 `all/main` 别名、目录详情、分页、语言选择或任意字段展开。
+成功响应为 `{ "success": true, "data": ... }`。Map key 是正整数十进制 ID；member/support 的 ID 空间独立。卡及活动 ID 必须是无前导零的正安全整数。不提供 `all/main` 别名、目录详情、分页、语言选择或任意字段展开。
 
 无 `server` 时合并四个实际来源；指定唯一数字 `server` 时，只保留对应来源收录的卡并移除 `serverExtensions`。本地化字段和原始时间仍保留五槽。`characters/bands/skills` 是共享目录，拒绝查询参数。
 
@@ -269,6 +271,108 @@ Leader 效果不输出 timing/release 字段；其余类别提供 `activationTim
 | 4 | Amber | 琉金 |
 | 5 | Violet | 紫苑 |
 
+## Events
+
+后端保存一份已确认第一方历史，生成最终摘要／详情 map。后续 master 缺少旧活动或区域时不删除已确认记录。Web 读取最终 map，验证消费结构、按服筛选并包装 HTTP 响应，不重建历史、关联 master 表或重复跨服一致性校验。
+
+曲目、时间和活动奖励字段统一取固定 `jp/en/tw/cn_intl/kr` 顺序中第一个历史存在槽的值作为基础值。无 `server` 时，记录始终提供五槽 `serverExtensions` 保存存在性和区域差异：`null` 表示不存在，`{}` 表示存在且沿用基础值，对象只提供有差异的 `startAt`、`endAt`、`displayEndAt`、`musics` 或详情 `stories`、`pointRewards`、`pointLoopRewards`、`rankingRewards`。五槽全部存在且内容相同时，仍提供 `[{}, {}, {}, {}, {}]`。数组整体替换，不按 ID 合并。指定服时按存在性筛选，应用该槽覆盖，然后移除 `serverExtensions`；显式 `null` 时间及 `[]` 集合均覆盖基础值。本地化文本仍保留五槽。TW 与 `cn_intl` 共用记录和时间，繁中／简中文本分别保留。缺失文本为 `""`，缺失时间为 `null`，活动存在但集合真实为空为 `[]`。
+
+Events 的所有时间字段统一为十进制字符串形式的 Unix 毫秒时间戳或 `null`，与 Bandori Events 的时间戳表示一致。Web 在核验原始包后，将私有 `yyyy/MM/dd HH:mm:ss` 字符串按 JST（UTC+9）解释并转换，不依赖宿主机时区。源时间为空时输出 `null`，非法日期使读取失败。例如 `2026/09/30 18:00:00` 转为 `"1790758800000"`。时间戳在各时区表示同一时刻，调用者按选定显示时区格式化。不增加原日期／ISO 伴随字段，也不推断开放或可用状态。
+
+| 摘要字段 | 合同 |
+|---|---|
+| `eventType`、`eventName` | 原生枚举名称（`None`、`ChallengeLive`），未知码保留整数；五槽名称 |
+| `startAt`、`endAt`、`displayEndAt` | 单值十进制字符串 Unix 毫秒时间戳或 `null`；区域差异使用 `serverExtensions` |
+| `imageAsset`、`logoAsset`、`backgroundAsset`、`bannerAsset` | 原生资源字符串，保留空值，不提供媒体 URL 或可用性承诺 |
+| `memberBonuses`、`supportBonuses` | 成员／留影的完整目标条件及 rank 1–5 配置百分比 |
+| `effects` | 可选，仅保留无法在上述分组中无损表达的规则 |
+| `musics` | 单个整数曲目 ID 数组，保留原顺序及重复 ID；区域差异使用 `serverExtensions` |
+| `pickUpCards`、`rewardCards` | `{resourceType,resourceId}` 数组，活动 pickup 与实际积分奖励卡分别保留 |
+| `serverExtensions` | 无筛选响应必带五槽存在性及覆盖；指定服时移除 |
+
+`pickUpCards` 来自按 `_eventId` 关联的 `MasterEventPickUpCard`，每项保留卡牌资源种类及 ID，表达活动配置登记的 Pickup 引用，不声明抽卡概率或获取方式。`rewardCards` 是从实际积分奖励中提取并去重的成员／留影引用。两份列表可以重叠，也不能替代完整加成规则。`MemberCard` 关联 `/cards/member/{id}`，`SupportCard` 关联 `/cards/support/{id}`，两个 ID 空间独立。
+
+`memberBonuses`、`supportBonuses` 是数组，组内按目标首次出现的顺序排列。每条保留完整的非零目标字段（`characterId`、`bandId`、`cardType`、`tagId`、`memberCardId`、`supportCardId`）和实际存在的加成字段；省略目标表示未指定该目标，多项条件始终留在同一条记录。成员／留影的 ID 空间保持独立。
+
+| 原生加成类型 | 公开分组字段 |
+|---|---|
+| `0 = EventPoint` | `pointPercent` |
+| `1 = EventItem` | `itemPercent` |
+| `2 = ParameterAll` | `parameterPercent` |
+| `3 = ParameterPfm` | `performancePercent` |
+| `4 = ParameterTec` | `technicPercent` |
+| `5 = ParameterVis` | `visualPercent` |
+
+每个百分比字段都是 rank 1–5 的完整五项数值数组，与区域轴独立。使用原配置除以 100，不做显示取整：`[1500,1750,2000,2250,2500]` 变为 `[15,17.5,20,22.5,25]`，零值及负值仍保留。游戏的百分比展示会向下取整，调用者可在显示时对齐；这些数组不计算玩家最终积分、道具或战力。只输出实际存在的加成字段，不将不存在的规则填成五个零。
+
+只有同一卡种、完整目标条件相同的规则才合并。当前目标行已经含有同种加成字段时新增一条记录，保留重复规则，不覆盖或求和。未知加成类型、成员／留影以外的资源种类，以及无法通过对 `percent * 100` 取最近整数恢复原值的配置，继续放在可选 `effects` 中，保留原始五项 `effectValue`、名称或未知整数形式的 `resourceTypeConstraint/eventBonusType` 和非零目标。一条规则只出现于一种表示；全部成功分组时省略 `effects`。两个分组数组始终提供，真实空组为 `[]`。ID、数量仍为原始整数，奖励中的资源 ID `0` 合法。记录不重复顶层活动 ID。
+
+所有资源／奖励行的 `resourceType` 与加成的 `resourceTypeConstraint` 共用以下 `GameResourceType` 映射。`0` 没有已声明名称，保留整数。国际服额外项同样提供，共通编码不变。
+
+| 码 | API 名称 | 码 | API 名称 |
+|---|---|---|---|
+| 1 | `Item` | 2 | `MemberCard` |
+| 3 | `SupportCard` | 4 | `Voice` |
+| 5 | `LoginBonus` | 6 | `Subscription` |
+| 7 | `GachaPoint` | 8 | `Music` |
+| 9 | `Stamp` | 10 | `PremiumPass` |
+| 11 | `EventMedal` | 12 | `LiveLaneSkin` |
+| 13 | `LiveNoteSkin` | 14 | `LiveNoteEffectSkin` |
+| 15 | `LiveNoteSEGroup` | 16 | `VipPoint` |
+| 17 | `Degree` | 18 | `Background` |
+| 19 | `Spot` | 1001 | `BiliChatTheme` |
+| 1002 | `BiliChatBubble` | 1003 | `BiliChatFrame` |
+
+| 字段 | API 映射 |
+|---|---|
+| 加成 `cardType` | `1 = Ruby`、`2 = Azure`、`3 = Jade`、`4 = Amber`、`5 = Violet`；原 `0 = None` 表示未指定目标，省略 |
+| 曲目 `musicType` | `0 = None`，同样的 `1..5 = Ruby/Azure/Jade/Amber/Violet`，`99 = All` |
+| 曲目 `gekisouMission1/2/3` | `0 = None`、`1 = Combo`、`2 = Luck`、`3 = JustCount`、`4 = All` |
+
+卡牌／曲目名称按明确约定使用原生 `Red/Blue/Green/Yellow/Purple` 的上述公开展示别名。两个枚举仍独立，只有 `LiveMusicType` 声明 `All = 99`。上述已知类型均在 HTTP 输出中映射，不在记录里重复提供数字／名称两份字段。
+
+上述分组、精简、时间戳转换和枚举名称映射只在 HTTP 输出投影中完成：私有包继续保留整数码、原 `{musicId}` 摘要项、五槽曲目／时间／奖励、原始日期字符串、原加成数值及完整目标，Web 先核验原始包 hash 再投影响应。不更改后端构建配方、pointer schema 或已存对象；详情曲目对象仍保留 `musicId` 及其他字段。摘要按摘要表顺序输出；详情独立使用下表顺序，不再先输出完整摘要再追加详情字段。按服筛选应用覆盖并移除 `serverExtensions`，其余字段不重排。使用早期开发响应的调用者须将 `musics[服槽]`、时间槽和活动奖励槽访问改为单值／基础字段加扩展物化，或直接请求 `?server=n`。调用者按字段名读取；展示顺序不改变字段含义或数组元素顺序。
+
+| 详情字段顺序 | 按序排列的字段 |
+|---|---|
+| 身份 | `eventType`、`eventName` |
+| 时间 | `startAt`、`endAt`、`displayEndAt` |
+| 关联引用 | `storyChapterId`、`eventItemId`、`musicId` |
+| 排名配置 | `isRankingDisabled`、`isMusicRankingDisabled`、`isTotalMusicRankingDisabled` |
+| 资源 | `imageAsset`、`logoAsset`、`backgroundAsset`、`bannerAsset` |
+| 加成 | `memberBonuses`、`supportBonuses`、可选 `effects` |
+| 卡牌引用 | `pickUpCards`、`rewardCards` |
+| 挑战曲目 | `musics` |
+| 活动奖励 | `pointRewards`、`pointLoopRewards`、`rankingRewards` |
+| 剧情 | `stories` |
+| 区域存在性／覆盖 | `serverExtensions`，无筛选时始终放在最后 |
+
+摘要扩展类型只允许 `startAt`、`endAt`、`displayEndAt` 和整数数组形式的 `musics`。详情扩展类型额外允许 `pointRewards`、`pointLoopRewards`、`rankingRewards`、`stories`，其中 `musics` 使用完整曲目对象。扩展对象按上述字段顺序排列，省略未覆盖的字段。整个槽为 `null` 表示活动不存在；时间字段的 `null` 表示显式未设置时间，保留该字段，不表示删除字段。公开类型为兼容指定服后的响应保留可选扩展字段，无筛选记录仍始终提供五槽。
+
+积分奖励项先输出 `point`，再输出 `resourceType/resourceId/resourceCount`；循环奖励项先输出 `loopStartEventPoint/loopEventPoint`；活动及歌曲排名奖励项先输出 `fromRank/toRank`。资源引用先类型后 ID，普通奖励最后增加数量。曲目项遵循下文曲目字段列表，排名奖励放最后。剧情项依次输出身份／编号／adv 引用、描述和时间、标记、解锁配置、资源、两组奖励。加成项先按上文顺序输出完整目标，再按 `pointPercent`、`itemPercent`、`parameterPercent`、`performancePercent`、`technicPercent`、`visualPercent` 排列实际存在的字段。省略可选字段时，不删除零值、false、null 或空数组。
+
+详情保留摘要字段，曲目项使用完整结构，并增加：
+
+| 详情字段 | 合同 |
+|---|---|
+| `storyChapterId`、`eventItemId`、`musicId` | 原生引用；活动主曲目与挑战集合分别表达 |
+| `isRankingDisabled`、`isMusicRankingDisabled`、`isTotalMusicRankingDisabled` | 三个独立原生 bool，不表示排名 RPC 可用性 |
+| `pointRewards` | 单个 `{point,resourceType,resourceId,resourceCount}` 数组；区域差异整体覆盖数组 |
+| `pointLoopRewards` | 单个 `{loopStartEventPoint,loopEventPoint,resourceType,resourceId,resourceCount}` 数组；区域差异整体覆盖数组 |
+| `rankingRewards` | 单个 `{fromRank,toRank,resourceType,resourceId,resourceCount}` 数组；区域差异整体覆盖数组 |
+| `musics` | 单个挑战曲目数组，项结构如下；区域差异整体覆盖数组 |
+| `stories` | 活动引用的剧情元数据，项结构如下 |
+
+三组活动奖励继续分别保存为数组。区域比较包含每一条记录的门槛／排名区间、资源类型、ID、数量及原顺序，保留重复行、零数量及真实空数组；不使用其他来源的非空奖励替换空的基础数组。缺服仍在 `serverExtensions` 中标记为 `null`，不借用其他服奖励。仅覆盖有差异的那组集合。歌曲排名奖励及两组剧情奖励继续保留原位置。
+
+曲目详情含 `musicId`、`challengeMusicId`、`musicType`、`gekisouMission1`、`gekisouMission2`、`gekisouMission3`、`startAt`、`endAt`、`musicRankingRewards`。三个激奏字段即使值为 `None` 也始终提供，位于 `data.musics[曲目下标]`，不在摘要的 ID 数组中。`None` 表示该挑战配置未指定激奏类型，不能据此判断曲目本身没有激奏玩法。时间为单值时间戳字符串或 `null`，空值不补成活动时间；歌曲排名奖励为与 `rankingRewards` 同字段的平面数组。区域比较覆盖完整曲目数组，包括挑战配置、时间及歌曲排名奖励，即使曲目 ID 相同也保留这些差异。曲目内部不增加区域轴、完整曲目目录或推导的成就字段。
+
+剧情含 `episodeId`、`episodeNumber`、`advId`、五槽 `description`、单值时间戳字符串或 `null` 的 `startAt/endAt`、`unlockEpisodeNumber`、`eventPoint`、`characterId`、`characterRank`、`playerRank`、`bandRank`、`storyFriendshipEpisodeId`、`isAnotherEpisode`、`isExtraEpisode`、`banner`、`image`、`rewards`、`eventRewards`。剧情时间存在区域差异时，在活动的扩展中整体覆盖 `stories` 数组，本地化描述仍保留五槽。两组奖励独立保存 `{resourceType,resourceId,resourceCount}` 数组。这些是原生解锁配置及资源引用，不代表玩家解锁状态、剧情正文或可播放媒体。引用及零值、false、空值保留；内部关系 ID 和原始行不公开。
+
+Events 通过 `ournotes/master/events-v1/api/active.json`（schema `ournotes-events-api-pointer-v3`）发现，仅消费 `events/eventDetails` 描述符及包。Web 校验 schema、generation、安全内容寻址 key、压缩／semantic hash、大小、数量和公开结构。producer 的 `revision`、`sourceIdentity`、master/history 来源及 `recentPackKeys` 由后端发布／验收负责；Web 不重算，也不要求 `datasets` 恰好只有两项。私有依赖不成为公开接口。reader 每包最多压缩 32 MiB、JSON 128 MiB、10,000 条记录，使用有界两项内容缓存及 15 秒读取期限。producer 容量独立；reader 放宽本身不会提高后端当前的 16 MiB pack 预算。
+
+Events 不增加媒体提取、cutoff 抓取、数据库、locale/expand/page 查询或未确认的 Bandori 派生字段。列表只读摘要包，详情只读详情包，不单独缓存各服目录。两个视图由同一后端根固定，独立 HTTP 请求仍可能跨越一次新发布。
+
 ## 共享目录与图片
 
 角色记录包含 `characterName[5]`、`shortName[5]`、`bandId`、`displayOrder`、`colorCode`；乐队记录包含 `bandName[5]`、`colorCode`。名称使用同一固定来源/语言映射，结构字段必须跨服一致。卡牌关联角色，角色关联乐队，不在卡牌中重复内嵌目录。
@@ -282,11 +386,11 @@ Leader 效果不输出 timing/release 字段；其余类别提供 `activationTim
 | 状态码 | 条件 |
 |---|---|
 | 400 | 未知、重复或非法查询参数；目录携带任何查询参数 |
-| 404 | 未知卡种、非法 ID，或卡不在请求视图中 |
+| 404 | 未知卡种、非法 ID，或卡／活动不在请求视图中 |
 | 503 | 配置/来源缺失、快照损坏、引用无效或数据冲突 |
 | 500 | 未归类程序错误 |
 
-成功响应复用 `SNAPSHOT_HTTP_CACHE_POLICY`：浏览器 `max-age=300, stale-while-revalidate=1800`；Cloudflare `max-age=1800, stale-while-revalidate=86400`。边缘缓存键必须区分卡牌 `server` 查询。来源 pointer 的进程缓存为 60 秒；不可变对象使用有界缓存与并发请求合并，输入身份不变时复用聚合结果。TW/cn_intl 共用输入。独立请求不承诺跨服或主数据/图片原子切换。
+成功响应复用 `SNAPSHOT_HTTP_CACHE_POLICY`：浏览器 `max-age=300, stale-while-revalidate=1800`；Cloudflare `max-age=1800, stale-while-revalidate=86400`。边缘缓存键必须区分卡牌／活动 `server` 查询。来源 pointer 的进程缓存为 60 秒；不可变对象使用有界缓存与并发请求合并，输入身份不变时复用聚合结果。TW/cn_intl 共用输入。独立请求不承诺跨服或主数据/图片原子切换。
 
 ## 服务端配置与验证
 
@@ -299,3 +403,5 @@ Cards 固定各服 `ournotes/master/cards-v1/{server}/api/active.json`，直接�
 运行 `npm run test:ournotes-master` 检查小型本地 fixture、路由合同、损坏失败、五槽筛选与缓存复用。公共读取工具改动还需相关 Bandori 回归及 typecheck、lint、build。Fixture 仅保留带版本/hash 来源的选定元数据，不含完整 master 表或凭据。
 
 Skills 先发布四服已验收产物并完成签名回读，最后启用 Web。本数据集不要求更新既有 assets 消费者或媒体。核实七路响应、区分卡牌查询的边缘缓存和错误 no-store。主数据就绪独立于图片任务；离线检查不能替代生产验收。
+
+Events 先确认后端最终根及两包，再启用 Web。现有测试命令覆盖最终字段、五槽历史筛选、错误 no-store、损坏拒绝、消费端容量和内容缓存刷新。仅修改 Events HTTP 投影时，用 `node --import tsx --test --test-name-pattern '^Events ' tests/ournotes-master-api.test.mjs` 选取相关用例，运行 typecheck 和改动模块的 lint，再将 dev 两路及服筛选与已发布包对照；该范围不要求完整 build 或无关测试组。部署后将两个 HTTP 路由及全部服筛选与准确已发布包对照，并验证边缘查询缓存。本轮不重跑后端历史／CAS／回滚／GC 测试，也不重建 master 或媒体输入。
