@@ -25,6 +25,10 @@ export function extensionTypes(detail: OurNotesEventDetail) {
   // @ts-expect-error Detail overrides contain full music objects, not IDs.
   const wrongDetail: DetailExtension = { musics: [19] };
   const validDetail: DetailExtension = { musics: detail.musics, stories: detail.stories,
-    pointRewards: detail.pointRewards, pointLoopRewards: detail.pointLoopRewards, rankingRewards: detail.rankingRewards };
-  return [wrongMusic, wrongStories, wrongRewards, wrongDetail, validDetail];
+    pointRewards: detail.pointRewards, pointLoopRewards: detail.pointLoopRewards, rankingRewards: detail.rankingRewards,
+    imageAsset: "", logoAsset: "logo", backgroundAsset: "", bannerAsset: "Banner_1" };
+  const validSummary: SummaryExtension = { imageAsset: "", logoAsset: "logo", backgroundAsset: "", bannerAsset: "Banner_1" };
+  // @ts-expect-error Asset overrides preserve strings, including empty strings, but never null.
+  const wrongAsset: SummaryExtension = { bannerAsset: null };
+  return [wrongMusic, wrongStories, wrongRewards, wrongDetail, validDetail, validSummary, wrongAsset];
 }

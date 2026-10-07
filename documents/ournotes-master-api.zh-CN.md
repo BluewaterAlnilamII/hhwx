@@ -273,9 +273,11 @@ Leader 效果不输出 timing/release 字段；其余类别提供 `activationTim
 
 ## Events
 
+四个活动资源字段的区域差异由 backend 在私有包中保存为基础字符串与既有 `serverExtensions` 覆盖，Web 验证字符串类型并保留覆盖。仅字段实际不同时提供覆盖，空字符串有效；未开放服仍为 `null`，TW 与 `cn_intl` 共用资源值。发布顺序为先更新兼容旧空对象槽的 Web，再发布 backend `ournotes-events-api-v4` 产物。此变更不触发活动图片抓取或发布。
+
 后端保存一份已确认第一方历史，生成最终摘要／详情 map。后续 master 缺少旧活动或区域时不删除已确认记录。Web 读取最终 map，验证消费结构、按服筛选并包装 HTTP 响应，不重建历史、关联 master 表或重复跨服一致性校验。
 
-曲目、时间和活动奖励字段统一取固定 `jp/en/tw/cn_intl/kr` 顺序中第一个历史存在槽的值作为基础值。无 `server` 时，记录始终提供五槽 `serverExtensions` 保存存在性和区域差异：`null` 表示不存在，`{}` 表示存在且沿用基础值，对象只提供有差异的 `startAt`、`endAt`、`displayEndAt`、`musics` 或详情 `stories`、`pointRewards`、`pointLoopRewards`、`rankingRewards`。五槽全部存在且内容相同时，仍提供 `[{}, {}, {}, {}, {}]`。数组整体替换，不按 ID 合并。指定服时按存在性筛选，应用该槽覆盖，然后移除 `serverExtensions`；显式 `null` 时间及 `[]` 集合均覆盖基础值。本地化文本仍保留五槽。TW 与 `cn_intl` 共用记录和时间，繁中／简中文本分别保留。缺失文本为 `""`，缺失时间为 `null`，活动存在但集合真实为空为 `[]`。
+曲目、时间、活动奖励及四个活动资源字段统一取固定 `jp/en/tw/cn_intl/kr` 顺序中第一个历史存在槽的值作为基础值。无 `server` 时，记录始终提供五槽 `serverExtensions` 保存存在性和区域差异：`null` 表示不存在，`{}` 表示存在且沿用基础值，对象只提供有差异的 `startAt`、`endAt`、`displayEndAt`、`imageAsset`、`logoAsset`、`backgroundAsset`、`bannerAsset`、`musics` 或详情 `stories`、`pointRewards`、`pointLoopRewards`、`rankingRewards`。五槽全部存在且内容相同时，仍提供 `[{}, {}, {}, {}, {}]`。数组整体替换，不按 ID 合并。指定服时按存在性筛选，应用该槽覆盖，然后移除 `serverExtensions`；显式 `null` 时间、`[]` 集合及空资源字符串均覆盖基础值。本地化文本仍保留五槽。TW 与 `cn_intl` 共用记录和时间，繁中／简中文本分别保留。缺失文本为 `""`，缺失时间为 `null`，活动存在但集合真实为空为 `[]`。
 
 Events 的所有时间字段统一为十进制字符串形式的 Unix 毫秒时间戳或 `null`，与 Bandori Events 的时间戳表示一致。Web 在核验原始包后，将私有 `yyyy/MM/dd HH:mm:ss` 字符串按 JST（UTC+9）解释并转换，不依赖宿主机时区。源时间为空时输出 `null`，非法日期使读取失败。例如 `2026/09/30 18:00:00` 转为 `"1790758800000"`。时间戳在各时区表示同一时刻，调用者按选定显示时区格式化。不增加原日期／ISO 伴随字段，也不推断开放或可用状态。
 
@@ -283,7 +285,7 @@ Events 的所有时间字段统一为十进制字符串形式的 Unix 毫秒时�
 |---|---|
 | `eventType`、`eventName` | 原生枚举名称（`None`、`ChallengeLive`），未知码保留整数；五槽名称 |
 | `startAt`、`endAt`、`displayEndAt` | 单值十进制字符串 Unix 毫秒时间戳或 `null`；区域差异使用 `serverExtensions` |
-| `imageAsset`、`logoAsset`、`backgroundAsset`、`bannerAsset` | 原生资源字符串，保留空值，不提供媒体 URL 或可用性承诺 |
+| `imageAsset`、`logoAsset`、`backgroundAsset`、`bannerAsset` | 基础值为首个存在服的原生资源字符串，差异放入 `serverExtensions`；保留空值，不提供媒体 URL 或可用性承诺 |
 | `memberBonuses`、`supportBonuses` | 成员／留影的完整目标条件及 rank 1–5 配置百分比 |
 | `effects` | 可选，仅保留无法在上述分组中无损表达的规则 |
 | `musics` | 单个整数曲目 ID 数组，保留原顺序及重复 ID；区域差异使用 `serverExtensions` |
@@ -347,7 +349,7 @@ Events 的所有时间字段统一为十进制字符串形式的 Unix 毫秒时�
 | 剧情 | `stories` |
 | 区域存在性／覆盖 | `serverExtensions`，无筛选时始终放在最后 |
 
-摘要扩展类型只允许 `startAt`、`endAt`、`displayEndAt` 和整数数组形式的 `musics`。详情扩展类型额外允许 `pointRewards`、`pointLoopRewards`、`rankingRewards`、`stories`，其中 `musics` 使用完整曲目对象。扩展对象按上述字段顺序排列，省略未覆盖的字段。整个槽为 `null` 表示活动不存在；时间字段的 `null` 表示显式未设置时间，保留该字段，不表示删除字段。公开类型为兼容指定服后的响应保留可选扩展字段，无筛选记录仍始终提供五槽。
+摘要扩展类型按序允许 `startAt`、`endAt`、`displayEndAt`、`imageAsset`、`logoAsset`、`backgroundAsset`、`bannerAsset` 和整数数组形式的 `musics`。详情扩展类型额外允许 `pointRewards`、`pointLoopRewards`、`rankingRewards`、`stories`，其中 `musics` 使用完整曲目对象。扩展对象按上述字段顺序排列，省略未覆盖的字段。整个槽为 `null` 表示活动不存在；时间字段的 `null` 表示显式未设置时间，保留该字段，不表示删除字段。公开类型为兼容指定服后的响应保留可选扩展字段，无筛选记录仍始终提供五槽。
 
 积分奖励项先输出 `point`，再输出 `resourceType/resourceId/resourceCount`；循环奖励项先输出 `loopStartEventPoint/loopEventPoint`；活动及歌曲排名奖励项先输出 `fromRank/toRank`。资源引用先类型后 ID，普通奖励最后增加数量。曲目项遵循下文曲目字段列表，排名奖励放最后。剧情项依次输出身份／编号／adv 引用、描述和时间、标记、解锁配置、资源、两组奖励。加成项先按上文顺序输出完整目标，再按 `pointPercent`、`itemPercent`、`parameterPercent`、`performancePercent`、`technicPercent`、`visualPercent` 排列实际存在的字段。省略可选字段时，不删除零值、false、null 或空数组。
 
