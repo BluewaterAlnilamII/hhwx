@@ -322,6 +322,51 @@ test("Events keep five presence slots for identical data and expose JST millisec
   assert.deepEqual(views, source);
 });
 
+test("Events preserve asset-only overrides in summary, detail and server selection", async () => {
+  const views = eventViews();
+  const assets = ["imageAsset", "logoAsset", "backgroundAsset", "bannerAsset"];
+  for (const records of Object.values(views)) {
+    const event = records["1"];
+    event.bannerAsset = "01/Banner/event_banner_00001";
+    event.serverExtensions = [{}, null, { bannerAsset: "Banner_1", imageAsset: "tw/image", logoAsset: "tw/logo", backgroundAsset: "" },
+      { bannerAsset: "Banner_1", imageAsset: "tw/image", logoAsset: "tw/logo", backgroundAsset: "" }, { bannerAsset: "Banner_1" }];
+  }
+  const original = structuredClone(views);
+  await withObjectStore(eventObjects(views), null, async () => {
+    for (const dataset of ["events", "eventDetails"]) {
+      const read = async (server) => {
+        const suffix = server === undefined ? "" : `?server=${server}`;
+        const response = dataset === "events" ? await events(request(`events${suffix}`))
+          : await eventDetail(request(`events/1${suffix}`), { params: Promise.resolve({ eventId: "1" }) });
+        assert.equal(response.status, 200);
+        const body = await response.json();
+        return dataset === "events" ? body.data["1"] : body.data;
+      };
+      const merged = await read();
+      assert.equal(merged.bannerAsset, "01/Banner/event_banner_00001");
+      assert.equal(merged.serverExtensions[1], null);
+      for (const server of [0, 2, 3, 4]) {
+        const extension = merged.serverExtensions[server];
+        assert.deepEqual(Object.fromEntries(Object.entries(extension).filter(([key]) => assets.includes(key))),
+          views[dataset]["1"].serverExtensions[server]);
+        const selected = await read(server);
+        for (const field of assets) assert.equal(selected[field], extension[field] ?? merged[field]);
+        assert.equal(Object.hasOwn(selected, "serverExtensions"), false);
+      }
+      assert.deepEqual(merged.serverExtensions[2], merged.serverExtensions[3]);
+    }
+  });
+  assert.deepEqual(views, original);
+  for (const extension of [{ bannerAsset: null }, { bannerAsset: 1 }, { bannerAsset: [] }, { unknown: "path" }, { startAt: "" }]) {
+    const malformed = eventViews();
+    for (const records of Object.values(malformed)) records["1"].serverExtensions[2] = extension;
+    await withObjectStore(eventObjects(malformed), null, async () => {
+      assert.equal((await events(request("events"))).status, 503);
+      assert.equal((await eventDetail(request("events/1"), { params: Promise.resolve({ eventId: "1" }) })).status, 503);
+    });
+  }
+});
+
 test("Events retain full music/story overrides and use the first present source even when its time is unset", async () => {
   const views = eventViews();
   for (const dataset of ["events", "eventDetails"]) {

@@ -12,6 +12,8 @@ type Slots<T> = [T, T, T, T, T];
 type Regional<T> = Slots<T[] | null>;
 type Timestamp = string | null;
 type EventTimes = { startAt: Timestamp; endAt: Timestamp; displayEndAt: Timestamp };
+type EventAssets = { imageAsset: string; logoAsset: string; backgroundAsset: string; bannerAsset: string };
+const ASSET_FIELDS = ["imageAsset", "logoAsset", "backgroundAsset", "bannerAsset"] as const;
 const EVENT_TYPES = ["None", "ChallengeLive"] as const;
 const EVENT_BONUS_TYPES = ["EventPoint", "EventItem", "ParameterAll", "ParameterPfm", "ParameterTec", "ParameterVis"] as const;
 const RESOURCE_TYPES = {
@@ -61,15 +63,14 @@ type EventRewards = {
   pointLoopRewards: (Reward & { loopStartEventPoint: number; loopEventPoint: number })[];
   rankingRewards: RankingReward[];
 };
-type SummaryExtension = Partial<EventTimes> & { musics?: number[] };
-type DetailExtension = Partial<EventTimes & EventRewards> & { musics?: Music[]; stories?: Story[] };
-type ProjectionExtension = Partial<EventTimes & EventRewards> & { musics?: number[] | Music[]; stories?: Story[] };
-const SUMMARY_EXTENSION_ORDER = ["startAt", "endAt", "displayEndAt", "musics"] as const;
+type SummaryExtension = Partial<EventTimes & EventAssets> & { musics?: number[] };
+type DetailExtension = Partial<EventTimes & EventAssets & EventRewards> & { musics?: Music[]; stories?: Story[] };
+type ProjectionExtension = Partial<EventTimes & EventAssets & EventRewards> & { musics?: number[] | Music[]; stories?: Story[] };
+const SUMMARY_EXTENSION_ORDER = ["startAt", "endAt", "displayEndAt", ...ASSET_FIELDS, "musics"] as const;
 const DETAIL_EXTENSION_ORDER = [...SUMMARY_EXTENSION_ORDER, "pointRewards", "pointLoopRewards", "rankingRewards", "stories"] as const;
 const BONUS_ORDER = ["characterId", "bandId", "cardType", "tagId", "memberCardId", "supportCardId", ...Object.values(BONUS_FIELDS)] as const;
-export type OurNotesEventSummary = EventTimes & {
+export type OurNotesEventSummary = EventTimes & EventAssets & {
   eventType: typeof EVENT_TYPES[number] | number; eventName: OurNotesText;
-  imageAsset: string; logoAsset: string; backgroundAsset: string; bannerAsset: string;
   memberBonuses: Bonus[]; supportBonuses: Bonus[]; effects?: Effect[]; musics: number[];
   pickUpCards: Resource[]; rewardCards: Resource[];
   serverExtensions?: Slots<SummaryExtension | null>;
@@ -219,8 +220,9 @@ function event(value: unknown, detail: boolean): OurNotesEventSummary | OurNotes
   const row = ourNotesRecord(value);
   const serverExtensions = slots<ProjectionExtension | null>(row.serverExtensions, (value) => {
     if (value === null) return null;
-    requireOurNotes(Object.keys(ourNotesRecord(value)).length === 0);
-    return {};
+    const extension = ourNotesRecord(value);
+    requireOurNotes(Object.keys(extension).every((key) => ASSET_FIELDS.some((field) => field === key)));
+    return Object.fromEntries(Object.entries(extension).map(([key, asset]) => [key, ourNotesString(asset)]));
   });
   const baseServer = serverExtensions.findIndex((value) => value !== null);
   requireOurNotes(baseServer >= 0);
