@@ -63,6 +63,8 @@ CN profile imports can use an official browser login when the compatible private
 
 `/api/ournotes/master/` provides read-only member/support card lists and details, characters, and bands. Configure the independent server-only `OURNOTES_*` storage values; see the [OurNotes master API contract](documents/ournotes-master-api.md). These APIs read master data independently of image delivery.
 
+`/api/ournotes/tracker/` serves ordinary cutoff and TOP10 activity history for JP/EN/TW/KR using the unified JSON envelope. See the [OurNotes tracker API contract](documents/ournotes-tracker-api.md) for fields, signed public-bucket reads and local verification.
+
 ## Scripts
 
 ```bash
