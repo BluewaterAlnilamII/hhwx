@@ -1,0 +1,77 @@
+{
+  "provenance": {
+    "producer": "hhwx-ournotes-backend Rust cutoff-tracker",
+    "source": "temp/cutoff-acceptance/signed-publication-1/normal/objects/cutoff-test",
+    "test": "scripts/verify-cutoff-publication.py normal case; synthetic players from src/cutoff_tracker/tests.rs",
+    "observedBackendCommit": "c959525",
+    "note": "Preserved published manifest and gzip bytes; not re-encoded by the Web test."
+  },
+  "artifacts": [
+    {
+      "kind": "data",
+      "manifest": {
+        "eventId": 1,
+        "generation": 10,
+        "kind": "events",
+        "packs": {
+          "event": {
+            "compressedSha256": "9c864ba4347d0451c51edda639855b095a982d728b4d00aaad79924248c95c3d",
+            "compressedSize": 380,
+            "key": "ournotes/trackerdata/events/1/jp/packs/event/9c864ba4347d0451c51edda639855b095a982d728b4d00aaad79924248c95c3d.json.gz",
+            "recordCount": 160,
+            "semanticSha256": "42c549885ce8ca5f8ab647473bbba93eb3eea1c9dbb8dca6fe02fec2169d07cf",
+            "tierCount": 16
+          }
+        },
+        "preserveIrregularPoints": true,
+        "publishedAt": "2026-10-07T05:39:10.8889963Z",
+        "recentPackKeys": {
+          "event": [
+            "ournotes/trackerdata/events/1/jp/packs/event/9c864ba4347d0451c51edda639855b095a982d728b4d00aaad79924248c95c3d.json.gz",
+            "ournotes/trackerdata/events/1/jp/packs/event/5eb8e433a0c6b807db9b7359768f3cb817fc74b27d8af972dca6753e97a457a5.json.gz",
+            "ournotes/trackerdata/events/1/jp/packs/event/96ea7716d716a491d624b08644e8bac4343e322bc82a96c6708af828729bbe9c.json.gz",
+            "ournotes/trackerdata/events/1/jp/packs/event/f57f96c9358a25275441ce94cc381b80d4fef9c4508ba57eaedd54ff5307185d.json.gz",
+            "ournotes/trackerdata/events/1/jp/packs/event/afdc2231a1c3a4320fcefcd9e5bf45ef8ac9eff2abe0997baadde62c5111218f.json.gz",
+            "ournotes/trackerdata/events/1/jp/packs/event/edf004540ffa00c3c5bbb2c0631557be8c68af1682a1a238f68f10b922cf82be.json.gz",
+            "ournotes/trackerdata/events/1/jp/packs/event/bdf97119f86a21b1700406535e786a033a13a63b59273228b09b5629c113bac3.json.gz",
+            "ournotes/trackerdata/events/1/jp/packs/event/8ef32c2927c6e721317ee8d425bbc2918e35aca0b9ff163093da5dc0117dfcc5.json.gz"
+          ]
+        },
+        "schemaVersion": 1,
+        "server": "jp"
+      },
+      "gzipBase64": "H4sIAAAAAAAC/+XVQW7CQAyF4bvMOgtPEuNJbtALdINYVCVSaVVaAWKDuHuTFDGO+vcCAzueQNYnOy+XcHx9Gz5fnofDcfe1D32swsduvw19GM7D/hSqcBwO5+EwBu/f47c5fdrOPzztxn+F/hKiSOjX62hdbJpYy/Spuq5T2VS3tBFK20TpakVpaiFthaa1NU1rG5rWKk1rbTFtU43G+ABGXqQKIX2akT7NSJ9mpEsd0qc1TXNInypNc8gp/UXG4pHKmzREGiINkYZIQ6Qh0hBpiDREWkbG4pHTM0mrnDb8V7lI78pFelcu0rvSp1m5SGualpWLVGlaVs7pTRmLV9b/7FJQKagUVAoqBZWCSkGloFJQKU4Zi1c2vMuEF5vwYhNebMKLTXixCS824cUmvNiEF5vUKWPxSuVdGioNlYZKQ6Wh0lBpqDRUGirNK2Pxyvl9CctUrB/F+lGsH8X6UawfxfpRrB/F+lGsHxXPjIUzr9cfWY+gTKAOAAA="
+    },
+    {
+      "kind": "topdata",
+      "manifest": {
+        "eventId": 1,
+        "generation": 10,
+        "kind": "eventTop10",
+        "pack": {
+          "compressedSha256": "315ecca663c4f75aa6794e6fd7c235564cad69defafd5b9bc99a1c7c2e4ed2a4",
+          "compressedSize": 649,
+          "key": "ournotes/trackerdata/topdata/events/1/jp/packs/event/315ecca663c4f75aa6794e6fd7c235564cad69defafd5b9bc99a1c7c2e4ed2a4.json.gz",
+          "pointCount": 110,
+          "sampleCount": 10,
+          "semanticSha256": "f29a326c00c5ee565e59e109a3f493e919cc4558c085c194a380d0da82a7ac37",
+          "userCount": 11
+        },
+        "publishedAt": "2026-10-07T05:39:11.3117553Z",
+        "recentPackKeys": [
+          "ournotes/trackerdata/topdata/events/1/jp/packs/event/315ecca663c4f75aa6794e6fd7c235564cad69defafd5b9bc99a1c7c2e4ed2a4.json.gz",
+          "ournotes/trackerdata/topdata/events/1/jp/packs/event/ba39afd92e6a900d5697a3f0289435b6fe0b04edfc20ba732f2c3ac113873f37.json.gz",
+          "ournotes/trackerdata/topdata/events/1/jp/packs/event/59581a4a1ebf75656c4944c3c2b3c9652b0534da6be58a091a0e07c32f6eccfa.json.gz",
+          "ournotes/trackerdata/topdata/events/1/jp/packs/event/cf548767f53385b58c6c03dab02001fee4987524fd1e1099da7b84e250bd1314.json.gz",
+          "ournotes/trackerdata/topdata/events/1/jp/packs/event/3a1c0dce4827af7860d8e3152e13d8f93e2eda9030995fdf97a69ca9a677366e.json.gz",
+          "ournotes/trackerdata/topdata/events/1/jp/packs/event/599c64178c37f1101b5a080d7b830c1208461a7b0bc182c1e56a9136ad058429.json.gz",
+          "ournotes/trackerdata/topdata/events/1/jp/packs/event/41fcc322f268fca38fb6aa7fc9396bfc1d33289c59a9681ea3c133779aaa2791.json.gz",
+          "ournotes/trackerdata/topdata/events/1/jp/packs/event/ddb83fb1c7733648ccd6083cee12485a75908f9ae8411a88cb9db01ee5c7a8d3.json.gz"
+        ],
+        "schemaVersion": 1,
+        "server": "jp"
+      },
+      "gzipBase64": "H4sIAAAAAAAC/7XYTWrbUBTF8b28sQrS+9DT81ZKEGqtgKm/kOXQErKF7qOTDruj0m3USgbBevdyxCHyKGD/khP4Iy5+NufT7jhezObzsxl3h95sqpgq5ypbTq/C7LZmY8777kc/fCorU5inbn+dPvb6/kuxhNl3lqbXMuUo5e9Vs0wFStX3Ki5TkVLNvaqXqcSoqrxXYZmqgHIllZTMUFKycpRCSckqUAolJatIKZSUrBKjYFKyQkn5hkpKZigpWTlKoaRkFSiFkpJVpBRKSlaJUTApWaGk6ppKSmYoKVk5SqGkZBUohZKSVaQUSkpWiVEwKVmhpBpPJSUzlJSsHKVQUrIKlEJJySpSCiUlq8QomJSsQFK+pM5zhYGkFOUoBZJSVKAUSEpRkVIgKUUlRqGkFIWSstR5rjCUlGXOc0WhpCxznisKJWWZ81xRKCnLnOeygklZ5jz3jjrPFYaScsx5riiUlGPOc0WhpBxznisKJeWY81xWMCnHnOc+UOe5wlBSgTnPFYWSCsx5riiUVGDOc0WhpAJznssKJhWY89xH6jxXGEoqMue5olBSkTnPFYWSisx5riiUVGTOc1nBpOKy8/yhMNdLP7x9j551dB5Oj7t9305v3GKqCnPspj9h/v389ff3n+kjQ3f81vbfz2YTQijMvruM7fW87cZ+23bjjVnnC/PYPZ2G3di3h/7wpR/ar92wbQ+3z95+nn55uk2tpn8ha3I2wc4m2JUnuHyCm01wK0/w+QQ/m+BXnhDyCWE2Iaw8oc4n1LMJ9coTYj4hzibElSc0+YRmNqFZeULKJ6TZhLTuhNdn3/2Eqpw/msqVN+SPxyp7PH708/Hh5T8Fs9IB9xwAAA=="
+    }
+  ]
+}

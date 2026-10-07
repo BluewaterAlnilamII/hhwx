@@ -63,6 +63,8 @@ npm run dev
 
 `/api/ournotes/master/` 提供 member/support 卡牌列表与详情、角色及乐队的只读接口。需配置独立的服务端 `OURNOTES_*` 存储变量，详见 [OurNotes master API 合同](documents/ournotes-master-api.zh-CN.md)。这些 API 的 master 读取独立于图片提供流程。
 
+`/api/ournotes/tracker/` 使用统一 JSON 封装提供 JP/EN/TW/KR 的普通档线与 TOP10 活动历史。字段、公开 bucket 签名读取及本地验收见 [OurNotes 分数 API 合同](documents/ournotes-tracker-api.zh-CN.md)。
+
 ## 脚本
 
 ```bash

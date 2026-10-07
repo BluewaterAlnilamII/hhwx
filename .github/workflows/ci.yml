@@ -93,6 +93,9 @@ jobs:
       - name: Test OurNotes master API
         run: npm run test:ournotes-master
 
+      - name: Test OurNotes tracker API
+        run: npm run test:ournotes-tracker
+
       - name: Test Bandori TOP10 tracker
         run: npm run test:bandori-tracker-topdata
 

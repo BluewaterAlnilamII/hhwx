@@ -58,6 +58,7 @@ hhwx/
 - `api/account/game-profiles/`: game profile sync, import, export, copy, and deletion APIs.
 - `api/bandori/`: public Bandori metadata APIs for characters, songs, area items, and related data.
 - `api/ournotes/master/`: read-only OurNotes member/support cards, characters, bands, and skills APIs.
+- `api/ournotes/tracker/`: read-only ordinary cutoff and TOP10 event-history APIs with unified responses.
 - `manifest.ts`: default-locale web app manifest kept at `/manifest.webmanifest`.
 - `globals.css`: global styles, animations, and shared visual rules.
 
@@ -99,6 +100,7 @@ hhwx/
 - `bandori/costumes/`: Costumes metadata validation, regional materialization, and private snapshot API readers. Media extraction belongs to the assets-builder.
 - `bandori/events/`: event catalogs, API contracts/services, route/region/status helpers, banner proxy logic, and event-specific comment target validation.
 - `bandori/event-tracker/`: Event Tracker cutoff, TOP10, live-series, projection, history, and prediction contracts/services shared by event, song, and monthly tracker modes.
+- `ournotes/event-tracker/`: ordinary and TOP10 publication contracts, signed history readers, and HTTP handling for JP/EN/TW/KR.
 - `bandori/chart-simulator/`: lossless chart compilation, versioned worker transport, seek-state rebuilding, native presentation/effect/audio runtimes, and CDN manifest resolution. Physical simulator assets stay outside the Web repository and are resolved through logical paths; this module contains no region selection.
 - `bandori/medley-foundation/`: shared HHWX profile/master, card, skill and chart normalization, plus the versioned medley scoring/search contracts.
 - `bandori/medley-wasm/pkg/`: generated browser bindings for medley and single-song Rust search and hydration, loaded by the Team Builder Worker.
