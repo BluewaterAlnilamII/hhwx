@@ -4,7 +4,7 @@ import { NO_STORE_HTTP_CACHE_POLICY, withHttpCachePolicy } from "@/lib/api-cache
 import {
   OURNOTES_TRACKER_SERVERS, OURNOTES_TRACKER_TIERS, OURNOTES_TRACKER_MAX_ROWS, type OurNotesTrackerKind,
 } from "./contract";
-import { OurNotesTrackerReadError, readOurNotesTrackerHistory } from "./history-server";
+import { OurNotesTrackerReadError, readOurNotesTrackerHistory, readOurNotesParticipation } from "./history-server";
 
 export async function handleOurNotesTrackerRequest(request: Request, kind: OurNotesTrackerKind) {
   const headers = withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY);
@@ -35,6 +35,20 @@ export async function handleOurNotesTrackerRequest(request: Request, kind: OurNo
     return jsonSuccess(pack.kind === "data"
       ? { cutoffs: (pack.tiers.get(tier!) ?? []).slice(0, OURNOTES_TRACKER_MAX_ROWS) }
       : { points: pack.points, users: pack.users }, { headers });
+  } catch (error) {
+    return jsonRouteError(error instanceof OurNotesTrackerReadError
+      ? new ApiRouteError(503, "TRACKER_HISTORY_UNAVAILABLE", "Tracker history is temporarily unavailable.") : error,
+    { status: 500, code: "INTERNAL_SERVER_ERROR", message: "Internal server error." }, { headers });
+  }
+}
+
+export async function handleOurNotesParticipationRequest(request: Request) {
+  const headers = withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY);
+  try {
+    if (new URL(request.url).searchParams.size !== 0) {
+      throw new ApiRouteError(400, "INVALID_REQUEST", "This endpoint does not accept query parameters.");
+    }
+    return jsonSuccess(await readOurNotesParticipation(), { headers });
   } catch (error) {
     return jsonRouteError(error instanceof OurNotesTrackerReadError
       ? new ApiRouteError(503, "TRACKER_HISTORY_UNAVAILABLE", "Tracker history is temporarily unavailable.") : error,

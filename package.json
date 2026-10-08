@@ -51,7 +51,7 @@
     "test:bandori-costumes": "node --import tsx --test tests/bandori-costumes-api.test.mjs",
     "test:ournotes-master": "node --import tsx --test tests/ournotes-master-api.test.mjs tests/bandori-snapshot-api-server.test.mjs",
     "test:ournotes-cards": "node --import tsx --test tests/ournotes-cards.test.mjs",
-    "test:ournotes-tracker": "node --import tsx --test tests/ournotes-tracker-api.test.mjs"
+    "test:ournotes-tracker": "node --import tsx --test tests/ournotes-tracker-api.test.mjs tests/ournotes-participation-api.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
