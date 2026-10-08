@@ -17,17 +17,23 @@ export type TrackerUserSnapshotPayload = {
 
 type LoginAction = "start" | "confirm";
 const ERROR_MESSAGES: Record<string, string> = {
-  USER_SNAPSHOT_UNAVAILABLE: "游戏档案自动同步暂不可用",
-  LOGIN_TASK_ACTIVE: "同步服务繁忙，请稍后再试",
-  LOGIN_TASK_BUSY: "同步服务繁忙，请稍后再试",
-  LOGIN_ACCOUNT_BUSY: "该 Bilibili 账号正在同步，请稍后再试",
-  LOGIN_TASK_NOT_FOUND: "登录任务已失效，请重新开始",
-  LOGIN_TASK_EXPIRED: "登录任务已过期，请重新开始",
-  LOGIN_TARGET_MISMATCH: "登录的 Bilibili 账号与目标游戏 UID 不匹配",
-  LOGIN_GAME_MAINTENANCE: "游戏暂不可用，请稍后重新同步",
-  LOGIN_VERIFICATION_FAILED: "登录验证或游戏数据读取失败，请重新开始",
-  LOGIN_UPSTREAM_UNAVAILABLE: "官方登录服务暂不可用，请稍后再试",
-  LOGIN_NOT_COMPLETED: "请先完成登录",
+  INVALID_LOGIN_REQUEST: "登录请求参数无效，请刷新页面后重新同步",
+  USER_SNAPSHOT_UNAVAILABLE: "游戏档案自动同步暂不可用，请稍后再试",
+  LOGIN_TASK_ACTIVE: "当前登录任务正在处理，请稍候再试",
+  LOGIN_TASK_BUSY: "同步服务繁忙，请稍后再次点击“我已登录”",
+  LOGIN_ACCOUNT_BUSY: "该 Bilibili 账号正在进行另一次同步，请等待其结束后重新同步",
+  LOGIN_TASK_NOT_FOUND: "登录任务已失效，请重新同步",
+  LOGIN_TASK_EXPIRED: "本次登录已失效，请重新同步",
+  LOGIN_TARGET_MISMATCH: "此 Bilibili 账号下未找到与目标 UID 匹配的游戏角色，请确认账号后重新同步",
+  LOGIN_GAME_MAINTENANCE: "游戏服务暂不可用，请稍后重新同步",
+  LOGIN_VERIFICATION_FAILED: "登录验证或游戏数据读取失败，请重新同步",
+  LOGIN_UPSTREAM_UNAVAILABLE: "暂时无法创建官方登录请求，请稍后重新同步",
+  LOGIN_NOT_COMPLETED: "请先在官方页面完成登录，再点击“我已登录”",
+  LOGIN_UPSTREAM_TIMEOUT: "官方服务响应超时，请稍后重新同步",
+  LOGIN_UPSTREAM_CONNECTION_FAILED: "连接官方服务失败，请稍后重新同步",
+  LOGIN_OPERATION_TIMEOUT: "本次同步耗时过长，请稍后重新同步",
+  LOGIN_DATA_INVALID: "获取到的游戏数据未通过校验，暂时无法完成同步",
+  LOGIN_RESPONSE_TOO_LARGE: "本次返回的数据超过同步服务处理上限，暂时无法同步",
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -64,7 +70,7 @@ async function requestLogin(action: LoginAction, ownerId: string, gameUid: strin
     if (!["http:", "https:"].includes(base.protocol) || base.username || base.password || base.search || base.hash) throw new Error();
     endpoint = `${base.href.replace(/\/+$/u, "")}/internal/hhwx-user-fetcher/user-snapshot`;
   } catch {
-    throw new ApiRouteError(503, "TRACKER_SERVICE_NOT_CONFIGURED", "游戏账号同步服务尚未配置");
+    throw new ApiRouteError(503, "TRACKER_SERVICE_NOT_CONFIGURED", "游戏档案同步服务尚未配置，请稍后再试");
   }
 
   let response: Response;
@@ -80,14 +86,14 @@ async function requestLogin(action: LoginAction, ownerId: string, gameUid: strin
     });
     payload = await readSnapshotLoginJson(response, action === "confirm" ? 16 * 1024 * 1024 : 16_384);
   } catch {
-    throw new ApiRouteError(502, "TRACKER_SERVICE_FAILED", "同步游戏档案失败");
+    throw new ApiRouteError(502, "TRACKER_SERVICE_FAILED", "同步服务未能完成本次请求，请重新同步");
   }
   if (!response.ok) {
     const code = isRecord(payload) && typeof payload.code === "string" && Object.hasOwn(ERROR_MESSAGES, payload.code)
       ? payload.code : "TRACKER_SERVICE_FAILED";
-    throw new ApiRouteError(response.status >= 500 ? 502 : response.status, code, ERROR_MESSAGES[code] ?? "游戏账号同步失败");
+    throw new ApiRouteError(response.status >= 500 ? 502 : response.status, code, ERROR_MESSAGES[code] ?? "同步服务未能完成本次请求，请重新同步");
   }
-  if (!isRecord(payload)) throw new ApiRouteError(502, "TRACKER_SERVICE_INVALID_RESPONSE", "同步服务返回格式无效");
+  if (!isRecord(payload)) throw new ApiRouteError(502, "TRACKER_SERVICE_INVALID_RESPONSE", "同步服务返回的数据格式异常，请稍后重新同步");
   return payload;
 }
 
@@ -97,7 +103,7 @@ export async function requestGameProfileLogin(ownerId: string, gameUid: string):
     || payload.gameUid !== gameUid || payload.status !== "waiting"
     || !Number.isInteger(payload.expiresIn) || (payload.expiresIn as number) <= 0
     || (payload.expiresIn as number) > 300) {
-    throw new ApiRouteError(502, "TRACKER_SERVICE_INVALID_RESPONSE", "登录任务返回格式无效");
+    throw new ApiRouteError(502, "TRACKER_SERVICE_INVALID_RESPONSE", "同步服务返回的数据格式异常，请稍后重新同步");
   }
   let loginUrl: string;
   try {
@@ -107,7 +113,7 @@ export async function requestGameProfileLogin(ownerId: string, gameUid: string):
       || link.pathname !== "/x/passport-tv-login/h5/qrcode/auth") throw new Error();
     loginUrl = link.href;
   } catch {
-    throw new ApiRouteError(502, "TRACKER_SERVICE_INVALID_RESPONSE", "官方登录链接无效");
+    throw new ApiRouteError(502, "TRACKER_SERVICE_INVALID_RESPONSE", "同步服务返回的数据格式异常，请稍后重新同步");
   }
   return { taskId: payload.taskId, gameUid, status: "waiting", loginUrl, expiresIn: payload.expiresIn as number };
 }
@@ -116,7 +122,7 @@ export async function fetchGameUserSnapshot(ownerId: string, gameUid: string, ta
   const payload = await requestLogin("confirm", ownerId, gameUid, taskId);
   if (payload.gameUid !== gameUid || !isRecord(payload.snapshot)
     || !isRecord(payload.snapshot.profile) || !isRecord(payload.snapshot.suite_user)) {
-    throw new ApiRouteError(502, "TRACKER_SERVICE_INVALID_RESPONSE", "游戏数据返回格式无效");
+    throw new ApiRouteError(502, "TRACKER_SERVICE_INVALID_RESPONSE", "同步服务返回的数据格式异常，请稍后重新同步");
   }
   return { gameUid, snapshot: { profile: payload.snapshot.profile, suite_user: payload.snapshot.suite_user } };
 }

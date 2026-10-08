@@ -24,6 +24,36 @@
 
 同意框默认关闭，只有框本身可以切换；手动确认按钮同样要求同意。等待期间不能重新同步或解绑该 UID，也不能为其他 UID 创建登录任务；确认请求进行中显示同步中并禁用确认和取消按钮。没有额外打开登录页或保存重试按钮。
 
+## 错误提示与任务处理
+
+后端只返回受控错误码，Web 映射并本地化提示；已识别的确认错误不再被覆盖为通用同步失败。
+`LOGIN_NOT_COMPLETED`、`LOGIN_TASK_ACTIVE`、`LOGIN_TASK_BUSY` 保留确认界面的当前任务，
+其余终止性错误结束本次流程。`LOGIN_ACCOUNT_BUSY` 必须等待另一次同步结束后重新同步。
+`LOGIN_TASK_NOT_FOUND` 表示任务不可用，不一定是过期；`LOGIN_GAME_MAINTENANCE` 的提示为
+“游戏服务暂不可用”，不能仅凭上游状态断言维护。
+
+新增分类如下，均不改变原有网络、并发、大小或生命周期限制：
+
+| 错误码 | HTTP | 简体中文提示 |
+| --- | --- | --- |
+| `LOGIN_UPSTREAM_TIMEOUT` | 502 | 官方服务响应超时，请稍后重新同步 |
+| `LOGIN_UPSTREAM_CONNECTION_FAILED` | 502 | 连接官方服务失败，请稍后重新同步 |
+| `LOGIN_OPERATION_TIMEOUT` | 410 | 本次同步耗时过长，请稍后重新同步 |
+| `LOGIN_DATA_INVALID` | 502 | 获取到的游戏数据未通过校验，暂时无法完成同步 |
+| `LOGIN_RESPONSE_TOO_LARGE` | 502 | 本次返回的数据超过同步服务处理上限，暂时无法同步 |
+
+单次上游超时与整次操作超时分开；明确的网络超时若已耗尽操作预算，优先归为
+`LOGIN_OPERATION_TIMEOUT`，同时保留底层异常类型。非超时异常不因到达期限而改写分类。
+`LOGIN_TASK_EXPIRED` 继续用于等待登录或官方登录失效。
+无法明确分类时沿用 `LOGIN_UPSTREAM_UNAVAILABLE` / `LOGIN_VERIFICATION_FAILED`，不从总耗时
+猜测原因。解析规则文件异常不当作玩家数据错误。`TRACKER_SERVICE_FAILED` 不再承诺可重试原任务。
+公共文案由 `messages/{zh-CN,en}/errors.json` 维护；弹窗、本流程的无效 JSON 提示及三个
+`TRACKER_SERVICE_*` 同步专用提示由 `messages/{zh-CN,en}/bandori.json` 维护。
+创建和确认共用这组同步提示；绑定验证等流程使用公共提示，不引导用户重新同步。
+
+诊断日志使用错误码和必要上下文，不添加中文解释或公开上游正文。创建任务返回 200 不等于同步完成，
+后端确认成功也不等于 Web 保存成功。新分类需后端和 Web 同时支持；旧 Web 在过渡期仍显示通用失败。
+
 ## 配置、兼容和发布顺序
 
 - 兼容后端和数据库迁移发布完成前，保持 `NEXT_PUBLIC_GAME_PROFILE_SYNC_ENABLED=false`。公开开关在构建时读取，同时控制页面和 API。
