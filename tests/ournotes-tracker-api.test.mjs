@@ -137,6 +137,23 @@ test("missing publications and missing supported tiers are normal empty response
   assert.deepEqual((await request("data", query(saved.id, "data"))).body.data, { cutoffs: [] });
 });
 
+test("retains nine cutoff tiers and rejects all seven retired companion ranks", async () => {
+  const tiers = [100, 101, 1000, 5000, 10000, 20000, 30000, 50000, 100000];
+  const saved = await history("data", { payload: { tiers: Object.fromEntries(tiers.map((tier) => [tier, [[1000, tier]]])) } });
+  for (const tier of tiers) {
+    assert.deepEqual(await request("data", `server=0&eventId=${saved.id}&tier=${tier}`),
+      { status: 200, body: { success: true, data: { cutoffs: [{ time: 1000, value: tier }] } } });
+  }
+  for (const tier of [1001, 5001, 10001, 20001, 30001, 50001, 100001]) {
+    const result = await request("data", `server=0&eventId=${saved.id}&tier=${tier}`);
+    assert.equal(result.status, 404);
+    assert.equal(result.body.error.code, "TRACKER_TIER_NOT_SUPPORTED");
+    const retired = await history("data", { payload: { tiers: { [tier]: [[1000, 1]] } } });
+    const { descriptor } = parseOurNotesTrackerManifest(retired.manifest, { kind: "data", server: "jp", eventId: retired.id });
+    assert.throws(() => parseOurNotesTrackerPack(retired.raw, descriptor));
+  }
+});
+
 test("returns the earliest 5000 ordinary rows without changing complete pack validation", async () => {
   const saved = await history("data", { payload: { tiers: { 100: Array.from({ length: 5001 }, (_, n) => [n + 1, n]) } } });
   const result = await request("data", query(saved.id, "data"));

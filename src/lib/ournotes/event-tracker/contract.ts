@@ -1,7 +1,7 @@
 import type { OurNotesSourceServer } from "../master-contract";
 
 export const OURNOTES_TRACKER_SERVERS = { 0: "jp", 1: "en", 2: "tw", 4: "kr" } as const;
-export const OURNOTES_TRACKER_TIERS = [100, 101, 1000, 1001, 5000, 5001, 10000, 10001, 20000, 20001, 30000, 30001, 50000, 50001, 100000, 100001] as const;
+export const OURNOTES_TRACKER_TIERS = [100, 101, 1000, 5000, 10000, 20000, 30000, 50000, 100000] as const;
 export const OURNOTES_TRACKER_MAX_MANIFEST_BYTES = 64 * 1024;
 export const OURNOTES_TRACKER_MAX_COMPRESSED_BYTES = 2 * 1024 * 1024;
 export const OURNOTES_TRACKER_MAX_JSON_BYTES = 16 * 1024 * 1024;
