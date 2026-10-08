@@ -24,6 +24,40 @@ Private fetch work has a 120-second operation deadline and bounded individual ne
 
 The consent checkbox defaults off. Only the checkbox itself changes consent. The manual confirmation button also requires consent. While waiting, that UID cannot be resynced or unbound, and another UID cannot start a login task. An active confirmation displays the syncing label and disables both confirmation and cancellation. No extra login-opening or save-retry button is used.
 
+## Errors and task handling
+
+The backend returns controlled error codes, which Web maps to localized messages. Recognized confirmation
+errors are no longer replaced by the generic sync failure. `LOGIN_NOT_COMPLETED`, `LOGIN_TASK_ACTIVE`
+and `LOGIN_TASK_BUSY` preserve the pending confirmation task; other terminal errors end the flow.
+`LOGIN_ACCOUNT_BUSY` requires waiting for the other sync to finish before starting a new sync.
+`LOGIN_TASK_NOT_FOUND` means the task is unavailable, not necessarily expired. The message for
+`LOGIN_GAME_MAINTENANCE` says the game service is unavailable; an upstream status alone does not prove maintenance.
+
+The following classifications retain all existing network, concurrency, size and lifecycle limits:
+
+| Code | HTTP | English message |
+| --- | --- | --- |
+| `LOGIN_UPSTREAM_TIMEOUT` | 502 | The official service timed out; start a new sync later |
+| `LOGIN_UPSTREAM_CONNECTION_FAILED` | 502 | Unable to connect to the official service; start a new sync later |
+| `LOGIN_OPERATION_TIMEOUT` | 410 | This sync took too long; start a new sync later |
+| `LOGIN_DATA_INVALID` | 502 | The retrieved game data failed validation; sync cannot be completed |
+| `LOGIN_RESPONSE_TOO_LARGE` | 502 | The returned data exceeds the sync service’s processing limit; sync is currently unavailable |
+
+Individual upstream timeouts are distinct from the whole operation deadline. A recognized network timeout
+is classified as `LOGIN_OPERATION_TIMEOUT` when the operation budget is exhausted, preserving the underlying
+exception type. Non-timeout failures retain their classification even after the deadline. `LOGIN_TASK_EXPIRED` remains
+the code for expired waiting or invalid official login results. Unclassified failures keep
+`LOGIN_UPSTREAM_UNAVAILABLE` / `LOGIN_VERIFICATION_FAILED`; elapsed time is not used to guess a cause.
+Local schema-file failures are not classified as invalid player data. `TRACKER_SERVICE_FAILED` no longer
+promises that the original task can be retried. Shared messages live in `messages/{zh-CN,en}/errors.json`;
+popup, sync-specific invalid JSON and the three `TRACKER_SERVICE_*` sync messages live in
+`messages/{zh-CN,en}/bandori.json`. Both start and confirm use these sync messages. Binding verification
+and other flows use the shared messages, which do not tell users to start a new sync.
+
+Diagnostics record codes and necessary context, not prose or upstream bodies. A successful start is not
+a completed sync, and a successful backend confirmation is not a successful Web save. Both backend and
+Web must support the new codes; an older Web build still shows generic failures during the rollout.
+
 ## Rollout and compatibility
 
 - Keep `NEXT_PUBLIC_GAME_PROFILE_SYNC_ENABLED=false` until the matching backend and database migration are deployed. This is a build-time flag for both UI and API.

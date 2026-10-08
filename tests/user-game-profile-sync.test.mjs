@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
-import { ApiRouteError } from "../src/lib/api-contracts.ts";
+import { ApiRouteError, getApiErrorCode, getApiErrorMessage } from "../src/lib/api-contracts.ts";
 import { createHash } from "node:crypto";
 import * as codec from "../src/lib/bestdori-profile-codec.ts";
 import * as areaItems from "../src/lib/bandori-area-item-groups.ts";
@@ -96,9 +96,60 @@ test("backend adapter bounds and sanitizes replies and only exposes the official
   assert.equal(JSON.parse(requests.at(-1).options.body).action,"confirm");
   status=409; payload={code:"LOGIN_NOT_COMPLETED",accessToken:"secret"};
   await assert.rejects(adapter.fetchGameUserSnapshot("owner","1001",taskId),{code:"LOGIN_NOT_COMPLETED"});
+  const messages = JSON.parse(readFileSync(new URL("../messages/zh-CN/errors.json", import.meta.url), "utf8")).api;
+  for (const code of [
+    "INVALID_LOGIN_REQUEST", "USER_SNAPSHOT_UNAVAILABLE", "LOGIN_TASK_ACTIVE", "LOGIN_TASK_BUSY",
+    "LOGIN_ACCOUNT_BUSY", "LOGIN_TASK_NOT_FOUND", "LOGIN_TASK_EXPIRED", "LOGIN_TARGET_MISMATCH",
+    "LOGIN_GAME_MAINTENANCE", "LOGIN_VERIFICATION_FAILED", "LOGIN_UPSTREAM_UNAVAILABLE", "LOGIN_NOT_COMPLETED",
+    "LOGIN_UPSTREAM_TIMEOUT", "LOGIN_UPSTREAM_CONNECTION_FAILED", "LOGIN_OPERATION_TIMEOUT",
+    "LOGIN_DATA_INVALID", "LOGIN_RESPONSE_TOO_LARGE",
+  ]) {
+    status = ["LOGIN_TASK_EXPIRED", "LOGIN_OPERATION_TIMEOUT"].includes(code) ? 410 : 502;
+    payload = {code, message: "private upstream body", token: "private token"};
+    for (const invoke of [() => adapter.requestGameProfileLogin("owner", "1001"), () => adapter.fetchGameUserSnapshot("owner", "1001", taskId)]) {
+      await assert.rejects(invoke(), error => error.code === code && error.status === status && error.message === messages[code]);
+    }
+  }
   status=200; payload={gameUid:"2001",snapshot:{profile:{},suite_user:{}}};
   await assert.rejects(adapter.fetchGameUserSnapshot("owner","1001",taskId),{code:"TRACKER_SERVICE_INVALID_RESPONSE"});
   await assert.rejects(adapter.readSnapshotLoginJson(new Response('"'+'x'.repeat(4096)+'"')));
+});
+
+test("sync errors have localized copy without exposing backend diagnostics", () => {
+  const errors = loadModule("../src/lib/localized-api-errors.ts", {
+    "@/lib/api-contracts": {getApiErrorCode, getApiErrorMessage},
+  });
+  assert.equal(errors.isLocalizedApiErrorCode("UNKNOWN_PRIVATE_ERROR"), false);
+  for (const locale of ["zh-CN", "en"]) {
+    const messages = JSON.parse(readFileSync(new URL(`../messages/${locale}/errors.json`, import.meta.url), "utf8")).api;
+    const syncMessages = JSON.parse(readFileSync(new URL(`../messages/${locale}/bandori.json`, import.meta.url), "utf8")).gameProfiles.panel.uidManagement;
+    for (const [code, key] of [
+      ["TRACKER_SERVICE_FAILED", "syncServiceFailed"],
+      ["TRACKER_SERVICE_NOT_CONFIGURED", "syncServiceNotConfigured"],
+      ["TRACKER_SERVICE_INVALID_RESPONSE", "syncServiceInvalidResponse"],
+    ]) {
+      const text = errors.getLocalizedApiErrorMessage(
+        {success: false, error: {code, message: syncMessages[key]}},
+        key => messages[key.slice(4)],
+      );
+      assert.equal(text, messages[code]);
+      assert.notEqual(text, syncMessages[key]);
+      assert.doesNotMatch(text, /同步|sync/iu);
+      assert.ok(syncMessages[key] && !/[。.]$/u.test(syncMessages[key]));
+    }
+    for (const code of ["LOGIN_TARGET_MISMATCH", "LOGIN_GAME_MAINTENANCE", "LOGIN_VERIFICATION_FAILED",
+      "LOGIN_UPSTREAM_TIMEOUT", "LOGIN_UPSTREAM_CONNECTION_FAILED", "LOGIN_OPERATION_TIMEOUT",
+      "LOGIN_DATA_INVALID", "LOGIN_RESPONSE_TOO_LARGE", "GAME_PROFILE_SYNC_FAILED"]) {
+      const text = errors.getLocalizedApiErrorMessage(
+        {success: false, error: {code, message: "private backend diagnostic"}},
+        key => messages[key.slice(4)],
+      );
+      assert.equal(errors.isLocalizedApiErrorCode(code), true);
+      assert.equal(text, messages[code]);
+      assert.ok(text && !text.includes("private"));
+      assert.ok(!/[。.]$/u.test(text));
+    }
+  }
 });
 
 test("confirm identity validates signed claims without account, email or binding reads", async () => {

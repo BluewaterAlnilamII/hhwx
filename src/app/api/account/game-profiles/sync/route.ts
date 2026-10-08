@@ -11,7 +11,7 @@ const noStore = { headers: { "Cache-Control": "no-store" } };
 export async function POST(request: Request) {
   try {
     if (!GAME_PROFILE_SYNC_ENABLED) {
-      return jsonError(503, "USER_SNAPSHOT_UNAVAILABLE", "游戏档案自动同步暂不可用，请使用手动档案", noStore);
+      return jsonError(503, "USER_SNAPSHOT_UNAVAILABLE", "游戏档案自动同步暂不可用，请稍后再试", noStore);
     }
     let body: Record<string, unknown>;
     try {
@@ -19,14 +19,14 @@ export async function POST(request: Request) {
       if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error();
       body = value as Record<string, unknown>;
     } catch {
-      throw new ApiRouteError(400, "INVALID_JSON", "请求体不是有效的小型 JSON 对象");
+      throw new ApiRouteError(400, "INVALID_JSON", "同步请求格式无效，请刷新页面后重试");
     }
     const { action, taskId } = body;
     const keys = action === "start" ? ["action", "gameUid"] : ["action", "gameUid", "taskId"];
     if (typeof action !== "string" || !["start", "confirm"].includes(action)
       || Object.keys(body).length !== keys.length || Object.keys(body).some((key) => !keys.includes(key))
       || (action !== "start" && (typeof taskId !== "string" || !/^[A-Za-z0-9_-]{43}$/u.test(taskId)))) {
-      throw new ApiRouteError(400, "INVALID_LOGIN_REQUEST", "登录任务参数无效");
+      throw new ApiRouteError(400, "INVALID_LOGIN_REQUEST", "登录请求参数无效，请刷新页面后重新同步");
     }
     const gameUid = normalizeGameUid(body.gameUid);
     if (action === "start") {
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     return jsonRouteError(safeError, {
       status: 500,
       code: "GAME_PROFILE_SYNC_FAILED",
-      message: "同步游戏档案失败",
+      message: "本次同步未能完成，请重新同步",
     }, noStore);
   }
 }

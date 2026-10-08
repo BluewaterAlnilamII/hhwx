@@ -9,7 +9,7 @@ import { type AppLocale } from "@/i18n/routing";
 import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
 import { ApiRouteError, getApiErrorCode, getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import { normalizeBandoriServer, type BandoriServer } from "@/lib/bandori-server";
-import { getLocalizedApiErrorMessage } from "@/lib/localized-api-errors";
+import { getLocalizedApiErrorMessage, isLocalizedApiErrorCode } from "@/lib/localized-api-errors";
 import { formatLocalizedDateTime } from "@/lib/localized-format";
 import { GAME_PROFILE_SYNC_ENABLED, type GameProfileLoginTask } from "@/lib/user-game-profile-sync";
 import BandoriCnExclusiveNotice from "@/app/[locale]/bandori/BandoriCnExclusiveNotice";
@@ -89,6 +89,12 @@ type RequestJsonMessages = {
 const USER_GAME_BINDING_LIMIT = 5;
 const USER_GAME_AUTO_PROFILE_LIMIT = 5;
 const USER_GAME_MANUAL_PROFILE_LIMIT = 10;
+const SYNC_ERROR_MESSAGE_KEYS = new Map([
+  ["INVALID_JSON", "uidManagement.loginInvalidJson"],
+  ["TRACKER_SERVICE_FAILED", "uidManagement.syncServiceFailed"],
+  ["TRACKER_SERVICE_NOT_CONFIGURED", "uidManagement.syncServiceNotConfigured"],
+  ["TRACKER_SERVICE_INVALID_RESPONSE", "uidManagement.syncServiceInvalidResponse"],
+]);
 
 async function requestJson<T>(path: string, init: RequestInit | undefined, messages: RequestJsonMessages): Promise<T> {
   const accessToken = await getAccessToken();
@@ -412,8 +418,11 @@ export default function GameProfilesPanel() {
       link.click();
       setLoginTask({ ...task, expiresAt: Date.now() + task.expiresIn * 1000 });
     } catch (syncError) {
-      if (!controller.signal.aborted) finishLogin(targetUid,
-        syncError instanceof ApiRouteError ? syncError.message : t("errors.syncFailed"));
+      if (!controller.signal.aborted) {
+        const messageKey = syncError instanceof ApiRouteError ? SYNC_ERROR_MESSAGE_KEYS.get(syncError.code) : undefined;
+        finishLogin(targetUid, messageKey ? t(messageKey)
+          : syncError instanceof ApiRouteError ? syncError.message : t("errors.syncFailed"));
+      }
     } finally {
       if (loginAction.current === controller) {
         loginAction.current = null;
@@ -443,10 +452,10 @@ export default function GameProfilesPanel() {
         if (["LOGIN_TASK_BUSY", "LOGIN_NOT_COMPLETED", "LOGIN_TASK_ACTIVE"].includes(code)) {
           setSyncNotice({ gameUid: loginTask.gameUid, message: (syncError as Error).message, kind: "error" });
         } else {
-          const message = code === "LOGIN_TARGET_MISMATCH" ? t("uidManagement.loginMismatch")
-            : ["LOGIN_TASK_EXPIRED", "LOGIN_TASK_NOT_FOUND"].includes(code) ? t("uidManagement.loginExpired")
-              : code === "LOGIN_GAME_MAINTENANCE" ? t("uidManagement.loginMaintenance")
-                : t("errors.syncFailed");
+          const messageKey = SYNC_ERROR_MESSAGE_KEYS.get(code);
+          const message = messageKey ? t(messageKey)
+            : syncError instanceof ApiRouteError && isLocalizedApiErrorCode(code)
+              ? syncError.message : t("errors.syncFailed");
           finishLogin(loginTask.gameUid, message);
         }
       }

@@ -10,6 +10,15 @@ const LOCALIZED_API_ERROR_CODES = new Set([
   "LOGIN_TASK_EXPIRED",
   "LOGIN_UPSTREAM_UNAVAILABLE",
   "LOGIN_NOT_COMPLETED",
+  "LOGIN_TARGET_MISMATCH",
+  "LOGIN_GAME_MAINTENANCE",
+  "LOGIN_VERIFICATION_FAILED",
+  "LOGIN_UPSTREAM_TIMEOUT",
+  "LOGIN_UPSTREAM_CONNECTION_FAILED",
+  "LOGIN_OPERATION_TIMEOUT",
+  "LOGIN_DATA_INVALID",
+  "LOGIN_RESPONSE_TOO_LARGE",
+  "GAME_PROFILE_SYNC_FAILED",
   "TRACKER_SERVICE_FAILED",
   "TRACKER_SERVICE_NOT_CONFIGURED",
   "TRACKER_SERVICE_INVALID_RESPONSE",
@@ -49,12 +58,16 @@ const LOCALIZED_API_ERROR_CODES = new Set([
 
 type TranslateApiError = (key: string, values?: Record<string, string | number>) => string;
 
+export function isLocalizedApiErrorCode(code: string): boolean {
+  return LOCALIZED_API_ERROR_CODES.has(code);
+}
+
 export function getLocalizedApiErrorMessage(
   payload: unknown,
   translateApiError: TranslateApiError,
 ): string | null {
   const code = getApiErrorCode(payload);
-  if (code && LOCALIZED_API_ERROR_CODES.has(code)) {
+  if (code && isLocalizedApiErrorCode(code)) {
     return translateApiError(`api.${code}`);
   }
 
