@@ -21,16 +21,20 @@ positive decimal safe integers (no leading zeros, signs, fractions or exponents)
 server; the master API's `cn_intl` projection does not define a separate ranking
 source or tracker alias.
 
-The ordinary endpoint requires one of these 16 tiers:
+The ordinary endpoint requires one of these 9 tiers:
 
 ```text
-100,101,1000,1001,5000,5001,10000,10001,
-20000,20001,30000,30001,50000,50001,100000,100001
+100,101,1000,5000,10000,20000,30000,50000,100000
 ```
 
 These APIs provide event rankings only. There are no `event`, `type`, `song`,
 pagination or locale parameters. TOP10 includes all actually returned T1–T11
 records, with at most 11 distinct players per sample. Missing ranks are not filled.
+
+Retired tiers 1001, 5001, 10001, 20001, 30001, 50001 and 100001 return HTTP 404
+with `TRACKER_TIER_NOT_SUPPORTED`, including for previous events. Current ordinary
+history is migrated before deploying the narrower artifact validator; old immutable
+pack URLs are not overwritten or deleted. Participation searches retain arbitrary-rank queries.
 
 ## Responses
 

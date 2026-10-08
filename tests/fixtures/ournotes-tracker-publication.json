@@ -1,9 +1,9 @@
 {
   "provenance": {
     "producer": "hhwx-ournotes-backend Rust cutoff-tracker",
-    "source": "temp/cutoff-acceptance/signed-publication-1/normal/objects/cutoff-test",
+    "source": "temp/cutoff-tier-retirement-20261009/publication/normal/objects/cutoff-test",
     "test": "scripts/verify-cutoff-publication.py normal case; synthetic players from src/cutoff_tracker/tests.rs",
-    "observedBackendCommit": "c959525",
+    "observedBackendCommit": "f299291ee025a6be4846735c591a01b5fe8ffa75",
     "note": "Preserved published manifest and gzip bytes; not re-encoded by the Web test."
   },
   "artifacts": [
@@ -15,32 +15,32 @@
         "kind": "events",
         "packs": {
           "event": {
-            "compressedSha256": "9c864ba4347d0451c51edda639855b095a982d728b4d00aaad79924248c95c3d",
-            "compressedSize": 380,
-            "key": "ournotes/trackerdata/events/1/jp/packs/event/9c864ba4347d0451c51edda639855b095a982d728b4d00aaad79924248c95c3d.json.gz",
-            "recordCount": 160,
-            "semanticSha256": "42c549885ce8ca5f8ab647473bbba93eb3eea1c9dbb8dca6fe02fec2169d07cf",
-            "tierCount": 16
+            "compressedSha256": "9cf681e243c14e1497f97efaac5df04cb313f50c29ea5099b0e67cf77f411188",
+            "compressedSize": 350,
+            "key": "ournotes/trackerdata/events/1/jp/packs/event/9cf681e243c14e1497f97efaac5df04cb313f50c29ea5099b0e67cf77f411188.json.gz",
+            "recordCount": 90,
+            "semanticSha256": "1eee1ab193ebaef86e7a4e103a7f1ed7443e4cc597dda8ae8bdaba207a99aceb",
+            "tierCount": 9
           }
         },
         "preserveIrregularPoints": true,
-        "publishedAt": "2026-10-07T05:39:10.8889963Z",
+        "publishedAt": "2026-10-08T18:26:37.8633766Z",
         "recentPackKeys": {
           "event": [
-            "ournotes/trackerdata/events/1/jp/packs/event/9c864ba4347d0451c51edda639855b095a982d728b4d00aaad79924248c95c3d.json.gz",
-            "ournotes/trackerdata/events/1/jp/packs/event/5eb8e433a0c6b807db9b7359768f3cb817fc74b27d8af972dca6753e97a457a5.json.gz",
-            "ournotes/trackerdata/events/1/jp/packs/event/96ea7716d716a491d624b08644e8bac4343e322bc82a96c6708af828729bbe9c.json.gz",
-            "ournotes/trackerdata/events/1/jp/packs/event/f57f96c9358a25275441ce94cc381b80d4fef9c4508ba57eaedd54ff5307185d.json.gz",
-            "ournotes/trackerdata/events/1/jp/packs/event/afdc2231a1c3a4320fcefcd9e5bf45ef8ac9eff2abe0997baadde62c5111218f.json.gz",
-            "ournotes/trackerdata/events/1/jp/packs/event/edf004540ffa00c3c5bbb2c0631557be8c68af1682a1a238f68f10b922cf82be.json.gz",
-            "ournotes/trackerdata/events/1/jp/packs/event/bdf97119f86a21b1700406535e786a033a13a63b59273228b09b5629c113bac3.json.gz",
-            "ournotes/trackerdata/events/1/jp/packs/event/8ef32c2927c6e721317ee8d425bbc2918e35aca0b9ff163093da5dc0117dfcc5.json.gz"
+            "ournotes/trackerdata/events/1/jp/packs/event/9cf681e243c14e1497f97efaac5df04cb313f50c29ea5099b0e67cf77f411188.json.gz",
+            "ournotes/trackerdata/events/1/jp/packs/event/a49c1e5b1d0ca42ee085abdc9d6eefaca6da24a3577ce4d2b137e47dfca497f9.json.gz",
+            "ournotes/trackerdata/events/1/jp/packs/event/13172cb63e5aa8441db593734eedb992839d9fb31add216989c0e98a2c6fbe9e.json.gz",
+            "ournotes/trackerdata/events/1/jp/packs/event/79c7a844b93fc64f1ac4ceaa98ff14c8d0c386be07707310e583df8ffb493ed8.json.gz",
+            "ournotes/trackerdata/events/1/jp/packs/event/7616c7d9d0cee0ebcea2973fde90d56c7de71c6ceabf3803c038278c86c70f01.json.gz",
+            "ournotes/trackerdata/events/1/jp/packs/event/8346370f3f6064023da6c7f722f3e14378fb11e42c62c09645912232c94ee565.json.gz",
+            "ournotes/trackerdata/events/1/jp/packs/event/c7992fb529ecd8ec69dd4e1fb41bafa0ff2009b4cac07323f2d63a0712beb244.json.gz",
+            "ournotes/trackerdata/events/1/jp/packs/event/d601b3db25a3cb4f6d7dd03fbcaae370126051de1657d1bb7192f57690378772.json.gz"
           ]
         },
         "schemaVersion": 1,
         "server": "jp"
       },
-      "gzipBase64": "H4sIAAAAAAAC/+XVQW7CQAyF4bvMOgtPEuNJbtALdINYVCVSaVVaAWKDuHuTFDGO+vcCAzueQNYnOy+XcHx9Gz5fnofDcfe1D32swsduvw19GM7D/hSqcBwO5+EwBu/f47c5fdrOPzztxn+F/hKiSOjX62hdbJpYy/Spuq5T2VS3tBFK20TpakVpaiFthaa1NU1rG5rWKk1rbTFtU43G+ABGXqQKIX2akT7NSJ9mpEsd0qc1TXNInypNc8gp/UXG4pHKmzREGiINkYZIQ6Qh0hBpiDREWkbG4pHTM0mrnDb8V7lI78pFelcu0rvSp1m5SGualpWLVGlaVs7pTRmLV9b/7FJQKagUVAoqBZWCSkGloFJQKU4Zi1c2vMuEF5vwYhNebMKLTXixCS824cUmvNiEF5vUKWPxSuVdGioNlYZKQ6Wh0lBpqDRUGirNK2Pxyvl9CctUrB/F+lGsH8X6UawfxfpRrB/F+lGsHxXPjIUzr9cfWY+gTKAOAAA="
+      "gzipBase64": "H4sIAAAAAAAC/+XTMW6DQBBA0btsTTHAjmfhBrlAGosiipFCopAILDeW7x4gGHaVnxPYnb9Ao6cZrm58fWs/X57bYey+elfnmfvo+pOrXXtp+7PL3NgOl3aYwvv39G+pT6flwXM3veXqq8tFXH085lblZZkXMv+yqqpUmmytpVD1gerhQDV4qF5omi9omi9pmlea5i2Z1mSTMX8AIy9ShZBx3ZFx3ZFx3ZFRjZBxLWhahIyr0rQIOdcJqYw0RBoiDZGGSEOkIdIQaYg0RNqKnDdJyhn/V5nUTZnUTZnUTRnXXZnUgqbtyqQqTduVS52UxT9KQaWgUlApqBRUCioFlYJKQaWsypKVAXcZcJcBdxlwlwF3GXCXAXcZcJcBdxnuu1RWGioNlYZKQ6Wh0lBpqDRUGirtrly+S2AqnqziySqerOLJKp6s4skqnqziySqe7G9tbrcfak1IvFcIAAA="
     },
     {
       "kind": "topdata",
@@ -57,7 +57,7 @@
           "semanticSha256": "f29a326c00c5ee565e59e109a3f493e919cc4558c085c194a380d0da82a7ac37",
           "userCount": 11
         },
-        "publishedAt": "2026-10-07T05:39:11.3117553Z",
+        "publishedAt": "2026-10-08T18:26:38.1231509Z",
         "recentPackKeys": [
           "ournotes/trackerdata/topdata/events/1/jp/packs/event/315ecca663c4f75aa6794e6fd7c235564cad69defafd5b9bc99a1c7c2e4ed2a4.json.gz",
           "ournotes/trackerdata/topdata/events/1/jp/packs/event/ba39afd92e6a900d5697a3f0289435b6fe0b04edfc20ba732f2c3ac113873f37.json.gz",
