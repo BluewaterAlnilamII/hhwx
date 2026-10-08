@@ -1,6 +1,6 @@
 # OurNotes tracker API
 
-The Web app serves published activity-ranking history. `hhwx-ournotes-backend`
+The Web app serves published activity-ranking history and participation/reward counts. `hhwx-ournotes-backend`
 owns collection, local history and publication; requests to these APIs never
 query the game, write storage, or start backend work. See the backend's
 `docs/cutoff-tracker.md` for its producer contract.
@@ -10,10 +10,12 @@ query the game, write storage, or start backend work. See the backend's
 ```text
 GET /api/ournotes/tracker/data?server=0&eventId=1&tier=100
 GET /api/ournotes/tracker/topdata?server=0&eventId=1
+GET /api/ournotes/tracker/participation
 ```
 
-Both endpoints are public, read-only and require no login. Only the listed query
-parameters are accepted, each exactly once. `eventId` and `tier` must be canonical
+All three endpoints are public, read-only and require no login. Participation accepts
+no query parameters and returns all events and servers. Ordinary/TOP10 accept only
+the listed parameters, each exactly once. `eventId` and `tier` must be canonical
 positive decimal safe integers (no leading zeros, signs, fractions or exponents).
 `server` is exactly `0` (JP), `1` (EN), `2` (TW), or `4` (KR). `3` is not a tracker
 server; the master API's `cn_intl` projection does not define a separate ranking
@@ -125,9 +127,59 @@ For example, a storage failure returns:
 }
 ```
 
+## Participation and reward counts
+
+`GET /api/ournotes/tracker/participation` returns event ID → five fields → five slots.
+The slot order is always `[JP, EN, TW, CN, KR]`; CN is currently always `null`.
+The following counts are illustrative:
+
+```json
+{
+  "success": true,
+  "data": {
+    "1": {
+      "firstCardRewardCount": [12000, 8000, 3000, null, 2000],
+      "lastCardRewardCount": [9000, 5000, 2000, null, 1000],
+      "allNonEventItemRewardsCount": [7000, 3000, 1500, null, 800],
+      "allPointRewardsCount": [5000, 2000, 1000, null, 600],
+      "participantCount": [50000, 30000, 10000, null, 7000]
+    }
+  }
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `firstCardRewardCount` | Players reaching the first cumulative card reward threshold, including MemberCard and SupportCard |
+| `lastCardRewardCount` | Players reaching the highest positive-quantity MemberCard / SupportCard point reward, including repeated copies |
+| `allNonEventItemRewardsCount` | Players reaching every positive-quantity ordinary point reward other than this event's item; exclude Item rows whose resourceId equals detail.eventItemId |
+| `allPointRewardsCount` | Players reaching all ordinary cumulative rewards, excluding Loop |
+| `participantCount` | Players represented in the event leaderboard during that closing observation, including present zero-score entries |
+
+Thresholds come from each event/server's `pointRewards`; neither scores nor item IDs are hardcoded.
+Both added metrics exclude Loop. Filter mixed reward tiers per resource row; an empty selection
+means an inapplicable threshold. Missing added fields in early packs become five null slots,
+preserving the original counts. New publications and HTTP responses contain all five fields.
+
+Reward counts prove score eligibility, not that rewards were claimed. `null` means
+unfinished, unverified, or an inapplicable threshold; never convert it to zero.
+`0` means nobody reached a reward threshold on a verified leaderboard. An empty
+leaderboard is not yet sufficient evidence for zero participants and remains null.
+Counts depend on unique contiguous ranks and omission only beyond the leaderboard's
+end. Unranked players are outside this count, and later player removals may change it.
+Non-null counts are integers in `0..2147483647`; when present, all-reward count ≤
+non-event-item reward count ≤ last-card count ≤ first-card count ≤ participant count.
+Compare remaining known counts even when intermediate metrics are null.
+
+Each server fills its own slots when complete, without waiting for the other servers.
+Unfinished slots remain null. No published root returns `{ "success": true, "data": {} }`;
+actual read failures use the 503 and stale-cache rules above. The complete map is
+returned without filtering, pagination or truncation. Threshold scores and internal
+observation times are not response fields.
+
 ## Reading and caching
 
-Both histories live in the same public artifact bucket, accessed by signed S3
+All three artifacts live in the same public artifact bucket, accessed by signed S3
 requests from the server. The server never falls back to a public CDN or another
 game's configuration. Configure server-only `OURNOTES_R2_ENDPOINT`,
 `OURNOTES_R2_ACCESS_KEY_ID`, `OURNOTES_R2_SECRET_ACCESS_KEY` and
@@ -139,6 +191,8 @@ ournotes/trackerdata/events/{eventId}/{server}/manifest.json
 ournotes/trackerdata/events/{eventId}/{server}/packs/event/{compressedSha256}.json.gz
 ournotes/trackerdata/topdata/events/{eventId}/{server}/manifest.json
 ournotes/trackerdata/topdata/events/{eventId}/{server}/packs/event/{compressedSha256}.json.gz
+ournotes/trackerdata/participation/manifest.json
+ournotes/trackerdata/participation/packs/{compressedSha256}.json.gz
 ```
 
 The reader verifies schema, target identity, exact paths, required descriptors,
@@ -146,12 +200,18 @@ recent references, compressed size/hash, bounded decompression, semantic hash an
 record counts. Hash validation uses the original stored JSON, before public field
 mapping. An ordinary manifest must contain `packs.event`. A missing required
 descriptor, a missing referenced pack or invalid content is a failure, not empty
-history. The two manifests commit independently; their generations need not match.
+history. Ordinary/TOP10 manifests commit independently; their generations need not match.
+Participation has one root shared by every event and server. Its pack is
+`{schemaVersion:1,kind:"eventParticipation",events}`; the root uses the same kind,
+with generation, publishedAt, pack and recentPackKeys. Its descriptor contains key,
+both hashes, compressedSize, jsonSize and recordCount (number of events). The reader
+checks exact JSON size, event count, fixed slots and count relationships, then
+projects `events` into the response.
 
 Both success and error responses send `Cache-Control: no-store, max-age=0` and
 `Cloudflare-CDN-Cache-Control: no-store`. Server-side manifest caching is 60 seconds,
 with 64 targets; verified pack caching is limited to 16 entries and an estimated
-32 MiB across both kinds. Concurrent reads share in-flight work. The read deadline
+32 MiB across all three kinds. Concurrent reads share in-flight work. The read deadline
 is 3 seconds, and failures have a 15-second cooldown.
 
 After a read failure, a still-resident verified pack may be reused for up to six
@@ -168,6 +228,7 @@ not response fields.
 | Complete ordinary pack records | 200,000 |
 | Ordinary response rows | 5,000 |
 | TOP10 points / users | 20,000 each; returned in full |
+| Participation events | No event-count cap; the byte budgets above apply, with a complete response |
 
 These are reader/response limits, not backend retention limits. Changing them
 requires checking producer, reader and recovery contracts together.
@@ -177,7 +238,9 @@ requires checking producer, reader and recovery contracts together.
 `npm run test:ournotes-tracker` covers the HTTP handler, parsers, real retained Rust
 publication bytes with synthetic players, signed reads, cache refresh, cooldown,
 stale expiry, corruption, missing data and response projection. The retained
-fixture records its provenance. Run `npm run typecheck`, `npm run lint` and
+fixture records its provenance. Participation tests use actual Rust gzip bytes with
+synthetic counts, checking fields, slot order, nulls, hashes, refresh and failures.
+Run `npm run typecheck`, `npm run lint` and
 `npm run build` for integration changes.
 
 For local acceptance, configure the verified R2 binding above and run `npm run dev`.
@@ -189,5 +252,8 @@ that override is rejected in production. Neither mode invokes a backend command.
 Before production rollout, verify the explicit public-bucket binding and signed
 read access from the Web host. After deploying Web, compare both endpoints against
 the referenced packs for JP/EN/TW/KR, check error/empty responses, and observe a
-new publication after the manifest TTL. API rollback does not rewrite backend
+new publication after the manifest TTL. For participation, compare all four slots
+with the aggregate pack. Verify rank ties and
+leaderboard-end semantics within an explicitly authorized event/server scope before
+launch. API rollback does not rewrite backend
 history, manifests or pending publications.

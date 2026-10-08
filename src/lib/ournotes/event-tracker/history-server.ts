@@ -6,6 +6,15 @@ import {
   ourNotesTrackerPrefix, parseOurNotesTrackerManifest, parseOurNotesTrackerPack,
   type OurNotesTrackerTarget, type OurNotesTrackerDescriptor, type OurNotesTrackerManifest, type OurNotesTrackerPack,
 } from "./contract";
+import {
+  OURNOTES_PARTICIPATION_PREFIX, parseOurNotesParticipationManifest, parseOurNotesParticipationPack,
+  type OurNotesParticipation, type OurNotesParticipationDescriptor, type OurNotesParticipationManifest, type OurNotesParticipationPack,
+} from "./participation-contract";
+
+type Pack = OurNotesTrackerPack | OurNotesParticipationPack;
+type Descriptor = OurNotesTrackerDescriptor | OurNotesParticipationDescriptor;
+type Manifest = OurNotesTrackerManifest | OurNotesParticipationManifest;
+type Target = OurNotesTrackerTarget | { kind: "participation" };
 
 const MAX_TARGETS = 64;
 const READ_BUDGET_MS = 3_000;
@@ -44,15 +53,16 @@ const readManifest = createBandoriSnapshotJsonObjectCache<unknown>({
     return value;
   },
 });
-const readPack = createBandoriSnapshotVerifiedGzipJsonCache<OurNotesTrackerPack, OurNotesTrackerDescriptor>({
+const readPack = createBandoriSnapshotVerifiedGzipJsonCache<Pack, Descriptor>({
   maxEntries: 16, maxCacheBytes: 32 * 1024 * 1024,
   maxCompressedBytes: OURNOTES_TRACKER_MAX_COMPRESSED_BYTES, maxDecompressedBytes: OURNOTES_TRACKER_MAX_JSON_BYTES,
-  datasetLabel: "OurNotes tracker pack", parse: parseOurNotesTrackerPack,
-  estimateBytes: (pack, bytes) => bytes + (pack.kind === "data"
+  datasetLabel: "OurNotes tracker pack", parse: (raw, descriptor) => descriptor.kind === "participation"
+    ? parseOurNotesParticipationPack(raw, descriptor) : parseOurNotesTrackerPack(raw, descriptor),
+  estimateBytes: (pack, bytes) => bytes + (pack.kind === "participation" ? Object.keys(pack.events).length * 512 : pack.kind === "data"
     ? Array.from(pack.tiers.values()).reduce((count, points) => count + points.length * 64, 0)
     : pack.points.length * 64 + pack.users.length * 256),
 });
-type CachedTarget = OurNotesTrackerManifest & { sourceScope: string; manifestKey: string; completedAt: number };
+type CachedTarget = Manifest & { sourceScope: string; manifestKey: string; completedAt: number };
 const lastSuccess = new Map<string, CachedTarget>();
 const cooldowns = new Map<string, number>();
 
@@ -61,7 +71,7 @@ function retain<T>(map: Map<string, T>, key: string, value: T) {
   map.set(key, value);
   while (map.size > MAX_TARGETS) map.delete(map.keys().next().value!);
 }
-function stalePack(key: string): OurNotesTrackerPack | null {
+function stalePack(key: string): Pack | null {
   const cached = lastSuccess.get(key);
   if (!cached || Date.now() - cached.completedAt > STALE_WINDOW_MS) return null;
   const pack = readPack.peek(cached.sourceScope, cached.manifestKey, cached.descriptor);
@@ -85,14 +95,14 @@ async function withinDeadline<T>(promise: Promise<T>, deadline: number): Promise
   }
 }
 
-export async function readOurNotesTrackerHistory(target: OurNotesTrackerTarget): Promise<OurNotesTrackerPack> {
+async function readHistory(target: Target): Promise<Pack> {
   let source;
   try {
     source = objectSource();
   } catch {
     throw new OurNotesTrackerReadError("OurNotes tracker storage is unavailable");
   }
-  const manifestKey = `${ourNotesTrackerPrefix(target)}/manifest.json`;
+  const manifestKey = `${target.kind === "participation" ? OURNOTES_PARTICIPATION_PREFIX : ourNotesTrackerPrefix(target)}/manifest.json`;
   const key = `${source.scope}\u0000${manifestKey}`;
   if ((cooldowns.get(key) ?? 0) > Date.now()) {
     const stale = stalePack(key);
@@ -105,9 +115,10 @@ export async function readOurNotesTrackerHistory(target: OurNotesTrackerTarget):
     if (raw === null) {
       lastSuccess.delete(key);
       cooldowns.delete(key);
-      return target.kind === "data" ? { kind: "data", tiers: new Map() } : { kind: "topdata", points: [], users: [] };
+      return target.kind === "participation" ? { kind: "participation", events: {} }
+        : target.kind === "data" ? { kind: "data", tiers: new Map() } : { kind: "topdata", points: [], users: [] };
     }
-    const manifest = parseOurNotesTrackerManifest(raw, target);
+    const manifest = target.kind === "participation" ? parseOurNotesParticipationManifest(raw) : parseOurNotesTrackerManifest(raw, target);
     const pack = await withinDeadline(readPack(source, manifestKey, manifest.descriptor, { timeoutMs: remaining(deadline) }), deadline);
     retain(lastSuccess, key, { ...manifest, sourceScope: source.scope, manifestKey, completedAt: Date.now() });
     cooldowns.delete(key);
@@ -121,4 +132,15 @@ export async function readOurNotesTrackerHistory(target: OurNotesTrackerTarget):
     if (stale) return stale;
     throw new OurNotesTrackerReadError("OurNotes tracker history is unavailable");
   }
+}
+
+export async function readOurNotesTrackerHistory(target: OurNotesTrackerTarget): Promise<OurNotesTrackerPack> {
+  const pack = await readHistory(target);
+  if (pack.kind === "participation") throw new OurNotesTrackerReadError("Unexpected participation pack");
+  return pack;
+}
+export async function readOurNotesParticipation(): Promise<OurNotesParticipation> {
+  const pack = await readHistory({ kind: "participation" });
+  if (pack.kind !== "participation") throw new OurNotesTrackerReadError("Unexpected tracker history pack");
+  return pack.events;
 }

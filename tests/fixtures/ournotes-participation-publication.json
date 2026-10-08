@@ -1,0 +1,21 @@
+{
+  "producer": "hhwx-ournotes-backend cutoff_tracker::participation_tests::export_participation_fixture_and_validate_slots; synthetic counts; generated from five-metric implementation candidate",
+  "manifest": {
+    "schemaVersion": 1,
+    "kind": "eventParticipation",
+    "generation": 1,
+    "publishedAt": "2026-10-08T00:00:00Z",
+    "pack": {
+      "key": "ournotes/trackerdata/participation/packs/d220acafe6056c2289498dd55adc202624d803d7ae51dd8895e7d5a0342c7195.json.gz",
+      "semanticSha256": "61cdf558288e6a26ffa5b7773065f9dbc528a499a05f45a8c01fc5f004cee5b6",
+      "compressedSha256": "d220acafe6056c2289498dd55adc202624d803d7ae51dd8895e7d5a0342c7195",
+      "compressedSize": 191,
+      "jsonSize": 532,
+      "recordCount": 2
+    },
+    "recentPackKeys": [
+      "ournotes/trackerdata/participation/packs/d220acafe6056c2289498dd55adc202624d803d7ae51dd8895e7d5a0342c7195.json.gz"
+    ]
+  },
+  "gzipBase64": "H4sIAAAAAAAC/42RsQ6DIBCG3+VmBqwbq+nQpTEdujQORGlKioeBsx2M716Rmi6oTY4jkO/484UB1EsheRADZKFJY84Wj+HyRKq9qLd0jS9sjwTilnEWC3tjpr1iYaC0GmmfvGvnqZigiC5kzlmsmcwDaeSfYCcd6Vp3EukXHGLj+mbzamRw2Leb8URbt9yYWLHlK3haeeP9lHoSHSf5p8YGRPzrchkkbREY+PqhWnlVzoezyMYPLfPFHhQCAAA="
+}
