@@ -25,6 +25,18 @@ export function ourNotesString(value: unknown): string {
   requireOurNotes(typeof value === "string" && value.length <= 65_536);
   return value;
 }
+export function ourNotesTimestamp(value: unknown): string | null {
+  const raw = ourNotesString(value);
+  if (raw === "" || raw === "null") return null;
+  const match = /^(\d{4})([/-])(\d{2})\2(\d{2}) (\d{1,2}):(\d{2}):(\d{2})$/u.exec(raw);
+  requireOurNotes(match);
+  const [, year, , month, day, hour, minute, second] = match;
+  const local = `${year}-${month}-${day}T${hour.padStart(2, "0")}:${minute}:${second}`;
+  const milliseconds = Date.parse(`${local}+09:00`);
+  requireOurNotes(Number.isSafeInteger(milliseconds)
+    && new Date(milliseconds + 9 * 60 * 60 * 1000).toISOString().slice(0, 19) === local);
+  return String(milliseconds);
+}
 export function ourNotesId(value: string): boolean {
   return /^[1-9]\d*$/u.test(value) && Number.isSafeInteger(Number(value));
 }

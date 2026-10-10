@@ -1,7 +1,8 @@
 import {
   OURNOTES_MAX_RECORDS, ourNotesHash, ourNotesId, ourNotesInteger,
-  ourNotesRecord, ourNotesSize, ourNotesString, requireOurNotes, type OurNotesText,
+  ourNotesRecord, ourNotesSize, ourNotesString, ourNotesTimestamp as timestamp, requireOurNotes, type OurNotesText,
 } from "../master-contract";
+import { RESOURCE_TYPES, CARD_TYPES, MUSIC_TYPES, GEKISOU_MISSION_TYPES } from "../api-enums";
 
 export const OURNOTES_EVENTS_API_PREFIX = "ournotes/master/events-v1/api";
 export const OURNOTES_EVENTS_API_POINTER_KEY = `${OURNOTES_EVENTS_API_PREFIX}/active.json`;
@@ -16,15 +17,6 @@ type EventAssets = { imageAsset: string; logoAsset: string; backgroundAsset: str
 const ASSET_FIELDS = ["imageAsset", "logoAsset", "backgroundAsset", "bannerAsset"] as const;
 const EVENT_TYPES = ["None", "ChallengeLive"] as const;
 const EVENT_BONUS_TYPES = ["EventPoint", "EventItem", "ParameterAll", "ParameterPfm", "ParameterTec", "ParameterVis"] as const;
-const RESOURCE_TYPES = {
-  1: "Item", 2: "MemberCard", 3: "SupportCard", 4: "Voice", 5: "LoginBonus", 6: "Subscription",
-  7: "GachaPoint", 8: "Music", 9: "Stamp", 10: "PremiumPass", 11: "EventMedal", 12: "LiveLaneSkin",
-  13: "LiveNoteSkin", 14: "LiveNoteEffectSkin", 15: "LiveNoteSEGroup", 16: "VipPoint", 17: "Degree",
-  18: "Background", 19: "Spot", 1001: "BiliChatTheme", 1002: "BiliChatBubble", 1003: "BiliChatFrame",
-} as const;
-const CARD_TYPES = ["None", "Ruby", "Azure", "Jade", "Amber", "Violet"] as const;
-const MUSIC_TYPES = { ...CARD_TYPES, 99: "All" } as const;
-const GEKISOU_MISSION_TYPES = ["None", "Combo", "Luck", "JustCount", "All"] as const;
 const BONUS_FIELDS = {
   EventPoint: "pointPercent", EventItem: "itemPercent", ParameterAll: "parameterPercent",
   ParameterPfm: "performancePercent", ParameterTec: "technicPercent", ParameterVis: "visualPercent",
@@ -123,16 +115,6 @@ function regional<T>(value: unknown, parse: (value: unknown) => T): Regional<T> 
 }
 function ordered<T extends object>(value: T, fields: readonly (keyof T)[]): T {
   return Object.fromEntries(fields.filter((field) => Object.hasOwn(value, field)).map((field) => [field, value[field]])) as T;
-}
-function timestamp(value: unknown): Timestamp {
-  const raw = ourNotesString(value);
-  if (raw === "") return null;
-  requireOurNotes(/^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}$/u.test(raw));
-  const local = raw.replaceAll("/", "-").replace(" ", "T");
-  const milliseconds = Date.parse(`${local}+09:00`);
-  requireOurNotes(Number.isSafeInteger(milliseconds)
-    && new Date(milliseconds + 9 * 60 * 60 * 1000).toISOString().slice(0, 19) === local);
-  return String(milliseconds);
 }
 function numbers<K extends string>(row: Record<string, unknown>, fields: readonly K[]): Record<K, number> {
   return Object.fromEntries(fields.map((field) => [field, ourNotesInteger(row[field])])) as Record<K, number>;

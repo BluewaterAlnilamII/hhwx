@@ -1,0 +1,90 @@
+{
+  "provenance": "Synthetic bounded music-v1 private record. Shapes and numeric examples were checked against the published generation 2 music/musicDetails packs; no complete private table is included.",
+  "record": {
+    "id": 100001,
+    "sortOrder": 10,
+    "available": [true, true, true, true, true],
+    "serverExtensions": [{}, {}, {}, {}, {}],
+    "texts": {
+      "titleTextID": ["JP title", "EN title", "TW title", "CN title", "KR title"],
+      "rubyTitleTextID": ["<ruby>name</ruby>", "", "", "", ""],
+      "phoneticTextID": ["", "", "", "", ""],
+      "bandNameTextID": ["", "", "", "", ""],
+      "lyricistTextID": ["Writer", "Writer", "Writer", "Writer", "Writer"],
+      "composerTextID": ["Composer", "Composer", "Composer", "Composer", "Composer"],
+      "arrangerTextID": ["Arranger", "Arranger", "Arranger", "Arranger", "Arranger"]
+    },
+    "bandIDs": [2, 1, 2],
+    "vocalCharacterIDs": [10, 1],
+    "musicType": 1,
+    "musicCategories": [3, 1],
+    "bestMusicTagIDs": [2, 1],
+    "startAt": "2026/01/01 0:00:00",
+    "defaultUnlock": false,
+    "unlockConditionID": 0,
+    "difficulties": {
+      "2": {"scoreId": 10000102, "data": {"id": 10000102, "musicScoreLevel": 20, "musicScoreDisplayLevel": 20.5, "fullComboCount": 342, "musicScoreTextFileName": "score_100001_2", "privateOnly": "must-not-be-public"}}
+    },
+    "assets": {
+      "length": 99.98933333333333,
+      "bpm": {"2": {"ticksPerBeat": 480, "events": [{"t": 0, "bpm": 180}, {"t": 480, "bpm": 190, "interp": 0}, {"t": 480, "bpm": 200, "interp": 1}]}},
+      "files": {"privateOnly": "must-not-be-public"}
+    },
+    "tags": [{"id": 2, "texts": {"nameTextID": "JP tag two"}}, {"id": 1, "texts": {"nameTextID": "JP tag one"}}],
+    "categories": [{"id": 10, "musicCategories": [3, 1], "texts": {"textKey": "JP category"}}],
+    "gekisouMission1": 0,
+    "gekisouMission2": 1,
+    "gekisouMission3": 1,
+    "scoreRanks": [{"id": 101, "group": 1, "liveScoreRank": 7, "requiredScore": 1000000, "battleLiveRequiredScore": 900000}],
+    "scoreRewards": [{"id": 201, "group": 1, "liveScoreRank": 7, "resourceType": 1, "resourceId": 1, "resourceCount": 0}],
+    "comboRewards": [
+      {"difficulty": 2, "comboRateType": 0, "requiredCombo": 85, "resourceType": 1, "resourceId": 1, "resourceCount": 1},
+      {"difficulty": 2, "comboRateType": 1, "requiredCombo": 171, "resourceType": 1, "resourceId": 1, "resourceCount": 1},
+      {"difficulty": 2, "comboRateType": 2, "requiredCombo": 256, "resourceType": 1, "resourceId": 1, "resourceCount": 1},
+      {"difficulty": 2, "comboRateType": 3, "requiredCombo": 342, "resourceType": 1, "resourceId": 1, "resourceCount": 1}
+    ],
+    "resourceItems": {"1": {"id": 1, "texts": {"nameTextId": "JP item", "phoneticNameTextId": "", "descriptionTextId": "JP description"}, "type": 1, "value": 0, "max": 999, "imagePath": "item_1", "startAt": "", "endAt": "", "inventoryDisplayGroup": 1, "orderNum": 0, "displayTargetIds": []}},
+    "scoreCLiveMusicRewardID": 11,
+    "scoreBLiveMusicRewardID": 12,
+    "scoreALiveMusicRewardID": 13,
+    "scoreSLiveMusicRewardID": 14,
+    "scoreSSLiveMusicRewardID": 15,
+    "comboEasyLiveMusicRewardID": 16,
+    "comboNormalLiveMusicRewardID": 17,
+    "comboHardLiveMusicRewardID": 18,
+    "comboExpertLiveMusicRewardID": 19,
+    "resources": {"jacketAssetName": "jacket_100001", "audio": {"cueSheetName": "sheet_1", "cueName": "cue_1"}, "charts": {"privateOnly": "must-not-be-public"}},
+    "musicSoundID": 1301000010001,
+    "sound": {"id": 1301000010001, "soundCueSheetID": 1301000010000, "cueName": "cue_1", "audioSyncedTimerEnabled": false, "cacheType": 0, "category": 0, "isRandomPitch": false, "minPitch": 0.0, "maxPitch": 0.0},
+    "soundCueSheet": {"id": 1301000010000, "cueSheetName": "sheet_1"},
+    "anotherVocalIDs": [7],
+    "anotherVocals": [{"id": 7, "vocalCharacterIDs": [10, 1], "musicSoundID": 8, "unlockConditionID": 0, "startAt": "", "jingleSoundID": 9}],
+    "musicVideoIDs": [9],
+    "musicVideos": [{"id": 9, "texts": {"displayNameTextId": "JP video"}, "assetName": "mv_9", "width": 1920, "height": 1080, "hasAudio": false, "autoStop": true, "overrideShaderName": "Unlit/Test", "privateOnly": "must-not-be-public"}],
+    "releaseEffects": [{"id": 10, "liveMusicId": 100001, "difficulty": 2, "releaseEffectType": 99, "startAt": "2026-01-01 0:00:00", "endAt": ""}],
+    "liveMusicPenLightColorID": 1,
+    "musicLightColorIDNormal": 2,
+    "musicLightColorIDChorus": 3,
+    "lazerLightMotionNormal": 0,
+    "lazerLightMotionChorus": 1,
+    "stageLightMotionNormal": 0,
+    "stageLightMotionChorus": 1,
+    "vjVideoPattern": 0,
+    "backgroundCameraType": 0,
+    "gekisouCallSe": 0,
+    "performance": {
+      "penLight": {"id": 1, "mainColor": "#ffffff", "mainQuantityRatio": 100, "sub1Color": "#000000", "sub1QuantityRatio": 0},
+      "normalLight": {"id": 2, "mainFloorBackSpot1": "#ffffff", "subScreenWallSpot": "#000000"},
+      "chorusLight": {"id": 3, "mainFloorBackSpot1": "#ff0000"},
+      "stageVideos": [{"id": 1, "stageID": 10, "vjVideoPattern": 0, "videoID": 9}],
+      "videos": [{"id": 9, "texts": {"displayNameTextId": "JP video"}, "assetName": "mv_9", "width": 1920, "height": 1080, "hasAudio": false, "autoStop": true, "overrideShaderName": "Unlit/Test"}]
+    },
+    "acquisition": [
+      {"type": "exchange", "product": {"id": 1, "exchangeId": 2, "resourceType": 8, "resourceId": 100001, "resourceCount": 1, "paymentResourceCount": 10, "paymentSteps": [2, 1], "paymentStepResourceCounts": [20, 10], "limitCount": 1, "resetType": 0, "isRecommended": false, "startAt": "", "endAt": "", "thumbnailAsset": ""}, "exchange": {"id": 2, "texts": {"nameTextId": "JP exchange"}, "exchangeCategoryId": 0, "paymentResourceType": 1, "paymentResourceId": 1, "targetDisplay": 0, "targetDisplayId": 0, "startAt": "", "endAt": "", "bannerAsset": ""}},
+      {"type": "story", "reward": {"id": 1, "group": 1, "resourceType": 8, "resourceId": 100001, "resourceCount": 1}, "chapters": [{"id": 3, "texts": {"nameTextId": "JP chapter", "descriptionTextId": "JP chapter description"}, "bandId": 1, "mainCharacterIds": [10, 1], "musicId": 100001, "isSpecialStory": false, "startAt": "", "endAt": "", "background": "", "banner": "", "icon": "", "image": ""}], "episodes": [{"id": 4, "chapterId": 3, "episodeNumber": 1, "advId": 5, "texts": {"descriptionTextId": "JP episode"}, "isAnotherEpisode": false, "isExtraEpisode": false, "playerRank": 0, "startAt": "", "endAt": ""}]},
+      {"type": "mission", "reward": {"resourceType": 8, "resourceId": 100001, "resourceCount": 1}, "missions": [{"id": 5, "texts": {"descriptionTextId": "Play {BandId}"}, "missionCategory": 1, "missionType": 2, "priority": 0, "useTypeGrouping": false, "achievementCount": 1, "initialValue": 0, "value": 0, "bandId": 1, "cardType": 0, "musicDifficulty": 2, "scoreRank": 7, "startAt": "", "endAt": "null", "loginTimeStartAt": "", "loginTimeEndAt": ""}]}
+    ],
+    "missing": [],
+    "privateOnly": "must-not-be-public"
+  }
+}

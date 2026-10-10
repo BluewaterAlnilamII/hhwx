@@ -19,8 +19,10 @@ All paths below start with `/api/ournotes/master`.
 | `/skills` | Five skill-kind ID maps, described below | None |
 | `/events` | Event summary ID map | Optional `server=0..4` |
 | `/events/{eventId}` | One event detail | Optional `server=0..4` |
+| `/music` | Music summary ID map | Optional `server=0..4` |
+| `/music/{musicId}` | One music detail | Optional `server=0..4` |
 
-Success uses `{ "success": true, "data": ... }`. Map keys are positive decimal IDs. Member and support IDs are separate namespaces. Card and event IDs must be positive safe integers without leading zeros. There are no `all`/`main` aliases, directory details, pagination, language selectors or arbitrary field expansion.
+Success uses `{ "success": true, "data": ... }`. Map keys are positive decimal IDs. Member and support IDs are separate namespaces. Card, event and music IDs must be positive safe integers without leading zeros. There are no `all`/`main` aliases, directory details, pagination, language selectors or arbitrary field expansion.
 
 Without `server`, cards merge all four actual sources. With exactly one numeric `server`, only cards present in that source remain, and `serverExtensions` is removed. Localized fields and raw times retain all five slots. `characters`, `bands` and `skills` remain shared catalogs and reject queries.
 
@@ -304,7 +306,7 @@ The backend preserves one confirmed first-party history and produces the final s
 
 Music, time, event reward and the four event asset fields use one base value from the first historically present slot in fixed `jp/en/tw/cn_intl/kr` order. Without `server`, records always include five-slot `serverExtensions` for presence and regional differences: `null` means absent, `{}` means present with the base values, and an object supplies only differing `startAt`, `endAt`, `displayEndAt`, `imageAsset`, `logoAsset`, `backgroundAsset`, `bannerAsset`, `musics` or detail `stories`, `pointRewards`, `pointLoopRewards`, `rankingRewards`. When all five slots are present and identical, the field is `[{}, {}, {}, {}, {}]`. Arrays replace the complete base array; they do not merge by ID. A server query filters on presence, applies that slot's overrides, then removes `serverExtensions`. Explicit `null` times, `[]` collections and empty asset strings override base values. Localized text retains its five slots. TW and `cn_intl` share records and times, with distinct Traditional/Simplified Chinese text. Missing text is `""`; missing time is `null`, and a present region's genuinely empty collection is `[]`.
 
-All Events time fields are decimal-string Unix timestamps in milliseconds or `null`, matching the Bandori Events timestamp representation. Web interprets private `yyyy/MM/dd HH:mm:ss` strings as JST (UTC+9), independently of the host timezone, and converts them after verifying the original pack. Empty source times become `null`; malformed dates fail the read. For example, `2026/09/30 18:00:00` becomes `"1790758800000"`. A timestamp identifies the same instant in every timezone; clients format it in their selected display timezone. No raw-date or ISO companion fields are added, and no release/availability state is inferred.
+All Events time fields are decimal-string Unix timestamps in milliseconds or `null`, matching the Bandori Events timestamp representation. Web interprets private dates as JST (UTC+9), independently of the host timezone, and converts them after verifying the original pack. The shared Events/Music parser accepts `yyyy/MM/dd H:mm:ss` or `yyyy-MM-dd H:mm:ss`, with one- or two-digit hours. Empty strings and the literal `"null"` become `null`; invalid dates fail the read. For example, `2026/09/30 18:00:00` becomes `"1790758800000"`. A timestamp identifies the same instant in every timezone; clients format it in their selected display timezone. No raw-date or ISO companion fields are added, and no release/availability state is inferred.
 
 | Summary fields | Contract |
 |---|---|
@@ -400,6 +402,102 @@ Events discover `ournotes/master/events-v1/api/active.json` with schema `ournote
 
 Events add no media extraction, cutoff collection, database, locale/expand/page query or unverified Bandori-derived fields. Lists read the summary pack and details read the detail pack; filtered directories are not separately cached. Both views are pinned by one backend root, while separate HTTP requests can observe a later publication.
 
+## Music
+
+Music follows the Bandori summary/detail organization, unified envelopes, private readers and cache policy. Its fields describe OurNotes rules: multiple bands/vocals, native levels and combo counts, three gekisou task positions, acquisition paths, rewards and performance configuration. It does not infer Bandori note counts, `closedAt`, release status or unlock state. Music IDs are positive safe integers without leading zeros; the ID is the map key or detail URL and is not repeated in the record.
+
+Both routes accept optional `server=0..4`: `GET /api/ournotes/master/music` returns the summary ID map, and `GET /api/ournotes/master/music/{musicId}` returns one song's detail.
+
+### Fields and order
+
+Summary order is `sortOrder, musicTitle, bandIds, bandName, vocalCharacterIds, musicType, musicCategories, bestMusicTagIds, startAt, gekisouMission1, gekisouMission2, gekisouMission3, difficulty, length, bpm, serverExtensions`.
+
+Both views expose the three ordered gekisou mission fields with the shared enum mapping (`None`, `Combo`, `Luck`, `JustCount`, `All`); preserve repeated values, zero as `None`, unknown numeric codes and regional differences. The summary reads these fields from the backend `music` pack, introduced in `ournotes-music-api-v3`. Older packs omit them; the reader does not invent defaults or fetch details to fill them. Publish a snapshot containing these fields before relying on them in the public summary. The same v3 recipe removes `defaultUnlock` from the private summary and its regional overrides while retaining it in detail; HTTP already excludes it from summaries, so that private reduction does not block HTTP verification.
+
+`defaultUnlock` and `acquisition` are detail-only fields; they are absent from both summary records and summary `serverExtensions`. The root `unlockConditionId` is excluded from both HTTP views and their regional overrides; its private source value remains intact. `startAt` remains in the summary as the song's opening time.
+
+Detail order follows this table. Optional source fields are omitted when absent; present `0`, `false`, `""` and empty arrays are retained.
+
+| Group | Fields in order |
+|---|---|
+| Identity and credits | `sortOrder, musicTitle, ruby, phonetic, lyricist, composer, arranger, bandIds, bandName, vocalCharacterIds` |
+| Classification | `musicType, musicCategories, bestMusicTagIds` |
+| Access | `startAt, defaultUnlock, acquisition` |
+| Gameplay | `difficulty, gekisouMission1, gekisouMission2, gekisouMission3` |
+| Rewards | `scoreRanks, scoreRewards, comboRewards` |
+| Media references | `resources, anotherVocalIds, anotherVocals, musicVideoIds, musicVideos, releaseEffects` |
+| Performance and chart metadata | `performance, length, bpm, serverExtensions` |
+
+Root text fields (`musicTitle,bandName,ruby,phonetic,lyricist,composer,arranger`) are five-string arrays. `bandName` is a resolved display name: for each present region/language, use the song-specific name when nonempty; otherwise resolve that region's `bandIds` through the existing Bands catalog and join names in source order with ` / `. Preserve repeated IDs. If any required name/translation is unavailable, leave that slot empty rather than presenting a partial name or borrowing another language. Absent songs keep empty slots. CRYCHIC's song-specific name takes precedence even with empty `bandIds`. `ruby` preserves official markup as text, without rendering HTML. `musicCategories` contains classification codes, not category row IDs. `bestMusicTagIds` references Tag rows. Neither view embeds `tags`, `categories` or `resourceItems`; shared catalog names and item configuration are outside Music. No Tags, Categories or Items HTTP catalog is introduced by this projection.
+
+`difficulty` keys `0/1/2/3` mean Easy/Normal/Hard/Expert. Each referenced difficulty contains `scoreId,musicScoreLevel?,musicScoreDisplayLevel?,fullComboCount?`; detail additionally includes `musicScoreTextFileName` when present. Levels such as `20` and `20.5` remain distinct, without conversion to `20+`. `fullComboCount` is the official combo count, not a count of chart objects. A missing score row is `{scoreId,missing:true}`; an unreferenced difficulty has no key. Shared BPM may still exist when a region lacks that score row.
+
+`musicScoreLevel` is the native integer level. `musicScoreDisplayLevel` is a separate native float: the inspected client uses the full value as a song-list sort key, but its list/detail difficulty labels use `GetMusicScoreDisplayLevelInt`, which truncates that float toward zero. For example, `20.5` displays as `20` while retaining its fractional ordering value. The fraction does not establish a `+` label or a rating formula. The API preserves both source values.
+
+Both summary and detail expose complete `bpm`: difficulty keys map to `{events:[{t,bpm,...}]}`. The `t` unit is fixed at 480 integer ticks per beat; the reader still validates the private `ticksPerBeat:480` value but omits that constant from both HTTP views. Event order, equal-tick events and additional event fields are preserved. `length` is the positive duration in seconds without rounding, omitted when unavailable. Requests use published metadata without downloading chart/audio files.
+
+| Reward field | Entry fields in order |
+|---|---|
+| `scoreRanks` | `liveScoreRank,requiredScore,battleLiveRequiredScore`; both thresholds are official configuration |
+| `scoreRewards` | `liveScoreRank,resourceType,resourceId,resourceCount` |
+| `comboRewards` | `difficulty,comboRateType,requiredCombo?,resourceType,resourceId,resourceCount`; thresholds are not recomputed |
+
+The HTTP views and their regional overrides exclude `rewardIds` and the nine original song-master reward IDs. The resolved `scoreRewards` and `comboRewards`, together with `scoreRanks`, already provide reward categories, contents and thresholds without relying on those IDs. Private source references remain available for tracing; no foreign-key joins or player claim states are inferred. The root `unlockConditionId` is also excluded because its business meaning remains unverified; its zero value must not be interpreted as unconditional access. This does not alter the separate `anotherVocals[].unlockConditionId` field.
+
+`acquisition[]` preserves all sources in their original order, with acquisition identities, names and native conditions. It omits store presentation settings, chapter synopsis/cast/music and artwork, episode artwork, and mission list priority/grouping. Reward and payment item references remain without embedded item definitions. Reward objects contain `resourceType,resourceId,resourceCount`, omitting join-only row/group IDs.
+
+| Type | Nested fields in order |
+|---|---|
+| `exchange` | `product`: `id,exchangeId,resourceType,resourceId,resourceCount,paymentResourceCount,paymentSteps,paymentStepResourceCounts,limitCount,resetType,startAt,endAt`; optional `exchange`: `id,name[5],paymentResourceType,paymentResourceId,startAt,endAt` |
+| `story` | `reward,chapters,episodes`. Chapters: `chapterId,name[5],bandId,isSpecialStory,startAt,endAt`. Episodes: `episodeId,chapterId,episodeNumber,advId,description[5],startAt,endAt,isAnotherEpisode,isExtraEpisode,unlockEpisodeNumber,eventPoint,characterId,characterRank,playerRank,bandRank,storyFriendshipEpisodeId` |
+| `mission` | `reward,missions`. Missions: `missionId,description[5],missionCategory,missionType,achievementCount,initialValue,value`, target fields below, then `startAt,endAt,loginTimeStartAt,loginTimeEndAt` |
+
+Mission targets are ordered `arenaRankId,bandId,bandRank,cardType,characterId,episodeId,eventId,exchangeId,gachaId,memberCardId,missionLiveChapterId,missionLiveStageId,musicDifficulty,musicId,notesJudgement,scoreRank,storyChapterId,supportCardId`. Descriptions retain placeholders such as `{BandId}` with native parameters. There is no template executor or player-state evaluation. Story/exchange end times do not become song `closedAt`.
+
+The following condition meanings are verified in the inspected base client; they describe static configuration, not an account's eligibility:
+
+- Exchange `paymentResourceCount` is the base unit price. `paymentSteps[i]` is the one-based purchase occurrence at which `paymentStepResourceCounts[i]` becomes the unit price; the two arrays pair by index. A tier ends immediately before the next tier starts, with a positive `limitCount` capping its range. Empty tier arrays use the base price. The client's current-price lookup uses the purchase counter plus one, not a batch quantity. `resetType` is `1=NoReset, 2=Daily, 3=Weekly, 4=Monthly`; this API does not calculate reset boundaries.
+- Story conditions depend on the chapter and current event branch. An already viewed episode or a chapter marked `isSpecialStory` bypasses the usual condition list. During the relevant active event, the client checks `eventPoint`; outside that branch it checks configured character/player/band ranks and friendship-episode viewing. `characterRank`, `playerRank`, `eventPoint`, `unlockEpisodeNumber` and `storyFriendshipEpisodeId` activate at positive values; a character-rank condition also needs a positive `characterId`, and a zero `bandRank` skips that rank check. `bandRank` applies to the chapter's `bandId`. `unlockEpisodeNumber` identifies a non-Another episode with that number in the same chapter, not an episode ID. The common previous-episode viewing check is skipped for `isExtraEpisode`. Applicable unmet conditions accumulate; all fields must not be treated as an unconditional AND expression.
+- Mission `missionType` selects which target parameters form its counter key. Current Music acquisition missions use `missionCategory=15` (`UnlockMusic`) and `missionType=30` (`BandEvaluation`), with `bandId` selecting the band and `achievementCount` setting the progress target. `initialValue` is the `MissionInitialValue` policy enum (`0=Zero, 1=Minus1, 2=Current`), not the numeric baseline. For an active unfinished task, the inspected progress calculation clamps `counter - playerMission.startCount` to the progress range; `startCount` comes from player state. `value` is a type-dependent counter parameter, unused by the current BandEvaluation key branch. Other zero-valued targets are not additional requirements for that type. Completion and reward-receipt flags remain player/server state.
+
+Story chapters retain `bandId` and `isSpecialStory` as condition context: the former identifies the band for `bandRank`, and the latter changes the unlock branch. Preserve present zero/false values, omit absent fields, and retain regional differences. This does not expand the full chapter catalog or evaluate player eligibility.
+
+`resources` groups `jacketAssetName` and `audio`: `musicSoundId,soundCueSheetId,cueSheetName,cueName`. Missing sound/sheet rows do not manufacture configuration. Chart references already live in `difficulty`. No private descriptors, files map or media URLs are exposed; media consumers can use the separate music index.
+
+`anotherVocalIds` and `musicVideoIds` retain references even when related rows are missing. `anotherVocals[]` contains `id,vocalCharacterIds,musicSoundId,unlockConditionId,startAt`, excluding `jingleSoundID`. Nonempty AnotherVocal projection has synthetic coverage; the current production dataset has no nonempty sample. `musicVideos[]` contains only `id,displayName[5],assetName`; generic video dimensions, audio/stop flags and shader configuration are not exposed. `releaseEffects[]` contains `id,difficulty,releaseEffectType,startAt,endAt`.
+
+`releaseEffects` configures song-release notices. `releaseEffectType` is `0=Music, 1=Difficulty, 2=AnotherBand`; the inspected title branch reads `difficulty` only for type 1. Type 0 with difficulty 0 does not mean Easy-only access. Playback checks the notice's time window and locally recorded played ID, then marks it played after the notice. Its `endAt` ends that notice window, not song availability. The API does not derive whether a notice will currently play.
+
+`performance` contains the song's native `liveMusicPenLightColorId,musicLightColorIdNormal,musicLightColorIdChorus,lazerLightMotionNormal,lazerLightMotionChorus,stageLightMotionNormal,stageLightMotionChorus,vjVideoPattern,backgroundCameraType,gekisouCallSe`. Keep the official `lazer` spelling and zero values. The shared `penLight,normalLight,chorusLight,stageVideos,videos` expansions stay private. `resources.audio` likewise omits generic sound cache, timing and pitch configuration.
+
+### Enums, time, regions and missing data
+
+`musicType` uses `None/Ruby/Azure/Jade/Amber/Violet/All`; gekisou fields use `None/Combo/Luck/JustCount/All`. Resource types and mission `cardType` share the Events mappings above. Score rank codes `0..7` map to `None,E,D,C,B,A,S,SS`; combo rate codes `0..3` map to `Quarter,Half,ThreeQuarters,Full`. Unknown valid integer codes stay integers. Other types/conditions retain native numbers.
+
+Numeric `musicCategories` codes mean `0=All, 1=Original, 2=Virtual, 3=JPop, 4=Anime, 5=Game, 6=AnotherBand`. The numeric meanings documented for categories, acquisition parameters and release effects do not introduce additional string-enum conversions.
+
+All Music date fields use decimal-string Unix milliseconds or `null`, following the Events public JST (UTC+9) interpretation. This includes root `startAt`, acquisition product/exchange/chapter/episode/mission dates (including login windows), AnotherVocal dates and release-effect windows. The shared parser accepts slash/hyphen dates and one- or two-digit hours, normalizes empty strings/literal `"null"` to null, and rejects invalid calendar values without depending on the host timezone. Root `startAt` is always present (null if unset or removed in the private region); absent optional nested date fields remain omitted. Regional differences remain scalar overrides. No raw/ISO companion fields, open-state inference or private-pack rewrite is introduced. Cards' existing raw-time contract is unchanged.
+
+Five slots are `[jp,en,tw,cn_intl,kr]`, from `[JP,EN,TW,TW,KR]`. Root texts retain five slots. Related texts align by entity type and stable ID across materialized regions, never array position. An absent entity/translation yields `""`, without language fallback. Arrays retain source order, duplicates and positional meaning.
+
+Private extensions apply before renaming/grouping: a `null` slot means absent song, a `null` field deletes that optional field, and arrays/objects replace the whole value. Public records use the first present region as base and always emit five `serverExtensions` slots, including all-`{}` cases. Extensions contain only projected top-level differences; a field value of `null` deletes a whole optional field except `startAt`, whose null means an explicitly unset time and remains present after server selection, matching Events. Root texts and shared `length/bpm` are not overridden. With `server`, absent songs are excluded, differences/deletions applied, and `serverExtensions` removed; five-string texts stay intact. Historical presence does not mean open, unlocked or playable.
+
+Producer table/reference diagnostics in root `missing[]` remain private. Public `difficulty.*.missing:true` still identifies an explicitly referenced but missing score row. Official partial data stays readable without borrowing another region's score or fabricating zero values. Required object absence, corruption or invalid consumed structures fail the read. Source rows, history, text reference keys, pointers and storage paths are excluded; new source fields are not automatically exposed.
+
+Object field order is for readability; callers use field names. Numeric ID maps do not promise song order. Select a region and sort by its `sortOrder`, then numeric ID for ties. There is no `sort/order/page` query or `orderedIds`; native arrays and BPM events are never resorted.
+
+The Web field reductions apply to the HTTP projection, including `serverExtensions`; regional differences solely in excluded fields do not produce public overrides. Existing consumers must use the retained references instead of removed catalog expansions, the resolved reward arrays instead of `rewardIds`, and the fixed BPM unit instead of a per-chart constant. No current repository UI consumes the removed Music fields. These HTTP reductions can be verified against existing v2 packs without rebuilding them.
+
+Separately, backend `ournotes-music-api-v3` removes the five shared definition groups `bands`, `vocalCharacters`, `tags`, `categories` and `resourceItems` from final `musicDetails` records and their regional overrides. These definitions remain in raw archives, per-server normalized data and unified history. Final details retain native references, actual rewards, acquisition and performance configuration, private reward/unlock references, source diagnostics and complete `assets.files/bpm/length`; media indexes are unchanged. The Web reader accepts both older packs containing these definitions and v3 packs without them, so this private reduction requires no further HTTP adaptation.
+
+### Reader and activation
+
+Music discovers `ournotes/master/music-v1/api/active.json` (`ournotes-music-api-pointer-v1`). Lists read the `music` pack; details read `musicDetails`. Both also reuse the existing private Bands catalog reader to resolve names. This catalog has its own verified four-source roots/cache, and is not pinned to the Music generation; a catalog refresh can update names without rebuilding Music packs. No public API/CDN request or additional full detail-pack read is used for name completion. Catalog read failures fail the Music read; a missing referenced band/translation leaves the display slot empty. Validate schema, generation, content-addressed keys, compressed/original JSON byte hashes and sizes, descriptor counts and consumed structure. The producer's `semanticSha256` is the original JSON digest for these packs; use existing byte verification without JavaScript reserialization. Additional datasets/history and producer revisions do not alter this contract.
+
+Pointers have a 60-second TTL; reads have a 15-second deadline. Compressed and decompressed packs are limited to 16 MiB each. The content cache holds two entries with a 32 MiB total budget estimated from serialized public projections, not actual JavaScript heap size. Five temporary regional copies are not retained as five caches. There is no arbitrary song-count ceiling. Separate HTTP requests may observe different publications.
+
+For full activation, publish backend v3 snapshots before enabling the Web API with the agreed summary fields. The backend can build both final packs from the existing resource checkpoint without fetching master data again, rebuilding or uploading media, adding credentials or migrating the database. The summary's three gekisou fields are the only public field changes whose actual-data acceptance depends on that publication. `npm run test:ournotes-master` covers fields/order, regions, partial data, HTTP errors and pack/cache integrity; typecheck, lint and build cover integration. Dev acceptance compares both routes and all five selections with actual private packs and the verified Bands catalog, including normalized timestamps, ordinary band names and the CRYCHIC override. Production deployment/edge-cache verification are separate operational steps. Web rollback does not move the backend pointer or remove media. Invalid/absent music IDs return `404 OURNOTES_MUSIC_NOT_FOUND`; source errors follow the shared sanitized, no-store policy below. Edge cache keys must distinguish Music `server` queries.
+
 ## Shared catalogs and images
 
 Character records contain `characterName[5]`, `shortName[5]`, `bandId`, `displayOrder`, and `colorCode`. Band records contain `bandName[5]` and `colorCode`. Names use the same fixed source/locale mapping. Structural fields must agree across sources. Cards reference characters, and characters reference bands; cards do not embed these catalogs.
@@ -413,11 +511,11 @@ Errors use `{ "success": false, "error": { "code": "...", "message": "..." } }` 
 | Status | Condition |
 |---|---|
 | 400 | Unknown, duplicate or invalid query parameter; any directory query |
-| 404 | Unknown card kind, invalid ID, or card/event absent from the requested view |
+| 404 | Unknown card kind, invalid ID, or card/event/music absent from the requested view |
 | 503 | Missing configuration/source, corrupt snapshot, invalid references or conflicting data |
 | 500 | Unclassified application error |
 
-Success reuses `SNAPSHOT_HTTP_CACHE_POLICY`: browser `max-age=300, stale-while-revalidate=1800`; Cloudflare `max-age=1800, stale-while-revalidate=86400`. Edge cache keys must distinguish card/event `server` queries. Source pointers have a 60-second process cache. Immutable objects use bounded caches and shared in-flight reads; merged views are reused while input identities remain unchanged. TW and `cn_intl` share one input. Separate requests do not promise an atomic release across all servers or images.
+Success reuses `SNAPSHOT_HTTP_CACHE_POLICY`: browser `max-age=300, stale-while-revalidate=1800`; Cloudflare `max-age=1800, stale-while-revalidate=86400`. Edge cache keys must distinguish card/event/music `server` queries. Source pointers have a 60-second process cache. Immutable objects use bounded caches and shared in-flight reads; merged views are reused while input identities remain unchanged. TW and `cn_intl` share one input. Separate requests do not promise an atomic release across all servers or images.
 
 ## Server configuration and verification
 
