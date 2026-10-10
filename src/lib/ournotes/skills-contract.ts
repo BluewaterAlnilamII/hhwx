@@ -47,13 +47,34 @@ export type OurNotesSkillEffect = {
   skillTriggerType?: OurNotesLevelNumber;
   skillTriggerConditions?: ConditionGroup;
 };
+export type OurNotesSkillEffectAtLevel = {
+  skillEffectType: number;
+  effectValue: number;
+  effectExecuteLimitCount: number;
+  effectExecuteLimitResetConditions: OurNotesSkillConditionAtLevel[][];
+  skillTargets: OurNotesSkillTarget[];
+  skillConditions: OurNotesSkillConditionAtLevel[][];
+  skillCumulativeCondition: {
+    skillCumulativeConditionType: number;
+    conditionValues: number[];
+    conditionTargets: OurNotesSkillTarget[];
+    maxCumulativeCount: number;
+  } | null;
+  activationTimeSecond?: number;
+  maxEffectValue?: number;
+  effectLimitCount?: number;
+  skillReleaseConditions?: OurNotesSkillConditionAtLevel[][];
+  skillTriggerType?: number;
+  skillTriggerConditions?: OurNotesSkillConditionAtLevel[][];
+};
+export type OurNotesSkillEffectByLevel = Record<"1" | "2" | "3" | "4" | "5", OurNotesSkillEffectAtLevel | null>;
 type SkillFields = {
   skillIconId: number;
   skillCategories?: number[];
   displaySkillCategories?: number[];
   gekisouMissionType?: number;
   gekisouSupportSkillExecTiming?: number;
-  effects: OurNotesSkillEffect[];
+  effects: (OurNotesSkillEffect | OurNotesSkillEffectByLevel)[];
 };
 export type OurNotesSkill = SkillFields & {
   skillName: OurNotesText;
@@ -115,33 +136,49 @@ function skillConditionGroups(value: unknown): OurNotesSkillEffect["skillConditi
   requireOurNotes(Object.keys(row).join(",") === "1,2,3,4,5");
   return Object.fromEntries(Object.entries(row).map(([level, value]) => [level, conditions(value, true)]));
 }
-function effect(value: unknown, kind: OurNotesSkillKind): OurNotesSkillEffect {
+function effect(value: unknown, kind: OurNotesSkillKind): OurNotesSkillEffect;
+function effect(value: unknown, kind: OurNotesSkillKind, atLevel: true): OurNotesSkillEffectAtLevel;
+function effect(value: unknown, kind: OurNotesSkillKind, atLevel = false): OurNotesSkillEffect | OurNotesSkillEffectAtLevel {
   const row = ourNotesRecord(value);
   const cumulative = row.skillCumulativeCondition === null ? null : ourNotesRecord(row.skillCumulativeCondition);
+  const parseNumber = atLevel ? number : levelNumber;
+  const parseInteger = atLevel ? ourNotesInteger : (value: unknown) => levelNumber(value, ourNotesInteger);
+  const parseConditions = (value: unknown) => atLevel ? conditions(value, true) : conditions(value);
+  const parseSkillConditions = (value: unknown) => atLevel ? conditions(value, true) : skillConditionGroups(value);
   return {
     skillEffectType: ourNotesInteger(row.skillEffectType),
-    effectValue: levelNumber(row.effectValue),
-    effectExecuteLimitCount: levelNumber(row.effectExecuteLimitCount),
-    effectExecuteLimitResetConditions: conditions(row.effectExecuteLimitResetConditions),
+    effectValue: parseNumber(row.effectValue),
+    effectExecuteLimitCount: parseNumber(row.effectExecuteLimitCount),
+    effectExecuteLimitResetConditions: parseConditions(row.effectExecuteLimitResetConditions),
     skillTargets: targets(row.skillTargets),
-    skillConditions: skillConditionGroups(row.skillConditions),
+    skillConditions: parseSkillConditions(row.skillConditions),
     skillCumulativeCondition: cumulative === null ? null : {
-      skillCumulativeConditionType: levelNumber(cumulative.skillCumulativeConditionType, ourNotesInteger),
-      conditionValues: list(cumulative.conditionValues).map((value) => levelNumber(value)),
+      skillCumulativeConditionType: parseInteger(cumulative.skillCumulativeConditionType),
+      conditionValues: list(cumulative.conditionValues).map((value) => parseNumber(value)),
       conditionTargets: targets(cumulative.conditionTargets),
-      maxCumulativeCount: levelNumber(cumulative.maxCumulativeCount),
+      maxCumulativeCount: parseNumber(cumulative.maxCumulativeCount),
     },
     ...(kind !== "leader" ? {
-      activationTimeSecond: levelNumber(row.activationTimeSecond),
-      maxEffectValue: levelNumber(row.maxEffectValue),
-      effectLimitCount: levelNumber(row.effectLimitCount),
-      skillReleaseConditions: skillConditionGroups(row.skillReleaseConditions),
+      activationTimeSecond: parseNumber(row.activationTimeSecond),
+      maxEffectValue: parseNumber(row.maxEffectValue),
+      effectLimitCount: parseNumber(row.effectLimitCount),
+      skillReleaseConditions: parseSkillConditions(row.skillReleaseConditions),
     } : {}),
     ...(kind !== "leader" && kind !== "live" ? {
-      skillTriggerType: levelNumber(row.skillTriggerType, ourNotesInteger),
-      skillTriggerConditions: conditions(row.skillTriggerConditions),
+      skillTriggerType: parseInteger(row.skillTriggerType),
+      skillTriggerConditions: parseConditions(row.skillTriggerConditions),
     } : {}),
-  };
+  } as OurNotesSkillEffect | OurNotesSkillEffectAtLevel;
+}
+function effectEntry(value: unknown, kind: OurNotesSkillKind): OurNotesSkillEffect | OurNotesSkillEffectByLevel {
+  const row = ourNotesRecord(value);
+  if (Object.hasOwn(row, "skillEffectType")) return effect(row, kind);
+  requireOurNotes(Object.keys(row).join(",") === "1,2,3,4,5");
+  const values = Object.values(row);
+  requireOurNotes(values.some((value) => value === null) && values.some((value) => value !== null));
+  return Object.fromEntries(Object.entries(row).map(([level, value]) => [
+    level, value === null ? null : effect(value, kind, true),
+  ])) as OurNotesSkillEffectByLevel;
 }
 function displayString(value: unknown): string {
   const text = ourNotesString(value);
@@ -163,9 +200,7 @@ function parseSkill(value: unknown, kind: OurNotesSkillKind): LocalSkill {
     });
     requireOurNotes(!/[{}<>]/u.test(literal));
   }
-  const effects = list(row.effects).map((value) => effect(value, kind));
-  if (effects.length === 0)
-    requireOurNotes(Object.values(description).every((text) => text === "") && descriptionParameters.length === 0);
+  const effects = list(row.effects).map((value) => effectEntry(value, kind));
   return {
     fields: {
       skillIconId: ourNotesInteger(row.skillIconId),

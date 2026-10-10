@@ -85,7 +85,7 @@ Skill record fields are emitted in the order listed below; fields outside a kind
 | `skillName` | Five localized names, resolved from the original name text reference |
 | `description` | Five localized plain-text templates with numbered `{n}` placeholders |
 | `descriptionParameters` | Parameter index to five display strings in grade 1–5 order |
-| `effects` | Ordered effects with original game values and expanded conditions/targets |
+| `effects` | `(SkillEffect \| SkillEffectByLevel)[]`, ordered effects with original game values and expanded conditions/targets |
 | `skillIconId` | Original integer icon ID; no image URL or availability guarantee |
 | `skillCategories` | Original array; live and gekisou only |
 | `displaySkillCategories` | Original array; all except leader |
@@ -140,9 +140,34 @@ type SkillEffect = {
   skillTriggerType?: LevelNumber;
   skillTriggerConditions?: ConditionGroup;
 };
+type SkillEffectAtLevel = {
+  skillEffectType: number;
+  effectValue: number;
+  effectExecuteLimitCount: number;
+  effectExecuteLimitResetConditions: SkillConditionAtLevel[][];
+  skillTargets: SkillTarget[];
+  skillConditions: SkillConditionAtLevel[][];
+  skillCumulativeCondition: {
+    skillCumulativeConditionType: number;
+    conditionValues: number[];
+    conditionTargets: SkillTarget[];
+    maxCumulativeCount: number;
+  } | null;
+  activationTimeSecond?: number;
+  maxEffectValue?: number;
+  effectLimitCount?: number;
+  skillReleaseConditions?: SkillConditionAtLevel[][];
+  skillTriggerType?: number;
+  skillTriggerConditions?: SkillConditionAtLevel[][];
+};
+type SkillEffectByLevel = Record<"1" | "2" | "3" | "4" | "5", SkillEffectAtLevel | null>;
 ```
 
-Field names follow the game metadata and existing client relationship properties in camelCase. Values and enum codes remain unchanged. Every grade-dependent numeric field is a five-item array ordered by the original grades 1–5, including constant arrays such as `[2,2,2,2,2]`. Each source must have all five grades with the same effect count. There is no repeated level list. Effect order is preserved, including repeated effect types. `skillEffectType` and target selectors remain scalar identities.
+Field names follow the game metadata and existing client relationship properties in camelCase. Values and enum codes remain unchanged. Effects present at all five grades use SkillEffect: grade-dependent numeric fields are five-item arrays in grade 1–5 order, including constant arrays such as `[2,2,2,2,2]`. Each skill source with bound effects must have all five grades, but effect counts may differ. Effect order is preserved, including repeated effect types. `skillEffectType` and target selectors remain scalar identities.
+
+An effect position missing at some grades uses SkillEffectByLevel with exactly the keys `"1"`–`"5"`: a complete SkillEffectAtLevel where present, JSON `null` where absent, with at least one present and one absent entry. Single-grade objects use scalar values and SkillConditionAtLevel groups, without nested grade arrays or maps. Positions follow each grade's source order; a zero-valued record is not missing, and invalid fields or broken references still fail. Restoring all five source records restores the ordinary SkillEffect form.
+
+In the 2026-10-10 source, the second effect of gekisou/22 retains its complete records and raw value 2000 at grades 1–4 but is absent at grade 5, so `effects[1]["5"]` is null. Descriptions retain the source wording and existing missing-value display string `"null"`, distinct from structural JSON null; the previous 20% is not restored. This does not establish the current game client's behavior or the operator's intent.
 
 Leader effects omit timing/release fields. All other kinds include `activationTimeSecond`, `maxEffectValue`, `effectLimitCount` and `skillReleaseConditions`. Gekisou, support and gekisouSupport additionally include `skillTriggerType` and `skillTriggerConditions`; live has neither. Zero-valued effects, empty relationships and null cumulative conditions remain present.
 
@@ -257,9 +282,9 @@ Condition groups retain the native outer OR / inner AND order and `isPositive`. 
 
 Shared icon/category/timing fields and projected effects must agree across present sources. Names, templates and display parameters may differ. Missing IDs in a source are allowed. There is no cross-source comparison of raw rows, relationship IDs, versions, hashes or a second grade set. Validated input identity reuses the existing merge cache.
 
-Reserved headers with no effects and no authoritative description remain with `effects: []`, five empty description slots and `descriptionParameters: []`. Unreferenced skills and native None effects remain. Supported null references or out-of-range description indices use the client's explicit fallback, or literal text `null`. GekisouSupport 67 (grades 4–5) and 72 (grades 2–5) retain those substitutions without changing conditions. Unsupported syntax, unknown projected target fields and missing required records fail construction. This catalog describes configuration; it does not promise a full client simulation or add detail/level/attributes endpoints.
+A skill with no effect records uses `effects: []` while retaining its name and processing its authoritative description; no effect slots are inferred or invented from the text. This applies to gekisou/23 and /24 in the 2026-10-10 source. Missing references and expressions depending on them use the existing fallback; adjacent expressions can produce `nullnull` without guessing a conditional branch. Restoring source records restores normal effects. Reserved headers with no description still retain five empty description slots and `descriptionParameters: []`. Unreferenced skills and native None effects remain. Supported null references or out-of-range description indices use the client's explicit fallback, or literal text `null`. GekisouSupport 67 (grades 4–5) and 72 (grades 2–5) retain those substitutions without changing conditions. Unsupported syntax, unknown projected target fields and broken required references from existing records still fail construction. This catalog describes configuration; it does not promise a full client simulation or add detail/level/attributes endpoints.
 
-The producer recipe is `ournotes-skills-v2`; historical artifact layouts remain verifiable. The Skills reader requires the private effects/template format and cannot read old grade-to-description artifacts. Publish all four new generations and verify signed private reads before deploying Web; rollback must keep the reader and private format matched. No production deployment is implied by local verification.
+The effects/template format began with `ournotes-skills-v2`; the current recipe including Events is `ournotes-events-v1`. Historical artifact layouts remain verifiable; the Skills reader cannot read old grade-to-description artifacts. For missing-effect support, deploy Web accepting both complete and missing effects before updating the producer. Old-input bytes remain unchanged; this does not change recipe identity or overwrite old artifacts. Rollback must match the reader and private format: old Web cannot read grade maps containing null. Local verification does not imply production deployment.
 
 The existing `cardType` integer has these official labels; it is separate from Skills:
 
@@ -404,6 +429,6 @@ The generic master roots must be initialized before deploying these readers. Exi
 
 Run `npm run test:ournotes-master` for the bounded local fixture, route contracts, corruption failures, five-slot selection and cache reuse. Shared-reader changes also require the relevant Bandori tests, typecheck, lint and build. The fixture contains selected metadata with version/hash provenance, no complete master tables or credentials.
 
-For Skills, publish all four verified producer artifacts and verify signed reads before activating Web. Existing assets consumers and media need no update for this dataset. Verify all seven endpoints, query-aware card caching and no-store errors. Master readiness is independent of image jobs. Local tests do not replace production verification.
+Initial Skills activation requires verified artifacts and signed reads from all four sources. Updating an existing reader for missing effects instead requires Web first, then the producer, followed by verification of the four-source merge and actual API. Existing assets consumers and media need no update for this dataset. Master readiness is independent of image jobs. Local tests do not replace production verification.
 
 For Events, verify the backend's final root and two packs before activating Web. The existing test command also covers final-view fields, five-slot historical selection, no-store errors, corruption failures, consumer capacity and content-cache refresh. For an Events-only HTTP projection change, select its cases with `node --import tsx --test --test-name-pattern '^Events ' tests/ournotes-master-api.test.mjs`, run typecheck and lint the changed modules, then verify both dev routes and server selections against the published packs. This scope does not require a full build or unrelated suites. After deployment, verify both HTTP routes and all server selections against the exact published packs, including query-aware edge caching. This release does not require rerunning backend history/CAS/rollback/GC tests or rebuilding master/media inputs.
