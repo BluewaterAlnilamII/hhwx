@@ -12,6 +12,7 @@ import { GET as bands } from "../src/app/api/ournotes/master/bands/route.ts";
 import { GET as skills } from "../src/app/api/ournotes/master/skills/route.ts";
 import { mergeOurNotesSkills } from "../src/lib/ournotes/skills-contract.ts";
 import { readOurNotesSkills } from "../src/lib/ournotes/skills-server.ts";
+import { ourNotesSkillDescription } from "../src/lib/ournotes/cards/catalog.ts";
 import { mergeOurNotesCards } from "../src/lib/ournotes/cards/api-contract.ts";
 import { readOurNotesMasterInputs } from "../src/lib/ournotes/master-server.ts";
 import { mergeOurNotesCatalog } from "../src/lib/ournotes/catalogs-contract.ts";
@@ -999,6 +1000,82 @@ test("skills keep raw effects separate from native display values and conditiona
     });
   }
   assert.deepEqual(data.gekisou["22"].description.slice(1), ["", "", "", ""]);
+});
+
+test("skills preserve an absent effect grade as null through the API and description renderer", async () => {
+  const inputs = regions();
+  // Source gekisou/22: grades 1–4 still exist; grade 5's second effect was removed.
+  const missing = Object.fromEntries([1, 2, 3, 4, 5].map((level) => [String(level), level === 5 ? null : {
+    skillEffectType: 3004, effectValue: 2000, activationTimeSecond: level + 2,
+    effectExecuteLimitCount: 0, effectLimitCount: 0, maxEffectValue: 0,
+    effectExecuteLimitResetConditions: [], skillTargets: [], skillConditions: [],
+    skillCumulativeCondition: null, skillReleaseConditions: [], skillTriggerType: 1,
+    skillTriggerConditions: [[{
+      conditionType: 7010, conditionValues: [], isPositive: true,
+      conditionTargets: [{ skillTargetType: 5, gekisouMissionType: 2 }],
+    }]],
+  }]));
+  for (const input of inputs) {
+    const skill = input.skills.gekisou["22"] ??= structuredClone(inputs[0].skills.gekisou["22"]);
+    skill.effects[1] = structuredClone(missing);
+    // The existing display contract keeps the source line and a literal missing value.
+    skill.description.ja = "軽減{0}%";
+    skill.descriptionParameters = [["20", "20", "20", "20", "null"]];
+  }
+  await withStore(inputs, null, async () => {
+    const response = await skills(request("skills"));
+    assert.equal(response.status, 200);
+    const { data } = await response.json();
+    const skill = data.gekisou["22"];
+    assert.deepEqual(skill.effects[1], missing);
+    assert.deepEqual(skill.effects[0], mergeOurNotesSkills(skillFixture.datasets).gekisou["22"].effects[0]);
+    assert.equal(ourNotesSkillDescription(skill, 0, 4), "軽減20%");
+    assert.equal(ourNotesSkillDescription(skill, 0, 5), "軽減null%");
+  });
+  for (const mutate of [
+    (effect) => { delete effect["5"]; },
+    (effect) => { effect["1"].effectValue = null; },
+    (effect) => { effect["1"].activationTimeSecond = [3, 4, 5, 6, 0]; },
+    (effect) => { effect["1"].skillTriggerConditions[0][0].conditionType = [7010, 7010, 7010, 7010, 7020]; },
+    (effect) => { effect["1"].skillConditions = { 1: [], 2: [], 3: [], 4: [], 5: [] }; },
+    (effect) => { for (const level of Object.keys(effect)) effect[level] = null; },
+  ]) {
+    const invalid = structuredClone(inputs.map((input) => input.skills));
+    for (const data of invalid) mutate(data.gekisou["22"].effects[1]);
+    assert.throws(() => mergeOurNotesSkills(invalid));
+  }
+});
+
+test("effectless skills keep names and descriptions without inventing effect slots", async () => {
+  const inputs = regions();
+  for (const input of inputs) {
+    const skill = input.skills.gekisou["22"] ??= structuredClone(inputs[0].skills.gekisou["22"]);
+    skill.effects = [];
+    for (const locale of locales) {
+      skill.skillName[locale] = `${locale}:name`;
+      skill.description[locale] = `${locale}:nullnull\nGain null\nLife reduction null%`;
+    }
+    skill.descriptionParameters = [];
+  }
+  await withStore(inputs, null, async () => {
+    const response = await skills(request("skills"));
+    assert.equal(response.status, 200);
+    const skill = (await response.json()).data.gekisou["22"];
+    assert.deepEqual(skill.effects, []);
+    for (const [slot, locale] of locales.entries()) {
+      assert.equal(skill.skillName[slot], `${locale}:name`);
+      for (const level of [1, 5]) assert.equal(ourNotesSkillDescription(skill, slot, level), `${locale}:nullnull\nGain null\nLife reduction null%`);
+    }
+  });
+  for (const mutate of [
+    (skill) => { skill.description.ja = "{0}"; },
+    (skill) => { skill.description.ja = "{effects[0].value}"; },
+    (skill) => { skill.description.ja = "<color=#fff>null</color>"; },
+  ]) {
+    const invalid = structuredClone(inputs.map((input) => input.skills));
+    for (const data of invalid) mutate(data.gekisou["22"]);
+    assert.throws(() => mergeOurNotesSkills(invalid));
+  }
 });
 
 test("invalid skills fail only the skills read and never expose partial templates", async () => {

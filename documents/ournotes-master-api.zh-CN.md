@@ -85,7 +85,7 @@
 | `skillName` | 通过原始名称文本引用获得的五槽名称 |
 | `description` | 五槽纯文本模板，使用普通编号占位符 `{n}` |
 | `descriptionParameters` | 参数编号到五个显示字符串的数组，按等级 1–5 排列 |
-| `effects` | 按来源顺序保留的效果，包含游戏原值及展开的条件、目标 |
+| `effects` | `(SkillEffect \| SkillEffectByLevel)[]`，按来源顺序保留的效果，包含游戏原值及展开的条件、目标 |
 | `skillIconId` | 原始整数图标 ID，不含图片 URL 或可用性保证 |
 | `skillCategories` | 原始数组，仅 live、gekisou |
 | `displaySkillCategories` | 原始数组，除 leader 外均提供 |
@@ -140,9 +140,34 @@ type SkillEffect = {
   skillTriggerType?: LevelNumber;
   skillTriggerConditions?: ConditionGroup;
 };
+type SkillEffectAtLevel = {
+  skillEffectType: number;
+  effectValue: number;
+  effectExecuteLimitCount: number;
+  effectExecuteLimitResetConditions: SkillConditionAtLevel[][];
+  skillTargets: SkillTarget[];
+  skillConditions: SkillConditionAtLevel[][];
+  skillCumulativeCondition: {
+    skillCumulativeConditionType: number;
+    conditionValues: number[];
+    conditionTargets: SkillTarget[];
+    maxCumulativeCount: number;
+  } | null;
+  activationTimeSecond?: number;
+  maxEffectValue?: number;
+  effectLimitCount?: number;
+  skillReleaseConditions?: SkillConditionAtLevel[][];
+  skillTriggerType?: number;
+  skillTriggerConditions?: SkillConditionAtLevel[][];
+};
+type SkillEffectByLevel = Record<"1" | "2" | "3" | "4" | "5", SkillEffectAtLevel | null>;
 ```
 
-字段采用游戏元数据与客户端既有展开属性的名称，只统一为 camelCase；原数值及枚举码不改变。等级数值固定按原始等级 1–5 排列为五项数组，相同值也保持 `[2,2,2,2,2]`。每份来源须有完整五级且每级效果项数相同，不重复输出等级列表。效果顺序不改变，相同类型的多项效果不会覆盖。`skillEffectType` 和目标筛选字段仍是标识对象的原标量。
+字段采用游戏元数据与客户端既有展开属性的名称，只统一为 camelCase；原数值及枚举码不改变。五级均存在的效果使用 SkillEffect，等级数值按原始等级 1–5 排列为五项数组，相同值也保持 `[2,2,2,2,2]`。每份有绑定效果的技能来源须有完整五级，各级效果项数可以不同。效果顺序不改变，相同类型的多项效果不会覆盖。`skillEffectType` 和目标筛选字段仍是标识对象的原标量。
+
+某效果位置在部分等级缺失时，该项使用 SkillEffectByLevel，完整包含 `"1"`–`"5"` 五个 key；存在的等级保存完整 SkillEffectAtLevel，缺失等级为 JSON `null`，至少一项存在且至少一项缺失。单等级对象直接使用数值和 SkillConditionAtLevel 条件组，不再包含等级数组或映射。效果位置按各级原表顺序确定；有记录的零值不是缺失，非法字段和断开引用仍被拒绝。所有等级恢复记录时恢复普通 SkillEffect 形式。
+
+2026-10-10 来源中的 gekisou/22 第二项效果在 1–4 级保留原值 2000 及完整记录，第 5 级缺失，因此 `effects[1]["5"]` 为 null。说明仍保留来源措辞；其缺值显示字符串 `"null"` 沿用既有规则，与结构化 JSON null 区分，不填回旧版的 20%。这不能证明当前游戏客户端的实际行为或运营方意图。
 
 Leader 效果不输出 timing/release 字段；其余类别提供 `activationTimeSecond`、`maxEffectValue`、`effectLimitCount`、`skillReleaseConditions`。Gekisou、support、gekisouSupport 还提供 `skillTriggerType` 和 `skillTriggerConditions`，live 没有这两项。原零值效果、空关系和 null 累计关系均保留。
 
@@ -257,9 +282,9 @@ Leader 效果不输出 timing/release 字段；其余类别提供 `activationTim
 
 实际存在的同 ID 来源间，只比较共享图标、分类、时机字段与投影后的 effects；名称、模板、显示参数允许不同。允许某服缺少某 ID。不比较原始行、关联 ID、版本、hash，也不额外比较第二份等级集合。已校验输入身份不变时，复用既有合并缓存。
 
-没有效果且权威说明为空的预留头保留 `effects: []`、五个空说明槽和 `descriptionParameters: []`；未引用技能及原 None 效果也保留。已支持说明路径的空引用或越界沿用客户端指定的替代文本，未指定则保留字面文本 `null`。GekisouSupport 67（4–5 级）、72（2–5 级）保留这些结果，不修改条件。未知语法、未登记的实际目标筛选或必需记录缺失使构建失败。该目录描述游戏配置，不承诺完整模拟客户端，也不增加详情、等级或属性端点。
+整个技能没有效果记录时输出 `effects: []`，仍保留名称并处理权威说明，不根据说明猜测或补造效果槽。2026-10-10 来源中的 gekisou/23、24 使用此形式；缺失引用及依赖它的表达式沿用替代文本，连续表达式可得到 `nullnull`，不猜选条件分支。上游补回记录后自然恢复正常效果。原本没有说明的预留头继续保留五个空说明槽和 `descriptionParameters: []`；未引用技能及原 None 效果也保留。已支持说明路径的空引用或越界沿用客户端指定的替代文本，未指定则保留字面文本 `null`。GekisouSupport 67（4–5 级）、72（2–5 级）保留这些结果，不修改条件。未知语法、未登记的实际目标筛选或已有记录的必要关联引用断开仍使构建失败。该目录描述游戏配置，不承诺完整模拟客户端，也不增加详情、等级或属性端点。
 
-构建配方为 `ournotes-skills-v2`，历史产物集合仍可验证。Skills 读取器要求私有效果/模板格式，不能读取旧逐等级正文产物。先发布四服新 generation 并验证签名私有回读，再部署 Web；回滚也须匹配读者与私有格式。本地验证不代表生产已部署。
+效果/模板格式始于 `ournotes-skills-v2`，当前包含 Events 的构建配方为 `ournotes-events-v1`，历史产物集合仍可验证。Skills 读取器不能读取旧逐等级正文产物。缺项兼容更新先部署同时接受完整和缺项效果的 Web，再部署后端；旧输入 bytes 不变，不改现有配方身份或覆盖旧产物。回滚须匹配读者与私有格式，旧 Web 不能读取按等级带 null 的效果。本地验证不代表生产已部署。
 
 既有 `cardType` 整数对应以下官方名称，与 Skills 独立：
 
@@ -404,6 +429,6 @@ Cards 固定各服 `ournotes/master/cards-v1/{server}/api/active.json`，直接�
 
 运行 `npm run test:ournotes-master` 检查小型本地 fixture、路由合同、损坏失败、五槽筛选与缓存复用。公共读取工具改动还需相关 Bandori 回归及 typecheck、lint、build。Fixture 仅保留带版本/hash 来源的选定元数据，不含完整 master 表或凭据。
 
-Skills 先发布四服已验收产物并完成签名回读，最后启用 Web。本数据集不要求更新既有 assets 消费者或媒体。核实七路响应、区分卡牌查询的边缘缓存和错误 no-store。主数据就绪独立于图片任务；离线检查不能替代生产验收。
+Skills 首次启用前须先完成四服产物及签名回读；已有读者的缺项兼容更新则先升级 Web，再更新后端，并核验四服技能合并与实际 API。本数据集不要求更新既有 assets 消费者或媒体。主数据就绪独立于图片任务；离线检查不能替代生产验收。
 
 Events 先确认后端最终根及两包，再启用 Web。现有测试命令覆盖最终字段、五槽历史筛选、错误 no-store、损坏拒绝、消费端容量和内容缓存刷新。仅修改 Events HTTP 投影时，用 `node --import tsx --test --test-name-pattern '^Events ' tests/ournotes-master-api.test.mjs` 选取相关用例，运行 typecheck 和改动模块的 lint，再将 dev 两路及服筛选与已发布包对照；该范围不要求完整 build 或无关测试组。部署后将两个 HTTP 路由及全部服筛选与准确已发布包对照，并验证边缘查询缓存。本轮不重跑后端历史／CAS／回滚／GC 测试，也不重建 master 或媒体输入。
