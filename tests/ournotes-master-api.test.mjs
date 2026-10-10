@@ -22,9 +22,15 @@ import { GET as events } from "../src/app/api/ournotes/master/events/route.ts";
 import { GET as eventDetail } from "../src/app/api/ournotes/master/events/[eventId]/route.ts";
 import { readOurNotesEventDataset } from "../src/lib/ournotes/events/api-server.ts";
 import { OURNOTES_EVENTS_API_POINTER_KEY, parseOurNotesEventsPointer } from "../src/lib/ournotes/events/api-contract.ts";
+import { GET as music } from "../src/app/api/ournotes/master/music/route.ts";
+import { GET as musicDetail } from "../src/app/api/ournotes/master/music/[musicId]/route.ts";
+import { readOurNotesMusicDataset } from "../src/lib/ournotes/music/api-server.ts";
+import { OURNOTES_MUSIC_API_POINTER_KEY, parseOurNotesMusicPointer } from "../src/lib/ournotes/music/api-contract.ts";
+import { ourNotesTimestamp } from "../src/lib/ournotes/master-contract.ts";
 
 const fixture = JSON.parse(await readFile(new URL("fixtures/ournotes-master.json", import.meta.url), "utf8"));
 const skillFixture = JSON.parse(await readFile(new URL("fixtures/ournotes-skills.json", import.meta.url), "utf8"));
+const musicFixture = JSON.parse(await readFile(new URL("fixtures/ournotes-music.json", import.meta.url), "utf8"));
 const servers = ["jp", "en", "tw", "kr"];
 const locales = ["ja", "en", "zh-TW", "zh-CN", "ko"];
 const hash = (value) => createHash("sha256").update(value).digest("hex");
@@ -1181,4 +1187,419 @@ test("generic master retains schema, source, path, dependency and byte validatio
       assert.equal((await list(request("cards/member"), context())).status, 200);
     });
   }
+});
+
+const musicSummaryKeys = ["sortOrder", "musicTitle", "bandIds", "bandName", "vocalCharacterIds", "musicType", "musicCategories", "bestMusicTagIds", "startAt", "gekisouMission1", "gekisouMission2", "gekisouMission3", "difficulty", "length", "bpm", "serverExtensions"];
+const musicDetailKeys = ["sortOrder", "musicTitle", "ruby", "phonetic", "lyricist", "composer", "arranger", "bandIds", "bandName", "vocalCharacterIds", "musicType", "musicCategories", "bestMusicTagIds", "startAt", "defaultUnlock", "acquisition", "difficulty", "gekisouMission1", "gekisouMission2", "gekisouMission3", "scoreRanks", "scoreRewards", "comboRewards", "resources", "anotherVocalIds", "anotherVocals", "musicVideoIds", "musicVideos", "releaseEffects", "performance", "length", "bpm", "serverExtensions"];
+const musicContext = (musicId = "100001") => ({ params: Promise.resolve({ musicId }) });
+function musicViews(edit = () => {}) {
+  const row = structuredClone(musicFixture.record);
+  edit(row);
+  const summaryFields = ["id", "sortOrder", "texts", "bandIDs", "vocalCharacterIDs", "musicType", "musicCategories", "bestMusicTagIDs", "startAt", "defaultUnlock", "gekisouMission1", "gekisouMission2", "gekisouMission3", "difficulties", "assets", "available", "serverExtensions"];
+  const summary = Object.fromEntries(summaryFields.filter((key) => Object.hasOwn(row, key)).map((key) => [key, row[key]]));
+  summary.serverExtensions = row.serverExtensions.map((extension) => extension === null ? null : Object.fromEntries(Object.entries(extension).filter(([key]) => summaryFields.includes(key))));
+  return { music: { [row.id]: summary }, musicDetails: { [row.id]: row } };
+}
+function musicObjects(views = musicViews(), catalogs = regions()) {
+  const objects = storeObjects(catalogs), datasets = {};
+  for (const [name, data] of Object.entries(views)) {
+    // Python's 20.0 and JS's 20 have the same value but different bytes.
+    const json = Buffer.from(canonical(data).replaceAll('"musicScoreLevel":20', '"musicScoreLevel":20.0'));
+    const gzip = gzipSync(json, { mtime: 0 });
+    const key = `ournotes/master/music-v1/api/packs/${name}/${hash(gzip)}.json.gz`;
+    objects.set(key, gzip);
+    datasets[name] = { key, compressedSha256: hash(gzip), semanticSha256: hash(json), compressedSize: gzip.length, jsonSize: json.length, recordCount: Object.keys(data).length };
+  }
+  objects.set(OURNOTES_MUSIC_API_POINTER_KEY, encoded({ schema: "ournotes-music-api-pointer-v1", generation: 2, revision: "future-recipe", datasets: { ...datasets, history: {} } }));
+  return objects;
+}
+
+test("Music exposes the agreed summary/detail order, native configuration and complete BPM", async () => {
+  await withObjectStore(musicObjects(), null, async () => {
+    const response = await music(request("music"));
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "public, max-age=300, stale-while-revalidate=1800");
+    assert.equal(response.headers.get("cloudflare-cdn-cache-control"), "public, max-age=1800, stale-while-revalidate=86400");
+    const summary = (await response.json()).data["100001"];
+    const data = (await (await musicDetail(request("music/100001"), musicContext())).json()).data;
+    assert.deepEqual(Object.keys(summary), musicSummaryKeys);
+    assert.deepEqual(Object.keys(data), musicDetailKeys);
+    for (const key of musicSummaryKeys.filter((key) => key !== "difficulty")) assert.deepEqual(data[key], summary[key], key);
+    const { musicScoreTextFileName, ...level } = data.difficulty["2"];
+    assert.equal(musicScoreTextFileName, "score_100001_2");
+    assert.deepEqual(level, { scoreId: 10000102, musicScoreLevel: 20, musicScoreDisplayLevel: 20.5, fullComboCount: 342 });
+    assert.deepEqual(summary.difficulty["2"], level);
+    assert.equal(data.length, 99.98933333333333);
+    assert.deepEqual(data.bpm, { 2: { events: [{ t: 0, bpm: 180 }, { t: 480, bpm: 190, interp: 0 }, { t: 480, bpm: 200, interp: 1 }] } });
+    assert.deepEqual(data.bandIds, [2, 1, 2]);
+    assert.deepEqual(data.serverExtensions, [{}, {}, {}, {}, {}]);
+    assert.equal(data.musicType, "Ruby");
+    assert.deepEqual([data.gekisouMission1, data.gekisouMission2, data.gekisouMission3], ["None", "Combo", "Combo"]);
+    assert.deepEqual(data.comboRewards.map((r) => [r.comboRateType, r.requiredCombo]), [["Quarter", 85], ["Half", 171], ["ThreeQuarters", 256], ["Full", 342]]);
+    assert.deepEqual(data.scoreRewards, [{ liveScoreRank: "SS", resourceType: "Item", resourceId: 1, resourceCount: 0 }]);
+    assert.equal(Object.hasOwn(data, "rewardIds"), false);
+    assert.deepEqual(data.resources, { jacketAssetName: "jacket_100001", audio: {
+      musicSoundId: 1301000010001, soundCueSheetId: 1301000010000, cueSheetName: "sheet_1", cueName: "cue_1",
+    } });
+    assert.deepEqual(data.anotherVocals, [{ id: 7, vocalCharacterIds: [10, 1], musicSoundId: 8, unlockConditionId: 0, startAt: null }]);
+    assert.deepEqual(data.musicVideos, [{ id: 9, displayName: Array(5).fill("JP video"), assetName: "mv_9" }]);
+    assert.deepEqual(data.performance, {
+      liveMusicPenLightColorId: 1, musicLightColorIdNormal: 2, musicLightColorIdChorus: 3,
+      lazerLightMotionNormal: 0, lazerLightMotionChorus: 1, stageLightMotionNormal: 0, stageLightMotionChorus: 1,
+      vjVideoPattern: 0, backgroundCameraType: 0, gekisouCallSe: 0,
+    });
+    assert.equal(data.acquisition[0].product.resourceType, "Music");
+    assert.deepEqual(data.acquisition[0].product.paymentSteps, [2, 1]);
+    assert.deepEqual(Object.keys(data.acquisition[0].product), ["id", "exchangeId", "resourceType", "resourceId", "resourceCount", "paymentResourceCount", "paymentSteps", "paymentStepResourceCounts", "limitCount", "resetType", "startAt", "endAt"]);
+    assert.deepEqual(Object.keys(data.acquisition[0].exchange), ["id", "name", "paymentResourceType", "paymentResourceId", "startAt", "endAt"]);
+    assert.deepEqual(data.acquisition[1].chapters, [{ chapterId: 3, name: Array(5).fill("JP chapter"), bandId: 1, isSpecialStory: false, startAt: null, endAt: null }]);
+    assert.equal(data.acquisition[1].episodes[0].episodeId, 4);
+    assert.deepEqual(Object.keys(data.acquisition[2].missions[0]), ["missionId", "description", "missionCategory", "missionType", "achievementCount", "initialValue", "value", "bandId", "cardType", "musicDifficulty", "scoreRank", "startAt", "endAt", "loginTimeStartAt", "loginTimeEndAt"]);
+    assert.equal(data.acquisition[2].missions[0].initialValue, 0);
+    assert.equal(data.acquisition[2].missions[0].endAt, null);
+    assert.deepEqual(data.acquisition[2].missions[0].description, Array(5).fill("Play {BandId}"));
+    assert.equal(data.acquisition[2].missions[0].cardType, "None");
+    assert.equal(data.startAt, "1767193200000");
+    assert.equal(data.releaseEffects[0].startAt, "1767193200000");
+    assert.deepEqual(data.bandName, Array(5).fill("Ave Mujica / MyGO!!!!! / Ave Mujica"));
+    const json = JSON.stringify(data);
+    for (const forbidden of ["must-not-be-public", "jingleSoundID", "liveMusicId", "titleTextID", "files", "music-v1/api/packs"]) assert.equal(json.includes(forbidden), false, forbidden);
+    for (let server = 0; server < 5; server++) {
+      const selected = (await (await musicDetail(request(`music/100001?server=${server}`), musicContext())).json()).data;
+      const { serverExtensions, ...expected } = data;
+      assert.deepEqual(serverExtensions, [{}, {}, {}, {}, {}]);
+      assert.deepEqual(selected, expected);
+      assert.deepEqual(Object.keys(selected), musicDetailKeys.slice(0, -1));
+    }
+  });
+});
+
+test("Music excludes shared catalogs, rendering presets and diagnostics from every regional view", async () => {
+  const baseline = musicObjects();
+  let expected;
+  await withObjectStore(baseline, null, async () => {
+    expected = (await (await musicDetail(request("music/100001"), musicContext())).json()).data;
+  });
+  const views = musicViews((row) => {
+    // Private data outside the public projection must not affect its result or validation.
+    row.tags = "private tags"; row.categories = "private categories";
+    row.unlockConditionID = "unused";
+    for (const key of Object.keys(row).filter((key) => key.endsWith("LiveMusicRewardID"))) row[key] = "unused";
+    row.resourceItems = { 1: { id: 2 } }; row.missing = ["private/bucket/path"];
+    row.performance.videos[0].texts.displayNameTextId = "Unused stage video name";
+    row.serverExtensions[1] = { tags: null, categories: [], resourceItems: [], missing: null, performance: "unused preset", unlockConditionID: 77 };
+    row.serverExtensions[2] = { performance: null, sound: { ...row.sound, cacheType: "unused" }, unlockConditionID: null };
+    row.serverExtensions[3] = { musicVideos: row.musicVideos.map((video) => ({ ...video, overrideShaderName: "unused" })), unlockConditionID: 0 };
+    const acquisition = structuredClone(row.acquisition);
+    acquisition[0].product.isRecommended = "unused";
+    acquisition[0].exchange.targetDisplay = "unused";
+    acquisition[1].chapters[0].texts.descriptionTextId = { unused: true };
+    acquisition[1].chapters[0].musicId = 999999;
+    Object.assign(acquisition[1].episodes[0], { banner: "unused", image: "unused", privateOnly: "unused" });
+    acquisition[2].missions[0].priority = "unused";
+    acquisition[2].missions[0].useTypeGrouping = "unused";
+    row.serverExtensions[4] = { acquisition };
+  });
+  await withObjectStore(musicObjects(views), null, async () => {
+    const data = (await (await musicDetail(request("music/100001"), musicContext())).json()).data;
+    assert.deepEqual(data, expected);
+    assert.deepEqual(data.serverExtensions, [{}, {}, {}, {}, {}]);
+    for (let server = 0; server < 5; server++) {
+      const selected = (await (await musicDetail(request(`music/100001?server=${server}`), musicContext())).json()).data;
+      const { serverExtensions, ...record } = expected;
+      assert.equal(serverExtensions.length, 5);
+      assert.deepEqual(selected, record);
+    }
+  });
+});
+
+test("Music retains regional chapter conditions without exposing raw reward or song unlock IDs", async () => {
+  const conditions = [{ bandId: 1, isSpecialStory: false }, { bandId: 2, isSpecialStory: true }, { bandId: 0, isSpecialStory: false }, {}, { bandId: 1, isSpecialStory: false }];
+  const views = musicViews((row) => {
+    for (let server = 1; server < 4; server++) {
+      const acquisition = structuredClone(row.acquisition);
+      const chapter = acquisition[1].chapters[0];
+      delete chapter.bandId; delete chapter.isSpecialStory;
+      Object.assign(chapter, conditions[server]);
+      row.serverExtensions[server] = { acquisition, unlockConditionID: server };
+    }
+    row.serverExtensions[4] = { scoreCLiveMusicRewardID: 21, unlockConditionID: 99 };
+  });
+  await withObjectStore(musicObjects(views), null, async () => {
+    const base = (await (await musicDetail(request("music/100001"), musicContext())).json()).data;
+    assert.equal(Object.hasOwn(base, "unlockConditionId"), false);
+    assert.equal(Object.hasOwn(base, "rewardIds"), false);
+    for (const extension of base.serverExtensions) {
+      assert.equal(Object.hasOwn(extension, "unlockConditionId"), false);
+      assert.equal(Object.hasOwn(extension, "rewardIds"), false);
+    }
+    assert.equal(base.serverExtensions[1].acquisition[1].chapters[0].isSpecialStory, true);
+    assert.equal(base.serverExtensions[2].acquisition[1].chapters[0].bandId, 0);
+    assert.deepEqual(base.serverExtensions[4], {});
+    for (let server = 0; server < 5; server++) {
+      const selected = (await (await musicDetail(request(`music/100001?server=${server}`), musicContext())).json()).data;
+      const chapter = selected.acquisition[1].chapters[0];
+      assert.deepEqual(chapter, { chapterId: 3, name: Array(5).fill("JP chapter"), ...conditions[server], startAt: null, endAt: null });
+      assert.deepEqual(Object.keys(chapter), ["chapterId", "name", ...Object.keys(conditions[server]), "startAt", "endAt"]);
+      assert.equal(Object.hasOwn(selected, "unlockConditionId"), false);
+      assert.equal(Object.hasOwn(selected, "rewardIds"), false);
+      assert.deepEqual(selected.scoreRewards, base.scoreRewards);
+      assert.deepEqual(selected.comboRewards, base.comboRewards);
+      assert.equal(selected.anotherVocals[0].unlockConditionId, 0);
+    }
+  });
+});
+
+test("Music aligns related texts by entity ID and applies whole regional replacements and deletion", async () => {
+  const views = musicViews((row) => {
+    const video = (id, name) => ({ id, assetName: `mv_${id}`, texts: { displayNameTextId: name } });
+    row.musicVideoIDs = [10, 9]; row.musicVideos = [video(10, "JP ten"), video(9, "JP nine")];
+    row.serverExtensions[1] = {
+      musicVideoIDs: [9, 10, 9], musicVideos: [video(9, "EN nine"), video(10, "EN ten"), video(9, "EN nine")],
+      sortOrder: null, musicType: 998, defaultUnlock: true, startAt: "", sound: null,
+      gekisouMission1: 4, gekisouMission2: 999, gekisouMission3: 2,
+      tags: [{ id: 1, texts: { nameTextID: "EN one" } }, { id: 2, texts: { nameTextID: "EN two" } }, { id: 1, texts: { nameTextID: "EN one" } }],
+      performance: { penLight: { id: 11, mainColor: "#010101" } }, musicLightColorIDNormal: 11,
+      scoreRewards: [{ liveScoreRank: 999, resourceType: 999, resourceId: 0, resourceCount: 0 }],
+      acquisition: [{ type: "mission", reward: { resourceType: 8, resourceId: 100001, resourceCount: 1 }, missions: [{ id: 5, texts: { descriptionTextId: "EN {BandId}" }, bandId: 2, endAt: "null" }] }],
+    };
+    row.serverExtensions[2] = { musicVideoIDs: [9], musicVideos: [video(9, "TW nine")] };
+    row.serverExtensions[3] = { musicVideoIDs: [9], musicVideos: [video(9, "CN nine")] };
+    row.serverExtensions[4] = { musicVideoIDs: [], musicVideos: [], defaultUnlock: null, scoreRewards: [row.scoreRewards[0], row.scoreRewards[0]] };
+  });
+  await withObjectStore(musicObjects(views), null, async () => {
+    const base = (await (await musicDetail(request("music/100001"), musicContext())).json()).data;
+    assert.equal(base.defaultUnlock, false);
+    assert.equal(base.serverExtensions[1].defaultUnlock, true);
+    assert.equal(base.serverExtensions[4].defaultUnlock, null);
+    const summary = (await (await music(request("music"))).json()).data["100001"];
+    assert.equal(Object.hasOwn(summary, "defaultUnlock"), false);
+    for (const extension of summary.serverExtensions) assert.equal(Object.hasOwn(extension, "defaultUnlock"), false);
+    assert.deepEqual([summary.serverExtensions[1].gekisouMission1, summary.serverExtensions[1].gekisouMission2, summary.serverExtensions[1].gekisouMission3], ["All", 999, "Luck"]);
+    assert.deepEqual(Object.keys(summary.serverExtensions[1]), musicSummaryKeys.filter((key) => Object.hasOwn(summary.serverExtensions[1], key)));
+    assert.deepEqual(base.musicVideos[0].displayName, ["JP ten", "EN ten", "", "", ""]);
+    assert.deepEqual(base.musicVideos[1].displayName, ["JP nine", "EN nine", "TW nine", "CN nine", ""]);
+    assert.deepEqual(base.acquisition[0].exchange.name, ["JP exchange", "", "JP exchange", "JP exchange", "JP exchange"]);
+    assert.deepEqual(base.acquisition[2].missions[0].description, ["Play {BandId}", "EN {BandId}", "Play {BandId}", "Play {BandId}", "Play {BandId}"]);
+    assert.equal(base.serverExtensions[1].sortOrder, null);
+    assert.deepEqual(Object.keys(base.serverExtensions[1]), musicDetailKeys.filter((key) => Object.hasOwn(base.serverExtensions[1], key)));
+    const en = (await (await musicDetail(request("music/100001?server=1"), musicContext())).json()).data;
+    assert.equal(en.defaultUnlock, true);
+    assert.equal(Object.hasOwn(en, "sortOrder"), false);
+    assert.equal(en.musicType, 998);
+    assert.equal(base.serverExtensions[1].startAt, null);
+    assert.equal(en.startAt, null);
+    assert.deepEqual(en.musicVideos.map((video) => video.id), [9, 10, 9]);
+    assert.equal(en.performance.musicLightColorIdNormal, 11);
+    assert.equal(Object.hasOwn(en.performance, "penLight"), false);
+    assert.equal(Object.hasOwn(en.performance, "normalLight"), false);
+    assert.equal(Object.hasOwn(en.resources.audio, "soundCueSheetId"), false);
+    assert.deepEqual(en.scoreRewards, [{ liveScoreRank: 999, resourceType: 999, resourceId: 0, resourceCount: 0 }]);
+    assert.deepEqual(Object.keys(en), musicDetailKeys.filter((key) => key !== "sortOrder" && key !== "serverExtensions"));
+    const selectedSummary = (await (await music(request("music?server=1"))).json()).data["100001"];
+    assert.deepEqual(Object.keys(selectedSummary), musicSummaryKeys.filter((key) => key !== "sortOrder" && key !== "serverExtensions"));
+    assert.equal(selectedSummary.musicType, en.musicType);
+    assert.deepEqual([selectedSummary.gekisouMission1, selectedSummary.gekisouMission2, selectedSummary.gekisouMission3], ["All", 999, "Luck"]);
+    const kr = (await (await musicDetail(request("music/100001?server=4"), musicContext())).json()).data;
+    assert.equal(Object.hasOwn(kr, "defaultUnlock"), false);
+    assert.equal(kr.scoreRewards.length, 2);
+    assert.deepEqual((await (await musicDetail(request("music/100001"), musicContext())).json()).data, base);
+  });
+});
+
+test("Music accepts legacy summary packs without inventing gekisou missions or reading details", async () => {
+  const views = musicViews();
+  for (const field of ["gekisouMission1", "gekisouMission2", "gekisouMission3"]) delete views.music["100001"][field];
+  const objects = musicObjects(views), calls = [];
+  const records = await readOurNotesMusicDataset("music", memorySource(objects, calls));
+  for (const field of ["gekisouMission1", "gekisouMission2", "gekisouMission3"]) assert.equal(Object.hasOwn(records["100001"], field), false);
+  assert.equal(calls.length, 2);
+  assert.ok(calls[1].includes("/packs/music/"));
+});
+
+test("Music preserves historical absence and official partial data independently of chart metadata", async () => {
+  const views = musicViews((row) => {
+    row.available[0] = false; row.serverExtensions[0] = null;
+    for (const text of Object.values(row.texts)) text[0] = "";
+    row.difficulties["2"] = { scoreId: 10000102, missing: true };
+    row.scoreRanks = []; row.scoreRewards = []; row.comboRewards = [];
+    delete row.sound; delete row.soundCueSheet; delete row.assets.length;
+    row.assets.files = {}; row.resources = {}; row.resourceItems = {};
+    row.missing = ["MasterLiveMusicScore:10000102", "MasterLiveScoreRank:group:1", "MasterSound:table"];
+    delete row.acquisition[0].exchange;
+    delete row.anotherVocals[0].vocalCharacterIDs;
+  });
+  await withObjectStore(musicObjects(views), null, async () => {
+    const base = (await (await musicDetail(request("music/100001"), musicContext())).json()).data;
+    assert.deepEqual(base.serverExtensions, [null, {}, {}, {}, {}]);
+    assert.equal(base.musicTitle[0], "");
+    assert.deepEqual(base.difficulty["2"], { scoreId: 10000102, missing: true });
+    assert.deepEqual(base.bpm["2"], { events: musicFixture.record.assets.bpm["2"].events });
+    assert.equal(Object.hasOwn(base, "length"), false);
+    assert.deepEqual(base.resources, { audio: { musicSoundId: 1301000010001 } });
+    assert.deepEqual(base.scoreRanks, []);
+    assert.equal(Object.hasOwn(base.acquisition[0], "exchange"), false);
+    assert.equal(Object.hasOwn(base.anotherVocals[0], "vocalCharacterIds"), false);
+    assert.equal(Object.hasOwn(base, "missing"), false);
+    assert.deepEqual((await (await music(request("music?server=0"))).json()).data, {});
+    const absent = await musicDetail(request("music/100001?server=0"), musicContext());
+    assert.equal(absent.status, 404);
+    assert.match(absent.headers.get("cache-control"), /no-store/);
+    for (let server = 1; server < 5; server++) assert.equal((await musicDetail(request(`music/100001?server=${server}`), musicContext())).status, 200);
+  });
+});
+
+test("Music rejects malformed requests and snapshots with sanitized no-store errors", async () => {
+  for (const query of ["server=", "server=jp", "server=5", "server=-1", "server=01", "server=1.0", "server=1&server=1", "sort=1", "locale=ja", "server=0&expand=1"]) {
+    for (const response of [await music(request(`music?${query}`)), await musicDetail(request(`music/100001?${query}`), musicContext())]) {
+      assert.equal(response.status, 400, query);
+      assert.match(response.headers.get("cache-control"), /no-store/);
+    }
+  }
+  for (const id of ["0", "01", "-1", "1.0", "1x", "9007199254740992"]) {
+    assert.equal((await musicDetail(request(`music/${id}`), musicContext(id))).status, 404);
+  }
+  await withObjectStore(musicObjects(), null, async () => {
+    const response = await musicDetail(request("music/999999"), musicContext("999999"));
+    assert.equal(response.status, 404);
+    assert.equal((await response.json()).error.code, "OURNOTES_MUSIC_NOT_FOUND");
+  });
+  for (const edit of [
+    (row) => { row.id = 2; }, (row) => { row.available[0] = false; },
+    (row) => { row.serverExtensions[1] = { texts: {} }; },
+    (row) => { row.assets.bpm["2"].ticksPerBeat = 960; },
+    (row) => { row.assets.bpm["2"].events[0].bpm = 0; },
+    (row) => { row.difficulties["2"].data.id = 1; },
+    (row) => { row.musicVideos[0].id = 0; },
+    (row) => { row.scoreRewards[0].resourceType = 1.5; },
+    (row) => { row.acquisition[1].chapters[0].bandId = "1"; },
+    (row) => { row.acquisition[1].chapters[0].isSpecialStory = 0; },
+    (row) => { row.musicVideos.push({ ...row.musicVideos[0], texts: { displayNameTextId: "Conflicting name" } }); },
+  ]) {
+    const views = musicViews(); edit(views.musicDetails["100001"]);
+    await withObjectStore(musicObjects(views), null, async () => {
+      const response = await musicDetail(request("music/100001"), musicContext());
+      assert.equal(response.status, 503);
+      assert.match(response.headers.get("cache-control"), /no-store/);
+      assert.deepEqual(await response.json(), { success: false, error: { code: "OURNOTES_MASTER_UNAVAILABLE", message: "OurNotes master data is unavailable" } });
+    });
+  }
+});
+
+test("Music reader validates original bytes, reads only the requested pack and refreshes bounded caches", async (t) => {
+  let now = Date.now(); t.mock.method(Date, "now", () => now);
+  const objects = musicObjects(), calls = [], source = memorySource(objects, calls);
+  const [one, two] = await Promise.all([readOurNotesMusicDataset("music", source), readOurNotesMusicDataset("music", source)]);
+  assert.strictEqual(one, two);
+  assert.equal(calls.length, 2);
+  assert.ok(calls[1].includes("/packs/music/"));
+  const beforeDetail = await readOurNotesMusicDataset("musicDetails", source);
+  assert.equal(calls.length, 3);
+  const newObjects = musicObjects(musicViews((row) => { row.gekisouCallSe = 4; }));
+  for (const [key, value] of newObjects) objects.set(key, value);
+  now += 60_001;
+  assert.strictEqual(await readOurNotesMusicDataset("music", source), one);
+  const afterDetail = await readOurNotesMusicDataset("musicDetails", source);
+  assert.notStrictEqual(afterDetail, beforeDetail);
+  assert.equal(afterDetail["100001"].performance.gekisouCallSe, 4);
+  assert.equal(calls.length, 5);
+  assert.ok(calls[4].includes("/packs/musicDetails/"));
+  for (const edit of [
+    (p) => { p.schema = "unknown"; }, (p) => { p.datasets.music.key = "../private"; },
+    (p) => { p.datasets.music.jsonSize = 17 * 1024 * 1024; },
+    (p) => { p.datasets.music.recordCount++; },
+  ]) {
+    const pointer = JSON.parse(objects.get(OURNOTES_MUSIC_API_POINTER_KEY)); edit(pointer);
+    assert.throws(() => parseOurNotesMusicPointer(pointer));
+  }
+  for (const edit of [
+    (p) => { p.datasets.music.semanticSha256 = "0".repeat(64); },
+    (p) => { p.datasets.music.jsonSize++; },
+    (p) => { p.datasets.music.compressedSize++; },
+    (p) => { p.datasets.music.recordCount++; p.datasets.musicDetails.recordCount++; },
+  ]) {
+    const bad = musicObjects(), pointer = JSON.parse(bad.get(OURNOTES_MUSIC_API_POINTER_KEY)); edit(pointer);
+    bad.set(OURNOTES_MUSIC_API_POINTER_KEY, encoded(pointer));
+    await withObjectStore(bad, null, async () => {
+      const response = await music(request("music"));
+      assert.equal(response.status, 503);
+      assert.match(response.headers.get("cache-control"), /no-store/);
+    });
+  }
+  for (const corrupt of [false, true]) {
+    const bad = musicObjects(), pointer = JSON.parse(bad.get(OURNOTES_MUSIC_API_POINTER_KEY));
+    if (corrupt) { const bytes = Buffer.from(bad.get(pointer.datasets.music.key)); bytes[bytes.length - 1] ^= 1; bad.set(pointer.datasets.music.key, bytes); }
+    else bad.delete(pointer.datasets.music.key);
+    const badSource = memorySource(bad);
+    await assert.rejects(readOurNotesMusicDataset("music", badSource));
+    bad.set(pointer.datasets.music.key, musicObjects().get(pointer.datasets.music.key));
+    assert.ok((await readOurNotesMusicDataset("music", badSource))["100001"]);
+  }
+});
+
+test("Music and Events timestamps use JST milliseconds with validated formats and unset values", () => {
+  const oldTimezone = process.env.TZ;
+  try {
+    for (const timezone of ["UTC", "America/New_York", "Asia/Shanghai"]) {
+      process.env.TZ = timezone;
+      for (const raw of ["2026/01/01 0:00:00", "2026/01/01 00:00:00", "2026-01-01 0:00:00", "2026-01-01 00:00:00"])
+        assert.equal(ourNotesTimestamp(raw), "1767193200000", `${timezone}: ${raw}`);
+      assert.equal(ourNotesTimestamp("2026/09/30 18:00:00"), "1790758800000");
+      assert.equal(ourNotesTimestamp("2024/02/29 23:59:59"), String(Date.UTC(2024, 1, 29, 14, 59, 59)));
+    }
+  } finally {
+    if (oldTimezone === undefined) delete process.env.TZ; else process.env.TZ = oldTimezone;
+  }
+  for (const raw of ["", "null"]) assert.equal(ourNotesTimestamp(raw), null);
+  for (const raw of [null, 0, "not-a-date", "2026/02/29 00:00:00", "2026/01/32 00:00:00", "2026/13/01 00:00:00", "2026/01/01 24:00:00", "2026/01/01 00:60:00", "2026/01/01 00:00:60", "2026/01-01 00:00:00", "2026/1/01 00:00:00", "2026/01/01 00:00:00Z"])
+    assert.throws(() => ourNotesTimestamp(raw), raw === null ? "null input" : String(raw));
+});
+
+test("Music fills band names per language and regional IDs without changing cached music records", async (t) => {
+  let now = Date.now(); t.mock.method(Date, "now", () => now);
+  const catalogs = regions();
+  catalogs[2].bands["1"].bandName["zh-TW"] = "TW MyGO";
+  catalogs[2].bands["2"].bandName["zh-CN"] = "";
+  const views = musicViews((row) => {
+    row.texts.bandNameTextID = ["Song-specific", "", "", "", ""];
+    row.available[4] = false; row.serverExtensions[4] = null;
+    for (const text of Object.values(row.texts)) text[4] = "";
+    row.serverExtensions[1] = { bandIDs: [1], startAt: "" };
+    row.serverExtensions[2] = { bandIDs: [1], startAt: null };
+    row.serverExtensions[3] = { bandIDs: [2] };
+  });
+  await withObjectStore(musicObjects(views, catalogs), null, async (root) => {
+    const before = await readOurNotesMusicDataset("music");
+    const expected = ["Song-specific", "MyGO!!!!!", "TW MyGO", "", ""];
+    const read = async () => (await (await music(request("music"))).json()).data["100001"];
+    assert.deepEqual((await read()).bandName, expected);
+    for (let server = 0; server < 4; server++) {
+      const data = (await (await musicDetail(request(`music/100001?server=${server}`), musicContext())).json()).data;
+      assert.deepEqual(data.bandName, expected);
+      assert.equal(data.startAt, server === 1 || server === 2 ? null : "1767193200000");
+    }
+    assert.deepEqual(before["100001"].bandName, ["Song-specific", "", "", "", ""]);
+    catalogs[2].bands["1"].bandName["zh-TW"] = "Updated TW MyGO";
+    for (const [key, body] of musicObjects(views, catalogs)) {
+      const path = join(root, key); await mkdir(dirname(path), { recursive: true }); await writeFile(path, body);
+    }
+    now += 60_001;
+    assert.strictEqual(await readOurNotesMusicDataset("music"), before);
+    assert.equal((await read()).bandName[2], "Updated TW MyGO");
+  });
+  const special = musicViews((row) => { row.bandIDs = []; row.texts.bandNameTextID = Array(5).fill("CRYCHIC"); });
+  await withObjectStore(musicObjects(special), null, async () => {
+    assert.deepEqual((await (await music(request("music"))).json()).data["100001"].bandName, Array(5).fill("CRYCHIC"));
+  });
+  const missingBand = musicViews((row) => { row.bandIDs = [999]; });
+  await withObjectStore(musicObjects(missingBand), null, async () => {
+    assert.deepEqual((await (await music(request("music"))).json()).data["100001"].bandName, Array(5).fill(""));
+  });
+  await withObjectStore(musicObjects(), (objects) => {
+    for (const key of objects.keys()) if (key.endsWith("/normalized/bands.json.gz")) objects.delete(key);
+  }, async () => {
+    assert.equal((await music(request("music"))).status, 503);
+    assert.equal((await musicDetail(request("music/100001"), musicContext())).status, 503);
+    assert.equal((await musicDetail(request("music/999999"), musicContext("999999"))).status, 404);
+  });
 });

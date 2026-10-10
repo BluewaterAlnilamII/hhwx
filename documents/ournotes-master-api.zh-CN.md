@@ -19,8 +19,10 @@
 | `/skills` | 下述五种技能 ID map | 无 |
 | `/events` | 活动摘要 ID map | 可选 `server=0..4` |
 | `/events/{eventId}` | 单个活动详情 | 可选 `server=0..4` |
+| `/music` | 歌曲概览 ID map | 可选 `server=0..4` |
+| `/music/{musicId}` | 单曲详情 | 可选 `server=0..4` |
 
-成功响应为 `{ "success": true, "data": ... }`。Map key 是正整数十进制 ID；member/support 的 ID 空间独立。卡及活动 ID 必须是无前导零的正安全整数。不提供 `all/main` 别名、目录详情、分页、语言选择或任意字段展开。
+成功响应为 `{ "success": true, "data": ... }`。Map key 是正整数十进制 ID；member/support 的 ID 空间独立。卡、活动及歌曲 ID 必须是无前导零的正安全整数。不提供 `all/main` 别名、目录详情、分页、语言选择或任意字段展开。
 
 无 `server` 时合并四个实际来源；指定唯一数字 `server` 时，只保留对应来源收录的卡并移除 `serverExtensions`。本地化字段和原始时间仍保留五槽。`characters/bands/skills` 是共享目录，拒绝查询参数。
 
@@ -304,7 +306,7 @@ Leader 效果不输出 timing/release 字段；其余类别提供 `activationTim
 
 曲目、时间、活动奖励及四个活动资源字段统一取固定 `jp/en/tw/cn_intl/kr` 顺序中第一个历史存在槽的值作为基础值。无 `server` 时，记录始终提供五槽 `serverExtensions` 保存存在性和区域差异：`null` 表示不存在，`{}` 表示存在且沿用基础值，对象只提供有差异的 `startAt`、`endAt`、`displayEndAt`、`imageAsset`、`logoAsset`、`backgroundAsset`、`bannerAsset`、`musics` 或详情 `stories`、`pointRewards`、`pointLoopRewards`、`rankingRewards`。五槽全部存在且内容相同时，仍提供 `[{}, {}, {}, {}, {}]`。数组整体替换，不按 ID 合并。指定服时按存在性筛选，应用该槽覆盖，然后移除 `serverExtensions`；显式 `null` 时间、`[]` 集合及空资源字符串均覆盖基础值。本地化文本仍保留五槽。TW 与 `cn_intl` 共用记录和时间，繁中／简中文本分别保留。缺失文本为 `""`，缺失时间为 `null`，活动存在但集合真实为空为 `[]`。
 
-Events 的所有时间字段统一为十进制字符串形式的 Unix 毫秒时间戳或 `null`，与 Bandori Events 的时间戳表示一致。Web 在核验原始包后，将私有 `yyyy/MM/dd HH:mm:ss` 字符串按 JST（UTC+9）解释并转换，不依赖宿主机时区。源时间为空时输出 `null`，非法日期使读取失败。例如 `2026/09/30 18:00:00` 转为 `"1790758800000"`。时间戳在各时区表示同一时刻，调用者按选定显示时区格式化。不增加原日期／ISO 伴随字段，也不推断开放或可用状态。
+Events 的所有时间字段统一为十进制字符串形式的 Unix 毫秒时间戳或 `null`，与 Bandori Events 的时间戳表示一致。Web 在核验原始包后，将私有日期按 JST（UTC+9）解释并转换，不依赖宿主机时区。Events/Music 共用解析器，接受 `yyyy/MM/dd H:mm:ss` 或 `yyyy-MM-dd H:mm:ss`，小时可为一位或两位。空字符串和字面量 `"null"` 输出 `null`，非法日期使读取失败。例如 `2026/09/30 18:00:00` 转为 `"1790758800000"`。时间戳在各时区表示同一时刻，调用者按选定显示时区格式化。不增加原日期／ISO 伴随字段，也不推断开放或可用状态。
 
 | 摘要字段 | 合同 |
 |---|---|
@@ -400,6 +402,102 @@ Events 通过 `ournotes/master/events-v1/api/active.json`（schema `ournotes-eve
 
 Events 不增加媒体提取、cutoff 抓取、数据库、locale/expand/page 查询或未确认的 Bandori 派生字段。列表只读摘要包，详情只读详情包，不单独缓存各服目录。两个视图由同一后端根固定，独立 HTTP 请求仍可能跨越一次新发布。
 
+## Music
+
+Music 沿用 Bandori 的概览／详情组织、统一响应、私有读取和缓存策略；字段表达 OurNotes 自身规则：多乐队／演唱角色、原生等级与连击数、三个激奏任务位、获取途径、奖励和演出配置。不推导 Bandori note 数、`closedAt`、开放或解锁状态。歌曲 ID 是无前导零的正安全整数，通过 map key 或详情 URL 表达，记录内不重复。
+
+两个入口均支持可选的 `server=0..4`：`GET /api/ournotes/master/music` 返回概览 ID map，`GET /api/ournotes/master/music/{musicId}` 返回单曲详情。
+
+### 字段与顺序
+
+概览依次为 `sortOrder, musicTitle, bandIds, bandName, vocalCharacterIds, musicType, musicCategories, bestMusicTagIds, startAt, gekisouMission1, gekisouMission2, gekisouMission3, difficulty, length, bpm, serverExtensions`。
+
+概览和详情均提供三个有序激奏任务字段，沿用共享枚举映射（`None`、`Combo`、`Luck`、`JustCount`、`All`），保留重复值、零值对应的 `None`、未知数字及分服差异。概览从后端 `music` 包读取这些字段，由 `ournotes-music-api-v3` 引入；旧包缺失时省略，不编造默认值，也不另读详情补齐。公开概览依赖这些字段前，应先发布包含它们的快照。同一 v3 配方还会从私有概览及其地区覆盖中移除 `defaultUnlock`，详情继续保留；HTTP 概览已经排除它，因此这项私有精简不阻塞 HTTP 验收。
+
+`defaultUnlock` 和 `acquisition` 仅在详情提供，概览记录及其 `serverExtensions` 均不输出。根 `unlockConditionId` 从两种 HTTP 响应及其地区覆盖中排除，私有源值继续保留。概览继续保留歌曲开放时间 `startAt`。
+
+详情按下表顺序输出。可选源字段缺失时省略；存在的 `0`、`false`、`""` 和空数组均保留。
+
+| 分组 | 字段顺序 |
+|---|---|
+| 身份与署名 | `sortOrder, musicTitle, ruby, phonetic, lyricist, composer, arranger, bandIds, bandName, vocalCharacterIds` |
+| 分类 | `musicType, musicCategories, bestMusicTagIds` |
+| 获取 | `startAt, defaultUnlock, acquisition` |
+| 游戏配置 | `difficulty, gekisouMission1, gekisouMission2, gekisouMission3` |
+| 奖励 | `scoreRanks, scoreRewards, comboRewards` |
+| 媒体引用 | `resources, anotherVocalIds, anotherVocals, musicVideoIds, musicVideos, releaseEffects` |
+| 演出与谱面元信息 | `performance, length, bpm, serverExtensions` |
+
+根文本 `musicTitle,bandName,ruby,phonetic,lyricist,composer,arranger` 均为五字符串数组。`bandName` 是补齐后的显示名称：对每个存在的地区／语言槽，优先使用非空歌曲专用名称，否则根据该地区的 `bandIds` 从现有 Bands 目录读取同语言名称，按原序用 ` / ` 连接，保留重复 ID。任何必要名称／翻译缺失时该槽留空，不生成部分名称或跨语言回填；歌曲不存在的槽也留空。CRYCHIC 即使 `bandIds` 为空仍保留歌曲专用名称。`ruby` 原样保留官方标记文本，不渲染 HTML。`musicCategories` 是分类代码，不是分类行 ID。`bestMusicTagIds` 引用 Tag 行。两种响应均不内嵌 `tags`、`categories` 或 `resourceItems`；共享目录名称和物品配置不属于 Music。本次投影不新增 Tags、Categories 或 Items HTTP 目录。
+
+`difficulty` 的 `0/1/2/3` 键分别为 Easy/Normal/Hard/Expert。每个已引用难度包含 `scoreId,musicScoreLevel?,musicScoreDisplayLevel?,fullComboCount?`；详情额外保留存在的 `musicScoreTextFileName`。整数等级和显示等级（例如 `20` 与 `20.5`）分别保留，不转换成 `20+`。`fullComboCount` 是官方连击数，不是谱面对象数量。缺 score 行为 `{scoreId,missing:true}`；未引用的难度无对应键。本服缺 score 行时仍可存在共享 BPM。
+
+`musicScoreLevel` 是原生整数等级。`musicScoreDisplayLevel` 是独立的原生浮点数：已检查客户端将完整值用于歌曲列表排序，但列表／详情的难度标签调用 `GetMusicScoreDisplayLevelInt`，对该浮点数向零截断。例如 `20.5` 显示为 `20`，同时保留小数作为排序值。小数不能据此解释成 `+` 标记或某种评价值公式。API 保留这两个源值。
+
+概览与详情均提供完整 `bpm`：各难度对应 `{events:[{t,bpm,...}]}`，`t` 固定使用每拍 480 个整数 tick；reader 仍校验私有 `ticksPerBeat:480`，但两种 HTTP 响应均省略这个常量。保留事件原序、同 tick 多事件和附加字段。`length` 是不舍入的正秒数，缺失时省略。请求读取已发布元信息，不下载谱面或音频文件。
+
+| 奖励字段 | 每项字段顺序 |
+|---|---|
+| `scoreRanks` | `liveScoreRank,requiredScore,battleLiveRequiredScore`；两种阈值均为官方配置 |
+| `scoreRewards` | `liveScoreRank,resourceType,resourceId,resourceCount` |
+| `comboRewards` | `difficulty,comboRateType,requiredCombo?,resourceType,resourceId,resourceCount`；不重新计算阈值 |
+
+两种 HTTP 响应及其地区覆盖均不输出 `rewardIds` 或歌曲 master 的九个原始奖励 ID。已展开的 `scoreRewards`、`comboRewards` 配合 `scoreRanks`，已经提供奖励分类、内容和门槛，不依赖这些 ID。私有源引用继续保留用于追溯，不虚构外键联表或玩家领取状态。根 `unlockConditionId` 同样因业务含义未确认而不公开，其零值不能解释成无条件获取；这不改变独立的 `anotherVocals[].unlockConditionId` 字段。
+
+`acquisition[]` 保留全部来源及原序，以及获取途径的身份、名称和原生条件；不展开商店展示设置、章节简介／角色／音乐及图片、分集图片和任务列表排序／分组。奖励和支付物品仍通过引用表达，不附带物品定义。reward 对象包含 `resourceType,resourceId,resourceCount`，移除仅用于联表的行／组 ID。
+
+| type | 嵌套字段顺序 |
+|---|---|
+| `exchange` | `product`：`id,exchangeId,resourceType,resourceId,resourceCount,paymentResourceCount,paymentSteps,paymentStepResourceCounts,limitCount,resetType,startAt,endAt`；可选 `exchange`：`id,name[5],paymentResourceType,paymentResourceId,startAt,endAt` |
+| `story` | `reward,chapters,episodes`。章节：`chapterId,name[5],bandId,isSpecialStory,startAt,endAt`。分集：`episodeId,chapterId,episodeNumber,advId,description[5],startAt,endAt,isAnotherEpisode,isExtraEpisode,unlockEpisodeNumber,eventPoint,characterId,characterRank,playerRank,bandRank,storyFriendshipEpisodeId` |
+| `mission` | `reward,missions`。任务：`missionId,description[5],missionCategory,missionType,achievementCount,initialValue,value`，随后是下列目标字段，最后 `startAt,endAt,loginTimeStartAt,loginTimeEndAt` |
+
+任务目标字段依次为 `arenaRankId,bandId,bandRank,cardType,characterId,episodeId,eventId,exchangeId,gachaId,memberCardId,missionLiveChapterId,missionLiveStageId,musicDifficulty,musicId,notesJudgement,scoreRank,storyChapterId,supportCardId`。描述保留 `{BandId}` 等占位符和原生参数，不执行模板或判断玩家状态。剧情／兑换结束时间不转成歌曲 `closedAt`。
+
+以下条件含义已在所检查的基础客户端确认，说明的是静态配置，不是某个账号的获取资格：
+
+- 兑换的 `paymentResourceCount` 是基础单价。`paymentSteps[i]` 表示从第几次兑换起使用 `paymentStepResourceCounts[i]` 单价，次数从 1 开始，两个数组按相同索引配对。每档到下一档开始前一次结束，正数 `limitCount` 限制档位范围；阶梯数组为空则使用基础单价。客户端查询当前价格时使用已兑换次数加一，不是一次批量兑换的数量。`resetType` 为 `1=NoReset、2=Daily、3=Weekly、4=Monthly`，本 API 不计算刷新边界。
+- 剧情条件随章节及当前活动分支变化。已阅读分集或章节 `isSpecialStory` 为真时跳过通常的条件列表。相关活动进行期间检查 `eventPoint`；其他分支检查已配置的角色／玩家／乐队等级和羁绊分集阅读状态。`characterRank`、`playerRank`、`eventPoint`、`unlockEpisodeNumber`、`storyFriendshipEpisodeId` 为正数时才启用相应检查；角色等级还需要正数 `characterId`，`bandRank=0` 则跳过乐队等级检查。`bandRank` 检查章节 `bandId` 对应的乐队。`unlockEpisodeNumber` 指向同章节、相同分集编号的非 Another 分集，不是分集 ID；`isExtraEpisode` 为真时跳过共用的前一分集阅读检查。只累计当前分支适用的未满足条件，不能把所有字段无条件拼成 AND。
+- 任务由 `missionType` 决定用哪些目标参数组成计数器键。当前歌曲获取任务为 `missionCategory=15`（`UnlockMusic`）、`missionType=30`（`BandEvaluation`），用 `bandId` 选择乐队，`achievementCount` 表达进度目标。`initialValue` 是 `MissionInitialValue` 策略枚举（`0=Zero、1=Minus1、2=Current`），不是直接使用的基线数值。对进行中且未完成的任务，已检查进度计算将 `counter - playerMission.startCount` 限制在进度范围内，`startCount` 来自玩家状态。`value` 是随任务类型解释的计数参数，当前 BandEvaluation 计数器键分支不使用它；其他填 0 的目标字段也不是该类型的额外条件。任务完成及奖励领取标记仍由玩家／服务端状态提供。
+
+剧情章节保留 `bandId` 与 `isSpecialStory` 作为条件上下文：前者确定 `bandRank` 检查的乐队，后者改变解锁分支。保留存在的零值／false，缺失时省略，并保留地区差异；这不意味着展开完整章节目录或判断玩家获取资格。
+
+`resources` 收拢 `jacketAssetName` 与 `audio`，后者依次包含 `musicSoundId,soundCueSheetId,cueSheetName,cueName`。缺 sound/sheet 行时不伪造配置。谱面引用已在 `difficulty` 中表达。不公开私有 descriptor、files map 或媒体 URL；媒体消费者可使用独立 music index。
+
+`anotherVocalIds` 和 `musicVideoIds` 在关联行缺失时仍保留引用。`anotherVocals[]` 为 `id,vocalCharacterIds,musicSoundId,unlockConditionId,startAt`，不输出 `jingleSoundID`。非空 AnotherVocal 投影使用合成样本验证，当前生产数据没有非空样本。`musicVideos[]` 仅含 `id,displayName[5],assetName`，不公开视频通用尺寸、声音／停止标记和 shader 配置；`releaseEffects[]` 为 `id,difficulty,releaseEffectType,startAt,endAt`。
+
+`releaseEffects` 配置歌曲发布提示演出。`releaseEffectType` 为 `0=Music、1=Difficulty、2=AnotherBand`，已检查的标题分支仅在 type 1 时读取 `difficulty`。type 0 搭配 difficulty 0 不表示只开放 Easy。播放前检查提示时间窗口及本地已播放 ID，播放后记录已播放；`endAt` 结束的是这次提示窗口，不是歌曲可用期。API 不推导当前是否会播放提示。
+
+`performance` 仅包含歌曲本表的 `liveMusicPenLightColorId,musicLightColorIdNormal,musicLightColorIdChorus,lazerLightMotionNormal,lazerLightMotionChorus,stageLightMotionNormal,stageLightMotionChorus,vjVideoPattern,backgroundCameraType,gekisouCallSe`。保留官方 `lazer` 拼写及零值。通用 `penLight,normalLight,chorusLight,stageVideos,videos` 展开留在私有资料中；`resources.audio` 同样不公开通用声音缓存、计时和音高配置。
+
+### 枚举、时间、地区与缺项
+
+`musicType` 使用 `None/Ruby/Azure/Jade/Amber/Violet/All`；激奏字段使用 `None/Combo/Luck/JustCount/All`。资源类型与任务 `cardType` 共用上文 Events 映射。score rank 的 `0..7` 为 `None,E,D,C,B,A,S,SS`；combo rate 的 `0..3` 为 `Quarter,Half,ThreeQuarters,Full`。未知合法整数保留原值；其他类型／条件保留原生数字。
+
+数字 `musicCategories` 的含义为 `0=All、1=Original、2=Virtual、3=JPop、4=Anime、5=Game、6=AnotherBand`。本节对分类、获取参数及发布演出的数字含义说明，不新增字符串枚举转换。
+
+Music 所有日期字段使用十进制字符串形式的 Unix 毫秒时间戳或 `null`，沿用 Events 的 JST（UTC+9）公开解释。范围包括根 `startAt`、获取途径中的商品／兑换／章节／分集／任务日期（含登录窗口）、AnotherVocal 日期及开放演出窗口。共用解析器接受斜线／连字符日期及一位或两位小时，将空串／字面量 `"null"` 统一为 null，严格拒绝非法日历值，不依赖宿主机时区。根 `startAt` 始终存在，未设置或私有地区字段被删除时为 null；可选嵌套日期字段原本缺失则仍省略。地区差异继续使用单值覆盖，不增加原文／ISO 伴随字段，不推导开放状态，也不改写私有包。Cards 既有原始时间合同不变。
+
+五槽为 `[jp,en,tw,cn_intl,kr]`，来源为 `[JP,EN,TW,TW,KR]`。根文本保留五槽。关联文本先还原地区记录，再按实体类型和稳定 ID 对齐，不能按数组位置匹配。实体／翻译缺失输出 `""`，不跨语言补齐；数组保留原序、重复项和位置语义。
+
+私有扩展在重命名／分组前应用：槽为 `null` 表示无歌曲；字段值为 `null` 删除该可选字段；数组／对象整体替换。公开记录以第一个存在的地区为基准，始终输出五槽 `serverExtensions`，即使全部为 `{}`。扩展只含公开顶层差异，字段值 `null` 删除整个可选字段，但 `startAt` 例外：其 null 表示明确未设置时间，选服后仍保留该字段，与 Events 一致。根文本和共享 `length/bpm` 不进入扩展。有 `server` 时过滤不存在的歌曲、应用差异／删除并移除 `serverExtensions`，五槽文本不缩成单值。历史存在不代表当前开放、已解锁或可玩。
+
+根 `missing[]` 中的 producer 表／引用诊断留在私有资料中；公开 `difficulty.*.missing:true` 继续表达已引用但缺少的谱面行。官方部分缺项仍可读取，不借用另一服 score 或伪造零值；必要对象缺失、损坏或消费结构非法仍失败。不公开源行、history、文本引用键、pointer 或存储路径；新增源字段不会自动流入响应。
+
+对象字段顺序用于阅读，调用者仍应按名称读取。数字 ID map 不保证歌曲顺序；选服后按该服 `sortOrder` 升序、相同值按数值 ID 升序排序。不增加 `sort/order/page` 查询或 `orderedIds`，不重排原生数组或 BPM 事件。
+
+Web 字段精简作用于 HTTP 投影及其 `serverExtensions`；若地区差异只涉及被排除字段，不生成公开覆盖。既有消费者应使用保留的引用替代被移除的目录展开、使用已展开奖励数组替代 `rewardIds`，并使用固定 BPM 单位；当前仓库 UI 没有消费这些被移除的 Music 字段。这些 HTTP 精简可以使用现有 v2 包验收，无需重建它们。
+
+后端 `ournotes-music-api-v3` 另从最终 `musicDetails` 记录及其地区覆盖中移除 `bands`、`vocalCharacters`、`tags`、`categories`、`resourceItems` 五组共享定义。这些定义仍保留在原始归档、分服 normalized 和统一历史中。最终详情继续保留原生引用、实际奖励、获取途径与演出配置、私有奖励／解锁引用、来源诊断及完整 `assets.files/bpm/length`；媒体 index 不变。Web reader 同时兼容含这些定义的旧包与不含它们的 v3 包，因此这项私有精简无需额外 HTTP 适配。
+
+### Reader 与启用
+
+Music 从 `ournotes/master/music-v1/api/active.json`（`ournotes-music-api-pointer-v1`）发现数据；列表读取 `music` 包，详情读取 `musicDetails` 包；两者另复用现有 Bands 私有目录 reader 补齐名称。Bands 有自己的四服已验证根及缓存，不固定到 Music generation；目录刷新可更新名称，无需重建歌曲包。名称补齐不请求公开 API／CDN，也不额外读取完整歌曲详情包。目录读取失败使 Music 读取失败；实际缺少关联乐队／翻译时显示槽留空。校验 schema、generation、内容寻址 key、压缩／原始 JSON 的 hash 和大小、描述符数量及消费结构。这些包的 `semanticSha256` 是原始 JSON 摘要，使用现有字节校验，不经 JavaScript 重序列化；附加数据集／history 和 producer revision 不改变该读取合同。
+
+指针 TTL 为 60 秒，读取期限 15 秒；压缩和解压后单包各限 16 MiB。内容缓存最多两项，总预算 32 MiB，按公开投影序列化大小估算，不是 JavaScript 实际堆上限。临时五地区记录不驻留成五套缓存，不增加任意歌曲数量上限。独立 HTTP 请求可能跨越不同发布。
+
+按已确认的概览字段完整启用 Web API 前，应先发布后端 v3 快照。后端可从现有资源 checkpoint 构建两个最终包，无需重新抓取 master、重建或上传媒体、新增凭据或迁移数据库。本轮公开字段变更中，仅概览三个激奏字段的实际数据验收依赖这次发布。`npm run test:ournotes-master` 覆盖字段／顺序、地区、缺项、HTTP 错误及 pack／缓存完整性，typecheck、lint、build 验证集成；dev 验收还需将两路和五服筛选与实际私有包及已验证 Bands 目录比较，覆盖规范化时间戳、普通乐队名与 CRYCHIC 专用名称。生产部署／边缘缓存验收为后续操作，Web 回滚不移动后端指针或删除媒体。非法／不存在的歌曲 ID 返回 `404 OURNOTES_MUSIC_NOT_FOUND`，来源错误沿用下方脱敏及 no-store 规则；边缘缓存键须区分 Music `server` 查询。
+
 ## 共享目录与图片
 
 角色记录包含 `characterName[5]`、`shortName[5]`、`bandId`、`displayOrder`、`colorCode`；乐队记录包含 `bandName[5]`、`colorCode`。名称使用同一固定来源/语言映射，结构字段必须跨服一致。卡牌关联角色，角色关联乐队，不在卡牌中重复内嵌目录。
@@ -413,11 +511,11 @@ Events 不增加媒体提取、cutoff 抓取、数据库、locale/expand/page �
 | 状态码 | 条件 |
 |---|---|
 | 400 | 未知、重复或非法查询参数；目录携带任何查询参数 |
-| 404 | 未知卡种、非法 ID，或卡／活动不在请求视图中 |
+| 404 | 未知卡种、非法 ID，或卡／活动／歌曲不在请求视图中 |
 | 503 | 配置/来源缺失、快照损坏、引用无效或数据冲突 |
 | 500 | 未归类程序错误 |
 
-成功响应复用 `SNAPSHOT_HTTP_CACHE_POLICY`：浏览器 `max-age=300, stale-while-revalidate=1800`；Cloudflare `max-age=1800, stale-while-revalidate=86400`。边缘缓存键必须区分卡牌／活动 `server` 查询。来源 pointer 的进程缓存为 60 秒；不可变对象使用有界缓存与并发请求合并，输入身份不变时复用聚合结果。TW/cn_intl 共用输入。独立请求不承诺跨服或主数据/图片原子切换。
+成功响应复用 `SNAPSHOT_HTTP_CACHE_POLICY`：浏览器 `max-age=300, stale-while-revalidate=1800`；Cloudflare `max-age=1800, stale-while-revalidate=86400`。边缘缓存键必须区分卡牌／活动／歌曲 `server` 查询。来源 pointer 的进程缓存为 60 秒；不可变对象使用有界缓存与并发请求合并，输入身份不变时复用聚合结果。TW/cn_intl 共用输入。独立请求不承诺跨服或主数据/图片原子切换。
 
 ## 服务端配置与验证
 
