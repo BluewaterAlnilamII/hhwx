@@ -18,6 +18,7 @@ import { useRouter } from "@/i18n/navigation";
 import { useOurNotesPreferencesStore, useOurNotesPreferredServer } from "@/store/useServerPreferencesStore";
 import { DEFAULT_OURNOTES_PREFERRED_SERVER, OURNOTES_SERVER_CODES, getOurNotesServerFromCode, pickAvailableOurNotesServer } from "@/lib/ournotes/server";
 import type { OurNotesCardKind, OurNotesCardDetail } from "@/lib/ournotes/cards/api-contract";
+import { selectOurNotesSkill } from "@/lib/ournotes/skills-contract";
 import { ourNotesImageUrl, ourNotesCharacterIcon, ourNotesBandIcon, ourNotesAttributeIcon } from "@/lib/ournotes/cards/assets";
 import { OURNOTES_SERVERS, OURNOTES_RARITY_NAMES, ourNotesCardCharacters, ourNotesCardName, ourNotesCardTitle,
   ourNotesCardSkills, ourNotesSkillDescription, ourNotesCardsListHref, ourNotesCardStats } from "@/lib/ournotes/cards/catalog";
@@ -137,7 +138,7 @@ export default function CardDetailPageClient({ kind, cardId, card }: { kind: Our
           {references.length === 0 ? <p className="mt-4 text-sm text-[var(--theme-color-text-muted)]">{t("states.noSkills")}</p> : null}
           <div className="mt-4 divide-y divide-[var(--theme-color-border-subtle)]" aria-live="polite">
             {references.map((ref) => {
-              const skill = skills.data?.[ref.kind]?.[ref.id];
+              const skill = selectOurNotesSkill(skills.data?.[ref.kind]?.[ref.id], server);
               return <DetailColumns key={ref.slot} stackedDivider={false} left={<dl>
                 <DetailRow label={t(`skillKinds.${ref.kind}`)} className="@max-[54rem]:pb-2">{skill?.skillName[server] || missing}</DetailRow>
               </dl>} right={<dl>

@@ -114,9 +114,9 @@
         "difficulty": "难易度：如 <code>hd</code> / <code>hard</code> / <code>困难</code> / <code>ハード</code> 匹配 HARD 难易度",
         "difficultyRange": "难易度范围：如 <code>hd+</code> / <code>{difficulty}</code> 匹配 HARD / EXPERT 难易度",
         "level": "乐曲等级：如 <code>{level}</code> 匹配所选难易度中存在26级及以下谱面的歌曲",
-        "songType": "歌曲分类：如 <code>original</code> / <code>原创</code> 匹配原创歌曲，<code>anime</code> / <code>动画</code> 匹配动画分类",
+        "songType": "歌曲分类：如 <code>anime</code> / <code>动画</code> / <code>アニメ</code> 匹配动画歌曲",
         "server": "可用服务器：如 <code>en</code> / <code>intl</code> / <code>ww</code> / <code>国际服</code> 匹配 EN 服可用的歌曲",
-        "id": "ID：如 <code>#100001</code> 仅匹配 ID 为100001的歌曲；裸整数匹配歌曲 ID 或显示等级",
+        "id": "ID：如 <code>#100001</code> 匹配 ID 为100001的歌曲",
         "name": "强制名称：如 <code>/happy</code> / <code>\"happy\"</code> 仅匹配名称中包含happy的歌曲"
       },
       "otherBand": "其他",
@@ -213,6 +213,51 @@
       "Luck": "LUCK",
       "JustCount": "JUST",
       "All": "全部"
+    },
+    "view": {
+      "label": "歌曲页面视图",
+      "info": "歌曲",
+      "meta": "谱面 Meta"
+    },
+    "meta": {
+      "parameters": "参数设置",
+      "mode": "演出模式",
+      "free": "自由演出",
+      "gekisou": "激奏演出",
+      "liveSkill": "成员技能",
+      "supportSkill": "留影技能",
+      "none": "无",
+      "skillLevel": "{skill}等级",
+      "level": "等级 {level}",
+      "perfect": "Perfect 率",
+      "downtime": "演出间隔",
+      "seconds": "秒",
+      "loading": "正在读取歌曲 Meta",
+      "resultCount": "{count} 张谱面",
+      "empty": "没有符合当前条件的谱面",
+      "unsupported": "当前技能组合暂无可用的 Meta 数据",
+      "tableLabel": "歌曲 Meta 排名",
+      "rank": "排名",
+      "helpLabel": "{column}说明",
+      "help": {
+        "score": "出分相对于综合力的比率",
+        "efficiency": "每分钟平均出分相对于综合力的比率",
+        "bpm": "每分钟节拍数",
+        "notes": "谱面音符总数",
+        "nps": "每秒平均音符数",
+        "sr": "技能覆盖率"
+      },
+      "columns": {
+        "title": "歌曲",
+        "level": "难度",
+        "length": "时长",
+        "score": "分数",
+        "efficiency": "效率",
+        "bpm": "BPM",
+        "notes": "N",
+        "nps": "NPS",
+        "sr": "SR"
+      }
     }
   }
 }

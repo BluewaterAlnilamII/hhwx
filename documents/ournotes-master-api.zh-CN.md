@@ -21,6 +21,7 @@
 | `/events/{eventId}` | 单个活动详情 | 可选 `server=0..4` |
 | `/music` | 歌曲概览 ID map | 可选 `server=0..4` |
 | `/music/{musicId}` | 单曲详情 | 可选 `server=0..4` |
+| `/music/meta` | 自由演出计分系数 `{durations,songs}` | 无 |
 
 成功响应为 `{ "success": true, "data": ... }`。Map key 是正整数十进制 ID；member/support 的 ID 空间独立。卡、活动及歌曲 ID 必须是无前导零的正安全整数。不提供 `all/main` 别名、目录详情、分页、语言选择或任意字段展开。
 
@@ -93,6 +94,9 @@
 | `displaySkillCategories` | 原始数组，除 leader 外均提供 |
 | `gekisouMissionType` | 原始整数，仅 gekisou、gekisouSupport |
 | `gekisouSupportSkillExecTiming` | 原始整数，仅 gekisouSupport |
+| `serverExtensions` | 可选的五槽结构覆盖；各服均存在且结构相同时省略 |
+
+结构字段以 `jp/en/tw/cn_intl/kr` 顺序中首个存在来源作为基础值。如果某服存在差异或缺失，`serverExtensions` 提供五个槽位：`null` 表示不存在，`{}` 继承基础值，对象只替换其中列出的字段。覆盖 `effects` 时替换完整数组，包括按等级保存的 null，绝不按位置合并；TW 与 `cn_intl` 共用结构覆盖。本地化名称、模板和已重映射的显示参数仍保留既有五槽语义。卡牌使用已解析的当前服；Meta 优先使用偏好服，技能缺失时回退首个可用服。这是附加兼容字段，完全共享记录的既有字段和输出形状不变；计算技能效果的调用者必须先应用选中槽位。生产器与存储格式不变，发布时一并部署 reader 和调用者。例如 JP 的 gekisou/22 可以保留第二效果，而国际服第 5 级为 null，不再导致整个 Skills API 不可用。
 
 模板使用权威来源文本：JP-ja、EN-en、TW-zh-TW/zh-CN、KR-ko。后端处理游戏表达式和已识别的颜色标签，换行统一为 `\n`。五级相同的表达式结果直接写进模板；变化的结果保存为显示字符串数组，相同数组可跨语言槽共用。显示等级 `level` 时，将 `{n}` 替换成 `descriptionParameters[n][level - 1]`。Web 只组合槽位和重映射参数编号，不执行游戏表达式。缺译保持 `""`。
 
@@ -497,6 +501,18 @@ Music 从 `ournotes/master/music-v1/api/active.json`（`ournotes-music-api-point
 指针 TTL 为 60 秒，读取期限 15 秒；压缩和解压后单包各限 16 MiB。内容缓存最多两项，总预算 32 MiB，按公开投影序列化大小估算，不是 JavaScript 实际堆上限。临时五地区记录不驻留成五套缓存，不增加任意歌曲数量上限。独立 HTTP 请求可能跨越不同发布。
 
 按已确认的概览字段完整启用 Web API 前，应先发布后端 v3 快照。后端可从现有资源 checkpoint 构建两个最终包，无需重新抓取 master、重建或上传媒体、新增凭据或迁移数据库。本轮公开字段变更中，仅概览三个激奏字段的实际数据验收依赖这次发布。`npm run test:ournotes-master` 覆盖字段／顺序、地区、缺项、HTTP 错误及 pack／缓存完整性，typecheck、lint、build 验证集成；dev 验收还需将两路和五服筛选与实际私有包及已验证 Bands 目录比较，覆盖规范化时间戳、普通乐队名与 CRYCHIC 专用名称。生产部署／边缘缓存验收为后续操作，Web 回滚不移动后端指针或删除媒体。非法／不存在的歌曲 ID 返回 `404 OURNOTES_MUSIC_NOT_FOUND`，来源错误沿用下方脱敏及 no-store 规则；边缘缓存键须区分 Music `server` 查询。
+
+### 谱面 Meta
+
+`GET /api/ournotes/master/music/meta` 仅返回 `{durations,songs}`。Durations 是升序的秒数；每个歌曲 ID / 难度 `0..3` 包含 `{total,covered}`，其中 `total` 是标量，`covered` 完整包含各发布时长的系数，没有 Fever 轴。Reader 通过签名私有访问，从 `OURNOTES_PUBLIC_R2_BUCKET` 读取 `ournotes/music/meta.json`（`ournotes-music-meta-v1`），并用 `musicIndexSha256` 校验配套 `ournotes/music/index.json` 的精确 bytes。缺失、无效或不匹配时失败关闭，返回现有 unavailable/no-store 响应，不回退公共 CDN；有效结果采用共享 snapshot 缓存策略。
+
+Web 计算将系数与 Music、已解析区域的 Skills 组合使用。一种成员演出技能和可选的留影延时技能统一应用于技能窗口，各自选择 1–5 级。支持的成员效果包括普通、PERFECT 以上及高 LIFE 条件的分数提升；留影效果要求装配成员自己的演出技能发动触发条件及延时。分数等级触发加分、纯判定和纯生命技能不加入。条件取满足分支，互补的正反分支不叠加。时长按 float32 毫秒相加、向上取整后转换为秒，且必须存在于已发布的时长集合中。
+
+对于 Perfect 比例 `p`，`J = p + 0.8(1-p)`。普通和高 LIFE 技能使用 `R = J(B + uC)`；Perfect 加成技能使用 `R = JB + puC`，其中 `u = effectValue / 10000`、`B = total`、`C = covered[时长]`。后端系数已包含音符类型出分系数与 combo 权重。所有计分节点统一使用这一 P/G 简化模型，包括长条内部节点；判定转换和生命模拟不改变 `p`，界面百分数在计算前除以 100。
+
+分数为 `100R%`，效率为 `100R * 60 / (length + downtime)%`，两项时长均以秒计。官方 `fullComboCount` 作为音符数 `N`，`N / length` 得到 NPS，`100C/B%` 得到 SR。技能重叠独立累计，因此 SR 不截断为 100%。N 不通过统计原始谱面对象重新生成，也不替代已加权系数；不需要综合力输入或累计分数等级模拟。
+
+[谱面 Meta 页面契约](ournotes-songs.zh-CN.md#谱面-meta) 负责模式／技能默认值、筛选、表格格式与说明、前 5% 加粗、URL 优先级及浏览器偏好持久化。公开 API 不增加相应查询参数或用户状态。路由、区域 Skills reader 及其 Web 调用者一并部署，并确认配套私有 Meta／index 对象可读；Web 回滚不移动后端指针或改写系数。
 
 ## 共享目录与图片
 

@@ -24,7 +24,7 @@ export default function OurNotesCardFilterControls({ filter, options, bands, cha
     const selected = filter[field];
     const all = values.every((id) => selected.includes(id));
     return <FilterRow label={label}>
-      {values.map((id) => <SelectionButton key={id} title={name(id)} ariaLabel={name(id)} className={field === "servers" ? "gap-1.5 px-2.5" : undefined} isSelected={selected.includes(id)}
+      {values.map((id) => <SelectionButton key={id} title={name(id)} ariaLabel={name(id)} className={field === "servers" ? "gap-1 px-2 sm:gap-1.5 sm:px-2.5" : undefined} isSelected={selected.includes(id)}
         onClick={() => onChange({ [field]: selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id] })}>
         {content(id)}
       </SelectionButton>)}
@@ -32,20 +32,20 @@ export default function OurNotesCardFilterControls({ filter, options, bands, cha
         clearAllLabel={t("actions.clearAll", { group: label })} onClick={() => onChange({ [field]: all ? [] : [...values] })} />
     </FilterRow>;
   }
-  return <div className="hhwx-panel border p-4">
+  return <div className="hhwx-panel border p-3 sm:p-4">
     <CatalogSearchToolbar query={filter.query} placeholder={t("searchPlaceholder")} searchLabel={t("actions.search")} clearLabel={t("actions.clear")}
       resultCountLabel={t("resultCount", { count })} help={<SearchHelp kind="ournotesCards" />} onQueryChange={(query) => onChange({ query })} onClear={onClear} />
-    <div className="mt-4 space-y-3">
+    <div className="mt-3 space-y-3 sm:mt-4">
       {row("servers", OURNOTES_SERVERS, t("filters.servers"), (id) => t(`servers.${OURNOTES_SLOTS[id]}`), (id) => <><ServerIcon code={OURNOTES_SLOTS[id]} size={22} isDecorative /><span className="text-xs font-black">{t(`servers.${OURNOTES_SLOTS[id]}`)}</span></>)}
       {row("bandIds", options.bandIds, t("filters.bands"), (id) => pickOurNotesRegionalText(bands[id]?.bandName, server) || `#${id}`, (id) => icon(ourNotesBandIcon(id)))}
       {row("attributes", OURNOTES_ATTRIBUTES, t("filters.attributes"), (id) => t(`attributes.${id}`), (id) => icon(ourNotesAttributeIcon(id)))}
       {row("rarities", options.rarities, t("filters.rarities"), (id) => OURNOTES_RARITY_NAMES[id] ?? `#${id}`, (id) => <span className="px-1 text-xs font-black">{OURNOTES_RARITY_NAMES[id] ?? `#${id}`}</span>)}
       {row("characterIds", options.characterIds, t("filters.characters"), (id) => pickOurNotesRegionalText(characters[id]?.characterName, server) || `#${id}`, (id) => icon(ourNotesCharacterIcon(id), "h-6 w-6 rounded-full"))}
-      <FilterRow label={t("filters.sort")}>
-        <select aria-label={t("filters.sort")} value={filter.sortBy} onChange={(event) => onChange({ sortBy: event.target.value as OurNotesCardFilter["sortBy"] })} className="hhwx-control h-10 min-w-64 rounded-xl border px-3 text-sm transition">
+      <FilterRow label={t("filters.sort")} inlineOnMobile>
+        <select aria-label={t("filters.sort")} value={filter.sortBy} onChange={(event) => onChange({ sortBy: event.target.value as OurNotesCardFilter["sortBy"] })} className="hhwx-control h-9 min-w-0 flex-1 rounded-xl border px-3 text-sm transition sm:h-10 sm:min-w-64 sm:flex-none">
           {OURNOTES_SORTS.map((sort) => <option value={sort} key={sort}>{t(`sort.${sort}`)}</option>)}
         </select>
-        <button type="button" className="hhwx-control inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-semibold" onClick={() => onChange({ direction: filter.direction === "desc" ? "asc" : "desc" })}>
+        <button type="button" className="hhwx-control inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border px-2 text-sm font-semibold sm:h-10 sm:gap-2 sm:px-3" onClick={() => onChange({ direction: filter.direction === "desc" ? "asc" : "desc" })}>
           {filter.direction === "desc" ? <ArrowDownWideNarrow className="h-4 w-4" aria-hidden="true" /> : <ArrowUpNarrowWide className="h-4 w-4" aria-hidden="true" />}{t(`sort.${filter.direction}`)}
         </button>
       </FilterRow>

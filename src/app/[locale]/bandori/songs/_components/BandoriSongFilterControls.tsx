@@ -54,7 +54,7 @@ export default function BandoriSongFilterControls({ filter, resultCountLabel, on
                 onClick={() => onFilterChange({
                   servers: toggleSelection(filter.servers, server),
                 })}
-                className="gap-1.5 px-2.5"
+                className="gap-1 px-2 sm:gap-1.5 sm:px-2.5"
               >
                 <BandoriServerIcon server={server} size={22} isDecorative />
                 <span className="text-xs font-black">{code}</span>
@@ -88,7 +88,7 @@ export default function BandoriSongFilterControls({ filter, resultCountLabel, on
                 alt={group.label}
                 loading="lazy"
                 decoding="async"
-                className="h-7 w-7 object-contain"
+                className="h-6 w-6 object-contain sm:h-7 sm:w-7"
               />
             </SelectionButton>
           ))}
@@ -98,7 +98,7 @@ export default function BandoriSongFilterControls({ filter, resultCountLabel, on
             onClick={() => onFilterChange({
               bands: toggleSelection<BandoriSongBandFilter>(filter.bands, "other"),
             })}
-            className="px-3 text-xs"
+            className="px-2 text-xs sm:px-3"
           >
             {t("otherBand")}
           </SelectionButton>
@@ -122,7 +122,7 @@ export default function BandoriSongFilterControls({ filter, resultCountLabel, on
               onClick={() => onFilterChange({
                 types: toggleSelection<BandoriSongType>(filter.types, type),
               })}
-              className="px-3 text-xs"
+              className="px-2 text-xs sm:px-3"
             >
               {t(`types.${type}`)}
             </SelectionButton>
@@ -145,7 +145,7 @@ export default function BandoriSongFilterControls({ filter, resultCountLabel, on
               title={t(`difficulties.${difficulty}`)}
               isSelected={filter.difficulties.includes(difficulty)}
               onClick={() => onFilterChange({ difficulties: toggleSelection(filter.difficulties, difficulty) })}
-              className="px-3 text-xs"
+              className="px-2 text-xs sm:px-3"
             >
               {t(`difficulties.${difficulty}`)}
             </SelectionButton>

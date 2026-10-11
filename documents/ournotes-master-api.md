@@ -21,6 +21,7 @@ All paths below start with `/api/ournotes/master`.
 | `/events/{eventId}` | One event detail | Optional `server=0..4` |
 | `/music` | Music summary ID map | Optional `server=0..4` |
 | `/music/{musicId}` | One music detail | Optional `server=0..4` |
+| `/music/meta` | `{durations,songs}` Free Live score coefficients | None |
 
 Success uses `{ "success": true, "data": ... }`. Map keys are positive decimal IDs. Member and support IDs are separate namespaces. Card, event and music IDs must be positive safe integers without leading zeros. There are no `all`/`main` aliases, directory details, pagination, language selectors or arbitrary field expansion.
 
@@ -93,6 +94,9 @@ Skill record fields are emitted in the order listed below; fields outside a kind
 | `displaySkillCategories` | Original array; all except leader |
 | `gekisouMissionType` | Original integer; gekisou and gekisouSupport only |
 | `gekisouSupportSkillExecTiming` | Original integer; gekisouSupport only |
+| `serverExtensions` | Optional five-slot structural overrides; omitted when every source is present and structurally identical |
+
+Structural fields use the first present source in `jp/en/tw/cn_intl/kr` order as their base. If a source differs or is absent, `serverExtensions` contains five slots: `null` means absent, `{}` inherits the base, and an object replaces only the listed fields. An overridden `effects` array replaces the entire array, including per-grade null entries; it is never merged by position. TW and `cn_intl` share structural overrides. Localized names, templates and remapped display parameters retain their existing five-slot semantics. Card consumers select their resolved region; Meta selects the preferred region, falling back to the first available region when a skill is absent. This additive extension preserves existing fields and byte shape for fully shared records. Consumers that calculate effects must apply the selected slot before reading values. The producer and storage formats do not change; deploy this reader and its consumers together. For example, JP gekisou/22 can retain its second effect while international grade 5 is null without making the entire Skills API unavailable.
 
 Templates use the authoritative source text: JP-ja, EN-en, TW-zh-TW/zh-CN, KR-ko. The producer processes native expressions and recognized color tags; newlines become `\n`. Results that stay constant across grades are inlined. Varying results become display-string arrays; identical arrays can share a parameter across language slots. To render grade `level`, replace each `{n}` with `descriptionParameters[n][level - 1]`. Web only combines slots and remaps parameter indices; it does not evaluate game expressions. Missing translations remain `""`.
 
@@ -497,6 +501,18 @@ Music discovers `ournotes/master/music-v1/api/active.json` (`ournotes-music-api-
 Pointers have a 60-second TTL; reads have a 15-second deadline. Compressed and decompressed packs are limited to 16 MiB each. The content cache holds two entries with a 32 MiB total budget estimated from serialized public projections, not actual JavaScript heap size. Five temporary regional copies are not retained as five caches. There is no arbitrary song-count ceiling. Separate HTTP requests may observe different publications.
 
 For full activation, publish backend v3 snapshots before enabling the Web API with the agreed summary fields. The backend can build both final packs from the existing resource checkpoint without fetching master data again, rebuilding or uploading media, adding credentials or migrating the database. The summary's three gekisou fields are the only public field changes whose actual-data acceptance depends on that publication. `npm run test:ournotes-master` covers fields/order, regions, partial data, HTTP errors and pack/cache integrity; typecheck, lint and build cover integration. Dev acceptance compares both routes and all five selections with actual private packs and the verified Bands catalog, including normalized timestamps, ordinary band names and the CRYCHIC override. Production deployment/edge-cache verification are separate operational steps. Web rollback does not move the backend pointer or remove media. Invalid/absent music IDs return `404 OURNOTES_MUSIC_NOT_FOUND`; source errors follow the shared sanitized, no-store policy below. Edge cache keys must distinguish Music `server` queries.
+
+### Chart Meta
+
+`GET /api/ournotes/master/music/meta` returns only `{durations,songs}`. Durations are sorted seconds; each music ID / difficulty `0..3` contains `{total,covered}`, with one scalar `total` and a coefficient for every published duration in `covered`. There is no Fever axis. The reader uses signed private access to `OURNOTES_PUBLIC_R2_BUCKET` for `ournotes/music/meta.json` (`ournotes-music-meta-v1`) and verifies the exact companion `ournotes/music/index.json` bytes against `musicIndexSha256`. Missing, invalid or mismatched data fails closed with the existing unavailable/no-store response; there is no public CDN fallback. Valid results use the shared snapshot cache policy.
+
+The Web calculation combines these coefficients with Music and region-resolved Skills. One member live skill and an optional support duration-extension skill apply uniformly to the skill windows, with independent grades 1–5. Supported member effects are normal, Perfect-and-above and high-LIFE score boosts; support effects require the equipped member's live-activation trigger and duration extension. Score-rank-triggered, pure judgement and LIFE-only skills are excluded. Conditions use their satisfied branch; complementary positive/negative branches are not summed. Duration is the float32 millisecond sum rounded up to an integer, then converted to seconds, and must exist in the published duration set.
+
+For Perfect proportion `p`, `J = p + 0.8(1-p)`. Normal and high-LIFE skills use `R = J(B + uC)`; Perfect-only skills use `R = JB + puC`, where `u = effectValue / 10000`, `B = total`, and `C = covered[duration]`. Backend coefficients already include note-type score factors and combo weights. Every scoring node uses this uniform P/G approximation, including internal long-note nodes. Judgement conversion and LIFE simulation do not change `p`; the UI percentage is divided by 100 before calculation.
+
+Score is `100R%`; efficiency is `100R * 60 / (length + downtime)%`, with both durations in seconds. Official `fullComboCount` supplies note count `N`, `N / length` supplies NPS, and `100C/B%` supplies SR. Overlapping skill activations contribute independently, so SR is not capped at 100%. N is not reconstructed from raw chart objects and does not replace the preweighted coefficients. No comprehensive-power input or cumulative score-rank simulation is required.
+
+The [Chart Meta page contract](ournotes-songs.md#chart-meta) owns mode/skill defaults, filtering, table formatting and help, top-5% emphasis, URL precedence and browser preference persistence. The public API adds no corresponding query parameters or user state. Deploy the route, regional Skills reader and their Web consumers together; verify that the matching private Meta/index objects are readable. Web rollback does not move backend pointers or rewrite coefficients.
 
 ## Shared catalogs and images
 

@@ -2,6 +2,7 @@ import {
   OURNOTES_LOCALES, OURNOTES_MAX_RECORDS, OURNOTES_SLOT_SOURCES,
   ourNotesId, ourNotesInteger, ourNotesLocales, ourNotesRecord, ourNotesString,
   ourNotesText, requireOurNotes, type OurNotesLocaleMap, type OurNotesText,
+  type OurNotesServer,
 } from "./master-contract";
 
 export const OURNOTES_SKILL_KINDS = ["leader", "live", "gekisou", "support", "gekisouSupport"] as const;
@@ -80,6 +81,7 @@ export type OurNotesSkill = SkillFields & {
   skillName: OurNotesText;
   description: OurNotesText;
   descriptionParameters: string[][];
+  serverExtensions?: [Partial<SkillFields> | null, Partial<SkillFields> | null, Partial<SkillFields> | null, Partial<SkillFields> | null, Partial<SkillFields> | null];
 };
 export type OurNotesSkills = Record<OurNotesSkillKind, Record<string, OurNotesSkill>>;
 type LocalSkill = {
@@ -88,6 +90,13 @@ type LocalSkill = {
   description: OurNotesLocaleMap;
   descriptionParameters: string[][];
 };
+
+export function selectOurNotesSkill(skill: OurNotesSkill | undefined, server: OurNotesServer): OurNotesSkill | undefined {
+  if (!skill?.serverExtensions) return skill;
+  const { serverExtensions, ...base } = skill;
+  const extension = serverExtensions[server];
+  return extension === null ? undefined : { ...base, ...extension };
+}
 
 function list(value: unknown): unknown[] {
   requireOurNotes(Array.isArray(value) && value.length <= OURNOTES_MAX_RECORDS);
@@ -230,7 +239,11 @@ export function mergeOurNotesSkills(inputs: unknown[]): OurNotesSkills {
     for (const id of new Set(sources.flatMap((source) => Object.keys(source)))) {
       const rows = sources.map((source) => source[id]);
       const { fields } = rows.find(Boolean)!;
-      requireOurNotes(rows.every((row) => !row || JSON.stringify(fields) === JSON.stringify(row.fields)));
+      const extensions = OURNOTES_SLOT_SOURCES.map((source) => {
+        const row = rows[source];
+        return row ? Object.fromEntries(Object.entries(row.fields).filter(([key, value]) =>
+          JSON.stringify(value) !== JSON.stringify(fields[key as keyof SkillFields]))) : null;
+      }) as NonNullable<OurNotesSkill["serverExtensions"]>;
       const descriptionParameters: string[][] = [];
       const description = OURNOTES_LOCALES.map((locale, slot) => {
         const row = rows[OURNOTES_SLOT_SOURCES[slot]];
@@ -242,7 +255,9 @@ export function mergeOurNotesSkills(inputs: unknown[]): OurNotesSkills {
         });
       }) as OurNotesText;
       const { effects, ...headers } = fields;
-      records[id] = { skillName: ourNotesText(rows.map((row) => row?.skillName)), description, descriptionParameters, effects, ...headers };
+      records[id] = { skillName: ourNotesText(rows.map((row) => row?.skillName)), description, descriptionParameters, effects, ...headers,
+        ...(extensions.some((extension) => extension === null || Object.keys(extension).length > 0) ? { serverExtensions: extensions } : {}),
+      };
     }
     return [kind, records];
   })) as OurNotesSkills;

@@ -6,6 +6,7 @@ import { runInNewContext } from "node:vm";
 import ts from "typescript";
 import * as songCatalog from "../src/lib/bandori/songs/catalog.ts";
 import * as bandoriServers from "../src/lib/bandori-server.ts";
+import * as utils from "../src/lib/utils.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -21,6 +22,7 @@ test("clearing song filters discards uncommitted level drafts before they can be
     "@/lib/bandori-character-groups": { BANDORI_CHARACTER_GROUPS: [] },
     "@/lib/bandori/songs/catalog": songCatalog,
     "@/lib/bandori-server": bandoriServers,
+    "@/lib/utils": utils,
   };
   function load(path) {
     const source = readFileSync(new URL(`../${path}`, import.meta.url), "utf8");

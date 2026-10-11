@@ -76,11 +76,11 @@ export default function BandoriCardFilterControls<TSortBy extends string>({
   const serverLabel = t("rows.serverAvailability");
 
   return (
-    <div className={`hhwx-panel border p-4 ${className}`}>
+    <div className={`hhwx-panel border p-3 sm:p-4 ${className}`}>
       <CatalogSearchToolbar query={filter.query} placeholder={t("searchPlaceholder")} searchLabel={t("actions.search")} clearLabel={t("actions.clear")}
         resultCountLabel={resultCountLabel} help={<BandoriSearchHelp kind="cards" />} onQueryChange={(query) => onFilterChange({ query })} onClear={onClearFilter} />
 
-      <div className="mt-4 space-y-3">
+      <div className="mt-3 space-y-3 sm:mt-4">
         <FilterRow label={serverLabel}>
           {availableServers.map((server) => {
             const code = getBandoriServerCode(server).toUpperCase();
@@ -91,7 +91,7 @@ export default function BandoriCardFilterControls<TSortBy extends string>({
                 ariaLabel={t("serverAvailabilityAria", { server: code })}
                 isSelected={filter.servers.includes(server)}
                 onClick={() => onFilterChange({ servers: toggleSelection(filter.servers, server) })}
-                className="gap-1.5 px-2.5"
+                className="gap-1 px-2 sm:gap-1.5 sm:px-2.5"
               >
                 <BandoriServerIcon server={server} size={22} isDecorative />
                 <span className="text-xs font-black">{code}</span>
@@ -120,7 +120,7 @@ export default function BandoriCardFilterControls<TSortBy extends string>({
                 onClick={() => onFilterChange({ bandIds: toggleSelection(filter.bandIds, option.bandId) })}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                {bandIconUrl ? <img src={bandIconUrl} alt={option.label} loading="lazy" decoding="async" className="h-7 w-7 object-contain" /> : null}
+                {bandIconUrl ? <img src={bandIconUrl} alt={option.label} loading="lazy" decoding="async" className="h-6 w-6 object-contain sm:h-7 sm:w-7" /> : null}
               </SelectionButton>
             );
           })}
@@ -217,7 +217,7 @@ export default function BandoriCardFilterControls<TSortBy extends string>({
               title={option.label}
               isSelected={selectedTypes.includes(option.value)}
               onClick={() => onFilterChange({ types: toggleSelection(selectedTypes, option.value) })}
-              className="px-3 text-xs"
+              className="px-2 text-xs sm:px-3"
             >
               {option.label}
             </SelectionButton>
@@ -235,12 +235,12 @@ export default function BandoriCardFilterControls<TSortBy extends string>({
           />
         </FilterRow>
 
-        <FilterRow label={t("rows.sort")}>
+        <FilterRow label={t("rows.sort")} inlineOnMobile>
           <select
             value={filter.sortBy}
             onChange={(event) => onFilterChange({ sortBy: event.target.value as TSortBy })}
             aria-label={t("rows.sort")}
-            className="hhwx-control h-10 min-w-64 rounded-xl border px-3 text-sm transition"
+            className="hhwx-control h-9 min-w-0 flex-1 rounded-xl border px-3 text-sm transition sm:h-10 sm:min-w-64 sm:flex-none"
           >
             {sortOptions.map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
@@ -249,7 +249,7 @@ export default function BandoriCardFilterControls<TSortBy extends string>({
           <button
             type="button"
             onClick={() => onFilterChange({ sortDirection: filter.sortDirection === "desc" ? "asc" : "desc" })}
-            className="hhwx-control inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition"
+            className="hhwx-control inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border px-2 text-sm font-semibold transition sm:h-10 sm:gap-2 sm:px-3"
             title={filter.sortDirection === "desc" ? t("sortDirection.descTitle") : t("sortDirection.ascTitle")}
             aria-label={filter.sortDirection === "desc" ? t("sortDirection.descAria") : t("sortDirection.ascAria")}
           >

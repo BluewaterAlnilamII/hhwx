@@ -86,7 +86,7 @@ export default function HelpPopover({
         aria-haspopup="dialog"
         popoverTarget={id}
         className={`inline-flex shrink-0 items-center justify-center transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--theme-color-focus-ring)] ${variant === "search"
-          ? "h-10 w-10 rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-lg font-semibold text-[var(--theme-color-text-default)] hover:border-[var(--theme-color-action-secondary-border)]"
+          ? "h-9 w-9 rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-lg font-semibold text-[var(--theme-color-text-default)] hover:border-[var(--theme-color-action-secondary-border)] sm:h-10 sm:w-10"
           : "-my-0.5 h-6 w-6 rounded-full text-[var(--theme-color-semantic-info-foreground)]"}`}
         onPointerEnter={(event) => {
           if (event.pointerType === "mouse") setOpen(true);

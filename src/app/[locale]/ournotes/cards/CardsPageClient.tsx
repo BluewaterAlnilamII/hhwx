@@ -61,13 +61,13 @@ export default function CardsPageClient() {
   return <PageShell contentClassName="max-w-6xl">
     <Heading as="h1" visualRole="page" className="sr-only">{t("title")}</Heading>
     <Tabs.Root value={kind} onValueChange={(value) => navigate(switchOurNotesCardsKind(query, value as OurNotesCardKind), true)}>
-      <Tabs.List aria-label={t("kindLabel")} className="hhwx-panel grid grid-cols-2 overflow-hidden border">
+      <Tabs.List aria-label={t("kindLabel")} className="hhwx-panel grid grid-cols-2 overflow-hidden border border-b-0">
         {(["member", "support"] as const).map((value) => <Tabs.Trigger key={value} value={value}
-          className="relative h-14 text-base font-black text-[var(--theme-color-tab-foreground)] outline-hidden transition first:border-r first:border-[var(--theme-color-border-subtle)] hover:bg-[var(--theme-color-tab-background-hover)] hover:text-[var(--theme-color-tab-foreground-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)] data-[state=active]:text-[var(--theme-color-tab-foreground-selected)] data-[state=active]:after:absolute data-[state=active]:after:inset-x-0 data-[state=active]:after:bottom-0 data-[state=active]:after:h-0.5 data-[state=active]:after:bg-[var(--theme-color-tab-indicator-selected)]">
+          className="relative h-11 text-sm font-black sm:h-14 sm:text-base text-[var(--theme-color-tab-foreground)] outline-hidden transition first:border-r first:border-[var(--theme-color-border-subtle)] hover:bg-[var(--theme-color-tab-background-hover)] hover:text-[var(--theme-color-tab-foreground-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)] data-[state=active]:text-[var(--theme-color-tab-foreground-selected)] data-[state=active]:after:absolute data-[state=active]:after:inset-x-0 data-[state=active]:after:bottom-0 data-[state=active]:after:h-0.5 data-[state=active]:after:bg-[var(--theme-color-tab-indicator-selected)]">
           {t(`kinds.${value}`)}
         </Tabs.Trigger>)}
       </Tabs.List>
-      <Tabs.Content value={kind} className="mt-4 space-y-4 lg:mt-8 lg:space-y-8">
+      <Tabs.Content value={kind} className="space-y-4 lg:space-y-8">
         {failed ? <div role="alert" className="hhwx-panel flex flex-wrap items-center justify-center gap-3 border p-6 text-sm">
           <span>{t("states.loadFailed")}</span><button type="button" onClick={retry} className="hhwx-control rounded-xl border px-4 py-2 font-semibold">{t("actions.retry")}</button>
         </div> : null}

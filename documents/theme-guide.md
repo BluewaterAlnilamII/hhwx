@@ -98,6 +98,36 @@ Calendar bars retain band identity, white labels and no added colored outlines. 
 
 PWA installation colors are separate metadata in `src/app/manifest.ts` and `src/app/[locale]/manifest.webmanifest/route.ts`. They currently retain the fixed yellow brand color and are not changed by CSS media queries.
 
+## Catalog filters and Meta parameters
+
+Bandori and OurNotes card/song catalogs share the compact mobile layout through [FilterControls](../src/components/FilterControls.tsx), [SongFilterControls](../src/components/SongFilterControls.tsx), and their card filter consumers. The same primitives also serve card pickers and OurNotes detail skill levels. OurNotes Meta adds its parameter layout in [OurNotesSongMeta](../src/components/ournotes/OurNotesSongMeta.tsx). Keep these dimensions in the owning components; do not shrink every `hhwx-control` globally or apply them to navigation, playback controls, artwork, or unrelated forms.
+
+Use the existing `sm` breakpoint: below `40rem` (640 CSS px with the default root size), use the mobile column below; at and above it, preserve the wider layout. Colors, capsule shapes, selected/disabled states and focus feedback keep their shared roles in both color schemes.
+
+| Element | Below `sm` | At and above `sm` |
+| --- | --- | --- |
+| OurNotes catalog tab button | 44px high, 14px text | 56px high, 16px text |
+| Selection and skill-level button | 32px high, minimum width 32px | 36px high, minimum width 36px |
+| Search, select and number field | 36px high | 40px high |
+| Search and search-help button | 36 × 36px | 40 × 40px |
+| Result-count badge and Clear | 32px high, 12px text | 40px high, 14px text |
+| Filter / Meta parameter panel padding | 12px | 16px |
+| Filter label | 13px text, 20px line height, no top padding | 14px text, 8px top padding |
+| Inline row label-to-control gap | 12px | 8px |
+| Stacked label-to-options / option gap | 6px | 8px |
+| Filter-group gap | 12px | 12px |
+| Band icon previously sized at 28px | 24px | 28px |
+
+Input text stays 14px. Existing 12px text capsules keep that size; skill-level numbers retain 14px. Icon buttons can be wider than their minimum width to fit artwork and padding. Do not shrink an icon's silhouette or remove its accessible name to fit the minimum.
+
+Multi-select groups put their label above full-width wrapping options on mobile; wider layouts retain the 5.5rem label column. Short rows such as live mode, level bounds and sort use `FilterRow`'s `inlineOnMobile` layout. Sort selects can shrink beside the direction button instead of enforcing a 256px mobile minimum. Song-level inputs are 56px wide on mobile and 80px at `sm`; Meta number inputs are 80px and 96px respectively. Search stays above the count/Clear row on mobile.
+
+For Meta skills, place the label and five level buttons on the first mobile row, with the full-width select below. Wider layouts retain label, select and levels in one row. Perfect rate and Live interval use two mobile columns when both fit; each column needs 9rem and the gap is 12px, otherwise they stack. At `sm`, these return to independent labeled rows. Keep the parameter section's accessible name, without adding a visible Parameters subtitle or explanatory condition note.
+
+OurNotes catalog tabs touch their filter panel with zero gap; Meta filters likewise touch the parameter panel. Each join has exactly one 1px subtle border: the tab list omits its bottom border, and the parameter panel omits its top border. The selected tab indicator remains 2px. Results retain the existing separate spacing (16px below `lg`, 32px at `lg`), rather than joining the controls into the table or card list.
+
+When changing these shared components, check complete loaded filters in both games, the OurNotes tabs and detail skill controls, and the card picker/profile consumers when accessible. Cover narrow phones, both sides of `sm`, desktop, both locales and color schemes, wrapping, focus and touch activation. A compact screenshot alone does not prove touch usability or accessibility compliance. Record login-gated or real-device checks that were not performed in the page's verification notes.
+
 ## Loading and interaction feedback
 
 Reuse the loading components below. Block loading follows the event information panel: an orange spinner above muted text. Keep dimensions appropriate to the containing page, panel or dialog rather than making every loader full-screen.
