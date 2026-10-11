@@ -13,7 +13,11 @@
 - 工具栏分别提供 Bandori 和 OurNotes 首选服务器，默认均显示 CN，与网页语言无关；OurNotes 的 CN 对应原有 CN_INTL 槽位。用户主动选择后，分别保存到浏览器存储（保留 `hhwx:bandori:preferred-server:v1`，新增 `hhwx:ournotes:preferred-server:v1`）；读取默认值不写入存储。两者共用持久化实现。存储不可读或值非法时使用默认值，写入失败时当前页面内的选择仍生效。
 - 图鉴每张卡优先使用 OurNotes 首选服务器，未收录时按 JP、EN、TW、CN_INTL、KR 顺序选择首个可用槽位；标题、名称、技能摘要与详情链接统一使用该结果。单条卡牌／技能文本缺失时保持缺失，通用角色／乐队筛选标签允许回退。服务器可用性筛选只决定列表收录，不改变展示偏好。旧列表 `server` 参数会被移除，同时保留其他查询参数和 hash。
 - 详情使用 `server=jp|en|tw|cn_intl|kr`，同时接受 `server=cn` 指向相同槽位。URL 中合法且可用的服务器优先于偏好。参数缺失、非法或未收录时，等待偏好读取完成，再选出可用槽位并替换 URL，保留列表查询与 hash。详情切服只修改当前 URL，不覆盖已保存偏好。内部标识保持 `cn_intl`；界面标签、图标提示及搜索统一按 CN 表述。没有合法且可用的显式服务器时，metadata 先使用本地化图鉴通用标题，解析完成后随 URL 更新。网页语言只控制界面文案与格式，不决定区域数据。
-- 详情的 `list` 参数携带之前的列表查询；返回链接只接受已知筛选键，并重新构建本站图鉴 URL。筛选状态保留在 URL，仅两套显式服务器偏好需要持久化。
+- 详情的 `list` 参数携带之前的列表查询；返回链接只接受已知筛选键，并重新构建本站图鉴 URL。卡牌筛选保留在 URL 中，这些页面仅持久化显式服务器偏好；歌曲图鉴独立的 [Meta 偏好](ournotes-songs.zh-CN.md#浏览器偏好) 不改变这一行为。
+
+## 紧凑控件与布局
+
+成员／留影标签栏紧接筛选面板，间距为 0，连接处只有一条 1px 分隔线，选中指示线保持 2px。共享[图鉴布局规范](theme-guide.zh-CN.md#图鉴筛选与-meta-参数布局) 定义两款游戏的筛选及 OurNotes 技能等级按钮的响应式尺寸。小于 `sm` 时标签高 44px，选项／等级按钮高 32px，输入控件高 36px，筛选面板内边距 12px。排序下拉框与方向按钮同排，不在移动端强制下拉框最小 256px。卡牌行与卡面保留各自既有尺寸，宽屏控件保持原尺寸。
 
 ## 数据与展示
 
@@ -39,6 +43,8 @@ MyGO 五人的已审核别名直接复用 Bandori 数据，通过 `36→1、37�
 
 技能类别名与国际服 MasterText 的 `leader_skill`、`live_skill`、`gekisou_skill`、`live_support`、`gekisou_support` 对齐：队长技能 / Leader Skill、演出技能 / LIVE Skill、激奏技能 / GEKISO Skill、演出支援 / LIVE Support、激奏支援 / GEKISO Support。留影 / Snapshot 也由 `ui_bili_formation_power_snap` 确认。核对来源为留存的 2026-10-01 EN 原始 MasterText，SHA-256 为 `7f8a55dc415d0cb4b5f8eb79c1a024090511a4b3685e9ccf035bf9149f14a751`。`gekisou`、`supportSkillId01`、`supportSkillId02` 等 API 标识不变。
 
+消费技能结构效果前，先应用已解析卡牌服对应的可选 Skills `serverExtensions`；覆盖 `effects` 时替换整个基础数组，包括等级空值。不能用 JP 效果替代国际服卡牌的技能；说明与参数替换继续使用所选区域文本及 [Skills API](ournotes-master-api.zh-CN.md#技能) 规定的重映射参数。区域扩展不增加卡牌筛选，也不改变保存偏好。
+
 ## 卡面依据
 
 详情页直接展示完整卡图，不叠加缩略图边框、阴影或属性角标，保持图片比例；图鉴首页缩略图保留这些装饰。两种模式共用图片加载／失败处理，继续使用现有大图查看器。
@@ -52,6 +58,8 @@ MyGO 五人的已审核别名直接复用 Bandori 数据，通过 `36→1、37�
 服务器控件复用现有本地 JP／EN／TW／CN 图标，`CN_INTL` 使用 CN 图标。KR 图标于 2026-10-02 从 [Bestdori 同套服务器图标](https://bestdori.com/res/icon/kr.svg) 复制到 `public/res/server-icons/kr.svg`，SHA-256 为 `b5defb8a0aed8a9ca429e6cdcb1ecb9590ede92bcdf2edf5d6ee6eda4cf6df37`；原有不可变图标未修改。
 
 ## 验证
+
+2026-10-12 紧凑布局检查覆盖两款游戏完整加载后的 320／393／1440px 图鉴、OurNotes 成员／留影标签切换及详情技能等级修改，未发现页面横向溢出；共享 typecheck、定向 lint、生产构建和文案检查通过。[歌曲页面验收记录](ournotes-songs.zh-CN.md#验证) 汇总 Meta 检查及限制：未验证真实 iOS 设备或登录后的组队计算器／游戏档案选择器。下方较早日期的尺寸记录描述对应历史版本，不代表当前移动筛选控件尺寸。
 
 2026-10-02 边框修正：OurNotes 全部 10 项测试、typecheck、定向 lint 和生产构建通过。边框回归检查覆盖成员 SSR 平滑插值、留影角点／三色三角形采样、两类独立 SR 色表和 R 纯色。Chromium 定向检查覆盖桌面成员列表／详情、留影列表，以及 375px 留影列表；渐变正常显示，未观察到相关控制台错误。完整页面视觉验收按要求留待统一进行。
 

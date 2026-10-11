@@ -13,9 +13,10 @@ import { ourNotesBandIcon } from "@/lib/ournotes/cards/assets";
 import { OURNOTES_SONG_CATEGORIES, OURNOTES_SONG_DIFFICULTIES, OURNOTES_SONG_SORTS,
   ourNotesSongBandFilters, type OurNotesSongFilter } from "@/lib/ournotes/music/catalog";
 
-export default function OurNotesSongFilterControls({ filter, resultCountLabel, bands, server, onFilterChange, onClearFilter }: {
+export default function OurNotesSongFilterControls({ filter, resultCountLabel, bands, server, onFilterChange, onClearFilter, showSort = true }: {
   filter: OurNotesSongFilter; resultCountLabel: string; bands: Record<string, OurNotesBand>; server: OurNotesServer;
   onFilterChange: (patch: Partial<OurNotesSongFilter>) => void; onClearFilter: () => void;
+  showSort?: boolean;
 }) {
   const t = useTranslations("ournotes.songs.filters");
   function row<T extends string | number>(label: string, values: readonly T[], selected: readonly T[], name: (value: T) => string,
@@ -29,21 +30,21 @@ export default function OurNotesSongFilterControls({ filter, resultCountLabel, b
     </FilterRow>;
   }
   return <SongFilterControls filter={filter} resultCountLabel={resultCountLabel} onFilterChange={onFilterChange} onClearFilter={onClearFilter}
-    help={<SearchHelp kind="ournotesSongs" />} sortOptions={OURNOTES_SONG_SORTS.map((value) => ({ value, label: t(`sort.${value}`) }))}
+    help={<SearchHelp kind="ournotesSongs" />} sortOptions={showSort ? OURNOTES_SONG_SORTS.map((value) => ({ value, label: t(`sort.${value}`) })) : []}
     labels={{ searchPlaceholder: t("searchPlaceholder"), search: t("actions.search"), clear: t("actions.clear"),
       level: t("rows.level"), min: t("levelMin"), max: t("levelMax"), sort: t("rows.sort"), asc: t("sortDirection.asc"), desc: t("sortDirection.desc"),
       directionTitle: t(`sortDirection.${filter.sortDirection}Title`), directionAria: t(`sortDirection.${filter.sortDirection}Aria`) }}>
     {row(t("rows.serverAvailability"), OURNOTES_SERVERS, filter.servers, (slot) => t("serverAvailabilityAria", { server: OURNOTES_SERVER_CODES[slot].toUpperCase() }),
       (slot) => <><ServerIcon code={OURNOTES_SERVER_CODES[slot]} size={22} isDecorative /><span className="text-xs font-black">{OURNOTES_SERVER_CODES[slot].toUpperCase()}</span></>,
-      (servers) => onFilterChange({ servers }), "gap-1.5 px-2.5")}
+      (servers) => onFilterChange({ servers }), "gap-1 px-2 sm:gap-1.5 sm:px-2.5")}
     {row(t("rows.band"), ourNotesSongBandFilters(bands), filter.bands,
       (id) => id === "other" ? t("otherBand") : pickOurNotesRegionalText(bands[String(id)]?.bandName, server) || `#${id}`,
       (id) => id === "other" ? <span className="px-1 text-xs">{t("otherBand")}</span>
         // eslint-disable-next-line @next/next/no-img-element
-        : <img src={ourNotesBandIcon(id)} alt={pickOurNotesRegionalText(bands[String(id)]?.bandName, server) || `#${id}`} loading="lazy" decoding="async" className="h-7 w-7 object-contain" />,
+        : <img src={ourNotesBandIcon(id)} alt={pickOurNotesRegionalText(bands[String(id)]?.bandName, server) || `#${id}`} loading="lazy" decoding="async" className="h-6 w-6 object-contain sm:h-7 sm:w-7" />,
       (bands) => onFilterChange({ bands }))}
-    {row(t("rows.type"), OURNOTES_SONG_CATEGORIES, filter.types, (value) => t(`types.${value}`), (value) => t(`types.${value}`), (types) => onFilterChange({ types }), "px-3 text-xs")}
+    {row(t("rows.type"), OURNOTES_SONG_CATEGORIES, filter.types, (value) => t(`types.${value}`), (value) => t(`types.${value}`), (types) => onFilterChange({ types }), "px-2 text-xs sm:px-3")}
     {row(t("rows.difficulty"), OURNOTES_SONG_DIFFICULTIES, filter.difficulties, (value) => t(`difficulties.${value}`), (value) => t(`difficulties.${value}`),
-      (difficulties) => onFilterChange({ difficulties }), "px-3 text-xs")}
+      (difficulties) => onFilterChange({ difficulties }), "px-2 text-xs sm:px-3")}
   </SongFilterControls>;
 }

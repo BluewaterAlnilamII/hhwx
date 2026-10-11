@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import type { MusicPlayerItem } from "@/lib/music-player-contract";
 import { useMusicPlayerStore } from "@/store/useMusicPlayerStore";
 
-const DIFFICULTY_CLASSES = {
+export const SONG_DIFFICULTY_CLASSES = {
   easy: "border-emerald-200 bg-emerald-50 text-emerald-700",
   normal: "border-sky-200 bg-sky-50 text-sky-700",
   hard: "border-amber-200 bg-amber-50 text-amber-700",
@@ -14,7 +14,7 @@ const DIFFICULTY_CLASSES = {
 } as const;
 
 export type SongDifficultyStripProps = {
-  difficulties: { difficulty: keyof typeof DIFFICULTY_CLASSES; label: string; level: number | null }[];
+  difficulties: { difficulty: keyof typeof SONG_DIFFICULTY_CLASSES; label: string; level: number | null }[];
   track: MusicPlayerItem | null;
   playbackLoading?: boolean;
 };
@@ -29,7 +29,7 @@ export default function SongDifficultyStrip({ difficulties, track, playbackLoadi
     : playing ? t("pauseSong", { title: track.title }) : t("addAndPlaySong", { title: track.title });
   return <div className="relative z-10 mt-2 flex flex-wrap items-center gap-1.5">
     {difficulties.map(({ difficulty, label, level }) => <span key={difficulty} title={`${label} ${level ?? "—"}`}
-      className={`inline-flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-lg border px-1.5 text-[11px] font-black tabular-nums sm:rounded-full sm:px-2 ${DIFFICULTY_CLASSES[difficulty]}`}>
+      className={`inline-flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-lg border px-1.5 text-[11px] font-black tabular-nums sm:rounded-full sm:px-2 ${SONG_DIFFICULTY_CLASSES[difficulty]}`}>
       <span className="sr-only sm:not-sr-only">{label}</span><span>{level ?? "—"}</span>
     </span>)}
     <button type="button" title={label} aria-label={label} disabled={!track || full || playbackLoading}

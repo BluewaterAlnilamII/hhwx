@@ -13,7 +13,11 @@ The catalog follows the existing Bandori card list and event tab layout. Both ca
 - The toolbar exposes separate Bandori and OurNotes preferred servers, both presented as CN by default, independent of UI language. OurNotes CN is the existing CN_INTL slot. Explicit choices persist separately in browser storage (`hhwx:bandori:preferred-server:v1`, unchanged, and `hhwx:ournotes:preferred-server:v1`); reading defaults does not write them. Both use the same persistence implementation. Blocked or invalid storage keeps the default, and in-memory selection still works when writes fail.
 - Each catalog card uses the OurNotes preference when available, otherwise the first available slot in JP, EN, TW, CN_INTL, KR order. Its title, name, skill summaries and detail link use that resolved slot. Individual missing card/skill texts remain missing; generic character/band filter labels may fall back. Availability filters only filter membership and never change the display preference. Legacy list `server` parameters are removed while retaining other query parameters and the hash.
 - Details use `server=jp|en|tw|cn_intl|kr` and also accept `server=cn` for the same slot. A valid available URL server wins over the preference. Missing, invalid or unavailable servers resolve after preference hydration and replace the URL with the available result, retaining the list query and hash. Detail server switches affect that URL only, not the saved preference. The wire identifier remains `cn_intl`; UI labels, icon titles and search present it as CN. Metadata without a valid available explicit server uses the generic localized catalog title until resolution. UI language controls labels and formatting, never regional data selection.
-- A detail's `list` parameter holds the previous list query. The back link accepts only known filter keys and reconstructs a local catalog URL. Filters stay in the URL; only the two explicit server preferences are persisted.
+- A detail's `list` parameter holds the previous list query. The back link accepts only known filter keys and reconstructs a local catalog URL. Card filters stay in the URL; these pages persist only the explicit server preferences. The song catalog's separate [Meta preferences](ournotes-songs.md#browser-preferences) do not change this behavior.
+
+## Compact controls and layout
+
+The Member/Snapshot tabs touch their filter panel with zero gap and one 1px divider; the selected indicator remains 2px. The shared [catalog layout specification](theme-guide.md#catalog-filters-and-meta-parameters) defines responsive dimensions for both games' filters and OurNotes skill-level buttons. Below `sm`, tabs are 44px high, selection/level buttons are 32px, fields are 36px and filter-panel padding is 12px. Sorting fits beside its direction button instead of requiring a 256px mobile select. Card rows and artwork retain their own existing dimensions, and wider-screen controls retain their previous sizes.
 
 ## Data and display
 
@@ -39,6 +43,8 @@ One outer detail panel contains the shared header, artwork, card information wit
 
 Skill category labels follow the international client MasterText entries `leader_skill`, `live_skill`, `gekisou_skill`, `live_support` and `gekisou_support`: Leader Skill / 队长技能, LIVE Skill / 演出技能, GEKISO Skill / 激奏技能, LIVE Support / 演出支援 and GEKISO Support / 激奏支援. Snapshot / 留影 is also confirmed by `ui_bili_formation_power_snap`. These labels were checked against the retained 2026-10-01 EN raw MasterText (SHA-256 `7f8a55dc415d0cb4b5f8eb79c1a024090511a4b3685e9ccf035bf9149f14a751`). API identifiers such as `gekisou`, `supportSkillId01` and `supportSkillId02` are unchanged.
 
+Apply the resolved card region's optional Skills `serverExtensions` before consuming structural effects; an overridden `effects` array replaces the whole base array, including null level entries. Do not substitute JP effects for an international card's skills. Descriptions and parameter substitution continue to use the selected region's text and the remapped parameters defined by the [Skills API](ournotes-master-api.md#skills); the regional extension does not add card filters or change saved preferences.
+
 ## Artwork provenance
 
 Detail pages show the full artwork without the thumbnail frame, shadow or attribute overlay, preserving the image aspect ratio. Catalog thumbnails retain those decorations. Both modes share the image loading/error handling and the existing full-image viewer.
@@ -52,6 +58,8 @@ Frame colors follow the native `UIGradientImage` mesh behavior, not hard SVG col
 Server controls reuse the existing local JP/EN/TW/CN icons (`CN_INTL` uses the CN icon). The KR icon was copied from [Bestdori’s server icon](https://bestdori.com/res/icon/kr.svg) on 2026-10-02 to `public/res/server-icons/kr.svg`; SHA-256 `b5defb8a0aed8a9ca429e6cdcb1ecb9590ede92bcdf2edf5d6ee6eda4cf6df37`. Existing immutable icons are unchanged.
 
 ## Verification
+
+The 2026-10-12 compact-layout pass checked both games' fully loaded catalogs at 320/393/1440px, OurNotes Member/Snapshot tab switching, and a detail skill-level change without horizontal page overflow. Shared typecheck, focused lint, production build and i18n checks passed. The [song-page acceptance record](ournotes-songs.md#verification) records the Meta checks and limits: real iOS devices and authenticated team-builder/profile pickers were not verified. Earlier dated measurements below describe their original revisions, not the current compact mobile filter sizes.
 
 Frame correction on 2026-10-02: all 10 OurNotes tests, typecheck, focused lint and production build passed. The frame regression checks smooth Member SSR interpolation, Snapshot corner/three-color triangle samples, separate SR palettes and solid R colors. Focused Chromium checks covered desktop Member list/detail and Snapshot list, plus the 375px Snapshot list; gradients rendered and no related console errors were observed. The full page visual review remains deferred as requested.
 

@@ -4,7 +4,7 @@ import { BANDORI_CARD_SEARCH_CHARACTER_ALIASES } from "@/lib/bandori/cards/searc
 import { OURNOTES_SLOTS, type OurNotesServer } from "../master-contract";
 import { OURNOTES_SERVERS, OURNOTES_SERVER_CODES, getOurNotesServerFromCode, pickAvailableOurNotesServer } from "../server";
 import type { OurNotesCharacter, OurNotesBand } from "../catalogs-contract";
-import type { OurNotesSkill, OurNotesSkills, OurNotesSkillKind } from "../skills-contract";
+import { selectOurNotesSkill, type OurNotesSkill, type OurNotesSkills, type OurNotesSkillKind } from "../skills-contract";
 import type { OurNotesCardKind, OurNotesCardSummary } from "./api-contract";
 
 export type OurNotesCharacters = Record<string, OurNotesCharacter>;
@@ -48,6 +48,7 @@ export function ourNotesCardSkills(card: OurNotesCardSummary): OurNotesSkillRefe
   return refs.filter((ref) => ref.id !== 0);
 }
 export function ourNotesSkillDescription(skill: OurNotesSkill | undefined, server: OurNotesServer, level = 5): string {
+  skill = selectOurNotesSkill(skill, server);
   if (!skill) return "";
   if (!Number.isInteger(level) || level < 1 || level > 5) throw new Error("Invalid OurNotes skill level");
   return skill.description[server].replace(/\{(\d+)\}/gu, (_, index: string) => {

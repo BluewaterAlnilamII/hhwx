@@ -4,10 +4,12 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { SearchX } from "lucide-react";
+import * as Tabs from "@radix-ui/react-tabs";
 import PageShell from "@/components/PageShell";
 import LoadingIndicator from "@/components/LoadingIndicator";
 import SongCatalogRow from "@/components/SongCatalogRow";
 import OurNotesSongFilterControls from "@/components/ournotes/OurNotesSongFilterControls";
+import OurNotesSongMeta from "@/components/ournotes/OurNotesSongMeta";
 import { useOurNotesMaster, useOurNotesMusicAssetIndex } from "@/hooks/useOurNotesMaster";
 import { useOurNotesPreferencesStore, useOurNotesPreferredServer } from "@/store/useServerPreferencesStore";
 import { ourNotesMusicImageUrl } from "@/lib/ournotes/music/assets";
@@ -16,6 +18,29 @@ import { buildOurNotesSongCatalog, filterOurNotesSongs, ourNotesSongBandFilters,
   type OurNotesSongFilter } from "@/lib/ournotes/music/catalog";
 
 export default function SongsPageClient() {
+  const t = useTranslations("ournotes.songs");
+  const params = useSearchParams();
+  const view = params.get("view") === "meta" ? "meta" : "info";
+  return <PageShell contentClassName="max-w-6xl">
+    <h1 className="sr-only">{t("page.title")}</h1>
+    <Tabs.Root value={view} onValueChange={(value) => {
+      const query = new URLSearchParams(window.location.search);
+      if (value === "meta") query.set("view", value); else query.delete("view");
+      window.history.pushState(null, "", window.location.pathname + (query.size ? `?${query}` : "") + window.location.hash);
+    }}>
+      <Tabs.List aria-label={t("view.label")} className="hhwx-panel grid grid-cols-2 overflow-hidden border border-b-0">
+        {(["info", "meta"] as const).map((value) => <Tabs.Trigger key={value} value={value}
+          className="relative h-11 text-sm font-black sm:h-14 sm:text-base text-[var(--theme-color-tab-foreground)] outline-hidden transition first:border-r first:border-[var(--theme-color-border-subtle)] hover:bg-[var(--theme-color-tab-background-hover)] hover:text-[var(--theme-color-tab-foreground-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)] data-[state=active]:text-[var(--theme-color-tab-foreground-selected)] data-[state=active]:after:absolute data-[state=active]:after:inset-x-0 data-[state=active]:after:bottom-0 data-[state=active]:after:h-0.5 data-[state=active]:after:bg-[var(--theme-color-tab-indicator-selected)]">
+          {t(`view.${value}`)}
+        </Tabs.Trigger>)}
+      </Tabs.List>
+      <Tabs.Content value="info" className="space-y-4 lg:space-y-8"><SongInformation /></Tabs.Content>
+      <Tabs.Content value="meta" className="space-y-4 lg:space-y-8"><OurNotesSongMeta /></Tabs.Content>
+    </Tabs.Root>
+  </PageShell>;
+}
+
+function SongInformation() {
   const t = useTranslations("ournotes.songs");
   const commonT = useTranslations("common");
   const locale = useLocale();
@@ -45,8 +70,7 @@ export default function SongsPageClient() {
     window.history.replaceState(null, "", window.location.pathname + (next ? `?${next}` : "") + window.location.hash);
   }
   function update(patch: Partial<OurNotesSongFilter>) { navigate(updateOurNotesSongsQuery(window.location.search, patch, options)); }
-  return <PageShell contentClassName="max-w-6xl">
-    <h1 className="sr-only">{t("page.title")}</h1>
+  return <>
     {failed ? <div role="alert" className="hhwx-catalog-error rounded-2xl border p-5 text-sm font-bold">
       {commonT(ready ? "states.refreshFailed" : "states.loadFailed")}{" "}<button type="button" className="hhwx-text-link" onClick={() => {
         if (music.error) music.refresh(); if (bands.error) bands.refresh(); if (images.error) images.refresh();
@@ -74,5 +98,5 @@ export default function SongsPageClient() {
           onClick={() => setPagination({ query: deferredQuery, count: count + 40 })}>{t("page.showMore", { count: Math.min(40, results.length - count) })}</button> : null}
       </div>
     </> : null}
-  </PageShell>;
+  </>;
 }

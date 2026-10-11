@@ -114,9 +114,9 @@
         "difficulty": "Difficulty: e.g. <code>hd</code> / <code>hard</code> / <code>困难</code> / <code>ハード</code> match HARD difficulty",
         "difficultyRange": "Difficulty range: e.g. <code>hd+</code> / <code>{difficulty}</code> match HARD / EXPERT difficulties",
         "level": "Level: e.g. <code>{level}</code> matches songs with a chart at level 26 or below among the selected difficulties",
-        "songType": "Song category: <code>original</code> matches original songs; <code>anime</code> matches the anime category",
+        "songType": "Song category: e.g. <code>anime</code> / <code>动画</code> / <code>アニメ</code> match anime songs",
         "server": "Available server: e.g. <code>en</code> / <code>intl</code> / <code>ww</code> / <code>国际服</code> match songs available on EN",
-        "id": "ID: <code>#100001</code> matches only song ID 100001; a bare integer matches a song ID or displayed level",
+        "id": "ID: e.g. <code>#100001</code> matches songs with ID 100001",
         "name": "Name only: e.g. <code>/happy</code> / <code>\"happy\"</code> match only songs whose names contain happy"
       },
       "otherBand": "Other",
@@ -213,6 +213,51 @@
       "Luck": "LUCK",
       "JustCount": "JUST",
       "All": "All"
+    },
+    "view": {
+      "label": "Song page view",
+      "info": "Songs",
+      "meta": "Chart Meta"
+    },
+    "meta": {
+      "parameters": "Parameters",
+      "mode": "Live mode",
+      "free": "Free Live",
+      "gekisou": "Gekisou Live",
+      "liveSkill": "Member skill",
+      "supportSkill": "Support skill",
+      "none": "None",
+      "skillLevel": "{skill} level",
+      "level": "Level {level}",
+      "perfect": "Perfect rate",
+      "downtime": "Live interval",
+      "seconds": "seconds",
+      "loading": "Loading song Meta",
+      "resultCount": "{count} charts",
+      "empty": "No charts match the current filters",
+      "unsupported": "Meta data is unavailable for this skill combination",
+      "tableLabel": "Song Meta ranking",
+      "rank": "Rank",
+      "helpLabel": "{column} explanation",
+      "help": {
+        "score": "Score relative to total power",
+        "efficiency": "Average score per minute relative to total power",
+        "bpm": "Beats per minute",
+        "notes": "Total notes in the chart",
+        "nps": "Average notes per second",
+        "sr": "Skill coverage"
+      },
+      "columns": {
+        "title": "Song",
+        "level": "Difficulty",
+        "length": "Time",
+        "score": "Score",
+        "efficiency": "Efficiency",
+        "bpm": "BPM",
+        "notes": "N",
+        "nps": "NPS",
+        "sr": "SR"
+      }
     }
   }
 }

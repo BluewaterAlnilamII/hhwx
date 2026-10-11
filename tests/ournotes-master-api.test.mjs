@@ -10,7 +10,7 @@ import { GET as detail } from "../src/app/api/ournotes/master/cards/[kind]/[card
 import { GET as characters } from "../src/app/api/ournotes/master/characters/route.ts";
 import { GET as bands } from "../src/app/api/ournotes/master/bands/route.ts";
 import { GET as skills } from "../src/app/api/ournotes/master/skills/route.ts";
-import { mergeOurNotesSkills } from "../src/lib/ournotes/skills-contract.ts";
+import { mergeOurNotesSkills, selectOurNotesSkill } from "../src/lib/ournotes/skills-contract.ts";
 import { readOurNotesSkills } from "../src/lib/ournotes/skills-server.ts";
 import { ourNotesSkillDescription } from "../src/lib/ournotes/cards/catalog.ts";
 import { mergeOurNotesCards } from "../src/lib/ournotes/cards/api-contract.ts";
@@ -1084,15 +1084,54 @@ test("effectless skills keep names and descriptions without inventing effect slo
   }
 });
 
+test("regional skill differences preserve base compatibility, exact effect replacements and absence", async () => {
+  const inputs = regions();
+  inputs[1].skills.live["1"].skillIconId += 1;
+  inputs[1].skills.live["1"].effects[0].effectValue[0] = 1234;
+  inputs[2].skills.live["1"].effects[0].effectValue[0] = 5678;
+  const missing = Object.fromEntries([1, 2, 3, 4, 5].map((level) => [String(level), level === 5 ? null : {
+    skillEffectType: 3004, effectValue: 2000, activationTimeSecond: level + 2,
+    effectExecuteLimitCount: 0, effectLimitCount: 0, maxEffectValue: 0,
+    effectExecuteLimitResetConditions: [], skillTargets: [], skillConditions: [],
+    skillCumulativeCondition: null, skillReleaseConditions: [], skillTriggerType: 1, skillTriggerConditions: [],
+  }]));
+  for (const input of inputs.slice(1)) {
+    input.skills.gekisou["22"] ??= structuredClone(inputs[0].skills.gekisou["22"]);
+    input.skills.gekisou["22"].effects[1] = structuredClone(missing);
+  }
+  await withStore(inputs, null, async () => {
+    const response = await skills(request("skills"));
+    assert.equal(response.status, 200);
+    const { data } = await response.json();
+    const live = data.live["1"];
+    assert.equal(live.effects[0].effectValue[0], 1000);
+    assert.deepEqual(live.serverExtensions[0], {});
+    assert.deepEqual(live.serverExtensions[2], live.serverExtensions[3]);
+    assert.equal(selectOurNotesSkill(live, 1).effects[0].effectValue[0], 1234);
+    assert.equal(selectOurNotesSkill(live, 3).effects[0].effectValue[0], 5678);
+    assert.equal(selectOurNotesSkill(live, 0).effects[0].effectValue[0], 1000);
+    assert.equal(Object.hasOwn(selectOurNotesSkill(live, 1), "serverExtensions"), false);
+    assert.equal(Object.hasOwn(data.support["1"], "serverExtensions"), false);
+    assert.deepEqual(selectOurNotesSkill(data.gekisou["22"], 1).effects[1], missing);
+    assert.deepEqual(selectOurNotesSkill(data.gekisou["22"], 0).effects[1], mergeOurNotesSkills(skillFixture.datasets).gekisou["22"].effects[1]);
+  });
+  inputs[0].skills.support["999"] = structuredClone(inputs[0].skills.support["1"]);
+  delete inputs[0].skills.support["1"];
+  const data = mergeOurNotesSkills(inputs.map((input) => input.skills));
+  assert.equal(data.support["1"].serverExtensions[0], null);
+  assert.equal(selectOurNotesSkill(data.support["1"], 0), undefined);
+  assert.equal(ourNotesSkillDescription(data.support["1"], 0), "");
+  assert.ok(ourNotesSkillDescription(data.support["1"], 3));
+});
+
 test("invalid skills fail only the skills read and never expose partial templates", async () => {
   for (const mutate of [
     (s) => { s.live["1"].description.en = "{effects[0].value}"; },
     (s) => { s.live["1"].description.en = "<color=#fff>10</color>"; },
     (s) => { s.live["1"].description.en = "{999}"; },
     (s) => { s.live["1"].descriptionParameters[0].pop(); },
-    (s) => { s.live["1"].skillIconId += 1; },
+    (s) => { s.live["1"].skillIconId = -1; },
     (s) => { s.live["1"].effects[0].effectValue.pop(); },
-    (s) => { s.live["1"].effects[0].effectValue[0] += 1; },
     (s) => { s.live["1"].effects[0].effectValue[0] = NaN; },
     (s) => { delete s.gekisouSupport["67"].effects[0].skillConditions["5"]; },
     (s) => { s.gekisou["1"].effects[0].skillReleaseConditions = { 1: [], 2: [], 3: [], 4: [] }; },

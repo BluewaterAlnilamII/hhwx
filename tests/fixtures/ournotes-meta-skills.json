@@ -1,0 +1,2398 @@
+{
+  "provenance": "Selected normalized JP skill records read from the published OurNotes master on 2026-10-12; display text and effect arrays are preserved.",
+  "live": {
+    "1": {
+      "description": {
+        "en": "",
+        "ja": "【シンプル】5秒間 スコア{0}%UP",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      },
+      "descriptionParameters": [
+        [
+          "10",
+          "20",
+          "30",
+          "40",
+          "70"
+        ]
+      ],
+      "displaySkillCategories": [
+        1
+      ],
+      "effects": [
+        {
+          "activationTimeSecond": [
+            5,
+            5,
+            5,
+            5,
+            5
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectValue": [
+            1000,
+            2000,
+            3000,
+            4000,
+            7000
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 2000,
+          "skillReleaseConditions": [],
+          "skillTargets": []
+        }
+      ],
+      "skillCategories": [
+        1
+      ],
+      "skillIconId": 7,
+      "skillName": {
+        "en": "",
+        "ja": "スコアUP",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      }
+    },
+    "2": {
+      "description": {
+        "en": "",
+        "ja": "【シンプル】5秒間 スコア{0}%UP",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      },
+      "descriptionParameters": [
+        [
+          "40",
+          "50",
+          "60",
+          "70",
+          "100"
+        ]
+      ],
+      "displaySkillCategories": [
+        1
+      ],
+      "effects": [
+        {
+          "activationTimeSecond": [
+            5,
+            5,
+            5,
+            5,
+            5
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectValue": [
+            4000,
+            5000,
+            6000,
+            7000,
+            10000
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 2000,
+          "skillReleaseConditions": [],
+          "skillTargets": []
+        }
+      ],
+      "skillCategories": [
+        1
+      ],
+      "skillIconId": 7,
+      "skillName": {
+        "en": "",
+        "ja": "スコアUP",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      }
+    },
+    "3": {
+      "description": {
+        "en": "",
+        "ja": "【シンプル】5秒間 スコア{0}%UP",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      },
+      "descriptionParameters": [
+        [
+          "70",
+          "80",
+          "90",
+          "100",
+          "130"
+        ]
+      ],
+      "displaySkillCategories": [
+        1
+      ],
+      "effects": [
+        {
+          "activationTimeSecond": [
+            5,
+            5,
+            5,
+            5,
+            5
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectValue": [
+            7000,
+            8000,
+            9000,
+            10000,
+            13000
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 2000,
+          "skillReleaseConditions": [],
+          "skillTargets": []
+        }
+      ],
+      "skillCategories": [
+        1
+      ],
+      "skillIconId": 7,
+      "skillName": {
+        "en": "",
+        "ja": "スコアUP",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      }
+    },
+    "4": {
+      "description": {
+        "en": "",
+        "ja": "【判定】5秒間PERFECT以上のスコア{0}%UP",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      },
+      "descriptionParameters": [
+        [
+          "60",
+          "70",
+          "80",
+          "90",
+          "120"
+        ]
+      ],
+      "displaySkillCategories": [
+        1
+      ],
+      "effects": [
+        {
+          "activationTimeSecond": [
+            5,
+            5,
+            5,
+            5,
+            5
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectValue": [
+            6000,
+            7000,
+            8000,
+            9000,
+            12000
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 2004,
+          "skillReleaseConditions": [],
+          "skillTargets": [
+            {
+              "judgement": 5,
+              "skillTargetType": 4
+            },
+            {
+              "judgement": 6,
+              "skillTargetType": 4
+            }
+          ]
+        }
+      ],
+      "skillCategories": [
+        3
+      ],
+      "skillIconId": 7,
+      "skillName": {
+        "en": "",
+        "ja": "スコアUP(PERFECT)",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      }
+    },
+    "5": {
+      "description": {
+        "en": "",
+        "ja": "【判定】5秒間PERFECT以上のスコア{0}%UP",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      },
+      "descriptionParameters": [
+        [
+          "90",
+          "100",
+          "110",
+          "120",
+          "150"
+        ]
+      ],
+      "displaySkillCategories": [
+        1
+      ],
+      "effects": [
+        {
+          "activationTimeSecond": [
+            5,
+            5,
+            5,
+            5,
+            5
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectValue": [
+            9000,
+            10000,
+            11000,
+            12000,
+            15000
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 2004,
+          "skillReleaseConditions": [],
+          "skillTargets": [
+            {
+              "judgement": 5,
+              "skillTargetType": 4
+            },
+            {
+              "judgement": 6,
+              "skillTargetType": 4
+            }
+          ]
+        }
+      ],
+      "skillCategories": [
+        3
+      ],
+      "skillIconId": 7,
+      "skillName": {
+        "en": "",
+        "ja": "スコアUP(PERFECT)",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      }
+    },
+    "6": {
+      "description": {
+        "en": "",
+        "ja": "【ライフ】5秒間スコア{0}%UP\n発動時にLIFEが700以上の場合\nスコア{1}%UP",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      },
+      "descriptionParameters": [
+        [
+          "30",
+          "40",
+          "50",
+          "60",
+          "90"
+        ],
+        [
+          "50",
+          "60",
+          "70",
+          "80",
+          "110"
+        ]
+      ],
+      "displaySkillCategories": [
+        1
+      ],
+      "effects": [
+        {
+          "activationTimeSecond": [
+            5,
+            5,
+            5,
+            5,
+            5
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectValue": [
+            3000,
+            4000,
+            5000,
+            6000,
+            9000
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [
+            [
+              {
+                "conditionTargets": [],
+                "conditionType": [
+                  2001,
+                  2001,
+                  2001,
+                  2001,
+                  2001
+                ],
+                "conditionValues": [
+                  [
+                    700,
+                    700,
+                    700,
+                    700,
+                    700
+                  ]
+                ],
+                "isPositive": false
+              }
+            ]
+          ],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 2000,
+          "skillReleaseConditions": [],
+          "skillTargets": []
+        },
+        {
+          "activationTimeSecond": [
+            5,
+            5,
+            5,
+            5,
+            5
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectValue": [
+            5000,
+            6000,
+            7000,
+            8000,
+            11000
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [
+            [
+              {
+                "conditionTargets": [],
+                "conditionType": [
+                  2001,
+                  2001,
+                  2001,
+                  2001,
+                  2001
+                ],
+                "conditionValues": [
+                  [
+                    700,
+                    700,
+                    700,
+                    700,
+                    700
+                  ]
+                ],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 2000,
+          "skillReleaseConditions": [],
+          "skillTargets": []
+        }
+      ],
+      "skillCategories": [
+        2
+      ],
+      "skillIconId": 7,
+      "skillName": {
+        "en": "",
+        "ja": "スコアUP(LIFEボーナス)",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      }
+    },
+    "7": {
+      "description": {
+        "en": "",
+        "ja": "【ライフ】5秒間スコア{0}%UP\n発動時にLIFEが700以上の場合\nスコア{1}%UP",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      },
+      "descriptionParameters": [
+        [
+          "60",
+          "70",
+          "80",
+          "90",
+          "120"
+        ],
+        [
+          "80",
+          "90",
+          "100",
+          "110",
+          "140"
+        ]
+      ],
+      "displaySkillCategories": [
+        1
+      ],
+      "effects": [
+        {
+          "activationTimeSecond": [
+            5,
+            5,
+            5,
+            5,
+            5
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectValue": [
+            6000,
+            7000,
+            8000,
+            9000,
+            12000
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [
+            [
+              {
+                "conditionTargets": [],
+                "conditionType": [
+                  2001,
+                  2001,
+                  2001,
+                  2001,
+                  2001
+                ],
+                "conditionValues": [
+                  [
+                    700,
+                    700,
+                    700,
+                    700,
+                    700
+                  ]
+                ],
+                "isPositive": false
+              }
+            ]
+          ],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 2000,
+          "skillReleaseConditions": [],
+          "skillTargets": []
+        },
+        {
+          "activationTimeSecond": [
+            5,
+            5,
+            5,
+            5,
+            5
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectValue": [
+            8000,
+            9000,
+            10000,
+            11000,
+            14000
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [
+            [
+              {
+                "conditionTargets": [],
+                "conditionType": [
+                  2001,
+                  2001,
+                  2001,
+                  2001,
+                  2001
+                ],
+                "conditionValues": [
+                  [
+                    700,
+                    700,
+                    700,
+                    700,
+                    700
+                  ]
+                ],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 2000,
+          "skillReleaseConditions": [],
+          "skillTargets": []
+        }
+      ],
+      "skillCategories": [
+        2
+      ],
+      "skillIconId": 7,
+      "skillName": {
+        "en": "",
+        "ja": "スコアUP(LIFEボーナス)",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      }
+    },
+    "8": {
+      "description": {
+        "en": "",
+        "ja": "【シンプル】5秒間 スコア{0}%UP",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      },
+      "descriptionParameters": [
+        [
+          "55",
+          "65",
+          "75",
+          "85",
+          "115"
+        ]
+      ],
+      "displaySkillCategories": [
+        1
+      ],
+      "effects": [
+        {
+          "activationTimeSecond": [
+            5,
+            5,
+            5,
+            5,
+            5
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectValue": [
+            5500,
+            6500,
+            7500,
+            8500,
+            11500
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 2000,
+          "skillReleaseConditions": [],
+          "skillTargets": []
+        }
+      ],
+      "skillCategories": [
+        1
+      ],
+      "skillIconId": 7,
+      "skillName": {
+        "en": "",
+        "ja": "スコアUP",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      }
+    }
+  },
+  "support": {
+    "1": {
+      "description": {
+        "en": "",
+        "ja": "セットしたメンバーのライブスキル発動時間{0}秒延長\n「MyGO!!!!!」メンバーの場合\nライブスキル発動時間{1}秒延長",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      },
+      "descriptionParameters": [
+        [
+          "0.25",
+          "0.5",
+          "0.75",
+          "1",
+          "1.5"
+        ],
+        [
+          "0.5",
+          "1",
+          "1.5",
+          "2",
+          "3"
+        ]
+      ],
+      "displaySkillCategories": [],
+      "effects": [
+        {
+          "activationTimeSecond": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectValue": [
+            250,
+            500,
+            750,
+            1000,
+            1500
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [
+            [
+              {
+                "conditionTargets": [
+                  {
+                    "bandId": 1,
+                    "skillTargetType": 3
+                  }
+                ],
+                "conditionType": [
+                  5000,
+                  5000,
+                  5000,
+                  5000,
+                  5000
+                ],
+                "conditionValues": [],
+                "isPositive": false
+              }
+            ]
+          ],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 15000,
+          "skillReleaseConditions": [],
+          "skillTargets": [],
+          "skillTriggerConditions": [
+            [
+              {
+                "conditionTargets": [],
+                "conditionType": [
+                  4010,
+                  4010,
+                  4010,
+                  4010,
+                  4010
+                ],
+                "conditionValues": [],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillTriggerType": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "activationTimeSecond": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectValue": [
+            500,
+            1000,
+            1500,
+            2000,
+            3000
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [
+            [
+              {
+                "conditionTargets": [
+                  {
+                    "bandId": 1,
+                    "skillTargetType": 3
+                  }
+                ],
+                "conditionType": [
+                  5000,
+                  5000,
+                  5000,
+                  5000,
+                  5000
+                ],
+                "conditionValues": [],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 15000,
+          "skillReleaseConditions": [],
+          "skillTargets": [],
+          "skillTriggerConditions": [
+            [
+              {
+                "conditionTargets": [],
+                "conditionType": [
+                  4010,
+                  4010,
+                  4010,
+                  4010,
+                  4010
+                ],
+                "conditionValues": [],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillTriggerType": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        }
+      ],
+      "skillIconId": 17,
+      "skillName": {
+        "en": "",
+        "ja": "ライブスキル延長(MyGO!!!!!ボーナス)",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      }
+    },
+    "9": {
+      "description": {
+        "en": "",
+        "ja": "セットしたメンバーのライブスキル発動時間{0}秒延長\n「millsage」メンバーの場合\nライブスキル発動時間{1}秒延長",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      },
+      "descriptionParameters": [
+        [
+          "0.75",
+          "1",
+          "1.25",
+          "1.5",
+          "2"
+        ],
+        [
+          "1.5",
+          "2",
+          "2.5",
+          "3",
+          "4"
+        ]
+      ],
+      "displaySkillCategories": [],
+      "effects": [
+        {
+          "activationTimeSecond": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectValue": [
+            750,
+            1000,
+            1250,
+            1500,
+            2000
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [
+            [
+              {
+                "conditionTargets": [
+                  {
+                    "bandId": 4,
+                    "skillTargetType": 3
+                  }
+                ],
+                "conditionType": [
+                  5000,
+                  5000,
+                  5000,
+                  5000,
+                  5000
+                ],
+                "conditionValues": [],
+                "isPositive": false
+              }
+            ]
+          ],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 15000,
+          "skillReleaseConditions": [],
+          "skillTargets": [],
+          "skillTriggerConditions": [
+            [
+              {
+                "conditionTargets": [],
+                "conditionType": [
+                  4010,
+                  4010,
+                  4010,
+                  4010,
+                  4010
+                ],
+                "conditionValues": [],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillTriggerType": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "activationTimeSecond": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectValue": [
+            1500,
+            2000,
+            2500,
+            3000,
+            4000
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [
+            [
+              {
+                "conditionTargets": [
+                  {
+                    "bandId": 4,
+                    "skillTargetType": 3
+                  }
+                ],
+                "conditionType": [
+                  5000,
+                  5000,
+                  5000,
+                  5000,
+                  5000
+                ],
+                "conditionValues": [],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 15000,
+          "skillReleaseConditions": [],
+          "skillTargets": [],
+          "skillTriggerConditions": [
+            [
+              {
+                "conditionTargets": [],
+                "conditionType": [
+                  4010,
+                  4010,
+                  4010,
+                  4010,
+                  4010
+                ],
+                "conditionValues": [],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillTriggerType": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        }
+      ],
+      "skillIconId": 17,
+      "skillName": {
+        "en": "",
+        "ja": "ライブスキル延長(millsageボーナス)",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      }
+    },
+    "11": {
+      "description": {
+        "en": "",
+        "ja": "セットしたメンバーのライブスキル発動時間{0}秒延長\n「MyGO!!!!!」メンバーの場合\nライブスキル発動時間{1}秒延長",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      },
+      "descriptionParameters": [
+        [
+          "1.25",
+          "1.5",
+          "1.75",
+          "2",
+          "2.5"
+        ],
+        [
+          "2.5",
+          "3",
+          "3.5",
+          "4",
+          "5"
+        ]
+      ],
+      "displaySkillCategories": [],
+      "effects": [
+        {
+          "activationTimeSecond": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectValue": [
+            1250,
+            1500,
+            1750,
+            2000,
+            2500
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [
+            [
+              {
+                "conditionTargets": [
+                  {
+                    "bandId": 1,
+                    "skillTargetType": 3
+                  }
+                ],
+                "conditionType": [
+                  5000,
+                  5000,
+                  5000,
+                  5000,
+                  5000
+                ],
+                "conditionValues": [],
+                "isPositive": false
+              }
+            ]
+          ],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 15000,
+          "skillReleaseConditions": [],
+          "skillTargets": [],
+          "skillTriggerConditions": [
+            [
+              {
+                "conditionTargets": [],
+                "conditionType": [
+                  4010,
+                  4010,
+                  4010,
+                  4010,
+                  4010
+                ],
+                "conditionValues": [],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillTriggerType": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "activationTimeSecond": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectValue": [
+            2500,
+            3000,
+            3500,
+            4000,
+            5000
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [
+            [
+              {
+                "conditionTargets": [
+                  {
+                    "bandId": 1,
+                    "skillTargetType": 3
+                  }
+                ],
+                "conditionType": [
+                  5000,
+                  5000,
+                  5000,
+                  5000,
+                  5000
+                ],
+                "conditionValues": [],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 15000,
+          "skillReleaseConditions": [],
+          "skillTargets": [],
+          "skillTriggerConditions": [
+            [
+              {
+                "conditionTargets": [],
+                "conditionType": [
+                  4010,
+                  4010,
+                  4010,
+                  4010,
+                  4010
+                ],
+                "conditionValues": [],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillTriggerType": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        }
+      ],
+      "skillIconId": 17,
+      "skillName": {
+        "en": "",
+        "ja": "ライブスキル延長(MyGO!!!!!ボーナス)",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      }
+    },
+    "16": {
+      "description": {
+        "en": "",
+        "ja": "スコアランクが上がるごとに\n5秒間 スコアが{0}%UP\n「MyGO!!!!!」メンバーの場合、スコアが{1}%UP",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      },
+      "descriptionParameters": [
+        [
+          "1",
+          "1.5",
+          "2",
+          "2.5",
+          "5"
+        ],
+        [
+          "2",
+          "3",
+          "4",
+          "5",
+          "10"
+        ]
+      ],
+      "displaySkillCategories": [
+        1
+      ],
+      "effects": [
+        {
+          "activationTimeSecond": [
+            5,
+            5,
+            5,
+            5,
+            5
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectValue": [
+            100,
+            150,
+            200,
+            250,
+            500
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [
+            [
+              {
+                "conditionTargets": [
+                  {
+                    "bandId": 1,
+                    "skillTargetType": 3
+                  }
+                ],
+                "conditionType": [
+                  5000,
+                  5000,
+                  5000,
+                  5000,
+                  5000
+                ],
+                "conditionValues": [],
+                "isPositive": false
+              }
+            ]
+          ],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 2000,
+          "skillReleaseConditions": [],
+          "skillTargets": [],
+          "skillTriggerConditions": [
+            [
+              {
+                "conditionTargets": [],
+                "conditionType": [
+                  8000,
+                  8000,
+                  8000,
+                  8000,
+                  8000
+                ],
+                "conditionValues": [],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillTriggerType": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "activationTimeSecond": [
+            5,
+            5,
+            5,
+            5,
+            5
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectValue": [
+            200,
+            300,
+            400,
+            500,
+            1000
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [
+            [
+              {
+                "conditionTargets": [
+                  {
+                    "bandId": 1,
+                    "skillTargetType": 3
+                  }
+                ],
+                "conditionType": [
+                  5000,
+                  5000,
+                  5000,
+                  5000,
+                  5000
+                ],
+                "conditionValues": [],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 2000,
+          "skillReleaseConditions": [],
+          "skillTargets": [],
+          "skillTriggerConditions": [
+            [
+              {
+                "conditionTargets": [],
+                "conditionType": [
+                  8000,
+                  8000,
+                  8000,
+                  8000,
+                  8000
+                ],
+                "conditionValues": [],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillTriggerType": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        }
+      ],
+      "skillIconId": 7,
+      "skillName": {
+        "en": "",
+        "ja": "スコアUP(MyGO!!!!!ボーナス)",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      }
+    },
+    "31": {
+      "description": {
+        "en": "",
+        "ja": "セットしたメンバーのライブスキル発動中\nGREATをPERFECTに変換（{0}回まで）\n「MyGO!!!!!」メンバーの場合、GOODでも発動",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      },
+      "descriptionParameters": [
+        [
+          "3",
+          "4",
+          "5",
+          "6",
+          "8"
+        ]
+      ],
+      "displaySkillCategories": [
+        3
+      ],
+      "effects": [
+        {
+          "activationTimeSecond": [
+            5,
+            5,
+            5,
+            5,
+            5
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            3,
+            4,
+            5,
+            6,
+            8
+          ],
+          "effectValue": [
+            5,
+            5,
+            5,
+            5,
+            5
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [
+            [
+              {
+                "conditionTargets": [
+                  {
+                    "bandId": 1,
+                    "skillTargetType": 3
+                  }
+                ],
+                "conditionType": [
+                  5000,
+                  5000,
+                  5000,
+                  5000,
+                  5000
+                ],
+                "conditionValues": [],
+                "isPositive": false
+              }
+            ]
+          ],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 12006,
+          "skillReleaseConditions": [],
+          "skillTargets": [
+            {
+              "judgement": 4,
+              "skillTargetType": 4
+            }
+          ],
+          "skillTriggerConditions": [
+            [
+              {
+                "conditionTargets": [],
+                "conditionType": [
+                  4010,
+                  4010,
+                  4010,
+                  4010,
+                  4010
+                ],
+                "conditionValues": [],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillTriggerType": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "activationTimeSecond": [
+            5,
+            5,
+            5,
+            5,
+            5
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            3,
+            4,
+            5,
+            6,
+            8
+          ],
+          "effectValue": [
+            5,
+            5,
+            5,
+            5,
+            5
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [
+            [
+              {
+                "conditionTargets": [
+                  {
+                    "bandId": 1,
+                    "skillTargetType": 3
+                  }
+                ],
+                "conditionType": [
+                  5000,
+                  5000,
+                  5000,
+                  5000,
+                  5000
+                ],
+                "conditionValues": [],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 12006,
+          "skillReleaseConditions": [],
+          "skillTargets": [
+            {
+              "judgement": 3,
+              "skillTargetType": 4
+            },
+            {
+              "judgement": 4,
+              "skillTargetType": 4
+            }
+          ],
+          "skillTriggerConditions": [
+            [
+              {
+                "conditionTargets": [],
+                "conditionType": [
+                  4010,
+                  4010,
+                  4010,
+                  4010,
+                  4010
+                ],
+                "conditionValues": [],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillTriggerType": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        }
+      ],
+      "skillIconId": 10,
+      "skillName": {
+        "en": "",
+        "ja": "判定サポート(MyGO!!!!!ボーナス)",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      }
+    },
+    "51": {
+      "description": {
+        "en": "",
+        "ja": "セットしたメンバーのライブスキル発動時、LIFE{0}回復\n「MyGO!!!!!」メンバーの場合\nLIFE{1}回復",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      },
+      "descriptionParameters": [
+        [
+          "100",
+          "150",
+          "200",
+          "250",
+          "350"
+        ],
+        [
+          "200",
+          "300",
+          "400",
+          "500",
+          "700"
+        ]
+      ],
+      "displaySkillCategories": [
+        2
+      ],
+      "effects": [
+        {
+          "activationTimeSecond": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectValue": [
+            100,
+            150,
+            200,
+            250,
+            350
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [
+            [
+              {
+                "conditionTargets": [
+                  {
+                    "bandId": 1,
+                    "skillTargetType": 3
+                  }
+                ],
+                "conditionType": [
+                  5000,
+                  5000,
+                  5000,
+                  5000,
+                  5000
+                ],
+                "conditionValues": [],
+                "isPositive": false
+              }
+            ]
+          ],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 3001,
+          "skillReleaseConditions": [],
+          "skillTargets": [],
+          "skillTriggerConditions": [
+            [
+              {
+                "conditionTargets": [],
+                "conditionType": [
+                  4010,
+                  4010,
+                  4010,
+                  4010,
+                  4010
+                ],
+                "conditionValues": [],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillTriggerType": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "activationTimeSecond": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectValue": [
+            200,
+            300,
+            400,
+            500,
+            700
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [
+            [
+              {
+                "conditionTargets": [
+                  {
+                    "bandId": 1,
+                    "skillTargetType": 3
+                  }
+                ],
+                "conditionType": [
+                  5000,
+                  5000,
+                  5000,
+                  5000,
+                  5000
+                ],
+                "conditionValues": [],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 3001,
+          "skillReleaseConditions": [],
+          "skillTargets": [],
+          "skillTriggerConditions": [
+            [
+              {
+                "conditionTargets": [],
+                "conditionType": [
+                  4010,
+                  4010,
+                  4010,
+                  4010,
+                  4010
+                ],
+                "conditionValues": [],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillTriggerType": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        }
+      ],
+      "skillIconId": 14,
+      "skillName": {
+        "en": "",
+        "ja": "LIFE回復(MyGO!!!!!ボーナス)",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      }
+    },
+    "61": {
+      "description": {
+        "en": "",
+        "ja": "残LIFEが100以下の時\nLIFEが5秒間減少しなくなる(1回まで)\n「MyGO!!!!!」メンバーの場合\n10秒間減少しなくなる(1回まで)",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      },
+      "descriptionParameters": [],
+      "displaySkillCategories": [],
+      "effects": [
+        {
+          "activationTimeSecond": [
+            5,
+            5,
+            5,
+            5,
+            5
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          "effectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [
+            [
+              {
+                "conditionTargets": [
+                  {
+                    "bandId": 1,
+                    "skillTargetType": 3
+                  }
+                ],
+                "conditionType": [
+                  5000,
+                  5000,
+                  5000,
+                  5000,
+                  5000
+                ],
+                "conditionValues": [],
+                "isPositive": false
+              }
+            ]
+          ],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 3003,
+          "skillReleaseConditions": [],
+          "skillTargets": [],
+          "skillTriggerConditions": [
+            [
+              {
+                "conditionTargets": [],
+                "conditionType": [
+                  2003,
+                  2003,
+                  2003,
+                  2003,
+                  2003
+                ],
+                "conditionValues": [
+                  [
+                    100,
+                    100,
+                    100,
+                    100,
+                    100
+                  ]
+                ],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillTriggerType": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "activationTimeSecond": [
+            10,
+            10,
+            10,
+            10,
+            10
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          "effectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [
+            [
+              {
+                "conditionTargets": [
+                  {
+                    "bandId": 1,
+                    "skillTargetType": 3
+                  }
+                ],
+                "conditionType": [
+                  5000,
+                  5000,
+                  5000,
+                  5000,
+                  5000
+                ],
+                "conditionValues": [],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 3003,
+          "skillReleaseConditions": [],
+          "skillTargets": [],
+          "skillTriggerConditions": [
+            [
+              {
+                "conditionTargets": [],
+                "conditionType": [
+                  2003,
+                  2003,
+                  2003,
+                  2003,
+                  2003
+                ],
+                "conditionValues": [
+                  [
+                    100,
+                    100,
+                    100,
+                    100,
+                    100
+                  ]
+                ],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillTriggerType": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        }
+      ],
+      "skillIconId": 14,
+      "skillName": {
+        "en": "",
+        "ja": "LIFE減少無効(MyGO!!!!!ボーナス)",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      }
+    },
+    "71": {
+      "description": {
+        "en": "",
+        "ja": "セットしたメンバーのライブスキル発動時間{0}秒延長",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      },
+      "descriptionParameters": [
+        [
+          "0.5",
+          "1",
+          "1.5",
+          "2",
+          "3"
+        ]
+      ],
+      "displaySkillCategories": [],
+      "effects": [
+        {
+          "activationTimeSecond": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectExecuteLimitResetConditions": [],
+          "effectLimitCount": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "effectValue": [
+            500,
+            1000,
+            1500,
+            2000,
+            3000
+          ],
+          "maxEffectValue": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "skillConditions": [],
+          "skillCumulativeCondition": null,
+          "skillEffectType": 15000,
+          "skillReleaseConditions": [],
+          "skillTargets": [],
+          "skillTriggerConditions": [
+            [
+              {
+                "conditionTargets": [],
+                "conditionType": [
+                  4010,
+                  4010,
+                  4010,
+                  4010,
+                  4010
+                ],
+                "conditionValues": [],
+                "isPositive": true
+              }
+            ]
+          ],
+          "skillTriggerType": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        }
+      ],
+      "skillIconId": 7,
+      "skillName": {
+        "en": "",
+        "ja": "ライブスキル延長",
+        "ko": "",
+        "zh-CN": "",
+        "zh-TW": ""
+      }
+    }
+  }
+}
