@@ -98,5 +98,121 @@
       "title": "卡牌标题",
       "skillEffect": "技能效果"
     }
+  },
+  "songs": {
+    "page": {
+      "title": "OurNotes 歌曲图鉴",
+      "resultCount": "{count} 首歌曲",
+      "showMore": "再显示 {count} 首"
+    },
+    "filters": {
+      "searchPlaceholder": "搜索歌曲名称或其他条件",
+      "searchHelp": {
+        "label": "搜索规则",
+        "title": "条件规则示例：",
+        "band": "乐队：如 <code>go</code> / <code>ゆめみた</code> / <code>mujica</code>，匹配对应乐队",
+        "difficulty": "难易度：如 <code>hd</code> / <code>hard</code> / <code>困难</code> / <code>ハード</code> 匹配 HARD 难易度",
+        "difficultyRange": "难易度范围：如 <code>hd+</code> / <code>{difficulty}</code> 匹配 HARD / EXPERT 难易度",
+        "level": "乐曲等级：如 <code>{level}</code> 匹配所选难易度中存在26级及以下谱面的歌曲",
+        "songType": "歌曲分类：如 <code>original</code> / <code>原创</code> 匹配原创歌曲，<code>anime</code> / <code>动画</code> 匹配动画分类",
+        "server": "可用服务器：如 <code>en</code> / <code>intl</code> / <code>ww</code> / <code>国际服</code> 匹配 EN 服可用的歌曲",
+        "id": "ID：如 <code>#100001</code> 仅匹配 ID 为100001的歌曲；裸整数匹配歌曲 ID 或显示等级",
+        "name": "强制名称：如 <code>/happy</code> / <code>\"happy\"</code> 仅匹配名称中包含happy的歌曲"
+      },
+      "otherBand": "其他",
+      "serverAvailabilityAria": "筛选在 {server} 服务器有效的歌曲",
+      "levelMin": "最低",
+      "levelMax": "最高",
+      "rows": {
+        "serverAvailability": "服务器",
+        "band": "乐队",
+        "type": "类型",
+        "difficulty": "难易度",
+        "level": "乐曲等级",
+        "sort": "排序"
+      },
+      "types": {
+        "0": "全部",
+        "1": "原创歌曲",
+        "2": "虚拟歌手",
+        "3": "J-POP",
+        "4": "动画",
+        "5": "游戏",
+        "6": "Another Band"
+      },
+      "difficulties": {
+        "easy": "EASY",
+        "normal": "NORMAL",
+        "hard": "HARD",
+        "expert": "EXPERT"
+      },
+      "sort": {
+        "id": "歌曲 ID",
+        "title": "歌曲名",
+        "level": "乐曲等级",
+        "release_jp": "开放日期（JP）",
+        "release_en": "开放日期（EN）",
+        "release_tw": "开放日期（TW）",
+        "release_cn": "开放日期（CN）",
+        "release_kr": "开放日期（KR）"
+      },
+      "sortDirection": {
+        "desc": "倒序",
+        "asc": "正序",
+        "descTitle": "当前为倒序，点击切换为正序",
+        "ascTitle": "当前为正序，点击切换为倒序",
+        "descAria": "排序方向：倒序",
+        "ascAria": "排序方向：正序"
+      },
+      "actions": {
+        "all": "全部",
+        "clear": "清空",
+        "selectAll": "选择全部{group}",
+        "clearAll": "清除全部{group}",
+        "search": "搜索"
+      }
+    },
+    "states": {
+      "loading": "正在读取歌曲图鉴",
+      "loadFailed": "读取歌曲数据失败，请稍后重试",
+      "empty": "没有符合当前条件的歌曲"
+    },
+    "detail": {
+      "view": {
+        "label": "歌曲页面视图",
+        "info": "歌曲详情",
+        "simulator": "谱面模拟"
+      },
+      "attribute": "属性",
+      "mission": "激奏任务 {slot}",
+      "simulatorUnavailable": "谱面模拟暂不可用"
+    },
+    "songId": "歌曲 #{songId}",
+    "unknownTitle": "歌曲 #{songId}",
+    "unknownBand": "未知乐团",
+    "artworkAlt": "{title} 封面",
+    "difficultyLabel": "谱面难度",
+    "difficulties": {
+      "easy": "EASY",
+      "normal": "NORMAL",
+      "hard": "HARD",
+      "expert": "EXPERT"
+    },
+    "stats": {
+      "level": "等级",
+      "notes": "连击数",
+      "bpm": "BPM",
+      "duration": "时长"
+    },
+    "detailTitle": "{title} - OurNotes 歌曲图鉴",
+    "unknownCategory": "分类 {value}",
+    "unknownValue": "未知（{value}）",
+    "missions": {
+      "None": "未指定",
+      "Combo": "COMBO",
+      "Luck": "LUCK",
+      "JustCount": "JUST",
+      "All": "全部"
+    }
   }
 }

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
@@ -21,16 +22,21 @@ test("clearing song filters discards uncommitted level drafts before they can be
     "@/lib/bandori/songs/catalog": songCatalog,
     "@/lib/bandori-server": bandoriServers,
   };
-  const source = await read("src/app/[locale]/bandori/songs/_components/BandoriSongFilterControls.tsx");
-  const { outputText } = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
-  });
-  const exports = {};
-  runInNewContext(outputText, { exports, require: (id) => {
-    if (id.startsWith("@/components/")) return { default: () => null };
-    assert.ok(Object.hasOwn(dependencies, id), id);
-    return dependencies[id];
-  } });
+  function load(path) {
+    const source = readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+    const { outputText } = ts.transpileModule(source, {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+    });
+    const exports = {};
+    runInNewContext(outputText, { exports, require: (id) => {
+      if (["@/components/SongFilterControls", "@/components/FilterControls"].includes(id)) return load(id.replace("@/", "src/") + ".tsx");
+      if (id.startsWith("@/components/")) return { default: () => null };
+      assert.ok(Object.hasOwn(dependencies, id), id);
+      return dependencies[id];
+    } });
+    return exports;
+  }
+  const exports = load("src/app/[locale]/bandori/songs/_components/BandoriSongFilterControls.tsx");
   const inputs = [];
   const buttons = [];
   const mount = (node) => {
@@ -126,14 +132,16 @@ test("Songs filters use the game terminology and Cards-style regional release or
 });
 
 test("song detail keeps one URL-backed view and retains the simulator after first use", async () => {
-  const [detail, runtime] = await Promise.all([
+  const [detail, runtime, shared] = await Promise.all([
     read("src/app/[locale]/bandori/songs/[songId]/SongDetailPageClient.tsx"),
     read("src/app/[locale]/bandori/songs/[songId]/ChartSimulatorRuntime.tsx"),
+    read("src/components/SongDetailLayout.tsx"),
   ]);
 
   assert.match(detail, /searchParams\.get\("view"\) === "simulator"/u);
-  assert.match(detail, /role="tablist"/u);
-  assert.match(detail, /\["info", "simulator"\]/u);
+  assert.match(detail, /SongDetailTabs value=\{activeView\} onChange=\{selectView\}/u);
+  assert.match(shared, /role="tablist"/u);
+  assert.match(shared, /\["info", "simulator"\]/u);
   assert.match(detail, /next\.delete\("view"\)/u);
   assert.match(detail, /next\.delete\("server"\)/u);
   assert.doesNotMatch(detail, /getBandoriServerFromCode|locale === "en" \? 1 : 3/u);
@@ -143,6 +151,7 @@ test("song detail keeps one URL-backed view and retains the simulator after firs
   assert.match(detail, /hasOpenedSimulator[\s\S]*hidden=\{activeView !== "simulator"\}/u);
   assert.match(detail, /onDifficultyChange=\{selectDifficulty\}/u);
   assert.doesNotMatch(detail, /aria-label=\{t\("difficultyLabel"\)\}/u);
-  assert.match(runtime, /aria-label=\{songsT\("difficultyLabel"\)\}/u);
+  assert.match(runtime, /SongDifficultyControls label=\{songsT\("difficultyLabel"\)\}/u);
+  assert.match(shared, /role="group" aria-label=\{label\}/u);
   assert.match(runtime, /difficulties\.map\(\(option\) =>/u);
 });

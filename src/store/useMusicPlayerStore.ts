@@ -44,6 +44,7 @@ type MusicPlayerStore = {
   applyExternalPreferencesSnapshot: (snapshot: MusicPlayerPreferencesSnapshot | null) => void;
   refreshQueueArtwork: (artworkUrlsByItemId: Readonly<Record<string, string>>) => void;
   playQueueFromStart: (items: MusicPlayerItem[], currentIndex: number) => void;
+  playItem: (item: MusicPlayerItem) => void;
   requestTogglePlayback: () => void;
   requestPause: () => void;
   requestSeek: (positionSeconds: number) => void;
@@ -245,6 +246,21 @@ export const useMusicPlayerStore = create<MusicPlayerStore>((set, get) => ({
       command: createCommand(state.command, "restart"),
     }));
     persistQueue(get());
+  },
+
+  playItem: (item) => {
+    get().hydrate();
+    const state = get();
+    const index = state.queue.findIndex((queued) => queued.id === item.id);
+    if (index === state.currentIndex && state.queue[index]?.sourceUrl === item.sourceUrl) {
+      state.requestTogglePlayback();
+      return;
+    }
+    if (index < 0 && state.queue.length >= 500) return;
+    const queue = [...state.queue];
+    if (index < 0) queue.push(item);
+    else queue[index] = item;
+    state.playQueueFromStart(queue, index < 0 ? queue.length - 1 : index);
   },
 
   requestTogglePlayback: () => {

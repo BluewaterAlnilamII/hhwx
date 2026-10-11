@@ -1,5 +1,7 @@
 "use client";
 
+import { SongDifficultyControls } from "@/components/SongDetailLayout";
+
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
@@ -2626,25 +2628,8 @@ export default function ChartSimulatorRuntime({
       </div>
 
       <div className="mt-4 flex max-w-full items-center gap-2">
-        <div
-          aria-label={songsT("difficultyLabel")}
-          className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1"
-        >
-          {difficulties.map((option) => {
-            const selected = option.difficulty === difficulty;
-            return (
-              <button
-                key={option.difficulty}
-                type="button"
-                aria-pressed={selected}
-                onClick={() => changeDifficulty(option.difficulty)}
-                className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${selected ? "border-[var(--theme-color-selection-subtle-ring)] bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-control-foreground-pressed)]" : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)]"}`}
-              >
-                {songsT(`difficulties.${option.difficulty}`)}
-              </button>
-            );
-          })}
-        </div>
+        <SongDifficultyControls label={songsT("difficultyLabel")} value={difficulty} onChange={changeDifficulty}
+          options={difficulties.map((option) => ({ difficulty: option.difficulty, label: songsT(`difficulties.${option.difficulty}`) }))} />
         <button
           type="button"
           aria-label={t("controls.enterFullscreen")}

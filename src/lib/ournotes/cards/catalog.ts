@@ -1,5 +1,5 @@
 import { compareSearchValue, normalizeSearchText, SEARCH_SERVER_ALIASES, tokenizeSearch } from "@/lib/catalog-search";
-import { BANDORI_SEARCH_BAND_ALIASES } from "@/lib/bandori/search";
+import { OURNOTES_SEARCH_BAND_ALIASES as BAND_ALIASES } from "../search";
 import { BANDORI_CARD_SEARCH_CHARACTER_ALIASES } from "@/lib/bandori/cards/search-aliases";
 import { OURNOTES_SLOTS, type OurNotesServer } from "../master-contract";
 import { OURNOTES_SERVERS, OURNOTES_SERVER_CODES, getOurNotesServerFromCode, pickAvailableOurNotesServer } from "../server";
@@ -149,12 +149,6 @@ const ATTRIBUTE_ALIASES: Record<string, number> = {
   jade: 3, 翡翠: 3, green: 3, 绿: 3, 綠: 3,
   amber: 4, 琉金: 4, yellow: 4, 黄: 4, 黃: 4,
   violet: 5, 紫苑: 5, purple: 5, 紫: 5,
-};
-const BAND_ALIASES: Readonly<Record<number, readonly string[]>> = {
-  1: BANDORI_SEARCH_BAND_ALIASES[45],
-  2: ["avemujica", "mujica", "ave"],
-  3: ["mewtype", "梦限大", "夢限大", "ゆめみた", "yumemita"],
-  5: ["一家", "ikka", "dumb rock", "dumbrock"],
 };
 // Explicitly map the shared MyGO identities between the two games' character IDs.
 const CHARACTER_ALIASES: Readonly<Record<number, readonly string[]>> = {

@@ -197,7 +197,7 @@ function summary(row: Row, assets: ReturnType<typeof assetMetadata>) {
     musicCategories: row.musicCategories === undefined ? undefined : ids(row.musicCategories),
     bestMusicTagIds: row.bestMusicTagIDs === undefined ? undefined : ids(row.bestMusicTagIDs),
     startAt: row.startAt === undefined ? null : ourNotesTimestamp(row.startAt),
-    ...fields(row, ["gekisouMission1", "gekisouMission2", "gekisouMission3"], (v) => enumName(v, GEKISOU_MISSION_TYPES)),
+    ...fields(row, ["gekisouMission1", "gekisouMission2", "gekisouMission3"] as const, (v) => enumName(v, GEKISOU_MISSION_TYPES)),
     difficulty: difficulty(row.difficulties, false), ...assets,
   });
 }

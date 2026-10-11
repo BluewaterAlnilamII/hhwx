@@ -56,6 +56,9 @@
       "volume": "音量",
       "clear": "清空播放器",
       "playSong": "从头播放《{title}》",
+      "addAndPlaySong": "加入播放器并播放《{title}》",
+      "pauseSong": "暂停《{title}》",
+      "queueFull": "播放队列已满，请先清空播放器",
       "audioUnavailable": "暂无音频"
     }
   }

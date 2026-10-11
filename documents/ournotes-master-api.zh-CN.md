@@ -484,7 +484,7 @@ Music 所有日期字段使用十进制字符串形式的 Unix 毫秒时间戳�
 
 根 `missing[]` 中的 producer 表／引用诊断留在私有资料中；公开 `difficulty.*.missing:true` 继续表达已引用但缺少的谱面行。官方部分缺项仍可读取，不借用另一服 score 或伪造零值；必要对象缺失、损坏或消费结构非法仍失败。不公开源行、history、文本引用键、pointer 或存储路径；新增源字段不会自动流入响应。
 
-对象字段顺序用于阅读，调用者仍应按名称读取。数字 ID map 不保证歌曲顺序；选服后按该服 `sortOrder` 升序、相同值按数值 ID 升序排序。不增加 `sort/order/page` 查询或 `orderedIds`，不重排原生数组或 BPM 事件。
+对象字段顺序用于阅读，调用者仍应按名称读取。数字 ID map 不保证歌曲顺序；需要重现游戏内顺序时，选服后按该服 `sortOrder` 升序、相同值按数值 ID 升序排序。[Web 歌曲图鉴](ournotes-songs.zh-CN.md) 沿用 Bandori 默认 ID 倒序，不改变此 API 字段。不增加 `sort/order/page` 查询或 `orderedIds`，不重排原生数组或 BPM 事件。
 
 Web 字段精简作用于 HTTP 投影及其 `serverExtensions`；若地区差异只涉及被排除字段，不生成公开覆盖。既有消费者应使用保留的引用替代被移除的目录展开、使用已展开奖励数组替代 `rewardIds`，并使用固定 BPM 单位；当前仓库 UI 没有消费这些被移除的 Music 字段。这些 HTTP 精简可以使用现有 v2 包验收，无需重建它们。
 
