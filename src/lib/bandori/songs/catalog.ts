@@ -1,3 +1,4 @@
+import { SONG_DIFFICULTY_ALIASES as DIFFICULTY_ALIASES, parseSongPositiveInteger as parsePositiveInteger } from "@/lib/song-search";
 import { BANDORI_CHARACTER_GROUPS } from "@/lib/bandori-character-groups";
 import {
   BANDORI_SEARCH_BAND_ALIASES,
@@ -125,12 +126,6 @@ function getFirstRelease(
   );
 }
 
-function parsePositiveInteger(value: string | null): number | null {
-  if (value === null || !/^\d+$/u.test(value)) return null;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
-}
-
 function isDifficultyReleased(
   difficulty: BandoriMusicDifficulty,
   server: BandoriServer,
@@ -252,14 +247,7 @@ function sortLevel(
   return levels.length > 0 ? Math.max(...levels) : 0;
 }
 
-const DIFFICULTY_ALIASES: Record<BandoriChartDifficulty, readonly string[]> = {
-  easy: ["easy", "ez", "简单", "簡單", "イージー"],
-  normal: ["normal", "nm", "普通", "ノーマル"],
-  hard: ["hard", "hd", "困难", "困難", "ハード"],
-  expert: ["expert", "ex", "专家", "專家", "エキスパート"],
-  special: ["special", "sp", "特殊", "スペシャル"],
-};
-const difficultyRanks = new Map(BANDORI_CHART_DIFFICULTIES.flatMap((difficulty, rank) => (
+const difficultyRanks = new Map<string, number>(BANDORI_CHART_DIFFICULTIES.flatMap((difficulty, rank) => (
   DIFFICULTY_ALIASES[difficulty].map((alias) => [alias, rank] as const)
 )));
 

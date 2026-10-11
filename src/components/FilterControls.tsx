@@ -70,7 +70,7 @@ export function SelectionButton({
     <button
       type="button"
       title={title}
-      aria-label={ariaLabel}
+      aria-label={ariaLabel ?? title}
       aria-pressed={isSelected}
       onClick={onClick}
       className={`hhwx-control inline-flex h-9 min-w-9 items-center justify-center rounded-full border px-2 text-sm font-semibold transition ${className}`}

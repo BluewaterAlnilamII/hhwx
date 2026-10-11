@@ -9,10 +9,13 @@ import type { OurNotesCardSummary } from "@/lib/ournotes/cards/api-contract";
 import type { OurNotesCharacters, OurNotesBands } from "@/lib/ournotes/cards/catalog";
 import type { OurNotesSkills } from "@/lib/ournotes/skills-contract";
 import { OURNOTES_CARDS_INDEX_URL, parseOurNotesCardsAssetIndex } from "@/lib/ournotes/cards/assets";
+import type { OurNotesMusicSummary } from "@/lib/ournotes/music/api-contract";
+import { OURNOTES_MUSIC_INDEX_URL, parseOurNotesMusicAssetIndex } from "@/lib/ournotes/music/assets";
 
 type Datasets = {
   "cards/member": Record<string, OurNotesCardSummary>;
   "cards/support": Record<string, OurNotesCardSummary>;
+  music: Record<string, OurNotesMusicSummary>;
   characters: OurNotesCharacters; bands: OurNotesBands; skills: OurNotesSkills;
 };
 function parseMaster<T>(raw: unknown): T {
@@ -26,4 +29,8 @@ export function useOurNotesMaster<K extends keyof Datasets>(dataset: K) {
 const imageIndex = createPublicAssetIndexStore({ parse: parseOurNotesCardsAssetIndex });
 export function useOurNotesCardsAssetIndex() {
   return usePublicAssetIndex(OURNOTES_CARDS_INDEX_URL, imageIndex);
+}
+const musicIndex = createPublicAssetIndexStore({ parse: parseOurNotesMusicAssetIndex });
+export function useOurNotesMusicAssetIndex() {
+  return usePublicAssetIndex(OURNOTES_MUSIC_INDEX_URL, musicIndex);
 }

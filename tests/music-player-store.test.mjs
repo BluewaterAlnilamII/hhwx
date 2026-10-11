@@ -62,6 +62,48 @@ function resetStore(storage = createMemoryStorage()) {
   return storage;
 }
 
+test("catalog play hydrates, preserves a mixed queue and toggles the active track without duplicates", () => {
+  const storage = resetStore(createMemoryStorage([
+    [MUSIC_PLAYER_QUEUE_STORAGE_KEY, JSON.stringify(createMusicPlayerQueueSnapshot([FIRST_ITEM], 0, 1))],
+  ]));
+  const item = { ...SECOND_ITEM, id: "ournotes:100112", provider: "ournotes", providerTrackId: "100112" };
+  useMusicPlayerStore.getState().playItem(item);
+  let state = useMusicPlayerStore.getState();
+  assert.deepEqual(state.queue.map((track) => track.id), [FIRST_ITEM.id, item.id]);
+  assert.equal(state.currentIndex, 1);
+  assert.equal(state.command.type, "restart");
+  state.setPlaybackStatus("playing");
+  state.setPlaybackTime(15, 120);
+  state.playItem(item);
+  state = useMusicPlayerStore.getState();
+  assert.equal(state.queue.length, 2);
+  assert.equal(state.status, "paused");
+  assert.equal(state.currentTime, 15);
+  state.playItem(item);
+  assert.equal(useMusicPlayerStore.getState().command.type, "resume");
+  state.playItem(FIRST_ITEM);
+  state = useMusicPlayerStore.getState();
+  assert.equal(state.queue.length, 2);
+  assert.equal(state.currentIndex, 0);
+  assert.equal(state.currentTime, 0);
+  assert.equal(JSON.parse(storage.getItem(MUSIC_PLAYER_QUEUE_STORAGE_KEY)).items[1].provider, "ournotes");
+  useMusicPlayerStore.setState({ hydrated: false });
+  state.hydrate();
+  assert.equal(useMusicPlayerStore.getState().queue[1].id, item.id);
+  assert.equal(useMusicPlayerStore.getState().status, "paused");
+});
+
+test("catalog play respects the persisted queue limit without removing existing tracks", () => {
+  resetStore();
+  useMusicPlayerStore.getState().hydrate();
+  const queue = Array.from({ length: 500 }, (_, i) => ({ ...FIRST_ITEM, id: `bandori:${i + 1}` }));
+  useMusicPlayerStore.getState().playQueueFromStart(queue, 0);
+  useMusicPlayerStore.getState().playItem(SECOND_ITEM);
+  assert.deepEqual(useMusicPlayerStore.getState().queue, queue);
+  useMusicPlayerStore.getState().playItem(queue[499]);
+  assert.equal(useMusicPlayerStore.getState().currentIndex, 499);
+});
+
 test("audio seeking clamps positions and honors fast Media Session seeks", () => {
   const fastSeekPositions = [];
   const audio = {

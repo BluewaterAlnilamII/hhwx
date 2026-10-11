@@ -2,19 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useLocale, useTranslations } from "next-intl";
-import { Gauge, ListMusic, Music2, Timer } from "lucide-react";
+import { useTranslations } from "next-intl";
 import ChartSimulatorClientShell, {
   type ChartSimulatorClientShellProps,
 } from "./ChartSimulatorClientShell";
+import { SongDetailHeader, SongDetailTabs, SongStatistics } from "@/components/SongDetailLayout";
 import BandoriPageShell from "@/app/[locale]/bandori/BandoriPageShell";
-import Heading from "@/components/Heading";
-import MusicArtwork from "@/components/music-player/MusicArtwork";
 import { usePathname } from "@/i18n/navigation";
 import type { BandoriChartDifficulty } from "@/lib/bandori-master-contract";
 import { pickBandoriRegionalText } from "@/lib/bandori-server";
 import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
-import { cn } from "@/lib/utils";
 
 export type SongDetailRegionalTextSlots = [
   string | null,
@@ -43,19 +40,6 @@ type SongDetailPageClientProps = {
   >;
 };
 
-function formatDuration(seconds: number): string {
-  const wholeSeconds = Math.max(0, Math.floor(seconds));
-  return `${Math.floor(wholeSeconds / 60)}:${String(wholeSeconds % 60).padStart(2, "0")}`;
-}
-
-function formatBpm(values: readonly number[], locale: string): string {
-  const sorted = [...new Set(values)].sort((left, right) => left - right);
-  const formatter = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
-  if (sorted.length === 0) return "—";
-  if (sorted.length === 1) return formatter.format(sorted[0]);
-  return `${formatter.format(sorted[0])}–${formatter.format(sorted.at(-1) ?? sorted[0])}`;
-}
-
 export default function SongDetailPageClient({
   songId,
   titleSlots,
@@ -66,7 +50,6 @@ export default function SongDetailPageClient({
   simulator,
 }: SongDetailPageClientProps) {
   const t = useTranslations("bandori.songs");
-  const locale = useLocale();
   const preferredTextServer = useBandoriPreferredServer();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -149,82 +132,27 @@ export default function SongDetailPageClient({
     replaceSearchParams(next);
   };
 
-  const statistics = [
-    { id: "level", value: playLevel ?? "—", icon: Gauge },
-    { id: "notes", value: selectedOption.notes, icon: ListMusic },
-    { id: "bpm", value: formatBpm(selectedOption.bpmValues, locale), icon: Music2 },
-    { id: "duration", value: formatDuration(simulator.durationSeconds), icon: Timer },
-  ] as const;
-
   return (
     <BandoriPageShell contentClassName="max-w-6xl">
-      <article className="hhwx-panel border p-4 sm:p-6">
-        <div className="grid gap-5 sm:grid-cols-[8rem_minmax(0,1fr)] sm:items-start">
-          <div className="flex aspect-square w-32 items-center justify-center overflow-hidden rounded-2xl bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] shadow-[var(--theme-shadow-media)]">
-            {artworkUrl ? (
-              <MusicArtwork
-                src={artworkUrl}
-                alt={t("artworkAlt", { title })}
-                className="h-full w-full object-cover"
-                fallback={<Music2 className="h-8 w-8" aria-label={t("artworkUnavailable")} />}
-              />
-            ) : (
-              <Music2 className="h-8 w-8" aria-label={t("artworkUnavailable")} />
-            )}
-          </div>
-          <div className="min-w-0 space-y-4">
-            <div>
-              <p className="mb-1 text-sm font-semibold text-[var(--theme-color-text-muted)]">{t("songId", { songId })}</p>
-              <Heading as="h1" visualRole="page" className="break-words">{title}</Heading>
-              <p className="mt-2 text-sm font-medium text-[var(--theme-color-text-muted)] sm:text-base">{bandName}</p>
-            </div>
-          </div>
-        </div>
-      </article>
-
-      <div role="tablist" aria-label={t("detail.view.label")} className="hhwx-panel grid grid-cols-2 overflow-hidden border">
-        {(["info", "simulator"] as const).map((view) => {
-          const active = view === activeView;
-          return (
-            <button
-              key={view}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => selectView(view)}
-              className={cn(
-                "relative h-14 text-base font-black outline-hidden transition focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)]",
-                active
-                  ? "text-[var(--theme-color-tab-foreground-selected)]"
-                  : "text-[var(--theme-color-tab-foreground)] hover:bg-[var(--theme-color-tab-background-hover)] hover:text-[var(--theme-color-tab-foreground-hover)]",
-                view === "info" && "border-r border-[var(--theme-color-border-subtle)]",
-              )}
-            >
-              {t(`detail.view.${view}`)}
-              {active ? <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[var(--theme-color-tab-indicator-selected)]" /> : null}
-            </button>
-          );
-        })}
-      </div>
-
-      <div role="tabpanel" hidden={activeView !== "info"}>
+      <SongDetailHeader title={title} bandName={bandName} idLabel={t("songId", { songId })} artworkUrl={artworkUrl}
+        difficulties={difficulties.map((option) => ({ difficulty: option.difficulty, label: t(`difficulties.${option.difficulty}`),
+          level: option.playLevels.find((value) => value !== null) ?? null }))}
+        track={simulator.audioUrl ? {
+          id: `bandori:${songId}`, provider: "bandori", providerTrackId: String(songId), title, artist: bandName,
+          sourceUrl: simulator.audioUrl, artworkUrl, durationSeconds: simulator.durationSeconds,
+        } : null}
+        labels={{ artwork: t("artworkAlt", { title }), unavailable: t("artworkUnavailable"), loading: t("states.loading") }} />
+      <SongDetailTabs value={activeView} onChange={selectView}
+        labels={{ label: t("detail.view.label"), info: t("detail.view.info"), simulator: t("detail.view.simulator") }} />
+      <div id="song-panel-info" role="tabpanel" aria-labelledby="song-tab-info" hidden={activeView !== "info"}>
         <section className="hhwx-panel border p-4 sm:p-6">
-          <dl className="hhwx-catalog-statistics grid grid-cols-2 sm:grid-cols-4">
-          {statistics.map(({ id, value, icon: Icon }) => (
-            <div key={id} className="bg-[var(--theme-color-control-background-muted)] p-3">
-              <dt className="flex items-center gap-1.5 text-xs font-semibold text-[var(--theme-color-text-muted)]">
-                <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                {t(`stats.${id}`)}
-              </dt>
-              <dd className="mt-1 tabular-nums text-[var(--theme-color-text-default)]">{value}</dd>
-            </div>
-          ))}
-          </dl>
+          <SongStatistics level={playLevel} notes={selectedOption.notes} bpmValues={selectedOption.bpmValues} durationSeconds={simulator.durationSeconds}
+            labels={{ level: t("stats.level"), notes: t("stats.notes"), bpm: t("stats.bpm"), duration: t("stats.duration") }} />
         </section>
       </div>
 
       {hasOpenedSimulator ? (
-        <div role="tabpanel" hidden={activeView !== "simulator"}>
+        <div id="song-panel-simulator" role="tabpanel" aria-labelledby="song-tab-simulator" hidden={activeView !== "simulator"}>
           <ChartSimulatorClientShell
             {...simulator}
             difficulty={difficulty}

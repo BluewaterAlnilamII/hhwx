@@ -20,7 +20,7 @@ export type MusicPlayerStatus =
 
 export type MusicPlayerItem = {
   id: string;
-  provider: "bandori" | "falcom";
+  provider: "bandori" | "falcom" | "ournotes";
   providerTrackId: string;
   title: string;
   artist: string | null;
@@ -113,7 +113,7 @@ function parseMusicPlayerItem(value: unknown): MusicPlayerItem | null {
 
   if (
     !isSafeIdentifier(value.id)
-    || (value.provider !== "bandori" && value.provider !== "falcom")
+    || (value.provider !== "bandori" && value.provider !== "falcom" && value.provider !== "ournotes")
     || !isSafeIdentifier(value.providerTrackId)
     || !isSafeText(value.title)
     || (value.artist !== null && (typeof value.artist !== "string" || value.artist.length > 512))

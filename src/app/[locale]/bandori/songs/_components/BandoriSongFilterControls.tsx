@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode, type RefObject } from "react";
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Search, X } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { FilterRow, SelectionButton, ToggleAllButton as SharedToggleAllButton } from "@/components/FilterControls";
+import SongFilterControls from "@/components/SongFilterControls";
 import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
 import BandoriSearchHelp from "@/components/bandori/BandoriSearchHelp";
-import BandoriFilterResultCount from "@/components/bandori/BandoriFilterResultCount";
 import { buildBandoriCardBandIconUrl } from "@/lib/bandori-builtin-resources";
 import { BANDORI_CHARACTER_GROUPS } from "@/lib/bandori-character-groups";
 import {
@@ -19,202 +18,31 @@ import {
 } from "@/lib/bandori/songs/catalog";
 import { BANDORI_SERVERS, getBandoriServerCode } from "@/lib/bandori-server";
 
-type BandoriSongFilterControlsProps = {
-  filter: BandoriSongsPageFilter;
-  resultCountLabel: string;
-  onFilterChange: (patch: Partial<BandoriSongsPageFilter>) => void;
-  onClearFilter: () => void;
-};
-
 function toggleSelection<T>(values: readonly T[], value: T): T[] {
-  return values.includes(value)
-    ? values.filter((item) => item !== value)
-    : [...values, value];
+  return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
 }
-
 function areAllSelected<T>(selected: readonly T[], available: readonly T[]): boolean {
   return available.length > 0 && available.every((value) => selected.includes(value));
 }
-
-function SelectionButton({
-  isSelected,
-  title,
-  children,
-  onClick,
-  className = "",
-}: {
-  isSelected: boolean;
-  title: string;
-  children: ReactNode;
-  onClick: () => void;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      title={title}
-      aria-label={title}
-      aria-pressed={isSelected}
-      onClick={onClick}
-      className={`hhwx-control inline-flex h-9 min-w-9 items-center justify-center rounded-full border px-2 text-sm font-semibold transition ${className}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function ToggleAllButton({
-  isSelected,
-  label,
-  onClick,
-}: {
-  isSelected: boolean;
-  label: string;
-  onClick: () => void;
-}) {
+function ToggleAllButton({ isSelected, label, onClick }: { isSelected: boolean; label: string; onClick: () => void }) {
   const t = useTranslations("bandori.songs.filters");
-  return (
-    <SelectionButton
-      isSelected={isSelected}
-      title={isSelected ? t("actions.clearAll", { group: label }) : t("actions.selectAll", { group: label })}
-      onClick={onClick}
-      className="min-w-13 px-3 text-xs"
-    >
-      {t("actions.all")}
-    </SelectionButton>
-  );
+  return <SharedToggleAllButton isSelected={isSelected} allLabel={t("actions.all")}
+    selectAllLabel={t("actions.selectAll", { group: label })} clearAllLabel={t("actions.clearAll", { group: label })} onClick={onClick} />;
 }
-
-function FilterRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="grid gap-2 sm:grid-cols-[5.5rem_1fr] sm:items-start">
-      <div className="hhwx-filter-label pt-2 text-sm font-medium text-[var(--theme-color-text-muted)]">{label}</div>
-      <div className="flex min-w-0 flex-wrap items-center gap-2">{children}</div>
-    </div>
-  );
-}
-
-function numberInputValue(value: number | null): string {
-  return value === null ? "" : String(value);
-}
-
-function parseLevelInput(value: string): number | null {
-  if (!value) return null;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
-}
-
-function LevelInput({ label, value, onCommit, inputRef }: { label: string; value: number | null; onCommit: (value: number | null) => void; inputRef: RefObject<HTMLInputElement | null> }) {
-  useEffect(() => {
-    if (inputRef.current) inputRef.current.value = numberInputValue(value);
-  }, [value, inputRef]);
-  const commit = () => {
-    const next = parseLevelInput(inputRef.current?.value ?? "");
-    if (next !== value) onCommit(next);
-  };
-  return (
-    <label className="flex items-center gap-2 text-xs font-semibold text-[var(--theme-color-text-muted)]">
-      {label}
-      <input
-        ref={inputRef}
-        type="number"
-        min={1}
-        inputMode="numeric"
-        defaultValue={numberInputValue(value)}
-        onBlur={commit}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            commit();
-          }
-        }}
-        className="hhwx-control h-10 w-20 rounded-xl border px-3 text-sm transition"
-      />
-    </label>
-  );
-}
-
-export default function BandoriSongFilterControls({
-  filter,
-  resultCountLabel,
-  onFilterChange,
-  onClearFilter,
-}: BandoriSongFilterControlsProps) {
+export default function BandoriSongFilterControls({ filter, resultCountLabel, onFilterChange, onClearFilter }: {
+  filter: BandoriSongsPageFilter; resultCountLabel: string;
+  onFilterChange: (patch: Partial<BandoriSongsPageFilter>) => void; onClearFilter: () => void;
+}) {
   const t = useTranslations("bandori.songs.filters");
   const searchT = useTranslations("bandori.cardFilters.actions");
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const minLevelInputRef = useRef<HTMLInputElement>(null);
-  const maxLevelInputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (searchInputRef.current) searchInputRef.current.value = filter.query;
-  }, [filter.query]);
   const bandLabel = t("rows.band");
   const typeLabel = t("rows.type");
   const serverLabel = t("rows.serverAvailability");
-
-  return (
-    <div className="hhwx-panel border p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <form
-          role="search"
-          className="flex min-w-0 flex-1 gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            const query = searchInputRef.current?.value.trim() ?? "";
-            if (query !== filter.query) onFilterChange({ query });
-          }}
-        >
-          <div className="relative min-w-0 flex-1">
-            <Search className="hhwx-filter-search-icon pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--theme-color-text-muted)]" aria-hidden="true" />
-            <input
-              ref={searchInputRef}
-              type="search"
-              defaultValue={filter.query}
-              onInput={(event) => {
-                if (event.currentTarget.value === "" && filter.query !== "" && !(event.nativeEvent as InputEvent).isComposing) {
-                  onFilterChange({ query: "" });
-                }
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter") return;
-                event.stopPropagation();
-                if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) event.preventDefault();
-              }}
-              enterKeyHint="search"
-              aria-label={t("searchPlaceholder")}
-              placeholder={t("searchPlaceholder")}
-              className="hhwx-control h-10 w-full rounded-xl border pl-9 pr-3 text-sm transition"
-            />
-          </div>
-          <button
-            type="submit"
-            aria-label={searchT("search")}
-            className="hhwx-control inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition"
-          >
-            <Search className="h-4 w-4" aria-hidden="true" />
-          </button>
-          <BandoriSearchHelp kind="songs" />
-        </form>
-        <div className="flex items-center gap-2">
-          <BandoriFilterResultCount label={resultCountLabel} />
-          <button
-            type="button"
-            onClick={() => {
-              for (const inputRef of [searchInputRef, minLevelInputRef, maxLevelInputRef]) {
-                if (inputRef.current) inputRef.current.value = "";
-              }
-              onClearFilter();
-            }}
-            className="hhwx-control inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition"
-          >
-            <X className="h-4 w-4" aria-hidden="true" />
-            {t("actions.clear")}
-          </button>
-        </div>
-      </div>
-
-      <div className="mt-4 space-y-3">
+  return <SongFilterControls filter={filter} resultCountLabel={resultCountLabel} onFilterChange={onFilterChange} onClearFilter={onClearFilter}
+    help={<BandoriSearchHelp kind="songs" />} sortOptions={BANDORI_SONG_SORTS.map((value) => ({ value, label: t(`sort.${value}`) }))}
+    labels={{ searchPlaceholder: t("searchPlaceholder"), search: searchT("search"), clear: t("actions.clear"),
+      level: t("rows.level"), min: t("levelMin"), max: t("levelMax"), sort: t("rows.sort"), asc: t("sortDirection.asc"), desc: t("sortDirection.desc"),
+      directionTitle: t(`sortDirection.${filter.sortDirection}Title`), directionAria: t(`sortDirection.${filter.sortDirection}Aria`) }}>
         <FilterRow label={serverLabel}>
           {BANDORI_SERVERS.map((server) => {
             const code = getBandoriServerCode(server).toUpperCase();
@@ -333,41 +161,5 @@ export default function BandoriSongFilterControls({
           />
         </FilterRow>
 
-        <FilterRow label={t("rows.level")}>
-          <LevelInput inputRef={minLevelInputRef} label={t("levelMin")} value={filter.minLevel} onCommit={(minLevel) => onFilterChange({ minLevel })} />
-          <span className="text-[var(--theme-color-text-muted)]" aria-hidden="true">–</span>
-          <LevelInput inputRef={maxLevelInputRef} label={t("levelMax")} value={filter.maxLevel} onCommit={(maxLevel) => onFilterChange({ maxLevel })} />
-        </FilterRow>
-
-        <FilterRow label={t("rows.sort")}>
-          <select
-            value={filter.sortBy}
-            onChange={(event) => onFilterChange({
-              sortBy: event.target.value as BandoriSongsPageFilter["sortBy"],
-            })}
-            aria-label={t("rows.sort")}
-            className="hhwx-control h-10 min-w-64 rounded-xl border px-3 text-sm transition"
-          >
-            {BANDORI_SONG_SORTS.map((sort) => (
-              <option key={sort} value={sort}>{t(`sort.${sort}`)}</option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={() => onFilterChange({
-              sortDirection: filter.sortDirection === "desc" ? "asc" : "desc",
-            })}
-            className="hhwx-control inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition"
-            title={t(`sortDirection.${filter.sortDirection}Title`)}
-            aria-label={t(`sortDirection.${filter.sortDirection}Aria`)}
-          >
-            {filter.sortDirection === "desc"
-              ? <ArrowDownWideNarrow className="h-4 w-4" aria-hidden="true" />
-              : <ArrowUpNarrowWide className="h-4 w-4" aria-hidden="true" />}
-            {t(`sortDirection.${filter.sortDirection}`)}
-          </button>
-        </FilterRow>
-      </div>
-    </div>
-  );
+  </SongFilterControls>;
 }

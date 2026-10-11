@@ -56,6 +56,9 @@
       "volume": "Volume",
       "clear": "Clear player",
       "playSong": "Play {title} from the beginning",
+      "addAndPlaySong": "Add {title} to the player and play",
+      "pauseSong": "Pause {title}",
+      "queueFull": "Queue is full; clear the player first",
       "audioUnavailable": "Audio unavailable"
     }
   }

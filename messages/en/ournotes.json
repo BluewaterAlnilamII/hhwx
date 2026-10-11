@@ -98,5 +98,121 @@
       "title": "Card title",
       "skillEffect": "Skill effect"
     }
+  },
+  "songs": {
+    "page": {
+      "title": "OurNotes Song Catalog",
+      "resultCount": "{count} songs",
+      "showMore": "Show {count} more"
+    },
+    "filters": {
+      "searchPlaceholder": "Search song names or other filters",
+      "searchHelp": {
+        "label": "Search rules",
+        "title": "Filter examples:",
+        "band": "Band: e.g. <code>go</code> / <code>ゆめみた</code> / <code>mujica</code> match the corresponding band",
+        "difficulty": "Difficulty: e.g. <code>hd</code> / <code>hard</code> / <code>困难</code> / <code>ハード</code> match HARD difficulty",
+        "difficultyRange": "Difficulty range: e.g. <code>hd+</code> / <code>{difficulty}</code> match HARD / EXPERT difficulties",
+        "level": "Level: e.g. <code>{level}</code> matches songs with a chart at level 26 or below among the selected difficulties",
+        "songType": "Song category: <code>original</code> matches original songs; <code>anime</code> matches the anime category",
+        "server": "Available server: e.g. <code>en</code> / <code>intl</code> / <code>ww</code> / <code>国际服</code> match songs available on EN",
+        "id": "ID: <code>#100001</code> matches only song ID 100001; a bare integer matches a song ID or displayed level",
+        "name": "Name only: e.g. <code>/happy</code> / <code>\"happy\"</code> match only songs whose names contain happy"
+      },
+      "otherBand": "Other",
+      "serverAvailabilityAria": "Filter songs available on the {server} server",
+      "levelMin": "Min",
+      "levelMax": "Max",
+      "rows": {
+        "serverAvailability": "Server",
+        "band": "Band",
+        "type": "Type",
+        "difficulty": "Difficulty",
+        "level": "Song level",
+        "sort": "Sort"
+      },
+      "types": {
+        "0": "All",
+        "1": "Original",
+        "2": "Virtual",
+        "3": "J-POP",
+        "4": "Anime",
+        "5": "Game",
+        "6": "Another Band"
+      },
+      "difficulties": {
+        "easy": "EASY",
+        "normal": "NORMAL",
+        "hard": "HARD",
+        "expert": "EXPERT"
+      },
+      "sort": {
+        "id": "Song ID",
+        "title": "Song title",
+        "level": "Song level",
+        "release_jp": "Start date (JP)",
+        "release_en": "Start date (EN)",
+        "release_tw": "Start date (TW)",
+        "release_cn": "Start date (CN)",
+        "release_kr": "Start date (KR)"
+      },
+      "sortDirection": {
+        "desc": "Descending",
+        "asc": "Ascending",
+        "descTitle": "Currently descending, switch to ascending",
+        "ascTitle": "Currently ascending, switch to descending",
+        "descAria": "Sort direction: descending",
+        "ascAria": "Sort direction: ascending"
+      },
+      "actions": {
+        "all": "All",
+        "clear": "Clear",
+        "selectAll": "Select all {group}",
+        "clearAll": "Clear all {group}",
+        "search": "Search"
+      }
+    },
+    "states": {
+      "loading": "Loading the song catalog",
+      "loadFailed": "Unable to load song data, please try again later",
+      "empty": "No songs match the current filters"
+    },
+    "detail": {
+      "view": {
+        "label": "Song page view",
+        "info": "Song Details",
+        "simulator": "Chart Simulator"
+      },
+      "attribute": "Attribute",
+      "mission": "GEKISO mission {slot}",
+      "simulatorUnavailable": "Chart simulator is not yet available"
+    },
+    "songId": "Song #{songId}",
+    "unknownTitle": "Song #{songId}",
+    "unknownBand": "Unknown band",
+    "artworkAlt": "{title} artwork",
+    "difficultyLabel": "Chart difficulty",
+    "difficulties": {
+      "easy": "EASY",
+      "normal": "NORMAL",
+      "hard": "HARD",
+      "expert": "EXPERT"
+    },
+    "stats": {
+      "level": "Level",
+      "notes": "Combo count",
+      "bpm": "BPM",
+      "duration": "Duration"
+    },
+    "detailTitle": "{title} - OurNotes Song Catalog",
+    "unknownCategory": "Category {value}",
+    "unknownValue": "Unknown ({value})",
+    "missions": {
+      "None": "Not specified",
+      "Combo": "COMBO",
+      "Luck": "LUCK",
+      "JustCount": "JUST",
+      "All": "All"
+    }
   }
 }
