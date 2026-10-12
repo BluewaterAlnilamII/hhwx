@@ -203,6 +203,7 @@ function rankingFixture(count = 40) {
     const id = 100001 + Math.floor(i / 2), difficulty = i % 2 === 0 ? 0 : 3;
     music[id] ??= { musicTitle: Array(5).fill(`Song ${id}`), bandName: Array(5).fill(i < 20 ? "Band A" : "Band B"),
       bandIds: [i < 20 ? 1 : 2], musicCategories: [i < 20 ? 1 : 2], startAt: null,
+      musicType: i < 20 ? "Ruby" : "Azure", gekisouMission1: "Combo", gekisouMission2: "Combo", gekisouMission3: i < 20 ? "Combo" : "Luck",
       serverExtensions: i < 20 ? [{}, null, null, null, null] : [{}, {}, {}, {}, {}],
       length: i < 2 ? 1 : 120, difficulty: {}, bpm: {} };
     music[id].difficulty[difficulty] = { musicScoreDisplayLevel: difficulty === 0 ? 7 : 25, fullComboCount: 100 };
@@ -233,14 +234,15 @@ test("top five percent is per chart and metric, includes cutoff ties and ignores
   assert.equal(all.find((row) => chartKey(row) === "100019:easy").topScore, false);
 });
 
-test("search, availability, band, type, difficulty, level and sort never redefine the highlight population", () => {
+test("catalog filters and sort never redefine the highlight population", () => {
   const { rows } = rankingFixture(), all = new Map(rows().map((row) => [chartKey(row), row]));
-  for (const query of ["q=%23100002", "available=cn", "bands=1", "types=1", "difficulty=easy", "minLevel=20", "maxLevel=10"]) {
+  for (const query of ["q=%23100002", "available=cn", "bands=1", "types=1", "attributes=1", "gekisou=mix", "attributes=2&gekisou=mix", "difficulty=easy", "minLevel=20", "maxLevel=10"]) {
     const filtered = rows({ query, sort: "efficiency", direction: "asc" });
     assert.ok(filtered.length > 0 && filtered.length < all.size, query);
     for (const row of filtered) assert.deepEqual(row, all.get(chartKey(row)), query);
   }
   assert.deepEqual(rows({ query: "q=no-such-song" }), []);
+  for (const query of ["attributes=", "gekisou=", "attributes=1&gekisou=mix"]) assert.deepEqual(rows({ query }), []);
   for (const row of rows({ sort: "title", direction: "asc" })) assert.deepEqual(row, all.get(chartKey(row)));
 });
 

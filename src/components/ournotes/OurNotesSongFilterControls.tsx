@@ -9,8 +9,9 @@ import ServerIcon from "@/components/ServerIcon";
 import { OURNOTES_SERVERS, OURNOTES_SERVER_CODES, pickOurNotesRegionalText } from "@/lib/ournotes/server";
 import type { OurNotesServer } from "@/lib/ournotes/master-contract";
 import type { OurNotesBand } from "@/lib/ournotes/catalogs-contract";
-import { ourNotesBandIcon } from "@/lib/ournotes/cards/assets";
-import { OURNOTES_SONG_CATEGORIES, OURNOTES_SONG_DIFFICULTIES, OURNOTES_SONG_SORTS,
+import { ourNotesAttributeIcon, ourNotesBandIcon } from "@/lib/ournotes/cards/assets";
+import { OURNOTES_ATTRIBUTES } from "@/lib/ournotes/cards/catalog";
+import { OURNOTES_SONG_CATEGORIES, OURNOTES_SONG_DIFFICULTIES, OURNOTES_SONG_GEKISOU_TYPES, OURNOTES_SONG_SORTS,
   ourNotesSongBandFilters, type OurNotesSongFilter } from "@/lib/ournotes/music/catalog";
 
 export default function OurNotesSongFilterControls({ filter, resultCountLabel, bands, server, onFilterChange, onClearFilter, showSort = true }: {
@@ -19,6 +20,7 @@ export default function OurNotesSongFilterControls({ filter, resultCountLabel, b
   showSort?: boolean;
 }) {
   const t = useTranslations("ournotes.songs.filters");
+  const cardT = useTranslations("ournotes.cards");
   function row<T extends string | number>(label: string, values: readonly T[], selected: readonly T[], name: (value: T) => string,
     content: (value: T) => ReactNode, onChange: (values: T[]) => void, className?: string) {
     const all = values.every((value) => selected.includes(value));
@@ -43,6 +45,12 @@ export default function OurNotesSongFilterControls({ filter, resultCountLabel, b
         // eslint-disable-next-line @next/next/no-img-element
         : <img src={ourNotesBandIcon(id)} alt={pickOurNotesRegionalText(bands[String(id)]?.bandName, server) || `#${id}`} loading="lazy" decoding="async" className="h-6 w-6 object-contain sm:h-7 sm:w-7" />,
       (bands) => onFilterChange({ bands }))}
+    {row(cardT("filters.attributes"), OURNOTES_ATTRIBUTES, filter.attributes, (id) => cardT(`attributes.${id}`),
+      // eslint-disable-next-line @next/next/no-img-element
+      (id) => <img src={ourNotesAttributeIcon(id)!} alt={cardT(`attributes.${id}`)} loading="lazy" decoding="async" className="h-6 w-6 object-contain sm:h-7 sm:w-7" />,
+      (attributes) => onFilterChange({ attributes }))}
+    {row(t("rows.gekisou"), OURNOTES_SONG_GEKISOU_TYPES, filter.gekisou, (value) => t(`gekisou.${value}`), (value) => t(`gekisou.${value}`),
+      (gekisou) => onFilterChange({ gekisou }), "px-2 text-xs sm:px-3")}
     {row(t("rows.type"), OURNOTES_SONG_CATEGORIES, filter.types, (value) => t(`types.${value}`), (value) => t(`types.${value}`), (types) => onFilterChange({ types }), "px-2 text-xs sm:px-3")}
     {row(t("rows.difficulty"), OURNOTES_SONG_DIFFICULTIES, filter.difficulties, (value) => t(`difficulties.${value}`), (value) => t(`difficulties.${value}`),
       (difficulties) => onFilterChange({ difficulties }), "px-2 text-xs sm:px-3")}

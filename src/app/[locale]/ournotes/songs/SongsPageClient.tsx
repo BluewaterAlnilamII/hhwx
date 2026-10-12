@@ -13,6 +13,8 @@ import OurNotesSongMeta from "@/components/ournotes/OurNotesSongMeta";
 import { useOurNotesMaster, useOurNotesMusicAssetIndex } from "@/hooks/useOurNotesMaster";
 import { useOurNotesPreferencesStore, useOurNotesPreferredServer } from "@/store/useServerPreferencesStore";
 import { ourNotesMusicImageUrl } from "@/lib/ournotes/music/assets";
+import { CARD_TYPES, GEKISOU_MISSION_TYPES } from "@/lib/ournotes/api-enums";
+import { ourNotesAttributeIcon } from "@/lib/ournotes/cards/assets";
 import { buildOurNotesMusicPlayerItem } from "@/lib/ournotes-music-player";
 import { buildOurNotesSongCatalog, filterOurNotesSongs, ourNotesSongBandFilters, parseOurNotesSongFilter, updateOurNotesSongsQuery,
   type OurNotesSongFilter } from "@/lib/ournotes/music/catalog";
@@ -42,6 +44,7 @@ export default function SongsPageClient() {
 
 function SongInformation() {
   const t = useTranslations("ournotes.songs");
+  const cardT = useTranslations("ournotes.cards");
   const commonT = useTranslations("common");
   const locale = useLocale();
   const query = useSearchParams().toString();
@@ -86,8 +89,15 @@ function SongInformation() {
         </div> : null}
         {results.slice(0, count).map((entry) => {
           const title = entry.title || t("unknownTitle", { songId: entry.songId });
+          const attributeId = CARD_TYPES.findIndex((value) => value === entry.attribute);
+          const attributeIcon = ourNotesAttributeIcon(attributeId);
+          const missions = entry.missions.map((mission) => mission === null ? "—"
+            : (GEKISOU_MISSION_TYPES as readonly (string | number)[]).includes(mission) ? t(`missions.${mission}`)
+              : t("unknownValue", { value: String(mission) })).join("-");
           return <SongCatalogRow key={entry.songId} href={`/ournotes/songs/${entry.songId}`} songId={entry.songId} title={title}
             bandName={entry.bandName || t("unknownBand")}
+            attribute={attributeIcon ? { src: attributeIcon, label: cardT(`attributes.${attributeId}`) } : undefined}
+            missions={{ text: missions, label: t("filters.rows.gekisou") }}
             typeLabel={entry.categories.map((value) => value >= 0 && value <= 6 ? t(`filters.types.${value}`) : t("unknownCategory", { value })).join(" / ") || "—"}
             releaseDate={entry.releaseAt === null ? "—" : dateFormatter.format(entry.releaseAt)} artworkUrl={ourNotesMusicImageUrl(images.value, entry.songId, "thumb")}
             track={buildOurNotesMusicPlayerItem({ songId: entry.songId, title, artist: entry.bandName, assetIndex: images.value })}

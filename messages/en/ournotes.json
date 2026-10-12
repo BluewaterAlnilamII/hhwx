@@ -126,6 +126,7 @@
       "rows": {
         "serverAvailability": "Server",
         "band": "Band",
+        "gekisou": "Gekisou",
         "type": "Type",
         "difficulty": "Difficulty",
         "level": "Song level",
@@ -139,6 +140,12 @@
         "4": "Anime",
         "5": "Game",
         "6": "Another Band"
+      },
+      "gekisou": {
+        "combo": "COMBO",
+        "just": "JUST",
+        "luck": "LUCK",
+        "mix": "MIX"
       },
       "difficulties": {
         "easy": "EASY",
