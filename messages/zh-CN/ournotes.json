@@ -126,6 +126,7 @@
       "rows": {
         "serverAvailability": "服务器",
         "band": "乐队",
+        "gekisou": "激奏",
         "type": "类型",
         "difficulty": "难易度",
         "level": "乐曲等级",
@@ -139,6 +140,12 @@
         "4": "动画",
         "5": "游戏",
         "6": "Another Band"
+      },
+      "gekisou": {
+        "combo": "COMBO",
+        "just": "JUST",
+        "luck": "LUCK",
+        "mix": "混合"
       },
       "difficulties": {
         "easy": "EASY",

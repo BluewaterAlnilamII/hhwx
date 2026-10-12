@@ -172,6 +172,68 @@ test("query defaults, explicit empty selections and CN aliases round-trip withou
   assert.deepEqual(run({ 100001: song() }, rangedQuery), [100001]);
 });
 
+test("Gekisou groups classify every valid triplet and preserve its order and duplicates", () => {
+  const types = { Combo: "combo", JustCount: "just", Luck: "luck" };
+  for (const first of Object.keys(types)) for (const second of Object.keys(types)) for (const third of Object.keys(types)) {
+    const record = song({ gekisouMission1: first, gekisouMission2: second, gekisouMission3: third });
+    const expected = first === second && second === third ? types[first] : "mix";
+    const [entry] = buildOurNotesSongCatalog({ 100001: record }, 3);
+    assert.deepEqual(entry.missions, [first, second, third]);
+    assert.equal(entry.gekisouType, expected);
+    for (const group of ["combo", "just", "luck", "mix"]) {
+      assert.deepEqual(run({ 100001: record }, `gekisou=${group}`), group === expected ? [100001] : []);
+    }
+  }
+});
+
+test("attribute and Gekisou filters use OR within groups and AND across groups", () => {
+  const records = {
+    100001: song({ gekisouMission3: "Combo" }),
+    100002: song({ musicType: "Azure", gekisouMission3: "Combo" }),
+    100003: song(),
+    100004: song({ musicType: "Jade", gekisouMission1: "Luck", gekisouMission2: "Luck" }),
+  };
+  assert.deepEqual(run(records, "attributes=1,2&gekisou=combo,mix"), [100003, 100002, 100001]);
+  assert.deepEqual(run(records, "attributes=1&gekisou=combo"), [100001]);
+  assert.deepEqual(run(records, "attributes=2&gekisou=mix"), []);
+  for (const query of ["attributes=", "gekisou=", "attributes=unknown", "gekisou=unknown"]) assert.deepEqual(run(records, query), []);
+  const query = updateOurNotesSongsQuery("view=meta&liveSkill=5", { attributes: [1, 2], gekisou: ["combo", "mix"] }, bandFilters);
+  assert.deepEqual(filter(query), { ...filter(), attributes: [1, 2], gekisou: ["combo", "mix"] });
+  assert.equal(new URLSearchParams(query).get("view"), "meta");
+  assert.equal(new URLSearchParams(query).get("liveSkill"), "5");
+  assert.equal(updateOurNotesSongsQuery(query, filter(), bandFilters), "view=meta&liveSkill=5");
+  const empty = updateOurNotesSongsQuery("", { attributes: [], gekisou: [] }, bandFilters);
+  assert.equal(new URLSearchParams(empty).get("attributes"), "");
+  assert.equal(new URLSearchParams(empty).get("gekisou"), "");
+  assert.deepEqual(run(records, empty), []);
+});
+
+test("unrestricted filters retain missing and unknown values without classifying them as mixed", () => {
+  for (const value of [undefined, "None", "All", 91]) {
+    const record = song({ musicType: value, gekisouMission2: value });
+    const [entry] = buildOurNotesSongCatalog({ 100001: record }, 3);
+    assert.equal(entry.attribute, value ?? null);
+    assert.deepEqual(entry.missions, ["Combo", value ?? null, "Luck"]);
+    assert.equal(entry.gekisouType, null);
+    assert.deepEqual(run({ 100001: record }), [100001]);
+    assert.deepEqual(run({ 100001: record }, "attributes=1,2,3,4,5&gekisou=combo,just,luck,mix"), [100001]);
+    assert.deepEqual(run({ 100001: record }, "attributes=1,2,3,4"), []);
+    assert.deepEqual(run({ 100001: record }, "gekisou=mix"), []);
+  }
+});
+
+test("catalog attributes and missions follow regional replacements, deletions and preferred-server fallback", () => {
+  const record = song({ serverExtensions: [null, {}, { musicType: "Azure", gekisouMission3: "Combo" },
+    { musicType: null, gekisouMission2: null }, {}] });
+  const entries = [0, 2, 3].map((server) => buildOurNotesSongCatalog({ 100001: record }, server)[0]);
+  assert.deepEqual(entries.map((entry) => entry.attribute), ["Ruby", "Azure", null]);
+  assert.deepEqual(entries.map((entry) => entry.missions), [["Combo", "Combo", "Luck"], ["Combo", "Combo", "Combo"], ["Combo", null, "Luck"]]);
+  assert.deepEqual(entries.map((entry) => entry.gekisouType), ["mix", "combo", null]);
+  assert.deepEqual(run({ 100001: record }, "attributes=1&gekisou=mix", 0), [100001]);
+  assert.deepEqual(run({ 100001: record }, "attributes=2&gekisou=combo", 2), [100001]);
+  assert.deepEqual(run({ 100001: record }, "attributes=1&gekisou=mix", 3), []);
+});
+
 test("regional start-date sorting puts unset dates last in either direction", () => {
   const records = { 100001: song({ startAt: null }), 100002: song(), 100003: song({ serverExtensions: [{}, {}, {}, {}, { startAt: "1867193200000" }] }) };
   assert.deepEqual(run(records, "sort=release_kr"), [100003, 100002, 100001]);

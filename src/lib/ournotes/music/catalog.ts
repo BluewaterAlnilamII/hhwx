@@ -1,6 +1,8 @@
 import { compareSearchValue, normalizeSearchText, SEARCH_SERVER_ALIASES, tokenizeSearch } from "@/lib/catalog-search";
 import { SONG_DIFFICULTY_ALIASES, parseSongPositiveInteger } from "@/lib/song-search";
 import type { OurNotesBand } from "../catalogs-contract";
+import { CARD_TYPES } from "../api-enums";
+import { OURNOTES_ATTRIBUTES } from "../cards/catalog";
 import { OURNOTES_SLOTS, type OurNotesServer } from "../master-contract";
 import { OURNOTES_SERVERS, OURNOTES_SERVER_CODES, getOurNotesServerFromCode, pickAvailableOurNotesServer } from "../server";
 import { OURNOTES_SEARCH_BAND_ALIASES } from "../search";
@@ -8,18 +10,31 @@ import { selectOurNotesMusic, type OurNotesMusicRecord, type OurNotesMusicSummar
 
 export const OURNOTES_SONG_DIFFICULTIES = ["easy", "normal", "hard", "expert"] as const;
 export const OURNOTES_SONG_CATEGORIES = [1, 2, 3, 4, 5, 6] as const;
+export const OURNOTES_SONG_GEKISOU_TYPES = ["combo", "just", "luck", "mix"] as const;
 export const OURNOTES_SONG_SORTS = ["id", "title", "level", "release_jp", "release_en", "release_tw", "release_cn", "release_kr"] as const;
 export type OurNotesSongDifficulty = typeof OURNOTES_SONG_DIFFICULTIES[number];
 export type OurNotesSongBandFilter = number | "other";
+export type OurNotesSongGekisouType = typeof OURNOTES_SONG_GEKISOU_TYPES[number];
 export type OurNotesSongFilter = {
   query: string; servers: OurNotesServer[]; bands: OurNotesSongBandFilter[]; types: number[]; difficulties: OurNotesSongDifficulty[];
+  attributes: number[]; gekisou: OurNotesSongGekisouType[];
   minLevel: number | null; maxLevel: number | null; sortBy: typeof OURNOTES_SONG_SORTS[number]; sortDirection: "asc" | "desc";
 };
 export type OurNotesSongChart = { difficulty: OurNotesSongDifficulty; level: number | null; sortLevel: number | null; combo: number | null; bpmValues: number[] };
 export type OurNotesSongEntry = {
   songId: number; title: string; bandName: string; bandIds: number[]; categories: number[]; servers: OurNotesServer[];
+  attribute: NonNullable<OurNotesMusicSummary["musicType"]> | null;
+  missions: (NonNullable<OurNotesMusicSummary["gekisouMission1"]> | null)[]; gekisouType: OurNotesSongGekisouType | null;
   releaseAt: number | null; releaseAtByServer: (number | null)[]; charts: OurNotesSongChart[]; searchNames: string[]; searchText: string;
 };
+
+function songGekisouType(missions: OurNotesSongEntry["missions"]): OurNotesSongGekisouType | null {
+  if (!missions.every((mission) => mission === "Combo" || mission === "JustCount" || mission === "Luck")) return null;
+  if (missions.every((mission) => mission === "Combo")) return "combo";
+  if (missions.every((mission) => mission === "JustCount")) return "just";
+  if (missions.every((mission) => mission === "Luck")) return "luck";
+  return "mix";
+}
 
 export function isOurNotesSongDifficulty(value: string): value is OurNotesSongDifficulty {
   return (OURNOTES_SONG_DIFFICULTIES as readonly string[]).includes(value);
@@ -68,8 +83,10 @@ export function buildOurNotesSongCatalog(records: Record<string, OurNotesMusicSu
       return regional?.startAt == null ? null : Number(regional.startAt);
     });
     const releases = releaseAtByServer.filter((value): value is number => value !== null && value > 0);
+    const missions = [music.gekisouMission1 ?? null, music.gekisouMission2 ?? null, music.gekisouMission3 ?? null];
     return [{ songId: Number(id), title: music.musicTitle[0] || music.musicTitle[server], bandName: music.bandName[server],
       bandIds: music.bandIds ?? [], categories: music.musicCategories ?? [],
+      attribute: music.musicType ?? null, missions, gekisouType: songGekisouType(missions),
       servers: OURNOTES_SERVERS.filter((slot) => record.serverExtensions?.[slot] != null),
       releaseAt: releases.length ? Math.min(...releases) : null, releaseAtByServer, charts: ourNotesSongCharts(music),
       searchNames: music.musicTitle.map(normalizeSearchText),
@@ -97,6 +114,8 @@ export function parseOurNotesSongFilter(query: string, bands: readonly OurNotesS
       return slot === null ? [] : [slot];
     }))],
     bands: selection(params.get("bands"), bands), types: selection(params.get("types"), OURNOTES_SONG_CATEGORIES),
+    attributes: selection(params.get("attributes"), OURNOTES_ATTRIBUTES),
+    gekisou: selection(params.get("gekisou"), OURNOTES_SONG_GEKISOU_TYPES),
     difficulties: selection(params.get("difficulty"), OURNOTES_SONG_DIFFICULTIES),
     minLevel: parseSongPositiveInteger(params.get("minLevel")), maxLevel: parseSongPositiveInteger(params.get("maxLevel")),
     sortBy: OURNOTES_SONG_SORTS.includes(sort as OurNotesSongFilter["sortBy"]) ? sort as OurNotesSongFilter["sortBy"] : "id",
@@ -115,6 +134,7 @@ export function updateOurNotesSongsQuery(query: string, patch: Partial<OurNotesS
   set("q", filter.query.trim(), !filter.query.trim());
   list("available", filter.servers.map((slot) => OURNOTES_SLOTS[slot]), OURNOTES_SLOTS);
   list("bands", filter.bands, bands); list("types", filter.types, OURNOTES_SONG_CATEGORIES);
+  list("attributes", filter.attributes, OURNOTES_ATTRIBUTES); list("gekisou", filter.gekisou, OURNOTES_SONG_GEKISOU_TYPES);
   list("difficulty", filter.difficulties, OURNOTES_SONG_DIFFICULTIES);
   set("minLevel", String(filter.minLevel), filter.minLevel === null); set("maxLevel", String(filter.maxLevel), filter.maxLevel === null);
   set("sort", filter.sortBy, filter.sortBy === "id"); set("direction", filter.sortDirection, filter.sortDirection === "desc");
@@ -173,6 +193,8 @@ export function filterOurNotesSongs(entries: readonly OurNotesSongEntry[], filte
     if (!filter.servers.some((server) => entry.servers.includes(server)) || !filter.difficulties.length) return false;
     if (filter.bands.length < bandFilters.length && !filter.bands.some((band) => matchesBand(entry, band))) return false;
     if (filter.types.length < OURNOTES_SONG_CATEGORIES.length && !filter.types.some((category) => entry.categories.includes(category))) return false;
+    if (filter.attributes.length < OURNOTES_ATTRIBUTES.length && !filter.attributes.some((id) => CARD_TYPES[id] === entry.attribute)) return false;
+    if (filter.gekisou.length < OURNOTES_SONG_GEKISOU_TYPES.length && (entry.gekisouType === null || !filter.gekisou.includes(entry.gekisouType))) return false;
     const matchesChart = (difficulty: OurNotesSongDifficulty | null, level: number | null) =>
       (filter.minLevel === null || (level !== null && level >= filter.minLevel))
       && (filter.maxLevel === null || (level !== null && level <= filter.maxLevel))
