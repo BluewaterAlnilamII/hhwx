@@ -85,6 +85,16 @@ Bandori 单曲与组曲计算器的契约、算法及验证入口见 [documents/
 
 Kaoru AI 通过打包后的模块 Worker 运行，与同步兜底共用同一份实现。页面与生成的 Worker 文件需要一起部署；页面不再请求 `/kaoru.worker.js`。`test:othello` 检查保留落子结果和 Worker 消息协议；`test:comments` 在不使用真实凭据的情况下检查可选读取身份及写入认证要求。
 
+## 更新 PM2 部署
+
+已有名为 `hhwx` 的 PM2 进程时，使用该进程所属用户运行纳入版本管理的部署脚本：
+
+```bash
+./deploy.sh
+```
+
+脚本会进入自身所在的检出目录，以仅快进方式拉取 `origin/main`，通过 `npm ci` 安装锁定依赖，使用 1024 MB 的 Node.js 堆内存上限完成构建，并在这些步骤全部成功后重启 `hhwx`。该用户的 `PATH` 中需要有 Node.js、npm、PM2 以及上文列出的构建工具；部署环境变量保存在检出目录中不纳入版本管理的 `.env.local`。脚本直接更新现有检出目录，因此应在允许服务中断的维护窗口运行。
+
 ## Supabase 设置
 
 新 schema 变更只有一个 source of truth：[supabase/migrations](supabase/migrations)。[supabase/schema](supabase/schema) 下的文件是 legacy/reference snapshot，`documents/**/*.sql` 用于 maintenance、backfill、compatibility 或 reference。设置和复查说明见 [documents/supabase-setup.zh-CN.md](documents/supabase-setup.zh-CN.md)；两类 snapshot/reference 区域都不是独立的 migration history。
