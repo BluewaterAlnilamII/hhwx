@@ -24,7 +24,7 @@ The repository is suitable for local development and self-hosted deployment, but
 
 ## Requirements
 
-- Node.js 22 or newer
+- Node.js 26 is recommended and used by CI; the minimum supported version remains Node.js 22.
 - npm
 - rustup (the repository pins the Rust toolchain used by the medley scorer and search)
 - `wasm-bindgen-cli` matching the workspace's locked `wasm-bindgen` crate when rebuilding the browser package (currently `cargo install wasm-bindgen-cli --version 0.2.127 --locked`)

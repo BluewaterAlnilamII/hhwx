@@ -24,7 +24,7 @@ HHWX 是非官方粉丝/工具项目，不隶属于、未获得、也不代表 B
 
 ## 需求
 
-- Node.js 22 或更新版本
+- 推荐使用 Node.js 26，CI 也使用该版本；最低支持版本仍为 Node.js 22。
 - npm
 - rustup（仓库会锁定组曲计分与搜索所使用的 Rust 工具链）
 - 重建浏览器包时，需要与 workspace 中 `wasm-bindgen` 锁定版本一致的 `wasm-bindgen-cli`（当前安装命令为 `cargo install wasm-bindgen-cli --version 0.2.127 --locked`）
