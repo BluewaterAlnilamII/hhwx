@@ -220,6 +220,8 @@ export default function AccountNotificationsPage() {
     let disposed = false;
 
     if (!authReady || !userId) {
+      // No notification subscription/read can be active without an authenticated owner.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       return () => {
         disposed = true;

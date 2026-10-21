@@ -311,7 +311,6 @@ export default function CalendarPage() {
     enableStartSameDayReminder,
     endPreviousDayReminderTime,
     endSameDayReminderTime,
-    selectedBands,
     selectedCharacterIds,
     startPreviousDayReminderTime,
     startSameDayReminderTime,

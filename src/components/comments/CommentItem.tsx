@@ -380,13 +380,15 @@ export const CommentItem = memo(function CommentItem({
       })
     : null;
 
-  useEffect(() => {
+  const [dialogContext, setDialogContext] = useState({ id: comment.id, isDeleted });
+  if (dialogContext.id !== comment.id || dialogContext.isDeleted !== isDeleted) {
+    setDialogContext({ id: comment.id, isDeleted });
     setDeleteDialogOpen(false);
     setDeleting(false);
     setReactionPickerOpen(false);
     setReactionDialogEmojiKey(null);
     setReactingEmojiKey(null);
-  }, [comment.id, isDeleted]);
+  }
 
   const permalink = useMemo(() => {
     return buildPermalink(comment.id, commentPage);

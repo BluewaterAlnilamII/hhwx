@@ -118,7 +118,7 @@ export function getSavedGame(): SavedGameData | null {
                 return parsed as SavedGameData;
             }
         }
-    } catch (e) {
+    } catch {
         // 忽略 JSON 解析错误
     }
     return null;
@@ -147,7 +147,7 @@ export function useOthelloGame(playerColor: PlayerColor, characterIds?: { player
                     return;
                 }
             }
-        } catch (e) {
+        } catch {
             // 忽略 JSON 解析错误
         }
     }, []);
@@ -173,7 +173,7 @@ export function useOthelloGame(playerColor: PlayerColor, characterIds?: { player
                 aiCharacterId: characterIds?.aiId,
             };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
-        } catch (e) {
+        } catch {
             // 忽略写入错误（如 localStorage 已满）
         }
     }, [state.board, state.currentPlayer, state.gamePhase, state.lastMove, state.playerColor, state.aiColor, characterIds]);

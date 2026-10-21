@@ -25,7 +25,7 @@ The repository is suitable for local development and self-hosted deployment, but
 ## Requirements
 
 - Node.js 26 is recommended and used by CI; the minimum supported version remains Node.js 22.
-- npm
+- npm 11.20 is recommended; native install-script approvals are stored in the project (see [Contributing](CONTRIBUTING.md)).
 - rustup (the repository pins the Rust toolchain used by the medley scorer and search)
 - `wasm-bindgen-cli` matching the workspace's locked `wasm-bindgen` crate when rebuilding the browser package (currently `cargo install wasm-bindgen-cli --version 0.2.127 --locked`)
 - A Supabase project for account-backed features
@@ -35,7 +35,7 @@ The repository is suitable for local development and self-hosted deployment, but
 ## Quick Start
 
 ```bash
-npm install
+npm ci
 cp .env.example .env.local
 npm run dev
 ```

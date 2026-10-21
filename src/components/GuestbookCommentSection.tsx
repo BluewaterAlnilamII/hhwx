@@ -56,6 +56,8 @@ export default function GuestbookCommentSection() {
     }, []);
 
     useEffect(() => {
+        // Start the Supabase read; cleanup invalidates any late response.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchComments();
         return () => { readSequence.current += 1; };
     }, [fetchComments]);

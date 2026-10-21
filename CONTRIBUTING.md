@@ -7,10 +7,14 @@ Thanks for taking the time to improve HHWX.
 ## Development
 
 ```bash
-npm install
+npm ci
 cp .env.example .env.local
 npm run dev
 ```
+
+Dependency updates must keep `package.json` and `package-lock.json` together. With npm 11.20, ordinary `npm ci` uses the version-specific native build approvals in `package.json`'s `allowScripts`. After changing a dependency with an install script, review `npm install-scripts ls`, inspect that version's script, and update its approval with `npm install-scripts approve <package>`; use `npm install-scripts prune` to remove obsolete approvals. Do not enable all install scripts globally.
+
+The current lint stack keeps ESLint 9.39.5 because Next.js 16.4.2's React, JSX accessibility and import plugins do not yet declare ESLint 10 compatibility. TypeScript stays on 6.0.x within typescript-eslint's supported range. Recheck those peer ranges before either major upgrade; do not use `--force` or `--legacy-peer-deps` to hide conflicts. ESLint 9 is out of support, so this is a temporary compatibility constraint.
 
 ## Verification
 

@@ -3,8 +3,6 @@ import {
     PlayerColor,
     getValidMoves,
     countPieces,
-    isCorner,
-    isEdge,
     evaluatePotentialDiff,
     applyMove,
     opponent,

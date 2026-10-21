@@ -260,6 +260,8 @@ function ElementVirtualizedBandoriCardGrid<T>({
   overscan = DEFAULT_OVERSCAN,
   layoutKey = "",
 }: VirtualizedBandoriCardGridProps<T>) {
+  "use no memo";
+  // TanStack Virtual exposes a mutable instance; its reads must stay outside compiler memoization.
   const isDesktop = useDesktopBreakpoint();
   const itemSize = isDesktop ? desktopItemSize : mobileItemSize;
   const rowHeight = itemSize + gap;
@@ -272,6 +274,8 @@ function ElementVirtualizedBandoriCardGrid<T>({
     `${width}:${rowCount}:${itemSize}:${gap}:${layoutKey}`,
     scrollElementRef,
   );
+  // The component opts out above; keep virtualizer reads live instead of memoizing its mutable API.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer<HTMLElement, HTMLDivElement>({
     count: rowCount,
     getScrollElement: () => scrollElementRef?.current ?? null,

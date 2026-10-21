@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Image from "next/image";
 import { useTranslations } from "next-intl";
 import FallingPatterns from "@/components/FallingPatterns";
 import CharacterSelect from "@/components/CharacterSelect";
@@ -63,9 +64,12 @@ export default function OthelloPage() {
                 <div className="text-center">
                   <div className="mx-auto mb-1 h-14 w-14 overflow-hidden rounded-full border-2"
                     style={{ borderColor: playerCharInfo.color }}>
-                    <img
+                    <Image
                       src={playerCharInfo.avatar}
                       alt={playerCharInfo.nameJp}
+                      width={56}
+                      height={56}
+                      unoptimized
                       className="h-full w-full object-cover"
                     />
                   </div>
@@ -76,9 +80,12 @@ export default function OthelloPage() {
                 <div className="text-center">
                   <div className="mx-auto mb-1 h-14 w-14 overflow-hidden rounded-full border-2"
                     style={{ borderColor: aiCharInfo.color }}>
-                    <img
+                    <Image
                       src={aiCharInfo.avatar}
                       alt={aiCharInfo.nameJp}
+                      width={56}
+                      height={56}
+                      unoptimized
                       className="h-full w-full object-cover"
                     />
                   </div>

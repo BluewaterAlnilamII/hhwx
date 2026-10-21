@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
 import { Image as ImageIcon, Save, X } from "lucide-react";
@@ -54,12 +54,13 @@ export default function AccountAvatarCardControl({
   const [message, setMessage] = useState("");
   const pickerScrollRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    if (!open) {
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
       setDraftValue(profileToPickerValue(profile));
       setMessage("");
     }
-  }, [open, profile]);
+    setOpen(nextOpen);
+  };
 
   const hasChanges = useMemo(() => {
     const current = profileToPickerValue(profile);
@@ -114,7 +115,7 @@ export default function AccountAvatarCardControl({
   };
 
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
+    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Trigger asChild>
         <button
           type="button"

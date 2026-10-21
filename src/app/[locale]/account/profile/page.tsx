@@ -2,7 +2,7 @@
 
 import { LoadingSpinner } from "@/components/LoadingIndicator";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInState } from "../AccountShell";
 import { type AccountProfile, getAccessToken, useLocalizedAccountProfile } from "../useAccountProfile";
@@ -29,7 +29,9 @@ export default function AccountProfilePage() {
     loadingProfile,
     profileError,
   } = useLocalizedAccountProfile();
-  const [usernameInput, setUsernameInput] = useState("");
+  const profileUsername = profile?.username ?? "";
+  const [previousUsername, setPreviousUsername] = useState(profileUsername);
+  const [usernameInput, setUsernameInput] = useState(profileUsername);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const usernameHint = getLocalizedUsernameHint(authT);
@@ -42,9 +44,10 @@ export default function AccountProfilePage() {
     patternMessage: usernameHint,
   });
 
-  useEffect(() => {
-    setUsernameInput(profile?.username ?? "");
-  }, [profile?.username]);
+  if (previousUsername !== profileUsername) {
+    setPreviousUsername(profileUsername);
+    setUsernameInput(profileUsername);
+  }
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();

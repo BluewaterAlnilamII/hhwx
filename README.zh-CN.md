@@ -25,7 +25,7 @@ HHWX 是非官方粉丝/工具项目，不隶属于、未获得、也不代表 B
 ## 需求
 
 - 推荐使用 Node.js 26，CI 也使用该版本；最低支持版本仍为 Node.js 22。
-- npm
+- 推荐使用 npm 11.20；原生依赖安装脚本的许可保存在项目中，见[贡献指南](CONTRIBUTING.zh-CN.md)。
 - rustup（仓库会锁定组曲计分与搜索所使用的 Rust 工具链）
 - 重建浏览器包时，需要与 workspace 中 `wasm-bindgen` 锁定版本一致的 `wasm-bindgen-cli`（当前安装命令为 `cargo install wasm-bindgen-cli --version 0.2.127 --locked`）
 - 用于账号功能的 Supabase 项目
@@ -35,7 +35,7 @@ HHWX 是非官方粉丝/工具项目，不隶属于、未获得、也不代表 B
 ## 快速开始
 
 ```bash
-npm install
+npm ci
 cp .env.example .env.local
 npm run dev
 ```

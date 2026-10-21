@@ -8,6 +8,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -557,7 +558,8 @@ export default function ChartSimulatorRuntime({
     typeof createMusicPlaybackBrowserAudioSession
   > | null>(null);
   playbackAudioSessionRef.current ??= createMusicPlaybackBrowserAudioSession();
-  const transportRef = useRef(createBandoriChartTransportState(durationSeconds));
+  const [transport, setTransport] = useState(() => createBandoriChartTransportState(durationSeconds));
+  const transportRef = useRef(transport);
   const fullscreenRootRef = useRef<HTMLDivElement | null>(null);
   const frameStepHoldRef = useRef<ActiveFrameStepHold | null>(null);
   const loopPointClearHoldRef = useRef<ActiveLoopPointClearHold | null>(null);
@@ -597,7 +599,6 @@ export default function ChartSimulatorRuntime({
   const [assetLoadState, setAssetLoadState] = useState<AssetLoadState>({
     status: "loading",
   });
-  const [transport, setTransport] = useState(transportRef.current);
   const [activeTab, setActiveTab] = useState<SimulatorTab>("stage");
   const [stageFullscreenMode, setStageFullscreenMode] =
     useState<StageFullscreenMode>(null);
@@ -859,7 +860,9 @@ export default function ChartSimulatorRuntime({
     ? `${musicLoadId}:${getBandoriNativeTapSeCueBankId(effectiveTapSeSkin)}`
     : "unavailable";
   const stageLoadIdRef = useRef(stageLoadId);
-  stageLoadIdRef.current = stageLoadId;
+  useLayoutEffect(() => {
+    stageLoadIdRef.current = stageLoadId;
+  }, [stageLoadId]);
 
   const handleStageLoadProgress = useCallback(
     (progress: NativeSimulatorStageLoadProgress) => {
@@ -1415,6 +1418,8 @@ export default function ChartSimulatorRuntime({
       handleMusicPlaybackError,
     );
     if (audioUrl) {
+      // The progress view follows this newly created audio runtime and its abortable load.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMusicLoadProgress({
         completedResources: 0,
         loadId: musicLoadId,
@@ -1554,6 +1559,8 @@ export default function ChartSimulatorRuntime({
     effectTimelineVersionRef.current += 1;
     stopAndResetNoteSounds(0, false, true);
     nativeAudioRuntimeRef.current?.stopAll();
+    // Publish the stopped external transport together with its loop and error state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTransport(next);
     setLoopPoints(nextLoopPoints);
     setHasPlaybackError(false);
@@ -1568,6 +1575,8 @@ export default function ChartSimulatorRuntime({
   ]);
 
   useEffect(() => {
+    // Leaving the simulator must stop audio immediately, including its transport display.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!isActive) pauseAudioAndTransport();
   }, [isActive, pauseAudioAndTransport]);
 
@@ -1578,6 +1587,8 @@ export default function ChartSimulatorRuntime({
 
   useEffect(() => {
     let isCurrent = true;
+    // A retry starts a new external asset load; retain cleanup protection for late responses.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAssetLoadState({ status: "loading" });
     void loadBandoriChartSimulatorAssets({
       refresh: loadAttempt > 0,

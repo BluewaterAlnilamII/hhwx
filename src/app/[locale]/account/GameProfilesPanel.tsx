@@ -291,6 +291,8 @@ export default function GameProfilesPanel() {
   }, [requestGameJson, t]);
 
   useEffect(() => {
+    // Start the account's remote/local profile read with its loading indicator.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadData();
   }, [loadData]);
 
