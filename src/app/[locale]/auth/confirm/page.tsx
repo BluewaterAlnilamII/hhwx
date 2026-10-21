@@ -181,7 +181,7 @@ function AuthConfirmPageContent() {
   const [savingPassword, setSavingPassword] = useState(false);
   const hasHandledRef = useRef(false);
   const passwordPolicyMessage = getLocalizedPasswordPolicyMessage(authT);
-  const authErrorMessages = useMemo(() => getLocalizedAuthErrorMessages(authT), [authT]);
+  const authErrorMessages = getLocalizedAuthErrorMessages(authT);
   const passwordValidationProps = createNativeValidationProps({
     label: authT("fields.newPassword"),
     customValidationMessage: (value) => getLocalizedPasswordValidationMessage(value, authT),
@@ -245,6 +245,7 @@ function AuthConfirmPageContent() {
     }
 
     hasHandledRef.current = true;
+    const authErrorMessages = getLocalizedAuthErrorMessages(authT);
 
     let active = true;
 
@@ -397,7 +398,7 @@ function AuthConfirmPageContent() {
     return () => {
       active = false;
     };
-  }, [authErrorMessages, errorT, logout, nextPath, searchParams, setAuth, status, t]);
+  }, [authT, errorT, logout, nextPath, searchParams, setAuth, status, t]);
 
   const handlePasswordReset = async (event: React.FormEvent) => {
     event.preventDefault();

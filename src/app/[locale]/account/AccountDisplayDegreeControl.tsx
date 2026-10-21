@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
 import { BadgeCheck, Save, X } from "lucide-react";
@@ -104,6 +104,7 @@ export default function AccountDisplayDegreeControl({
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const optionsRequestRef = useRef(0);
   const { catalog, loading: loadingCatalog, error: catalogError, refresh: refreshCatalog } = useBandoriDegreeCatalog(true);
 
   const catalogByServer = useMemo(() => {
@@ -131,10 +132,12 @@ export default function AccountDisplayDegreeControl({
   const hasChanges = !compareDisplayDegreeSelections(toSelection(profile), draft);
 
   const loadOptions = useCallback(async (settings?: { preserveDraft?: boolean }) => {
+    const requestId = ++optionsRequestRef.current;
     setLoadingOptions(true);
     setMessage("");
     try {
       const accessToken = await getAccessToken();
+      if (requestId !== optionsRequestRef.current) return;
       if (!accessToken) {
         setMessage(t("notSignedIn"));
         return;
@@ -144,6 +147,7 @@ export default function AccountDisplayDegreeControl({
         cache: "no-store",
       });
       const payload = await response.json().catch(() => ({}));
+      if (requestId !== optionsRequestRef.current) return;
       if (!response.ok) {
         setMessage(getLocalizedApiErrorMessage(payload, errorT) || t("httpLoadFailed", { status: response.status }));
         return;
@@ -170,22 +174,27 @@ export default function AccountDisplayDegreeControl({
         });
       }
     } catch (error) {
+      if (requestId !== optionsRequestRef.current) return;
       setMessage(error instanceof Error ? error.message : t("loadFailed"));
     } finally {
-      setLoadingOptions(false);
+      if (requestId === optionsRequestRef.current) setLoadingOptions(false);
     }
   }, [errorT, onProfileChange, profile, t]);
 
-  useEffect(() => {
-    if (!open) {
-      setDraft(toSelection(profile));
-      setOptions(null);
-      setSelectedAccountKey(null);
-      setMessage("");
-      return;
+  useEffect(() => () => { optionsRequestRef.current += 1; }, []);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    optionsRequestRef.current += 1;
+    setOpen(nextOpen);
+    setDraft(toSelection(profile));
+    setOptions(null);
+    setSelectedAccountKey(null);
+    setMessage("");
+    setLoadingOptions(false);
+    if (nextOpen) {
+      void loadOptions();
     }
-    void loadOptions();
-  }, [loadOptions, open, profile]);
+  };
 
   const saveDegree = async () => {
     setSaving(true);
@@ -225,7 +234,7 @@ export default function AccountDisplayDegreeControl({
         displayDegreeId: saved.degreeId,
         displayDegreeEffectId: saved.degreeEffectId,
       });
-      setOpen(false);
+      handleOpenChange(false);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : t("saveFailed"));
     } finally {
@@ -234,7 +243,7 @@ export default function AccountDisplayDegreeControl({
   };
 
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
+    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Trigger asChild>
         <button
           type="button"

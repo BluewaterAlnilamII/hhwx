@@ -6,7 +6,7 @@ import Heading from "@/components/Heading";
 import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { Link, useRouter } from "@/i18n/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { formatAuthErrorMessage } from "@/lib/auth-error";
 import { parseApiSuccessData } from "@/lib/api-contracts";
 import { createNativeValidationProps } from "@/lib/native-validation";
@@ -79,7 +79,9 @@ export default function AuthPageContent() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [usernameInput, setUsernameInput] = useState("");
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const flashMessage = flashNotice === "signup-email-sent" ? t("flash.signupEmailSent") : "";
+  const [previousFlashMessage, setPreviousFlashMessage] = useState(flashMessage);
+  const [notice, setNotice] = useState(flashMessage);
   const [loading, setLoading] = useState(false);
   const captchaRef = useRef<TurnstileChallengeHandle | null>(null);
   const { isTurnstileEnabled, isTurnstileLoading } = useTurnstileAvailability();
@@ -88,7 +90,7 @@ export default function AuthPageContent() {
   const shouldShowCaptcha = isTurnstileEnabled && mode !== "login";
   const passwordPolicyMessage = getLocalizedPasswordPolicyMessage(t);
   const usernameHint = getLocalizedUsernameHint(t);
-  const authErrorMessages = useMemo(() => getLocalizedAuthErrorMessages(t), [t]);
+  const authErrorMessages = getLocalizedAuthErrorMessages(t);
   const usernameValidationProps = createNativeValidationProps({
     label: t("fields.username"),
     customValidationMessage: (value) => getLocalizedUsernameValidationMessage(value, t),
@@ -142,9 +144,10 @@ export default function AuthPageContent() {
     captchaRef.current?.reset();
   };
 
-  useEffect(() => {
-    setNotice(flashNotice === "signup-email-sent" ? t("flash.signupEmailSent") : "");
-  }, [flashNotice, t]);
+  if (previousFlashMessage !== flashMessage) {
+    setPreviousFlashMessage(flashMessage);
+    setNotice(flashMessage);
+  }
 
   const switchMode = (nextMode: AuthViewMode) => {
     if (nextMode === mode) {

@@ -2,7 +2,7 @@
 
 import { LoadingSpinner } from "@/components/LoadingIndicator";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import TurnstileChallenge, { type TurnstileChallengeHandle } from "@/components/TurnstileChallenge";
 import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInState } from "../AccountShell";
@@ -31,7 +31,9 @@ export default function AccountEmailPage() {
     loadProfile,
     syncStoreSummary,
   } = useLocalizedAccountProfile();
-  const [newEmail, setNewEmail] = useState("");
+  const profileEmail = profile?.email ?? "";
+  const [previousEmail, setPreviousEmail] = useState(profileEmail);
+  const [newEmail, setNewEmail] = useState(profileEmail);
   const [emailSaving, setEmailSaving] = useState(false);
   const [emailMessage, setEmailMessage] = useState("");
   const [resendingVerification, setResendingVerification] = useState(false);
@@ -41,9 +43,10 @@ export default function AccountEmailPage() {
   const emailValidationProps = createNativeValidationProps({ label: authT("fields.email"), invalidTypeMessage: authT("validation.invalidEmail") });
   const { isTurnstileEnabled, isTurnstileLoading } = useTurnstileAvailability();
 
-  useEffect(() => {
-    setNewEmail(profile?.email ?? "");
-  }, [profile?.email]);
+  if (previousEmail !== profileEmail) {
+    setPreviousEmail(profileEmail);
+    setNewEmail(profileEmail);
+  }
 
   const requireCaptchaToken = (
     captchaRef: React.MutableRefObject<TurnstileChallengeHandle | null>,

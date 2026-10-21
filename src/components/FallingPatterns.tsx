@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import { buildHhwxSiteResCdnUrl } from "@/lib/site-assets";
 
 const bandPatternUrl = buildHhwxSiteResCdnUrl("band_3.svg");
@@ -31,10 +32,14 @@ export default function FallingPatterns() {
     return (
         <div className="falling-pattern">
             {items.map((item) => (
-                <img
+                <Image
                     key={item.id}
                     src={bandPatternUrl}
                     alt=""
+                    width={44}
+                    height={44}
+                    unoptimized
+                    loading="eager"
                     className="falling-disc"
                     style={{
                         left: `${item.left}%`,

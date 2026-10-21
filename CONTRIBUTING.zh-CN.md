@@ -7,10 +7,14 @@ English version: [CONTRIBUTING.md](CONTRIBUTING.md)
 ## 开发
 
 ```bash
-npm install
+npm ci
 cp .env.example .env.local
 npm run dev
 ```
+
+依赖更新必须同时维护 `package.json` 和 `package-lock.json`。在 npm 11.20 下，普通 `npm ci` 会使用 `package.json` 的 `allowScripts` 中按版本记录的原生构建脚本许可。更新包含安装脚本的依赖后，运行 `npm install-scripts ls`，审查该版本脚本，再用 `npm install-scripts approve <package>` 更新许可；用 `npm install-scripts prune` 清理失效的旧许可。不要全局允许所有安装脚本。
+
+当前 lint 工具链保留 ESLint 9.39.5，因为 Next.js 16.4.2 使用的 React、JSX 可访问性和 import 插件尚未声明兼容 ESLint 10。TypeScript 保持在 typescript-eslint 支持的 6.0.x 范围内。升级这两个大版本之前应重新核对 peer 依赖范围，不要用 `--force` 或 `--legacy-peer-deps` 掩盖冲突。ESLint 9 已结束支持，因此这是一项临时兼容限制。
 
 ## 验证
 

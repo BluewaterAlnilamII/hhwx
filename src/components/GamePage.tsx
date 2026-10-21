@@ -188,7 +188,8 @@ export default function GamePage() {
         };
 
         // 调试模式：计算并设置 AI 权重（清除上一轮后设置新一轮）
-        if (debugMode && aiChar) {
+        // Snapshot the display preference at turn start; toggling it must not restart the turn.
+        if (useGameStore.getState().debugMode && aiChar) {
             clearAIWeights();
             const weights = computeAIWeights(aiChar.id, state.board, aiColor, randomContext);
             setAIWeights(weights);
@@ -268,6 +269,8 @@ export default function GamePage() {
         state.gamePhase,
         aiColor,
         aiChar,
+        clearAIWeights,
+        setAIWeights,
         lock,
         unlock,
         setPhase,

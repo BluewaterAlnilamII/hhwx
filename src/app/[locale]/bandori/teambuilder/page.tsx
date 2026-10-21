@@ -2174,7 +2174,7 @@ function TeamBuilderPanel({ userId }: { userId: string }) {
     onProgress?: (response: TeamSearchWorkerProgressResponse) => void;
     cleanup?: () => void;
   }>());
-  const profilePayloadCacheRef = useRef(new Map<string, UserGameProfilePayload>());
+  const [profilePayloadCache, setProfilePayloadCache] = useState(() => new Map<string, UserGameProfilePayload>());
   const loadDataRequestRef = useRef(0);
   const selectedProfileCacheKey = profileChoice ? `${profileChoice.source}:${profileChoice.id}` : "";
 
@@ -2532,7 +2532,7 @@ function TeamBuilderPanel({ userId }: { userId: string }) {
     ? selectedProfile?.name ?? labelsT("selectedProfile")
     : labelsT("unselectedProfile");
   const selectedProfilePayload = selectedProfileCacheKey
-    ? profilePayloadCacheRef.current.get(selectedProfileCacheKey) ?? null
+    ? profilePayloadCache.get(selectedProfileCacheKey) ?? null
     : null;
   const selectedProfileCards = useMemo(
     () => selectedProfilePayload ? getGameProfileCards(selectedProfilePayload) : [],
@@ -2670,7 +2670,6 @@ function TeamBuilderPanel({ userId }: { userId: string }) {
     if (!submitting || calculationStartedAt === null) {
       return undefined;
     }
-    setCalculationNow(Date.now());
     const intervalId = window.setInterval(() => {
       setCalculationNow(Date.now());
     }, 1000);
@@ -2752,6 +2751,8 @@ function TeamBuilderPanel({ userId }: { userId: string }) {
   ]);
 
   useEffect(() => {
+    // This starts account/master requests; loadData guards commits with a request generation.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadData();
     return () => { loadDataRequestRef.current += 1; };
   }, [loadData]);
@@ -2765,6 +2766,8 @@ function TeamBuilderPanel({ userId }: { userId: string }) {
     const canPreloadCharts = isMedleyEvent
       ? medleySongIds.every((id) => id && Number.isFinite(Number(id)))
       : Boolean(songId);
+    // Mark the new Worker preload pending before accepting its asynchronous response.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPreloadState((current) => ({
       ...current,
       master: current.master === "ready" ? "ready" : "loading",
@@ -2822,12 +2825,14 @@ function TeamBuilderPanel({ userId }: { userId: string }) {
 
   useEffect(() => {
     if (!profileChoice) {
+      // No profile request can be active without a selection.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPreloadState((current) => ({ ...current, profile: "idle" }));
       return;
     }
 
     const cacheKey = `${profileChoice.source}:${profileChoice.id}`;
-    if (profilePayloadCacheRef.current.has(cacheKey)) {
+    if (profilePayloadCache.has(cacheKey)) {
       setPreloadState((current) => ({ ...current, profile: "ready", message: "" }));
       return;
     }
@@ -2845,8 +2850,8 @@ function TeamBuilderPanel({ userId }: { userId: string }) {
 
     void profilePayloadPromise
       .then((profilePayload) => {
-        profilePayloadCacheRef.current.set(cacheKey, profilePayload);
         if (active) {
+          setProfilePayloadCache((current) => new Map(current).set(cacheKey, profilePayload));
           setPreloadState((current) => ({ ...current, profile: "ready", message: "" }));
         }
       })
@@ -2863,54 +2868,48 @@ function TeamBuilderPanel({ userId }: { userId: string }) {
     return () => {
       active = false;
     };
-  }, [errorsT, profileChoice, requestMessages]);
+  }, [errorsT, profileChoice, profilePayloadCache, requestMessages]);
 
   useEffect(() => {
+    // Card preferences live in browser storage and are scoped to the selected profile.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCardPreferences(readCardPreferences(selectedProfileCacheKey));
     setIsCardPickerOpen(false);
     setCardPickerValue(null);
     setEditingTemporaryCard(null);
   }, [selectedProfileCacheKey]);
 
-  useEffect(() => {
+  const [previousIsMedleyEvent, setPreviousIsMedleyEvent] = useState(isMedleyEvent);
+  if (previousIsMedleyEvent !== isMedleyEvent) {
+    setPreviousIsMedleyEvent(isMedleyEvent);
     if (isMedleyEvent) {
       setResultLimit("1");
       setMaxSearchDurationSeconds(DEFAULT_MEDLEY_SEARCH_DURATION_SECONDS);
-      return;
+    } else {
+      setResultLimit((current) => (current === "1" ? "10" : current));
+      setMaxSearchDurationSeconds((current) => (
+        current === DEFAULT_MEDLEY_SEARCH_DURATION_SECONDS ? DEFAULT_SEARCH_DURATION_SECONDS : current
+      ));
     }
-    setResultLimit((current) => (current === "1" ? "10" : current));
-    setMaxSearchDurationSeconds((current) => (
-      current === DEFAULT_MEDLEY_SEARCH_DURATION_SECONDS ? DEFAULT_SEARCH_DURATION_SECONDS : current
-    ));
-  }, [isMedleyEvent]);
+  }
 
-  useEffect(() => {
-    if (!isMedleyEvent || medleySongSource === "custom") {
-      return;
-    }
+  if (isMedleyEvent && medleySongSource !== "custom") {
     const option = medleyEventSongOptions.find((item) => item.id === medleySongSource);
     if (!option) {
       setMedleySongSource("custom");
-      return;
+    } else if (option.songIds.some((id, index) => id !== medleySongIds[index])) {
+      setMedleySongIds(option.songIds);
     }
-    setMedleySongIds(option.songIds);
-  }, [isMedleyEvent, medleyEventSongOptions, medleySongSource]);
+  }
 
-  useEffect(() => {
-    if (!targetOptions.includes(target)) {
-      setTarget(targetOptions.includes("eventPoint") ? "eventPoint" : targetOptions[0]);
-    }
-  }, [target, targetOptions]);
+  if (!targetOptions.includes(target)) {
+    setTarget(targetOptions.includes("eventPoint") ? "eventPoint" : targetOptions[0]);
+  }
 
-  useEffect(() => {
-    if (!shouldLimitSongsToEventSongs || eventSongOptions.length === 0) {
-      return;
-    }
-
-    if (!eventSongOptions.some((option) => option.id === songId)) {
-      setSongId(eventSongOptions[0].id);
-    }
-  }, [eventSongOptions, shouldLimitSongsToEventSongs, songId]);
+  if (shouldLimitSongsToEventSongs && eventSongOptions.length > 0
+    && !eventSongOptions.some((option) => option.id === songId)) {
+    setSongId(eventSongOptions[0].id);
+  }
 
   const resultEventPointMode = useMemo(() => {
     const singleResult = result && !isMedleySearchResponse(result)
@@ -2994,7 +2993,7 @@ function TeamBuilderPanel({ userId }: { userId: string }) {
       setResultError(preloadStatusMessage || errorsT("dataNotReady"));
       return;
     }
-    const profilePayload = profilePayloadCacheRef.current.get(selectedProfileCacheKey);
+    const profilePayload = profilePayloadCache.get(selectedProfileCacheKey);
     if (!profilePayload) {
       setResultError(errorsT("profileNotReady"));
       return;

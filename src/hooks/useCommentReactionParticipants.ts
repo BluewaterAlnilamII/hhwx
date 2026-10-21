@@ -63,10 +63,10 @@ export function useCommentReactionParticipants({
   reactions: CommentReactionSummary[];
   loadParticipants: CommentReactionParticipantPageLoader;
 }) {
-  const initialPageStates = useRef(buildInitialPageStates(reactions));
+  const [initialPageStates] = useState(() => buildInitialPageStates(reactions));
   const [selectedEmojiKey, setSelectedEmojiKey] = useState(initialEmojiKey);
-  const [pagesByEmoji, setPagesByEmoji] = useState(initialPageStates.current);
-  const pagesRef = useRef(initialPageStates.current);
+  const [pagesByEmoji, setPagesByEmoji] = useState(initialPageStates);
+  const pagesRef = useRef(initialPageStates);
   const abortControllersRef = useRef(new Map<string, AbortController>());
 
   const commitPageState = useCallback((
@@ -170,7 +170,7 @@ export function useCommentReactionParticipants({
   }, []);
 
   const selectedPage = pagesByEmoji[selectedEmojiKey]
-    ?? initialPageStates.current[initialEmojiKey];
+    ?? initialPageStates[initialEmojiKey];
   const loadMore = useCallback(
     () => loadPage(selectedEmojiKey, "more"),
     [loadPage, selectedEmojiKey],

@@ -299,6 +299,8 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
 
   useEffect(() => {
     if (!profileId || !userId) return;
+    // Start the abortable profile read; its generation guard protects the card draft.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadProfile();
     return () => {
       profileLoadGenerationRef.current += 1;

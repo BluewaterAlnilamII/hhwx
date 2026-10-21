@@ -477,9 +477,11 @@ export function useCommentThread({
     });
   }, [captureReadRequest, isReadRequestCurrent, locateLinkedComment, updateLocation]);
 
-  useEffect(() => {
+  const [pageInputPage, setPageInputPage] = useState(currentPage);
+  if (pageInputPage !== currentPage) {
+    setPageInputPage(currentPage);
     setPageInput(String(currentPage));
-  }, [currentPage]);
+  }
 
   useEffect(() => {
     rootLoadSequenceRef.current += 1;
@@ -487,6 +489,8 @@ export function useCommentThread({
     replyLoadsInFlightRef.current.clear();
     const requestTarget = captureReadRequest();
 
+    // Start a new guarded URL/API read with an empty view; stale replies must not cross targets.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setComments([]);
     setReplies({});
     setCurrentPage(1);

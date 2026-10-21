@@ -8,7 +8,6 @@ import {
     isGameOver,
     countPieces,
     POSITION_WEIGHTS,
-    BOARD_SIZE,
 } from "../othello";
 import { isFirstWhiteMove, handleFirstWhiteMove } from "./utils";
 

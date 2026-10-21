@@ -45,19 +45,19 @@ export function computeAIWeights(
 
     switch (characterId) {
         case "kokoro":
-            computeKokoroWeights(board, aiColor, moves, weights, randomContext);
+            computeKokoroWeights(board, aiColor, moves, weights);
             break;
         case "kaoru":
             computeKaoruWeights(board, aiColor, moves, weights);
             break;
         case "hagumi":
-            computeHagumiWeights(board, aiColor, moves, weights, randomContext);
+            computeHagumiWeights(board, aiColor, moves, weights);
             break;
         case "kanon":
             computeKanonWeights(board, aiColor, moves, weights, randomContext);
             break;
         case "michelle":
-            computeMichelleWeights(board, aiColor, moves, weights, randomContext);
+            computeMichelleWeights(board, aiColor, moves, weights);
             break;
         default:
             for (const m of moves) {
@@ -75,8 +75,7 @@ function computeKokoroWeights(
     board: CellState[][],
     aiColor: PlayerColor,
     moves: { row: number; col: number }[],
-    weights: (WeightData | null)[][],
-    randomContext?: AIRandomContext
+    weights: (WeightData | null)[][]
 ) {
     const currentThreatened = getThreatenedEdgePieces(board, aiColor);
     const currentThreatenedSet = new Set(currentThreatened.map(p => `${p.row},${p.col}`));
@@ -110,8 +109,7 @@ function computeHagumiWeights(
     board: CellState[][],
     aiColor: PlayerColor,
     moves: { row: number; col: number }[],
-    weights: (WeightData | null)[][],
-    randomContext?: AIRandomContext
+    weights: (WeightData | null)[][]
 ) {
     for (const m of moves) {
         const { score, details } = evaluateHagumiMove(board, aiColor, m);
@@ -172,8 +170,7 @@ function computeMichelleWeights(
     board: CellState[][],
     aiColor: PlayerColor,
     moves: { row: number; col: number }[],
-    weights: (WeightData | null)[][],
-    randomContext?: AIRandomContext
+    weights: (WeightData | null)[][]
 ) {
     const currentThreatened = getThreatenedEdgePieces(board, aiColor);
     const currentThreatenedSet = new Set(currentThreatened.map(p => `${p.row},${p.col}`));
