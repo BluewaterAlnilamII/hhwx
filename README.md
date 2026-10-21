@@ -85,6 +85,16 @@ The Bandori single-song and medley calculator contracts, algorithms and verifica
 
 Kaoru's AI runs in a bundled module Worker that imports the same implementation as the synchronous fallback. Deploy the page and generated Worker chunks together; the page no longer requests `/kaoru.worker.js`. `test:othello` checks retained moves and the Worker message protocol, while `test:comments` checks optional reader identity and required write authorization without live credentials.
 
+## Updating a PM2 Deployment
+
+For an existing PM2 process named `hhwx`, run the versioned deployment helper as the same user that owns the process:
+
+```bash
+./deploy.sh
+```
+
+The helper works from its own checkout directory, pulls `origin/main` with fast-forward-only updates, installs the locked dependencies with `npm ci`, builds with a 1024 MB Node.js heap limit, and restarts `hhwx` only after those steps succeed. Node.js, npm, PM2, and the build tools listed above must be available on that user's `PATH`; keep deployment environment values in the checkout's untracked `.env.local`. This updates the existing checkout in place, so use a maintenance window that permits a service interruption.
+
 ## Supabase Setup
 
 New schema changes have one source of truth: [supabase/migrations](supabase/migrations). Files under [supabase/schema](supabase/schema) are legacy/reference snapshots, while `documents/**/*.sql` contains maintenance, backfill, compatibility, or reference SQL. See [documents/supabase-setup.md](documents/supabase-setup.md) for setup and review notes; neither snapshot/reference area is an independent migration history.
