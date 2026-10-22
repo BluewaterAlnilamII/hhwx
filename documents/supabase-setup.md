@@ -16,7 +16,7 @@ This document describes HHWX's Supabase schema workflow. New schema changes shou
 - `supabase/migrations/*_baseline_schema.sql`: current migration baseline for new empty HHWX Supabase projects.
 - `supabase/migrations/20260602*_*.sql`, `supabase/migrations/202606030*_*.sql`, and `supabase/migrations/20260610030939_*.sql`: historical production migration records from the pre-baseline MCP/manual transition. These files are intentionally no-op locally because the baseline migration builds the empty-project schema.
 - `documents/account-status-schema.sql`: application-side email verification state.
-- `documents/account-status-backfill-auth-confirmed.sql`: optional backfill from Supabase Auth confirmation state.
+- `documents/account-status-backfill-auth-confirmed.sql`: retired unsafe historical backfill; do not run it.
 - `documents/account-auth-flow.md`: account registration, email verification, resend, and account-management behavior.
 - `supabase/migrations/20260630053053_comment_reactions.sql`: comment reaction migration that backfills historical `comment_likes` rows into a reaction key on deployments that still have that table.
 - `supabase/migrations/20260630055412_retarget_legacy_comment_reaction_kokoro_yay.sql`: retargets migrated legacy likes to the default `KokoroYay` reaction.
@@ -96,7 +96,7 @@ The repair only considers manual profiles, treats the checksummed payload's `bes
 
 ## Privileged Scripts
 
-The profile backfill above defaults to a read-only audit; its `--apply` requires remote-write authorization. The email-template script behaves differently: use `scripts/update-supabase-auth-email-templates.ps1 -DryRun` for a local preview. It requires the project ref and Management API token but exits before network calls. Without `-DryRun`, it can read a backup and PATCH the project's Auth configuration; `-WhatIf` alone does not skip the backup read. Verify the target and authorized operation, retain the backup, and keep tokens and private output out of commits and logs.
+The profile backfill above defaults to a read-only audit; its `--apply` requires remote-write authorization. The email-template script behaves differently: use `scripts/update-supabase-auth-email-templates.ps1 -DryRun` for a local preview. It requires the project ref but no Management API token and exits before network calls. Without `-DryRun`, it can read a backup and PATCH the project's Auth configuration; `-WhatIf` alone does not skip the backup read. Verify the target and authorized operation, retain the backup, and keep tokens and private output out of commits and logs.
 
 ## Legacy Manual Order
 
@@ -113,7 +113,7 @@ The following order is a compatibility reference for older manual deployments, n
 9. `documents/game-account-binding-schema.sql`
 10. `documents/game-profile-schema.sql`
 
-Then run `documents/account-status-backfill-auth-confirmed.sql` only when migrating users from an existing Supabase Auth project where confirmed users should become application-verified users.
+Do not run `documents/account-status-backfill-auth-confirmed.sql`: historical Auth auto-confirmation does not prove email ownership. Follow the canonical migration and [account flow rollout](account-auth-flow.md).
 
 If an existing project still has the historical `comment_likes` table, apply the CLI migrations from `supabase/migrations/20260630053053_comment_reactions.sql` through `supabase/migrations/20260701131822_remove_legacy_like_notifications.sql` in order. The final supported state is `comment_reactions` plus reply and reaction `comment_notifications`; the standalone like-notification bridge is no longer supported.
 
@@ -131,7 +131,7 @@ If an existing project still has the historical `comment_likes` table, apply the
 - Event TOP10 high-frequency snapshots use `bandori_tracker_topdata_latest_snapshots` and the service-role-only `upsert_bandori_tracker_topdata_latest` RPC. Registered non-anonymous users may SELECT the latest row and receive the anchored `bandori:topdata:cn:events:{eventId}` Private Broadcast topic. The table is not a Postgres Changes source; browsers cannot mutate it, execute the RPC, or insert Broadcast messages.
 - Clients order and deduplicate live data by `(topic, revision)`. `sampleId` identifies the newest observation time, but an older partial patch may fill a missing ranking line while preserving that top-level `sampleId` and incrementing `revision`.
 - The event tracker subscribes before the exact snapshot query, buffers Broadcast messages during that query, and retries a transient snapshot failure with bounded backoff. Private minute points stay in session memory and are hidden when live access is not active.
-- Keep Supabase Auth email provider enabled, but keep Dashboard Confirm email disabled (`mailer_autoconfirm: true`). HHWX uses application-side email verification; Supabase's built-in signup confirmation email does not complete `account_status.email_verified_at`.
+- Enable the Email provider and Confirm email (`mailer_autoconfirm: false`) together with the native OTP application/migration cutover. See [account flow settings and rollout](account-auth-flow.md); do not mix the old custom-verification app with the new schema.
 - Docker is needed only for local Supabase stack commands such as `db reset`, `db diff`, or `start`. Creating migration files and generating remote types can use the project-local CLI without Docker.
 
 ## Environment
@@ -141,6 +141,9 @@ The web app needs:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SECRET_KEY`
+- `RESEND_API_KEY` (server-only, for the new-address message in sequential email changes; keep native Auth SMTP configured separately)
+
+Local email-change tests may set `AUTH_EMAIL_TEST_INBOX_URL` to the isolated Mailpit URL; never set it in production. Apply the dispatch-quota migration with the matching application. See the [account flow settings and rollout](account-auth-flow.md).
 
 Before deploying tracker-live migrations, run `npm run test:supabase` against the local Supabase stack (or an isolated Supabase branch). `supabase/tests/bandori_tracker_latest.sql` covers cutoff latest, while `supabase/tests/bandori_tracker_topdata_latest.sql` covers the TOP10 table, RPC, RLS, concurrency, payload limits, and anchored Broadcast policy.
 

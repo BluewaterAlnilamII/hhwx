@@ -64,7 +64,7 @@ if (-not $ProjectRef) {
   throw "Missing project ref. Set PROJECT_REF or NEXT_PUBLIC_SUPABASE_URL in .env.local."
 }
 
-if (-not $AccessToken) {
+if (-not $AccessToken -and -not $DryRun) {
   throw "Missing Supabase Management API token. Set SUPABASE_ACCESS_TOKEN first."
 }
 
@@ -88,6 +88,10 @@ $payload = [ordered]@{
   mailer_templates_invite_content = Read-Template "invite.html"
   mailer_subjects_reauthentication = $subjects.reauthentication
   mailer_templates_reauthentication_content = Read-Template "reauthentication.html"
+  mailer_subjects_password_changed_notification = $subjects.password_changed
+  mailer_templates_password_changed_notification_content = Read-Template "password_changed.html"
+  mailer_subjects_email_changed_notification = $subjects.email_changed
+  mailer_templates_email_changed_notification_content = Read-Template "email_changed.html"
 }
 
 if ($DryRun) {

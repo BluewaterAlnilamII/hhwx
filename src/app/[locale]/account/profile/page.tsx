@@ -132,25 +132,20 @@ export default function AccountProfilePage() {
           </div>
 
           <form onSubmit={handleSubmit} className="rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-6 shadow-xs">
-            <h2 className="text-xl font-semibold text-[var(--theme-color-text-default)]">{t("usernameLabel")}</h2>
-            <p className="mt-2 text-sm leading-6 text-[var(--theme-color-text-muted)]">
-              {t("usernameDescription")}
-            </p>
-
-            <label className="mt-5 block text-sm font-medium text-[var(--theme-color-text-default)]">
+            <label htmlFor="profile-username" className="inline-block text-sm font-medium text-[var(--theme-color-text-default)]">
               {t("usernameLabel")}
-              <input
+            </label>
+            <input
+                id="profile-username"
                 type="text"
                 value={usernameInput}
                 onChange={(event) => setUsernameInput(event.target.value)}
                 {...usernameValidationProps}
+                aria-describedby="profile-nickname-hint"
                 className="hhwx-control mt-2 w-full rounded-2xl border px-4 py-3 transition"
                 placeholder={t("usernamePlaceholder")}
               />
-              <span className="mt-2 block text-xs leading-5 text-[var(--theme-color-text-muted)]">
-                {usernameHint}
-              </span>
-            </label>
+            <p id="profile-nickname-hint" className="mt-2 text-xs leading-5 text-[var(--theme-color-text-muted)]">{t("usernameDescription")}</p>
 
             {message && (
               <div className={`mt-4 text-sm ${message === t("saveSuccess") ? "text-[var(--theme-color-semantic-success-foreground)]" : "text-[var(--theme-color-semantic-danger-foreground)]"}`}>

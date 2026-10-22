@@ -1,6 +1,6 @@
 import { type User } from "@supabase/supabase-js";
 import { ApiRouteError } from "@/lib/api-contracts";
-import { readAccountEmailVerified } from "@/lib/account-status-server";
+import { isAccountEmailVerified } from "@/lib/account-registration";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 export interface AuthenticatedRequestUser {
@@ -10,7 +10,7 @@ export interface AuthenticatedRequestUser {
   metadataUsername: string | null;
 }
 
-function parseBearerToken(request: Request): string {
+export function parseBearerToken(request: Request): string {
   const authHeader = request.headers.get("authorization");
   if (!authHeader) {
     throw new ApiRouteError(401, "UNAUTHENTICATED", "未登录");
@@ -38,7 +38,7 @@ function toAuthenticatedRequestUser(user: User, emailVerified: boolean): Authent
 export async function requireAuthenticatedUserId(request: Request): Promise<string> {
   const { data, error } = await createServerSupabaseClient().auth.getClaims(parseBearerToken(request));
   const claims = data?.claims;
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   if (error || !claims || !supabaseUrl
     || claims.iss !== `${new URL(supabaseUrl).origin}/auth/v1`
     || claims.aud !== "authenticated" || claims.role !== "authenticated"
@@ -61,15 +61,14 @@ export async function requireAuthenticatedUser(request: Request): Promise<Authen
     throw new ApiRouteError(401, "AUTHENTICATION_FAILED", "认证失败", error?.message);
   }
 
-  const emailVerified = await readAccountEmailVerified(user.id);
-  return toAuthenticatedRequestUser(user, emailVerified);
+  return toAuthenticatedRequestUser(user, isAccountEmailVerified(user));
 }
 
 // Public comment reads tolerate missing or expired sessions; writes require verification.
 export async function readViewerUserId(request: Request): Promise<string | null> {
   if (!request.headers.get("authorization")) return null;
   try {
-    return (await requireAuthenticatedUser(request)).id;
+    return await requireAuthenticatedUserId(request);
   } catch {
     return null;
   }

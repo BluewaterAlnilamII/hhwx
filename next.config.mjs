@@ -23,6 +23,7 @@ const MANIFEST_SITE_ASSET_CACHE_PROFILE = {
 const CSP_REPORT_ENDPOINT = "/api/security/csp-report";
 const DEFAULT_SITE_ASSET_CDN_BASE_URL = "https://cdn.hhwx.org";
 const CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN = "https://static.cloudflareinsights.com";
+const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
 const BESTDORI_ASSET_ORIGIN = "https://bestdori.com";
 
 function normalizeOrigin(value) {
@@ -77,7 +78,7 @@ function buildContentSecurityPolicyReportOnly() {
         ["base-uri", ["'self'"]],
         ["form-action", ["'self'"]],
         ["frame-ancestors", ["'self'"]],
-        ["frame-src", ["'none'"]],
+        ["frame-src", [TURNSTILE_ORIGIN]],
         ["object-src", ["'none'"]],
         ["manifest-src", ["'self'"]],
         ["worker-src", ["'self'", "blob:"]],
@@ -87,7 +88,7 @@ function buildContentSecurityPolicyReportOnly() {
         ["style-src", ["'self'", "'unsafe-inline'"]],
         // Signalsmith performs WebAssembly compilation inside its same-origin
         // AudioWorklet. Keep eval disallowed while permitting WASM explicitly.
-        ["script-src", ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'", CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN]],
+        ["script-src", ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'", CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN, TURNSTILE_ORIGIN]],
         ["connect-src", ["'self'", ...buildSupabaseConnectSources(), ...buildImageSources()]],
         ["report-uri", [CSP_REPORT_ENDPOINT]],
     ];
@@ -123,6 +124,9 @@ function buildCacheHeaders(profile) {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     poweredByHeader: false,
+    async redirects() {
+        return [{ source: "/.well-known/change-password", destination: "/account/password", permanent: false }];
+    },
     images: {
         remotePatterns: buildRemoteImagePatterns(),
     },

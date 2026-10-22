@@ -1,0 +1,32 @@
+begin;
+create extension if not exists pgtap with schema extensions;
+select plan(13);
+insert into auth.users(id,email,encrypted_password,email_confirmed_at,raw_user_meta_data,raw_app_meta_data)
+values ('a1111111-1111-4111-8111-111111111111','pending@auth-test.invalid','local-fixture',now(),'{}','{}'),
+('a2222222-2222-4222-8222-222222222222','other@auth-test.invalid','local-fixture',now(),'{}','{}');
+insert into public.bandori_events(event_id) values (-1234567),(-1234568);
+insert into public.user_roles(user_id,role) values ('a1111111-1111-4111-8111-111111111111','calendar_editor');
+select set_config('request.jwt.claims','{"sub":"a1111111-1111-4111-8111-111111111111","role":"authenticated"}',true);
+set local role authenticated;
+with changed as (update public.profiles set username='Blocked' where id='a1111111-1111-4111-8111-111111111111' returning id) select is((select count(*)::int from changed),0,'pending registration cannot edit its profile through Data API');
+select throws_ok($$insert into public.bandori_event_schedules_cn(event_id) values (-1234567)$$,'42501',null,'pending editor cannot insert schedules');
+select throws_ok($$insert into public.account_status(user_id,email_verified_at) values ('a1111111-1111-4111-8111-111111111111',now())$$,'42501',null,'client cannot mark itself complete');
+reset role;
+update auth.users set raw_app_meta_data='{"hhwx_registration":{"id":"b1111111-1111-4111-8111-111111111111","username":"Same nickname"}}' where id='a1111111-1111-4111-8111-111111111111';
+update auth.users set raw_app_meta_data='{"hhwx_registration":{"id":"b2222222-2222-4222-8222-222222222222","username":"Same nickname"}}' where id='a2222222-2222-4222-8222-222222222222';
+select is((select count(*)::int from public.profiles where username='Same nickname'),2,'display nicknames can be duplicated');
+select ok((select email_verified_at is not null from public.account_status where user_id='a1111111-1111-4111-8111-111111111111'),'completion projects verified status');
+select throws_ok($$update auth.users set raw_app_meta_data='{"hhwx_registration":{"id":"b3333333-3333-4333-8333-333333333333","username":"Overwrite"}}' where id='a1111111-1111-4111-8111-111111111111'$$,'23514','Registration is already complete','completion marker cannot be replayed or replaced');
+set local role authenticated;
+select throws_ok($$insert into public.bandori_event_schedules_cn(event_id) values (-1234567)$$,'42501',null,'old pre-verification JWT cannot gain editor permissions after completion');
+select set_config('request.jwt.claims','{"sub":"a1111111-1111-4111-8111-111111111111","role":"authenticated","app_metadata":{"hhwx_registration":{"id":"b1111111-1111-4111-8111-111111111111"}}}',true);
+select lives_ok($$insert into public.bandori_event_schedules_cn(event_id) values (-1234567)$$,'completed editor can insert schedules');
+with changed as (update public.bandori_event_schedules_cn set duration_days=8 where event_id=-1234567 returning event_id) select is((select count(*)::int from changed),1,'completed editor can update schedules');
+with changed as (update public.profiles set username='New nickname' where id='a1111111-1111-4111-8111-111111111111' returning id) select is((select count(*)::int from changed),0,'completed account still uses the server profile API');
+select set_config('request.jwt.claims','{"sub":"a2222222-2222-4222-8222-222222222222","role":"authenticated","app_metadata":{"hhwx_registration":{"id":"b2222222-2222-4222-8222-222222222222"}}}',true);
+select throws_ok($$insert into public.bandori_event_schedules_cn(event_id) values (-1234568)$$,'42501',null,'completion does not grant editor permissions');
+with changed as (update public.bandori_event_schedules_cn set duration_days=9 where event_id=-1234567 returning event_id) select is((select count(*)::int from changed),0,'non-editor cannot update schedules');
+reset role;
+select ok(not has_function_privilege('authenticated','account_private.complete_registration()','execute'),'registration trigger is not callable by clients');
+select * from finish();
+rollback;

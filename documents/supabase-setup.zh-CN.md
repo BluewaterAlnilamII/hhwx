@@ -31,7 +31,7 @@ English version: [supabase-setup.md](supabase-setup.md)
 - `supabase/migrations/*_baseline_schema.sql`：当前 HHWX 空 Supabase 项目的迁移基线。
 - `supabase/migrations/20260602*_*.sql`、`supabase/migrations/202606030*_*.sql` 和 `supabase/migrations/20260610030939_*.sql`：接入 CLI baseline 前通过 MCP/手动流程应用的线上历史记录，本地有意保持 no-op，以便 linked CLI 识别远端已有版本；空库结构由 `20260610073410_baseline_schema.sql` 构建。
 - `documents/account-status-schema.sql`：应用侧邮箱验证状态。
-- `documents/account-status-backfill-auth-confirmed.sql`：从 Supabase Auth 确认状态回填的可选脚本。
+- `documents/account-status-backfill-auth-confirmed.sql`：已退役的不安全历史回填脚本，不要执行。
 - `documents/account-auth-flow.zh-CN.md`：账号注册、邮箱验证、重发和账号管理行为说明。
 - `supabase/migrations/20260630053053_comment_reactions.sql`：评论 reaction 迁移，会把仍存在历史 `comment_likes` 表的部署回填到 reaction key。
 - `supabase/migrations/20260630055412_retarget_legacy_comment_reaction_kokoro_yay.sql`：把旧点赞迁移到默认 `KokoroYay` reaction。
@@ -105,7 +105,7 @@ node --import tsx scripts/backfill-user-game-profile-servers.mjs
 
 ## 特权脚本
 
-上述档案回填脚本默认执行只读审计，`--apply` 需要远程写入授权。邮件模板脚本不同：本地预览使用 `scripts/update-supabase-auth-email-templates.ps1 -DryRun`。它要求提供项目 ref 和 Management API token，但会在网络调用前退出。不带 `-DryRun` 时，它可能读取备份并 PATCH 项目的 Auth 配置；单独使用 `-WhatIf` 也不会跳过备份读取。核实目标和授权操作，保留备份，不要把 token 或私有输出写入提交或日志。
+上述档案回填脚本默认执行只读审计，`--apply` 需要远程写入授权。邮件模板脚本不同：本地预览使用 `scripts/update-supabase-auth-email-templates.ps1 -DryRun`。它要求提供项目 ref，无需 Management API token，并会在网络调用前退出。不带 `-DryRun` 时，它可能读取备份并 PATCH 项目的 Auth 配置；单独使用 `-WhatIf` 也不会跳过备份读取。核实目标和授权操作，保留备份，不要把 token 或私有输出写入提交或日志。
 
 ## 旧手动执行顺序
 
@@ -122,7 +122,7 @@ node --import tsx scripts/backfill-user-game-profile-servers.mjs
 9. `documents/game-account-binding-schema.sql`
 10. `documents/game-profile-schema.sql`
 
-只有在从已有 Supabase Auth 项目迁移、并且需要把已确认邮箱用户变为应用侧已验证用户时，才执行 `documents/account-status-backfill-auth-confirmed.sql`。
+不要执行 `documents/account-status-backfill-auth-confirmed.sql`：历史 Auth 自动确认不能证明邮箱归属。遵循正式迁移和[账号流程切换说明](account-auth-flow.zh-CN.md)。
 
 如果既有项目仍有历史 `comment_likes` 表，按顺序执行从 `supabase/migrations/20260630053053_comment_reactions.sql` 到 `supabase/migrations/20260701131822_remove_legacy_like_notifications.sql` 的 CLI migrations。最终支持状态是 `comment_reactions` 加只支持回复和回应提醒的 `comment_notifications`；旧的点赞提醒桥接脚本不再支持。
 
@@ -139,7 +139,7 @@ node --import tsx scripts/backfill-user-game-profile-servers.mjs
 - 活动 TOP10 高频 snapshot 使用 `bandori_tracker_topdata_latest_snapshots` 和仅 service role 可执行的 `upsert_bandori_tracker_topdata_latest` RPC。已注册且非匿名的用户可 SELECT latest 行并接收锚定的 `bandori:topdata:cn:events:{eventId}` Private Broadcast。该表不作为 Postgres Changes source；浏览器不能写表、执行 RPC 或插入 Broadcast。
 - 客户端必须以 `(topic, revision)` 排序和幂等。`sampleId` 表示顶层最新观测时间；较旧 partial patch 补齐缺失榜线时，顶层 `sampleId` 可以保持不变而 `revision` 继续递增。
 - 事件追踪器先订阅，再精确查询 snapshot，并缓存查询期间的 Broadcast；snapshot 瞬时失败时使用有限退避重试。Private 分钟点只保留在当前会话内存中，live 权限未激活时不得显示。
-- Supabase Auth 的 Email provider 保持启用，但 Dashboard 的 Confirm email 保持关闭（`mailer_autoconfirm: true`）。HHWX 使用应用侧邮箱验证；Supabase 内置 signup 确认邮件不能完成 `account_status.email_verified_at`。
+- 原生 OTP 代码和迁移切换时，启用 Email provider 和 Confirm email（`mailer_autoconfirm: false`）。配置和顺序见[账号流程](account-auth-flow.zh-CN.md)，不能把旧自定义验证代码和新数据库结构混用。
 - 只有 `db reset`、`db diff`、`start` 等本地 Supabase stack 命令需要 Docker。创建 migration 文件和从远程生成 types 可以只用项目本地 CLI。
 
 ## 环境变量
@@ -149,6 +149,9 @@ Web 应用需要：
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SECRET_KEY`
+- `RESEND_API_KEY`（仅服务端，用于分步更换邮箱的新邮箱邮件；原生 Auth SMTP 继续单独配置）
+
+本地邮箱更换测试可以将 `AUTH_EMAIL_TEST_INBOX_URL` 设为隔离 Mailpit 地址，生产环境不要设置。发信限流迁移需要与配套应用同时切换，详见[账号流程配置和上线顺序](account-auth-flow.zh-CN.md)。
 
 部署 tracker-live migrations 前，必须在本地 Supabase 或隔离的 Supabase branch 执行 `npm run test:supabase`。`supabase/tests/bandori_tracker_latest.sql` 覆盖 cutoff latest，`supabase/tests/bandori_tracker_topdata_latest.sql` 覆盖 TOP10 表、RPC、RLS、并发、payload 上限与锚定 Broadcast policy。
 

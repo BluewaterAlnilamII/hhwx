@@ -3,21 +3,25 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
+import { isAccountEmailVerified } from "../src/lib/account-registration.ts";
 import { ApiRouteError } from "../src/lib/api-contracts.ts";
 
 test("public comment identity remains optional while write authorization stays strict", async () => {
   let clientCount = 0;
+  const userId = "00000000-0000-0000-0000-000000000001";
+  let getUserCount = 0;
   let isVerified = true;
   const dependencies = {
     "@/lib/api-contracts": { ApiRouteError },
-    "@/lib/account-status-server": { readAccountEmailVerified: async () => isVerified },
+    "@/lib/account-registration": { isAccountEmailVerified },
     "@/lib/supabase-server": {
       createServerSupabaseClient() {
         clientCount += 1;
-        return { auth: { getUser: async (token) => {
+        return { auth: { getClaims: async (token) => ({ data: token === "valid" ? { claims: { sub: userId, iss: "https://test.supabase.co/auth/v1", aud: "authenticated", role: "authenticated", exp: Date.now()/1000+100 } } : null, error: null }), getUser: async (token) => {
+          getUserCount += 1;
           if (token === "unavailable") throw new Error("Auth service unavailable");
           return token === "valid"
-            ? { data: { user: { id: "viewer", email: "viewer@example.com", user_metadata: {} } }, error: null }
+            ? { data: { user: { id: userId, email: "viewer@example.com", email_confirmed_at: "2026-01-01", app_metadata: isVerified ? { hhwx_registration: { id: userId } } : {}, user_metadata: {} } }, error: null }
             : { data: { user: null }, error: new Error("Expired token") };
         } } };
       },
@@ -28,7 +32,7 @@ test("public comment identity remains optional while write authorization stays s
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   });
   const exports = {};
-  runInNewContext(outputText, { exports, require: (id) => {
+  runInNewContext(outputText, { exports, URL, process: { env: { NEXT_PUBLIC_SUPABASE_URL: "https://test.supabase.co" } }, require: (id) => {
     assert.ok(Object.hasOwn(dependencies, id), `Unexpected dependency: ${id}`);
     return dependencies[id];
   } });
@@ -41,12 +45,13 @@ test("public comment identity remains optional while write authorization stays s
   for (const token of ["Basic invalid", "Bearer", "Bearer expired", "Bearer unavailable"]) {
     assert.equal(await exports.readViewerUserId(request(token)), null);
   }
-  assert.equal(await exports.readViewerUserId(request("Bearer valid")), "viewer");
+  assert.equal(await exports.readViewerUserId(request("Bearer valid")), userId);
+  assert.equal(getUserCount, 0, "public reads must not request the Auth user");
   await assert.rejects(exports.requireVerifiedAccount(request()), { status: 401 });
   await assert.rejects(exports.requireVerifiedAccount(request("Bearer expired")), { status: 401 });
   isVerified = false;
-  assert.equal(await exports.readViewerUserId(request("Bearer valid")), "viewer");
+  assert.equal(await exports.readViewerUserId(request("Bearer valid")), userId);
   await assert.rejects(exports.requireVerifiedAccount(request("Bearer valid")), { status: 403 });
   isVerified = true;
-  assert.equal((await exports.requireVerifiedAccount(request("Bearer valid"))).id, "viewer");
+  assert.equal((await exports.requireVerifiedAccount(request("Bearer valid"))).id, userId);
 });

@@ -3,9 +3,8 @@ import {
   normalizeAccountAvatarCardServer,
   resolveStoredAccountAvatarCardIdentity,
 } from "@/lib/account-avatar-card";
-import { ensureAccountStatus } from "@/lib/account-status-server";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
-import { requireAuthenticatedUser } from "@/lib/auth-server";
+import { requireAuthenticatedUser, requireVerifiedAccount } from "@/lib/auth-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { PROFILES_TABLE, USER_ROLES_TABLE } from "@/lib/supabase-table-names";
 import { readBandoriCardsApiDataset } from "@/lib/bandori/cards/api-server";
@@ -23,7 +22,6 @@ import {
 import { normalizeStoredDisplayDegree } from "@/lib/account-display-degree";
 import {
   USERNAME_REQUIRED_MESSAGE,
-  USERNAME_TAKEN_MESSAGE,
   normalizeUsernameValue,
   validateUsernameValue,
 } from "@/lib/username-policy";
@@ -199,11 +197,11 @@ async function readAccountProfile(
   userId: string,
   email: string | null,
   metadataUsername: string | null,
+  emailVerified: boolean,
 ) {
   const serviceClient = createServerSupabaseClient();
-  const [profile, accountStatus, rolesResult] = await Promise.all([
+  const [profile, rolesResult] = await Promise.all([
     ensureProfileRow(userId, metadataUsername),
-    ensureAccountStatus(userId),
     serviceClient
       .from(USER_ROLES_TABLE)
       .select("role")
@@ -231,7 +229,7 @@ async function readAccountProfile(
     userId,
     publicUid: profile.public_uid,
     email,
-    emailVerified: Boolean(accountStatus.email_verified_at),
+    emailVerified,
     username: profile.username,
     avatarCardId,
     avatarCardServer,
@@ -252,6 +250,7 @@ export async function GET(request: Request) {
       user.id,
       user.email,
       user.metadataUsername,
+      user.emailVerified,
     ));
   } catch (error) {
     console.error("Account profile GET API 错误:", error);
@@ -265,7 +264,7 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const user = await requireVerifiedAccount(request);
 
     let body: { username?: unknown };
     try {
@@ -286,10 +285,6 @@ export async function PUT(request: Request) {
       });
 
     if (error) {
-      if (error.code === "23505") {
-        throw new ApiRouteError(409, "USERNAME_TAKEN", USERNAME_TAKEN_MESSAGE, error.message);
-      }
-
       throw new ApiRouteError(500, "ACCOUNT_PROFILE_UPDATE_FAILED", "更新账号资料失败", error.message);
     }
 
@@ -297,6 +292,7 @@ export async function PUT(request: Request) {
       user.id,
       user.email,
       username,
+      user.emailVerified,
     ));
   } catch (error) {
     console.error("Account profile PUT API 错误:", error);
@@ -310,7 +306,7 @@ export async function PUT(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const user = await requireVerifiedAccount(request);
 
     let body: {
       avatarCardId?: unknown;
@@ -351,6 +347,7 @@ export async function PATCH(request: Request) {
       user.id,
       user.email,
       user.metadataUsername,
+      user.emailVerified,
     ));
   } catch (error) {
     console.error("Account profile PATCH API error:", error);

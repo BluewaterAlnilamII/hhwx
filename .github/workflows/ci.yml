@@ -10,6 +10,33 @@ permissions:
   contents: read
 
 jobs:
+  auth-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start disposable database and apply migrations
+        run: npx --no-install supabase db start
+
+      - name: Test account database permissions and registration
+        run: npx --no-install supabase test db supabase/tests/auth_registration.sql supabase/tests/account_email_change.sql supabase/tests/auto_game_profile_ownership.sql
+
+      - name: Stop disposable database
+        if: always()
+        run: npx --no-install supabase stop --no-backup
+
   medley-foundation:
     runs-on: ubuntu-latest
 
@@ -56,6 +83,9 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Test account authentication
+        run: npm run test:auth
 
       - name: Test Bandori chart simulator
         run: npm run test:bandori-chart-simulator

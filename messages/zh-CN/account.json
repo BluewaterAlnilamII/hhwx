@@ -1,26 +1,26 @@
 {
   "shell": {
     "eyebrow": "账号",
-    "defaultBackLabel": "返回首页",
+    "defaultBackLabel": "返回账号中心",
     "signInTitle": "需要登录",
     "signInDescription": "登录后可以继续使用账号相关功能。",
     "signInAction": "前往登录"
   },
   "home": {
     "title": "账号中心",
-    "description": "查看账号状态，处理资料、密码和邮箱设置。",
+    "description": "管理个人资料和账号安全",
     "entries": {
       "profile": {
         "title": "编辑资料",
-        "description": "修改公开用户名。"
+        "description": "修改头像、称号和用户名"
       },
       "password": {
         "title": "修改密码",
-        "description": "向当前邮箱发送重置密码邮件。"
+        "description": "验证邮箱后设置新密码"
       },
       "email": {
         "title": "更换邮箱",
-        "description": "检查验证状态并更换登录邮箱。"
+        "description": "更新用于登录和接收验证码的邮箱"
       },
       "gameProfiles": {
         "title": "游戏档案",
@@ -28,20 +28,20 @@
       }
     },
     "emailVerified": "邮箱已验证",
-    "emailUnverified": "邮箱未验证",
-    "emailWarning": "邮箱尚未验证。完成验证后可使用游戏档案、评论和排期编辑等功能。"
+    "emailUnverified": "注册未完成",
+    "emailWarning": "请完成邮箱验证和账号设置，以使用评论、游戏档案等功能"
   },
   "profile": {
     "title": "编辑资料",
-    "description": "修改公开用户名。",
-    "usernameLabel": "公开用户名",
-    "usernameDescription": "会显示在账号页、评论区等位置。",
-    "usernamePlaceholder": "输入公开用户名",
+    "description": "管理头像、称号和用户名",
+    "usernameLabel": "用户名",
+    "usernameDescription": "显示在账号页和评论区等位置",
+    "usernamePlaceholder": "输入用户名",
     "usernameHint": "用户名需在 {min}-{max} 个字符内，支持字母、数字、空格、符号和 emoji",
     "loadNotSignedIn": "请先登录",
     "loadFailed": "读取账号资料失败",
     "httpLoadFailed": "读取账号资料失败（HTTP {status}）",
-    "saveSuccess": "资料已保存。",
+    "saveSuccess": "资料已保存",
     "saveFailed": "保存失败",
     "notSignedIn": "请先登录",
     "invalidResponse": "账号资料返回格式无效",
@@ -83,7 +83,7 @@
   },
   "password": {
     "title": "修改密码",
-    "description": "把重置密码邮件发到当前邮箱。",
+    "description": "通过邮箱验证码设置新密码",
     "sectionTitle": "发送修改邮件",
     "sectionDescription": "当前接收邮箱如下。邮箱不可用时，请先更换邮箱。",
     "currentEmail": "当前接收邮箱：{email}",
@@ -95,28 +95,22 @@
   },
   "email": {
     "title": "更换邮箱",
-    "description": "新邮箱确认后才会生效。",
-    "currentStatus": "当前邮箱状态",
-    "currentEmail": "当前邮箱：{email}",
-    "verified": "已验证",
-    "unverified": "未验证",
-    "resendTitle": "重新发送验证邮件",
-    "resendDescription": "当前邮箱尚未验证时，可以重新发送验证邮件。",
-    "submitTitle": "提交新邮箱",
-    "submitDescription": "确认完成后，新邮箱会成为新的登录邮箱。",
+    "description": "先验证当前邮箱，再填写并验证新邮箱",
     "newEmail": "新邮箱",
-    "sameEmail": "新邮箱需要与当前邮箱不同。",
-    "sessionExpired": "登录状态已失效，请重新登录后再试。",
-    "updateSent": "确认邮件已发送到新邮箱。请按邮件提示完成更换。",
-    "verificationSent": "验证邮件已发送。请检查收件箱和垃圾邮件箱。",
-    "updateFailed": "提交更换邮箱失败",
-    "verificationFailed": "发送验证邮件失败",
-    "httpUpdateFailed": "提交更换邮箱失败（HTTP {status}）",
-    "httpVerificationFailed": "发送验证邮件失败（HTTP {status}）",
-    "resendAction": "重新发送验证邮件",
-    "submitAction": "发送确认邮件",
-    "submitting": "提交中...",
-    "newEmailPlaceholder": "输入新的邮箱地址"
+    "sessionExpired": "登录状态已失效，请重新登录后再试",
+    "updateFailed": "申请更换邮箱失败",
+    "otp": {
+      "currentTitle": "验证当前邮箱",
+      "newEmailTitle": "填写新邮箱",
+      "newCodeTitle": "验证新邮箱",
+      "completeTitle": "邮箱更换成功",
+      "proofExpired": "验证已过期，请重新验证当前邮箱",
+      "resendProofExpired": "重发前需重新验证当前邮箱，已收到的验证码仍可使用",
+      "finishRegistration": "设置账号信息",
+      "reverifyCurrent": "重新验证当前邮箱",
+      "finishChange": "确认更换",
+      "restartRequired": "申请已变更，请重新验证当前邮箱"
+    }
   },
   "notifications": {
     "title": "提醒",

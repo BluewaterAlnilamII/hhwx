@@ -3,8 +3,6 @@ export const USERNAME_MAX_LENGTH = 24;
 export const USERNAME_REQUIRED_MESSAGE = "请输入用户名";
 export const USERNAME_LENGTH_MESSAGE = `用户名需在 ${USERNAME_MIN_LENGTH}-${USERNAME_MAX_LENGTH} 个字符内`;
 export const USERNAME_RULE_MESSAGE = `用户名需在 ${USERNAME_MIN_LENGTH}-${USERNAME_MAX_LENGTH} 个字符内，支持字母、数字、空格、符号和 emoji`;
-export const USERNAME_TAKEN_MESSAGE = "这个用户名已被使用";
-export const USERNAME_CHECK_FAILED_MESSAGE = "暂时无法检查用户名，请稍后再试";
 
 const USERNAME_ALLOWED_CHARACTER_PATTERN = /^(?:\P{C}|[\u200C\u200D])+$/u;
 

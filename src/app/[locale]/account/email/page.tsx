@@ -1,301 +1,234 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { LoadingSpinner } from "@/components/LoadingIndicator";
-
-import { useRef, useState } from "react";
-import { useLocale, useTranslations } from "next-intl";
+import EmailOtpFlow from "@/components/EmailOtpFlow";
+import { AccountField, AccountFormError, AccountFormHeading, AccountFormPage, AccountFormResult, EmailCodeField, accountFormStyles } from "@/components/AccountForm";
 import TurnstileChallenge, { type TurnstileChallengeHandle } from "@/components/TurnstileChallenge";
-import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInState } from "../AccountShell";
-import { formatAuthErrorMessage } from "@/lib/auth-error";
-import { getLocalizedApiErrorMessage } from "@/lib/localized-api-errors";
-import { getLocalizedAuthErrorMessages } from "@/lib/localized-auth-errors";
-import { createNativeValidationProps } from "@/lib/native-validation";
-import { buildEmailVerificationCallbackUrl, getSafeSession } from "@/lib/supabase";
 import { useTurnstileAvailability } from "@/hooks/useTurnstileAvailability";
+import { createEmailFlowClient, getSafeSession, supabase } from "@/lib/supabase";
+import { EMAIL_RESEND_INTERVAL_SECONDS } from "@/lib/account-registration";
+import { emailChangeProofExpiresAt } from "@/lib/account-email-change";
+import { formatAuthErrorMessage } from "@/lib/auth-error";
+import { getLocalizedAuthErrorMessages } from "@/lib/localized-auth-errors";
+import { getLocalizedApiErrorMessage } from "@/lib/localized-api-errors";
+import { getApiErrorCode, parseApiSuccessData } from "@/lib/api-contracts";
+import { AccountErrorState, AccountLoadingState, AccountSignInState } from "../AccountShell";
+import { useGameStore } from "@/store/useGameStore";
 import { useLocalizedAccountProfile } from "../useAccountProfile";
 
+type PendingChange = { currentEmail: string; newEmail: string };
+type Proof = { token: string; expiresAt: number };
+
 export default function AccountEmailPage() {
-  const locale = useLocale();
+  const userId = useGameStore((state) => state.userId);
+  return <AccountEmailContent key={userId || "signed-out"} />;
+}
+
+function AccountEmailContent() {
   const t = useTranslations("account.email");
   const authT = useTranslations("auth");
   const commonT = useTranslations("common");
   const errorT = useTranslations("errors");
-  const authErrorMessages = getLocalizedAuthErrorMessages(authT);
-  const {
-    userId,
-    userEmail,
-    authReady,
-    profile,
-    loadingProfile,
-    profileError,
-    loadProfile,
-    syncStoreSummary,
-  } = useLocalizedAccountProfile();
-  const profileEmail = profile?.email ?? "";
-  const [previousEmail, setPreviousEmail] = useState(profileEmail);
-  const [newEmail, setNewEmail] = useState(profileEmail);
-  const [emailSaving, setEmailSaving] = useState(false);
-  const [emailMessage, setEmailMessage] = useState("");
-  const [resendingVerification, setResendingVerification] = useState(false);
-  const [verificationMessage, setVerificationMessage] = useState("");
-  const emailCaptchaRef = useRef<TurnstileChallengeHandle | null>(null);
-  const resendCaptchaRef = useRef<TurnstileChallengeHandle | null>(null);
-  const emailValidationProps = createNativeValidationProps({ label: authT("fields.email"), invalidTypeMessage: authT("validation.invalidEmail") });
+  const shellT = useTranslations("account.shell");
+  const { userId, authReady, profile, loadingProfile, profileError, loadProfile, syncStoreSummary } = useLocalizedAccountProfile();
+  const [client] = useState(createEmailFlowClient);
+  const [step, setStep] = useState<"current" | "newEmail" | "newCode" | "done">("current");
+  const [currentCodeSent, setCurrentCodeSent] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [pending, setPending] = useState<PendingChange | null>(null);
+  const [proof, setProof] = useState<Proof | null>(null);
+  const [code, setCode] = useState("");
+  const [pendingAction, setPendingAction] = useState<"send" | "verify" | null>(null);
+  const busy = pendingAction !== null;
+  const [error, setError] = useState("");
+  const [codeError, setCodeError] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [currentResendAfter, setCurrentResendAfter] = useState(0);
+  const [newResendAfter, setNewResendAfter] = useState(0);
+  const [now, setNow] = useState(0);
+  const alive = useRef(true);
+  const inFlight = useRef(false);
+  const captchaRef = useRef<TurnstileChallengeHandle | null>(null);
   const { isTurnstileEnabled, isTurnstileLoading } = useTurnstileAvailability();
+  const currentRemaining = Math.max(0, Math.ceil((currentResendAfter - now) / 1000));
+  const newRemaining = Math.max(0, Math.ceil((newResendAfter - now) / 1000));
+  const proofExpired = !proof || proof.expiresAt <= now;
 
-  if (previousEmail !== profileEmail) {
-    setPreviousEmail(profileEmail);
-    setNewEmail(profileEmail);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  async function run(operation: "send" | "verify", action: () => Promise<void>) {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setPendingAction(operation); setError(""); setCodeError(""); setEmailError("");
+    try { await action(); }
+    catch (value) {
+      if (alive.current) {
+        const message = formatAuthErrorMessage(value, t("updateFailed"), undefined, getLocalizedAuthErrorMessages(authT));
+        if (message === authT("otp.invalidCode")) setCodeError(message);
+        else if (step === "newEmail" && ["invalidEmail", "emailTaken", "emailUnchanged"].some((key) => message === authT(`errors.${key}`))) setEmailError(message);
+        else setError(message);
+      }
+    } finally {
+      inFlight.current = false;
+      if (alive.current) setPendingAction(null);
+    }
   }
 
-  const requireCaptchaToken = (
-    captchaRef: React.MutableRefObject<TurnstileChallengeHandle | null>,
-    setMessage: (message: string) => void,
-  ) => {
-    if (isTurnstileLoading) {
-      setMessage(authT("messages.captchaLoading"));
-      return undefined;
-    }
+  async function sendCurrentCode() {
+    if (currentRemaining > 0 || isTurnstileLoading || !profile?.email) return;
+    await run("send", async () => {
+      try {
+        const captchaToken = (currentCodeSent ? await captchaRef.current?.waitForToken() : captchaRef.current?.getToken()) || undefined;
+        if (!alive.current) return;
+        if (isTurnstileEnabled && !captchaToken) { setError(authT("messages.captchaRequired")); return; }
+        const result = await client.auth.signInWithOtp({ email: profile.email!, options: { shouldCreateUser: false, captchaToken } });
+        if (!alive.current) return;
+        if (result.error) throw result.error;
+        setCurrentCodeSent(true); setCode("");
+        setNow(Date.now()); setCurrentResendAfter(Date.now() + EMAIL_RESEND_INTERVAL_SECONDS * 1000);
+      } finally { if (alive.current) captchaRef.current?.reset(); }
+    });
+  }
 
-    if (!isTurnstileEnabled) {
-      return undefined;
-    }
-
-    const token = captchaRef.current?.getToken() ?? undefined;
-    if (!token) {
-      setMessage(authT("messages.captchaRequired"));
-      return undefined;
-    }
-
-    return token;
-  };
-
-  const resetCaptcha = () => {
-    emailCaptchaRef.current?.reset();
-    resendCaptchaRef.current?.reset();
-  };
-
-  const handleEmailUpdate = async (event: React.FormEvent) => {
+  async function verifyCurrent(event: React.FormEvent) {
     event.preventDefault();
-    setEmailSaving(true);
-    setEmailMessage("");
-
-    const normalizedNewEmail = newEmail.trim().toLowerCase();
-    const currentEmail = (profile?.email ?? userEmail ?? "").trim().toLowerCase();
-    if (normalizedNewEmail && currentEmail && normalizedNewEmail === currentEmail) {
-      setEmailSaving(false);
-      setEmailMessage(t("sameEmail"));
-      return;
-    }
-
-    const captchaToken = requireCaptchaToken(emailCaptchaRef, setEmailMessage);
-    if (isTurnstileEnabled && !captchaToken) {
-      setEmailSaving(false);
-      return;
-    }
-
-    try {
-      const session = await getSafeSession();
-      if (!session?.access_token || !session.refresh_token) {
-        setEmailMessage(t("sessionExpired"));
-        return;
+    if (!profile?.email) return;
+    await run("verify", async () => {
+      const result = await client.auth.verifyOtp({ email: profile.email!, token: code, type: "email" });
+      if (!alive.current) return;
+      if (result.error) throw result.error;
+      const session = result.data.session;
+      if (!session || result.data.user?.id !== userId || result.data.user.email?.toLowerCase() !== profile.email!.toLowerCase()) {
+        setError(t("sessionExpired")); return;
       }
+      const verified = await client.auth.getClaims(session.access_token);
+      if (!alive.current) return;
+      const expiresAt = verified.data?.claims ? emailChangeProofExpiresAt(verified.data.claims) : null;
+      if (verified.error || !expiresAt || expiresAt <= Date.now()) { setError(t("otp.proofExpired")); return; }
+      setProof({ token: session.access_token, expiresAt }); setCode(""); setNow(Date.now());
+      setStep(pending ? "newCode" : "newEmail");
+    });
+  }
 
-      const response = await fetch("/api/auth/email", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          action: "update",
-          newEmail: newEmail.trim(),
-          captchaToken,
-          redirectTo: buildEmailVerificationCallbackUrl("/account/email", locale),
-          refreshToken: session.refresh_token,
-        }),
-      });
-      const payload = await response.json().catch(() => ({}));
+  async function sendNewCode(event: React.FormEvent) {
+    event.preventDefault();
+    if (newRemaining > 0 || isTurnstileLoading) return;
+    if (!proof || proof.expiresAt <= Date.now()) { setError(t("otp.proofExpired")); return; }
+    await run("send", async () => {
+      try {
+        const captchaToken = (step === "newCode" ? await captchaRef.current?.waitForToken() : captchaRef.current?.getToken()) || undefined;
+        if (!alive.current) return;
+        if (isTurnstileEnabled && !captchaToken) { setError(authT("messages.captchaRequired")); return; }
+        const session = await getSafeSession();
+        if (!alive.current) return;
+        if (!session || session.user.id !== userId) { setError(t("sessionExpired")); return; }
+        const response = await fetch("/api/auth/email", {
+          method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ action: "update", newEmail: step === "newCode" ? pending?.newEmail : newEmail, proofToken: proof.token, captchaToken }),
+        });
+        const payload = await response.json();
+        if (!alive.current) return;
+        if (!response.ok) {
+          if (getApiErrorCode(payload) === "EMAIL_CHANGE_PROOF_REQUIRED") setProof(null);
+          if (response.status === 429) { setNow(Date.now()); setNewResendAfter(Date.now() + EMAIL_RESEND_INTERVAL_SECONDS * 1000); }
+          setError(getLocalizedApiErrorMessage(payload, errorT) || t("updateFailed")); return;
+        }
+        const change = parseApiSuccessData<PendingChange>(payload);
+        if (!change?.currentEmail || !change.newEmail) { setError(t("updateFailed")); return; }
+        setPending(change); setNewEmail(change.newEmail); setCode(""); setStep("newCode");
+        setNow(Date.now()); setNewResendAfter(Date.now() + EMAIL_RESEND_INTERVAL_SECONDS * 1000);
+      } finally { if (alive.current) captchaRef.current?.reset(); }
+    });
+  }
 
-      if (!response.ok) {
-        setEmailMessage(getLocalizedApiErrorMessage(payload, errorT) || t("httpUpdateFailed", { status: response.status }));
-        return;
+  async function verifyNew(event: React.FormEvent) {
+    event.preventDefault();
+    if (!pending) return;
+    await run("verify", async () => {
+      // An already-authorized change remains valid after the 15-minute proof window.
+      const result = await client.auth.verifyOtp({ email: pending.newEmail, token: code, type: "email_change" });
+      if (!alive.current) return;
+      if (result.error) throw result.error;
+      if (!result.data.session || result.data.user?.id !== userId || result.data.user.email?.toLowerCase() !== pending.newEmail.toLowerCase()) {
+        setError(t("otp.restartRequired")); return;
       }
+      const established = await supabase.auth.setSession(result.data.session);
+      if (!alive.current) return;
+      if (established.error) throw established.error;
+      setProof(null); setPending(null); setCode(""); setStep("done");
+      await syncStoreSummary(); await loadProfile();
+    });
+  }
 
-      await syncStoreSummary();
-      await loadProfile();
-      setEmailMessage(t("updateSent"));
-    } catch (error) {
-      setEmailMessage(formatAuthErrorMessage(error, t("updateFailed"), "email-update", authErrorMessages));
-    } finally {
-      setEmailSaving(false);
-      resetCaptcha();
-    }
-  };
+  function reverifyCurrent() {
+    setProof(null); setStep("current"); setCurrentCodeSent(false); setCode(""); setError(""); setCodeError(""); setEmailError("");
+  }
 
-  const handleResendVerificationEmail = async () => {
-    setVerificationMessage("");
-    setResendingVerification(true);
+  const captcha = isTurnstileEnabled && <TurnstileChallenge ref={captchaRef} action="account-email-verify" appearance={step === "newCode" || (step === "current" && currentCodeSent) ? "interaction-only" : "always"} title="" description="" notConfiguredTitle={authT("turnstile.notConfiguredTitle")} notConfiguredDescription={authT("turnstile.notConfiguredDescription")} expiredMessage={authT("turnstile.expired")} loadFailedMessage={authT("turnstile.loadFailed")} variant="inline" />;
+  const heading = step === "done" ? t("otp.completeTitle") : step === "current" ? t("otp.currentTitle") : t(step === "newEmail" ? "otp.newEmailTitle" : "otp.newCodeTitle");
+  const sendCurrentButton = <button className={currentCodeSent ? accountFormStyles.secondary : accountFormStyles.primary} type="button" onClick={() => void sendCurrentCode()} disabled={busy || isTurnstileLoading || currentRemaining > 0}>
+    {pendingAction === "send" && <LoadingSpinner className="text-current" />}{currentRemaining > 0 ? authT("otp.resendWait", { seconds: currentRemaining }) : authT(currentCodeSent ? "otp.resend" : "otp.send")}
+  </button>;
 
-    const captchaToken = requireCaptchaToken(resendCaptchaRef, setVerificationMessage);
-    if (isTurnstileEnabled && !captchaToken) {
-      setResendingVerification(false);
-      return;
-    }
-
-    try {
-      const session = await getSafeSession();
-      if (!session?.access_token) {
-        setVerificationMessage(t("sessionExpired"));
-        return;
-      }
-
-      const response = await fetch("/api/auth/email", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          action: "resend-verification",
-          captchaToken,
-          redirectTo: buildEmailVerificationCallbackUrl("/account/email", locale),
-        }),
-      });
-      const payload = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        setVerificationMessage(getLocalizedApiErrorMessage(payload, errorT) || t("httpVerificationFailed", { status: response.status }));
-        return;
-      }
-
-      setVerificationMessage(t("verificationSent"));
-    } catch (error) {
-      setVerificationMessage(formatAuthErrorMessage(error, t("verificationFailed"), "email-verify", authErrorMessages));
-    } finally {
-      setResendingVerification(false);
-      resetCaptcha();
-    }
-  };
-
-  return (
-    <AccountShell
-      title={t("title")}
-      description={t("description")}
-    >
-      {!authReady || loadingProfile ? (
-        <AccountLoadingState message={commonT("states.loadingAccount")} />
-      ) : !userId ? (
-        <AccountSignInState nextPath="/account/email" />
-      ) : profileError ? (
-        <AccountErrorState message={profileError} />
-      ) : profile ? (
-        <div className="space-y-6">
-          <section className="rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-6 shadow-xs">
-            <div className="flex flex-wrap items-center gap-3">
-              <h2 className="text-xl font-semibold text-[var(--theme-color-text-default)]">{t("currentStatus")}</h2>
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${profile.emailVerified ? "bg-[var(--theme-color-semantic-success-background)] text-[var(--theme-color-semantic-success-foreground)]" : "bg-[var(--theme-color-semantic-warning-background)] text-[var(--theme-color-semantic-warning-foreground)]"}`}>
-                {profile.emailVerified ? t("verified") : t("unverified")}
-              </span>
-            </div>
-            <div className="mt-4 rounded-2xl bg-[var(--theme-color-panel-background)] p-4 text-sm text-[var(--theme-color-text-muted)]">
-              {t("currentEmail", { email: profile.email || userEmail || "-" })}
-            </div>
-          </section>
-
-          {!profile.emailVerified && (
-            <section className="rounded-3xl border border-[var(--theme-color-semantic-warning-border)] bg-[var(--theme-color-semantic-warning-background)] p-6 shadow-xs">
-              <h2 className="text-xl font-semibold text-[var(--theme-color-semantic-warning-foreground)]">{t("resendTitle")}</h2>
-              <p className="mt-2 text-sm leading-6 text-[var(--theme-color-semantic-warning-foreground)]">
-                {t("resendDescription")}
-              </p>
-              {isTurnstileEnabled && (
-                <div className="mt-5">
-                  <TurnstileChallenge
-                    ref={resendCaptchaRef}
-                    action="account-email-resend"
-                    title=""
-                    description=""
-                    notConfiguredTitle={authT("turnstile.notConfiguredTitle")}
-                    notConfiguredDescription={authT("turnstile.notConfiguredDescription")}
-                    expiredMessage={authT("turnstile.expired")}
-                    loadFailedMessage={authT("turnstile.loadFailed")}
-                    variant="inline"
-                  />
+  return <AccountFormPage backHref="/account" backLabel={shellT("defaultBackLabel")}>
+    {(!authReady || loadingProfile || !userId || profileError || !profile) && <AccountFormHeading title={t("title")} />}
+    {!authReady || loadingProfile ? <AccountLoadingState message={commonT("states.loadingAccount")} />
+      : !userId ? <AccountSignInState nextPath="/account/email" />
+      : profileError ? <AccountErrorState message={profileError} />
+      : profile ? <>
+        {!profile.emailVerified ? <EmailOtpFlow kind="recovery" initialEmail={profile.email || ""} title={t("otp.finishRegistration")} /> : <>
+          {step !== "done" && <AccountFormHeading title={heading} />}
+          {step === "current" && <>
+            <p role={currentCodeSent ? "status" : undefined} className={accountFormStyles.hint}>{currentCodeSent ? authT("otp.sent") : authT("fields.email")}<strong className="block break-all font-medium text-[var(--theme-color-text-default)]">{profile.email}</strong></p>
+            {currentCodeSent ? <>
+              <form method="post" onSubmit={verifyCurrent} className="space-y-5" aria-busy={busy}>
+                <div>
+                  <EmailCodeField label={authT("otp.code")} value={code} onChange={(value) => { setCode(value); setCodeError(""); }} disabled={busy} error={codeError} />
+                  {sendCurrentButton}
+                  {captcha}
                 </div>
-              )}
-              {verificationMessage && (
-                <div className={`mt-4 text-sm ${verificationMessage === t("verificationSent") ? "text-[var(--theme-color-semantic-success-foreground)]" : "text-[var(--theme-color-semantic-danger-foreground)]"}`}>
-                  {verificationMessage}
-                </div>
-              )}
-              <div className="mt-5 flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleResendVerificationEmail}
-                  disabled={resendingVerification || isTurnstileLoading}
-                  className="hhwx-accent-button"
-                >
-                  {resendingVerification ? <LoadingSpinner className="mr-2 text-current" /> : null}
-                  {resendingVerification ? commonT("actions.sending") : t("resendAction")}
+                <AccountFormError message={error} />
+                <button className={accountFormStyles.primary} type="submit" disabled={busy}>{pendingAction === "verify" && <LoadingSpinner className="text-current" />}{authT("otp.verify")}</button>
+              </form>
+            </> : <>{captcha}<AccountFormError message={error} />{sendCurrentButton}</>}
+          </>}
+          {(step === "newEmail" || step === "newCode") && <>
+            {step === "newEmail" && <>
+              {proofExpired && <AccountFormError message={t("otp.proofExpired")} />}
+              {!proofExpired ? <form method="post" onSubmit={sendNewCode} className="space-y-5" aria-busy={busy}>
+                <AccountField id="account-new-email" name="email" label={t("newEmail")} type="email" value={newEmail}
+                  onChange={(event) => { setNewEmail(event.target.value); setEmailError(""); }} error={emailError}
+                  autoComplete="email" autoCapitalize="none" spellCheck={false} maxLength={254} required disabled={busy} />
+                {captcha}
+                <AccountFormError message={error} />
+                <button className={accountFormStyles.primary} type="submit" disabled={busy || isTurnstileLoading || newRemaining > 0}>
+                  {busy && <LoadingSpinner className="text-current" />}{newRemaining > 0 ? authT("otp.resendWait", { seconds: newRemaining }) : authT("otp.send")}
                 </button>
-              </div>
-            </section>
-          )}
-
-          <form onSubmit={handleEmailUpdate} className="rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-6 shadow-xs">
-            <h2 className="text-xl font-semibold text-[var(--theme-color-text-default)]">{t("submitTitle")}</h2>
-            <p className="mt-2 text-sm leading-6 text-[var(--theme-color-text-muted)]">
-              {t("submitDescription")}
-            </p>
-
-            <label className="mt-5 block text-sm font-medium text-[var(--theme-color-text-default)]">
-              {t("newEmail")}
-              <input
-                type="email"
-                value={newEmail}
-                onChange={(event) => setNewEmail(event.target.value)}
-                {...emailValidationProps}
-                className="hhwx-control mt-2 w-full rounded-2xl border px-4 py-3 transition"
-                placeholder={t("newEmailPlaceholder")}
-              />
-            </label>
-
-            {isTurnstileEnabled && (
-              <div className="mt-5">
-                <TurnstileChallenge
-                  ref={emailCaptchaRef}
-                  action="account-email-update"
-                  title=""
-                  description=""
-                  notConfiguredTitle={authT("turnstile.notConfiguredTitle")}
-                  notConfiguredDescription={authT("turnstile.notConfiguredDescription")}
-                  expiredMessage={authT("turnstile.expired")}
-                  loadFailedMessage={authT("turnstile.loadFailed")}
-                  variant="inline"
-                />
-              </div>
-            )}
-
-            {emailMessage && (
-              <div className={`mt-4 text-sm ${emailMessage === t("updateSent") ? "text-[var(--theme-color-semantic-success-foreground)]" : "text-[var(--theme-color-semantic-danger-foreground)]"}`}>
-                {emailMessage}
-              </div>
-            )}
-
-            <div className="mt-6 flex justify-end">
-              <button
-                type="submit"
-                disabled={emailSaving || isTurnstileLoading || !newEmail.trim()}
-                className="hhwx-accent-button"
-              >
-                {emailSaving ? <LoadingSpinner className="mr-2 text-current" /> : null}
-                {emailSaving ? t("submitting") : t("submitAction")}
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : null}
-    </AccountShell>
-  );
+              </form> : <button className={accountFormStyles.primary} type="button" disabled={busy} onClick={reverifyCurrent}>{t("otp.reverifyCurrent")}</button>}
+            </>}
+            {step === "newCode" && pending && <>
+              <p role="status" className={accountFormStyles.hint}>{authT("otp.sent")}<strong className="block break-all font-medium text-[var(--theme-color-text-default)]">{pending.newEmail}</strong></p>
+              <form method="post" onSubmit={verifyNew} className="space-y-5" aria-busy={busy}>
+                <div>
+                  <EmailCodeField label={authT("otp.code")} value={code} onChange={(value) => { setCode(value); setCodeError(""); }} disabled={busy} error={codeError} />
+                  {proofExpired
+                    ? <button className={accountFormStyles.secondary} type="button" disabled={busy} onClick={reverifyCurrent}>{t("otp.reverifyCurrent")}</button>
+                    : <button className={accountFormStyles.secondary} type="button" disabled={busy || isTurnstileLoading || newRemaining > 0} onClick={(event) => void sendNewCode(event)}>{pendingAction === "send" && <LoadingSpinner className="text-current" />}{newRemaining > 0 ? authT("otp.resendWait", { seconds: newRemaining }) : authT("otp.resend")}</button>}
+                  {proofExpired ? <p className={accountFormStyles.hint}>{t("otp.resendProofExpired")}</p> : captcha}
+                </div>
+                <AccountFormError message={error} />
+                <button className={accountFormStyles.primary} type="submit" disabled={busy}>{pendingAction === "verify" && <LoadingSpinner className="text-current" />}{t("otp.finishChange")}</button>
+              </form>
+            </>}
+          </>}
+          {step === "done" && <AccountFormResult title={t("otp.completeTitle")} detail={newEmail} actionHref="/account" actionLabel={shellT("defaultBackLabel")} />}
+        </>}
+      </> : null}
+  </AccountFormPage>;
 }
