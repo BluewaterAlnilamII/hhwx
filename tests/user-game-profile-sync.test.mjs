@@ -157,7 +157,7 @@ test("confirm identity validates signed claims without account, email or binding
   let claims=valid;
   const auth=loadModule("../src/lib/auth-server.ts",{
     "@/lib/api-contracts":{ApiRouteError},
-    "@/lib/account-status-server":{readAccountEmailVerified:()=>assert.fail("confirm must not read email")},
+    "@/lib/account-registration":{isAccountEmailVerified:()=>assert.fail("confirm must not read email")},
     "@/lib/supabase-server":{createServerSupabaseClient:()=>({auth:{getClaims:async(token)=>{assert.equal(token,"test-token");return {data:{claims},error:null};}}})},
   },{process:{env:{SUPABASE_URL:"https://test.supabase.co"}}});
   const request=new Request("https://hhwx.test",{headers:{Authorization:"Bearer test-token"}});

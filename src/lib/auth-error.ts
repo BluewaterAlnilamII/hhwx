@@ -20,21 +20,23 @@ export interface LocalizedAuthErrorMessages {
   weakPassword: string;
   samePassword: string;
   tooManyRequests: string;
+  invalidCode: string;
 }
 
 function getDefaultAuthErrorMessages(): LocalizedAuthErrorMessages {
   return {
-    loginCaptchaServer: "当前登录仍受服务端验证码配置限制。前端已取消登录验证码，如需彻底取消，还需要在 Supabase 后台关闭登录验证码。",
-    captchaFailed: "安全验证未通过，请重新完成后再试。",
-    serviceUnavailable: "认证服务连接失败，请检查 Supabase 环境变量和本地网络后再试。",
-    invalidCredentials: "邮箱或密码不正确。",
-    emailNotConfirmed: "请先完成邮箱验证。",
-    emailTaken: "该邮箱已被注册。",
-    emailUnchanged: "新邮箱需要与当前邮箱不同。",
-    invalidEmail: "请输入有效的邮箱地址。",
+    loginCaptchaServer: "安全验证未通过，请重新完成后再试",
+    captchaFailed: "安全验证未通过，请重新完成后再试",
+    serviceUnavailable: "暂时无法连接，请稍后重试",
+    invalidCredentials: "邮箱或密码不正确",
+    emailNotConfirmed: "请先完成邮箱验证",
+    emailTaken: "该邮箱已被注册",
+    emailUnchanged: "新邮箱需要与当前邮箱不同",
+    invalidEmail: "请输入有效的邮箱地址",
     weakPassword: PASSWORD_POLICY_MESSAGE,
-    samePassword: "新密码需要与当前密码不同。",
-    tooManyRequests: "请求过于频繁，请稍后再试。",
+    samePassword: "新密码需要与当前密码不同",
+    tooManyRequests: "请求过于频繁，请稍后再试",
+    invalidCode: "验证码错误",
   };
 }
 
@@ -44,8 +46,28 @@ export function formatAuthErrorMessage(
   context?: AuthErrorContext,
   localizedMessages: LocalizedAuthErrorMessages = getDefaultAuthErrorMessages(),
 ): string {
-  if (error instanceof Error && error.message) {
-    const normalizedMessage = error.message.toLowerCase();
+  if (!error || typeof error !== "object") return fallbackMessage;
+  const { code, status, message } = error as { code?: unknown; status?: unknown; message?: unknown };
+  switch (code) {
+    case "otp_expired": return localizedMessages.invalidCode;
+    case "same_password": return localizedMessages.samePassword;
+    case "over_email_send_rate_limit":
+    case "over_request_rate_limit": return localizedMessages.tooManyRequests;
+    case "captcha_failed": return context === "login" ? localizedMessages.loginCaptchaServer : localizedMessages.captchaFailed;
+    case "invalid_credentials": return localizedMessages.invalidCredentials;
+    case "email_not_confirmed": return localizedMessages.emailNotConfirmed;
+    case "email_exists":
+    case "user_already_exists": return localizedMessages.emailTaken;
+    case "email_address_invalid": return localizedMessages.invalidEmail;
+    case "weak_password": return localizedMessages.weakPassword;
+    case "request_timeout": return localizedMessages.serviceUnavailable;
+  }
+  if (status === 429) return localizedMessages.tooManyRequests;
+  if (code || (typeof status === "number" && status >= 500)) return fallbackMessage;
+
+  // Older Auth responses and browser network failures may not include a code.
+  if (typeof message === "string" && message) {
+    const normalizedMessage = message.toLowerCase();
 
     if (normalizedMessage.includes("captcha verification process failed")) {
       return context === "login"
@@ -89,15 +111,13 @@ export function formatAuthErrorMessage(
       return localizedMessages.weakPassword;
     }
 
-    if (normalizedMessage.includes("same as the old password")) {
+    if (normalizedMessage.includes("same as the old password") || normalizedMessage.includes("different from the old password")) {
       return localizedMessages.samePassword;
     }
 
     if (normalizedMessage.includes("too many requests") || normalizedMessage.includes("for security purposes")) {
       return localizedMessages.tooManyRequests;
     }
-
-    return error.message;
   }
 
   return fallbackMessage;

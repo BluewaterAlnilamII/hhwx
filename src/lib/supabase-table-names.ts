@@ -3,7 +3,6 @@ export const BANDORI_EVENTS_TABLE = "bandori_events";
 export const BANDORI_EVENT_SCHEDULES_CN_TABLE = "bandori_event_schedules_cn";
 export const PROFILES_TABLE = "profiles";
 export const ACCOUNT_STATUS_TABLE = "account_status";
-export const ACCOUNT_EMAIL_VERIFICATIONS_TABLE = "account_email_verifications";
 export const COMMENTS_TABLE = "comments";
 export const COMMENT_REACTIONS_TABLE = "comment_reactions";
 export const COMMENT_NOTIFICATIONS_TABLE = "comment_notifications";

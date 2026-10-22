@@ -256,7 +256,6 @@
     --theme-color-range-track-background: #08111a;
     --theme-color-focus-ring-on-dark: var(--theme-color-focus-ring);
     --theme-color-control-border-accent: var(--theme-color-action-secondary-border);
-    --theme-color-action-primary-foreground: var(--theme-seed-text-primary);
     /* Pure white keeps small labels readable on the saturated status action fills. */
     --theme-color-action-success-foreground: #ffffff;
     --theme-color-action-danger-foreground: #ffffff;

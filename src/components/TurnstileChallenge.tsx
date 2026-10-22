@@ -1,11 +1,13 @@
 "use client";
 
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Turnstile, type TurnstileInstance, type TurnstileTheme } from "@marsidev/react-turnstile";
+import { useLocale } from "next-intl";
 import { TURNSTILE_SITE_KEY } from "@/lib/turnstile-public";
 
 export interface TurnstileChallengeHandle {
   getToken: () => string | null;
+  waitForToken: () => Promise<string | null>;
   reset: () => void;
 }
 
@@ -20,6 +22,7 @@ interface TurnstileChallengeProps {
   theme?: TurnstileTheme;
   className?: string;
   variant?: "card" | "inline";
+  appearance?: "always" | "interaction-only";
 }
 
 const baseClassName = "rounded-3xl border border-slate-200 bg-slate-50 p-4";
@@ -34,17 +37,32 @@ const TurnstileChallenge = forwardRef<TurnstileChallengeHandle, TurnstileChallen
     expiredMessage = "验证已过期，请重新完成。",
     loadFailedMessage = "验证加载失败，请刷新后重试。",
     action,
-    theme = "light",
+    theme = "auto",
     className = "",
     variant = "card",
+    appearance = "always",
   },
   ref,
 ) {
+  const locale = useLocale();
   const widgetRef = useRef<TurnstileInstance | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [compact, setCompact] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver(([entry]) => {
+      // Cloudflare's flexible widget requires at least 300px of content width.
+      if (entry.contentRect.width > 0) setCompact(entry.contentRect.width < 300);
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   useImperativeHandle(ref, () => ({
     getToken: () => widgetRef.current?.getResponse() ?? null,
+    waitForToken: async () => widgetRef.current?.getResponsePromise().catch(() => null) ?? null,
     reset: () => {
       widgetRef.current?.reset();
       setStatusMessage("");
@@ -71,15 +89,17 @@ const TurnstileChallenge = forwardRef<TurnstileChallengeHandle, TurnstileChallen
     <div className={containerClassName}>
       {title && <div className="text-sm font-semibold text-slate-900">{title}</div>}
       {description && <p className="text-sm leading-6 text-slate-600">{description}</p>}
-      <div className={widgetClassName}>
-        <div className="min-w-[300px] sm:min-w-0">
+      <div ref={containerRef} className={widgetClassName}>
+        <div className="min-w-0">
           <Turnstile
             ref={widgetRef}
             siteKey={TURNSTILE_SITE_KEY}
             options={{
               action,
               theme,
-              size: "flexible",
+              language: locale.toLowerCase(),
+              size: compact ? "compact" : "flexible",
+              appearance,
             }}
             onSuccess={() => setStatusMessage("")}
             onExpire={() => setStatusMessage(expiredMessage)}
@@ -88,7 +108,7 @@ const TurnstileChallenge = forwardRef<TurnstileChallengeHandle, TurnstileChallen
         </div>
       </div>
       {statusMessage && (
-        <div className="mt-3 text-sm text-red-500">{statusMessage}</div>
+        <div role="status" className="mt-3 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{statusMessage}</div>
       )}
     </div>
   );

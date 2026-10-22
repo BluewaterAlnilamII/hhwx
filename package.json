@@ -52,7 +52,8 @@
     "test:ournotes-master": "node --import tsx --test tests/ournotes-master-api.test.mjs tests/bandori-snapshot-api-server.test.mjs",
     "test:ournotes-songs": "node --import tsx --test tests/ournotes-songs.test.mjs tests/ournotes-song-meta.test.mjs",
     "test:ournotes-cards": "node --import tsx --test tests/ournotes-cards.test.mjs",
-    "test:ournotes-tracker": "node --import tsx --test tests/ournotes-tracker-api.test.mjs tests/ournotes-participation-api.test.mjs"
+    "test:ournotes-tracker": "node --import tsx --test tests/ournotes-tracker-api.test.mjs tests/ournotes-participation-api.test.mjs",
+    "test:auth": "node --import tsx --test tests/auth-errors.test.mjs tests/auth-registration.test.mjs tests/account-email-change.test.mjs tests/auth-server.test.mjs tests/email-otp-flow.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -73,7 +74,8 @@
     "recharts": "^3.10.1",
     "signalsmith-stretch": "1.3.2",
     "tailwind-merge": "^3.7.0",
-    "zustand": "^5.0.15"
+    "zustand": "^5.0.15",
+    "server-only": "0.0.1"
   },
   "devDependencies": {
     "@next/env": "16.4.2",

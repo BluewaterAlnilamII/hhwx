@@ -25,13 +25,10 @@ export function isServerTurnstileEnabled(): boolean {
 
 export async function verifyTurnstileToken(token: string | null | undefined, request: Request): Promise<void> {
   if (!isServerTurnstileEnabled()) {
-    return;
+    throw new ApiRouteError(503, "TURNSTILE_SERVER_NOT_CONFIGURED", "安全验证服务暂时不可用");
   }
 
   const secretKey = readSecretKey();
-  if (!secretKey) {
-    throw new ApiRouteError(500, "TURNSTILE_SERVER_NOT_CONFIGURED", "缺少服务端安全验证配置");
-  }
 
   if (!token) {
     throw new ApiRouteError(400, "TURNSTILE_REQUIRED", "请先完成安全验证");

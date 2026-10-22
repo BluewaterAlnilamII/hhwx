@@ -1,19 +1,20 @@
 import { createClient, type Session } from "@supabase/supabase-js";
 import { parseApiSuccessData } from "@/lib/api-contracts";
-import {
-	buildLocalizedPathname,
-	DEFAULT_LOCALE,
-	getLocaleFromPathname,
-	isSupportedLocale,
-	stripLocalePrefix,
-	type AppLocale,
-} from "@/i18n/routing";
+import { stripLocalePrefix, type AppLocale } from "@/i18n/routing";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
-const DEFAULT_SITE_URL = "http://localhost:3000";
 
-export const supabase = createClient(supabaseUrl, supabasePublishableKey);
+export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
+	auth: { detectSessionInUrl: false },
+});
+
+// Keep incomplete registration/recovery sessions out of the site's global login.
+export function createEmailFlowClient() {
+	return createClient(supabaseUrl, supabasePublishableKey, {
+		auth: { storageKey: `hhwx-email-flow-${crypto.randomUUID()}`, persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+	});
+}
 
 export interface AuthProfileSummary {
 	userId: string;
@@ -40,10 +41,6 @@ let authSummaryCache: AuthSummaryCacheEntry | null = null;
 let authSummaryRequestInFlight: AuthSummaryRequestEntry | null = null;
 let authSummaryRequestGeneration = 0;
 
-function trimTrailingSlash(value: string): string {
-	return value.replace(/\/+$/, "");
-}
-
 export function normalizeInternalPath(path: string | null | undefined, fallback = "/"): string {
 	if (!path || !path.startsWith("/") || path.startsWith("//")) {
 		return fallback;
@@ -58,47 +55,6 @@ export function normalizeAuthMode(mode: string | null | undefined, fallback: Aut
 	}
 
 	return fallback;
-}
-
-export function getSiteUrl(): string {
-	const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-	if (configured) {
-		const withScheme = configured.startsWith("http") ? configured : `https://${configured}`;
-		return trimTrailingSlash(withScheme);
-	}
-
-	if (typeof window !== "undefined") {
-		return trimTrailingSlash(window.location.origin);
-	}
-
-	return DEFAULT_SITE_URL;
-}
-
-function resolveCurrentLocale(locale?: AppLocale | string | null): AppLocale | undefined {
-	if (isSupportedLocale(locale)) {
-		return locale;
-	}
-
-	if (typeof window === "undefined") {
-		return undefined;
-	}
-
-	return getLocaleFromPathname(window.location.pathname) ?? undefined;
-}
-
-export function buildAuthCallbackUrl(nextPath = "/account", locale?: AppLocale | string | null): string {
-	const resolvedLocale = resolveCurrentLocale(locale);
-	const authCallbackPath = buildLocalizedPathname("/auth/confirm", resolvedLocale ?? DEFAULT_LOCALE);
-	const url = new URL(authCallbackPath, getSiteUrl());
-	const safeNextPath = normalizeInternalPath(nextPath, "/account");
-	url.searchParams.set("next", safeNextPath);
-	return url.toString();
-}
-
-export function buildEmailVerificationCallbackUrl(nextPath = "/account/email", locale?: AppLocale | string | null): string {
-	const url = new URL(buildAuthCallbackUrl(nextPath, locale));
-	url.searchParams.set("verify_email", "1");
-	return url.toString();
 }
 
 export function buildAuthPath(

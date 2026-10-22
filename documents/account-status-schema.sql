@@ -1,6 +1,5 @@
--- Private account authorization state.
--- Apply this after the existing auth/profile schema and before enabling
--- application-side email verification in production.
+-- Legacy pre-native-OTP reference only; do not deploy independently.
+-- Current account state is defined by supabase/migrations and account-auth-flow.md.
 
 create table if not exists public.account_status (
   user_id uuid primary key references auth.users(id) on delete cascade,

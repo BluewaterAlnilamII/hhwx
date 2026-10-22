@@ -1,6 +1,6 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
-import { requireAuthenticatedUser } from "@/lib/auth-server";
+import { requireAuthenticatedUserId, requireVerifiedAccount } from "@/lib/auth-server";
 import {
   COMMENT_TARGET_BANDORI_EVENT,
   parseBandoriEventCommentTargetId,
@@ -77,11 +77,11 @@ function normalizeNotificationType(value: string | null) {
 
 export async function GET(request: Request) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const userId = await requireAuthenticatedUserId(request);
     const url = new URL(request.url);
 
     const notifications = await listCommentNotifications({
-      userId: user.id,
+      userId,
       type: normalizeNotificationType(url.searchParams.get("type")),
       cursor: url.searchParams.get("cursor"),
     });
@@ -98,7 +98,7 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const user = await requireVerifiedAccount(request);
     let body: UpdateNotificationsRequest;
     try {
       body = await request.json();

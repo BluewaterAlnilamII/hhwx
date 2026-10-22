@@ -21,5 +21,6 @@ export function getLocalizedAuthErrorMessages(t: TranslateAuthError): LocalizedA
     weakPassword: t("errors.weakPassword", passwordBounds),
     samePassword: t("errors.samePassword"),
     tooManyRequests: t("errors.tooManyRequests"),
+    invalidCode: t("otp.invalidCode"),
   };
 }

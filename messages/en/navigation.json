@@ -29,7 +29,7 @@
     "openAccountMenu": "Open account menu",
     "openLogin": "Open login entry",
     "accountCenter": "Account Center",
-    "accountCenterUnverified": "Account Center (verification pending)",
+    "accountCenterUnverified": "Account center (setup incomplete)",
     "notifications": "Notifications",
     "logout": "Log out",
     "login": "Log in",

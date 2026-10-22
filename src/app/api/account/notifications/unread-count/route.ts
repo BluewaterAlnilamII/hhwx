@@ -1,12 +1,12 @@
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
-import { requireAuthenticatedUser } from "@/lib/auth-server";
+import { requireAuthenticatedUserId } from "@/lib/auth-server";
 import { countUnreadCommentNotifications } from "@/lib/comments/notifications-server";
 
 export async function GET(request: Request) {
   try {
-    const user = await requireAuthenticatedUser(request);
+    const userId = await requireAuthenticatedUserId(request);
     return jsonSuccess({
-      unreadCount: await countUnreadCommentNotifications(user.id),
+      unreadCount: await countUnreadCommentNotifications(userId),
     });
   } catch (error) {
     console.error("Account notification unread count API error:", error);

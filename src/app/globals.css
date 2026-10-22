@@ -274,9 +274,14 @@
 }
 
 @media (hover: hover) {
-  .hhwx-accent-button:hover {
+  .hhwx-accent-button:hover:not(:disabled):not([aria-disabled='true']) {
     background: var(--theme-color-action-primary-background-hover);
   }
+}
+
+.hhwx-accent-button:focus-visible {
+  outline: 2px solid var(--theme-color-focus-ring);
+  outline-offset: 3px;
 }
 
 .hhwx-accent-button:disabled,

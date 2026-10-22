@@ -77,10 +77,10 @@ begin
   perform dblink_connect('profile_lock_waiter', connection_string);
   select pid into holder_pid from dblink('profile_lock_holder', 'select pg_backend_pid()') as result(pid integer);
   select pid into waiter_pid from dblink('profile_lock_waiter', 'select pg_backend_pid()') as result(pid integer);
+  perform dblink_exec('profile_lock_holder', 'set statement_timeout = ''5s''');
   perform dblink_exec('profile_lock_holder', format(
     'insert into auth.users (id, aud, role, email, raw_app_meta_data, raw_user_meta_data)
-     values (%L, ''authenticated'', ''authenticated'', ''profile-lock@example.invalid'', ''{}'', ''{}'')', owner_id));
-  perform dblink_exec('profile_lock_holder', 'set statement_timeout = ''5s''');
+     values (%L, ''authenticated'', ''authenticated'', ''profile-lock@example.invalid'', ''{}'', ''{"username":"profile_lock_test"}'')', owner_id));
   perform dblink_exec('profile_lock_waiter', 'set statement_timeout = ''5s''; set role service_role');
 
   foreach save_first in array array[true, false] loop

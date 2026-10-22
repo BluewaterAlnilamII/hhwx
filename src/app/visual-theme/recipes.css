@@ -159,10 +159,10 @@
   --theme-color-tab-indicator-selected: var(--theme-seed-brand-emphasis);
 
   /* Solid action fills stay independent from status text and progress indicators. */
-  --theme-color-action-primary-background: var(--theme-seed-brand-primary);
-  --theme-color-action-primary-background-hover: color-mix(in srgb, var(--theme-color-action-primary-background) 92%, var(--theme-color-control-background));
-  --theme-color-action-primary-foreground: var(--theme-color-text-default);
-  --theme-shadow-action-primary: 0 10px 24px color-mix(in srgb, var(--theme-color-action-primary-background) 28%, transparent);
+  --theme-color-action-primary-background: var(--theme-color-action-accent-background);
+  --theme-color-action-primary-background-hover: var(--theme-color-action-accent-background-hover);
+  --theme-color-action-primary-foreground: var(--theme-color-action-accent-foreground);
+  --theme-shadow-action-primary: none;
   --theme-color-action-secondary-background: var(--theme-color-semantic-info-background);
   --theme-color-action-secondary-background-hover: color-mix(in srgb, var(--theme-seed-semantic-info) 8%, var(--theme-color-control-background));
   --theme-color-action-secondary-foreground: var(--theme-color-semantic-info-foreground);
@@ -182,6 +182,7 @@
   --theme-color-action-destructive-foreground: var(--theme-color-semantic-danger-foreground);
 
   /* Non-chart progress indicators. Event Tracker data visualization stays independent. */
+  --theme-color-loading-indicator: var(--theme-seed-brand-primary);
   --theme-color-progress-foreground: var(--theme-color-semantic-info-foreground);
   --theme-color-progress-track-background: color-mix(in srgb, var(--theme-color-text-muted) 10%, var(--theme-color-surface-background));
   --theme-color-progress-indicator-background: var(--theme-color-semantic-info-foreground);

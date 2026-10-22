@@ -26,7 +26,7 @@ The nine HHW accent seeds are fixed. Neutrals and functional success/warning/dan
 | Fixed HHW seed | Light use | Dark use |
 | --- | --- | --- |
 | `#FFEE22` bright yellow | Sunny canvas band mix | Kept in the palette; no forced bright-yellow fill |
-| `#FF9922` orange | Header, primary action, diagonal mix | Small primary actions |
+| `#FF9922` orange | Header, loading indicator, diagonal mix | Loading indicator |
 | `#44DDFF` sky blue | 15% of the derived operation fill | Operation text/icons, outlines, selected tabs and keyboard focus |
 | `#AA33CC` purple | Decoration slot B | Lightened decoration slot B |
 | `#006699` blue | Information and operation ink/outlines, 85% of operation fill, profile banner, scrollbar, decoration C | Profile banner; lightened information ink, decoration C and silver canvas mix |
@@ -58,7 +58,7 @@ Values below are the current configuration, not literals to copy into components
 | Custom range track / thumb edge | `#E5E9EC` / white | `#08111A` / white |
 | Solid success action | `#008348` / `#FFFEF4` | `#008348` / `#FFFFFF` |
 | Solid danger/retry action | `#E0002F` / `#FFFEF4` | `#E0002F` / `#FFFFFF` |
-| Primary action | Orange / `#0F172A` | Orange / `#0F172A` |
+| Primary action | Same blue fill and inverse ink as solid blue operation | Same blue fill and inverse ink as solid blue operation |
 | Selected tab and standard focus | Operation blue | Sky blue |
 
 The legacy `--theme-seed-surface: #FFFEF4` still supplies light chart-axis and other base recipes. Independent inverse ink also uses that value in light mode. Neither is the content-panel source. `--smile-patrol-content-surface` owns light panel/floating content; the dark panel currently inherits the dark surface role. `--theme-seed-shell-canvas: #FFEA2F` is a legacy input still used by light toolbar icon hover; the actual canvas has its own explicit role. Do not mass-replace these values to change panels.
@@ -127,6 +127,18 @@ For Meta skills, place the label and five level buttons on the first mobile row,
 OurNotes catalog tabs touch their filter panel with zero gap; Meta filters likewise touch the parameter panel. Each join has exactly one 1px subtle border: the tab list omits its bottom border, and the parameter panel omits its top border. The selected tab indicator remains 2px. Results retain the existing separate spacing (16px below `lg`, 32px at `lg`), rather than joining the controls into the table or card list.
 
 When changing these shared components, check complete loaded filters in both games, the OurNotes tabs and detail skill controls, and the card picker/profile consumers when accessible. Cover narrow phones, both sides of `sm`, desktop, both locales and color schemes, wrapping, focus and touch activation. A compact screenshot alone does not prove touch usability or accessibility compliance. Record login-gated or real-device checks that were not performed in the page's verification notes.
+
+## Account forms
+
+Login, registration, password recovery, password changes, and email changes share `AccountFormPage`: one panel, a `max-w-lg` container, and a lightweight back link naming the actual destination. Panel padding is 16 px on mobile and 40 px on desktop. Account overview and game-profile pages retain their wider layouts.
+
+Account forms use a 24 px semibold heading in the default text color, without a step counter or eyebrow. This is a functional-form exception to the site's colored page-heading treatment. Put known email addresses in a readable summary instead of a disabled input. Each form has one full-width primary action, using the shared blue fill and inverse white ink in both themes. Resend and navigation actions use the secondary text treatment. Button spinners inherit their text color, while standalone loading indicators retain their own orange role.
+
+Use concise, conventional labels: Username, Email, Password, and Verification code. The username remains a nonunique display name; the label does not change account identity or login rules. Completion states share `AccountFormResult`: centered status icon, neutral heading and one centered action capped at 192 px. Successful registration, password changes and email changes use the success icon; an already-registered email uses an information icon. Omit conversational instructions and prose that merely repeats the next action. Show the new email after an email change so the result can be checked.
+
+Omit instructions that repeat the heading or obvious controls. Associate password hints and errors with their fields; use a numeric, pasteable, autofill-compatible OTP input labeled "Verification code". Keep code length and expiry rules in validation, without displaying them as instructions. Place one resend control directly below the input, changing its label from the disabled cooldown countdown to resend when ready. Do not add a collapsible help section or an edit-address button to code-entry steps. Explain expired verification only when it requires action; an already-issued code remains usable after the current-email authorization window expires. A completed step has a clear result and one next action. Announce errors/status and move focus when advancing to a new step.
+
+Password fields provide a keyboard-accessible show/hide button without a confirmation field. Inputs share `AccountField`: labels cover only their text, field errors are associated with the input and clear on editing, and network/service failures remain form-level. Login tab order reaches email and password before the visibility/help controls. Turnstile follows the site locale and system color scheme; mobile layouts allow a 300px widget where possible and use compact mode only below that width.
 
 ## Loading and interaction feedback
 

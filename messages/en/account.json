@@ -1,26 +1,26 @@
 {
   "shell": {
     "eyebrow": "Account",
-    "defaultBackLabel": "Back home",
+    "defaultBackLabel": "Back to account",
     "signInTitle": "Sign-in required",
     "signInDescription": "Log in to continue using account features.",
     "signInAction": "Go to login"
   },
   "home": {
     "title": "Account Center",
-    "description": "View account status and manage profile, password, and email settings.",
+    "description": "Manage your profile and account security",
     "entries": {
       "profile": {
         "title": "Edit profile",
-        "description": "Change your public username."
+        "description": "Edit your avatar, title, and username"
       },
       "password": {
         "title": "Change password",
-        "description": "Send a password reset email to the current inbox."
+        "description": "Verify your email to set a new password"
       },
       "email": {
         "title": "Change email",
-        "description": "Check verification status and change the login email."
+        "description": "Update the email used for login and verification"
       },
       "gameProfiles": {
         "title": "Game profiles",
@@ -28,20 +28,20 @@
       }
     },
     "emailVerified": "Email verified",
-    "emailUnverified": "Email not verified",
-    "emailWarning": "Your email is not verified yet. Verify it to use game profiles, comments, schedule editing, and other features."
+    "emailUnverified": "Registration incomplete",
+    "emailWarning": "Complete email verification and account setup to use comments and game profiles"
   },
   "profile": {
     "title": "Edit profile",
-    "description": "Change your public username.",
-    "usernameLabel": "Public username",
-    "usernameDescription": "Shown on account pages, comments, and similar surfaces.",
-    "usernamePlaceholder": "Enter public username",
+    "description": "Manage your avatar, title, and username",
+    "usernameLabel": "Username",
+    "usernameDescription": "Shown on your profile and in comments",
+    "usernamePlaceholder": "Enter username",
     "usernameHint": "Username must be {min}-{max} characters and may include letters, numbers, spaces, symbols, and emoji",
     "loadNotSignedIn": "Please log in first",
     "loadFailed": "Failed to load account profile",
     "httpLoadFailed": "Failed to load account profile (HTTP {status})",
-    "saveSuccess": "Profile saved.",
+    "saveSuccess": "Profile saved",
     "saveFailed": "Save failed",
     "notSignedIn": "Please log in first",
     "invalidResponse": "Account profile response is invalid",
@@ -83,7 +83,7 @@
   },
   "password": {
     "title": "Change password",
-    "description": "Send a password reset email to the current inbox.",
+    "description": "Use an email code to set a new password",
     "sectionTitle": "Send change email",
     "sectionDescription": "The current receiving email is shown below. Change email first if this inbox is unavailable.",
     "currentEmail": "Current receiving email: {email}",
@@ -95,28 +95,22 @@
   },
   "email": {
     "title": "Change email",
-    "description": "The new email only takes effect after confirmation.",
-    "currentStatus": "Current email status",
-    "currentEmail": "Current email: {email}",
-    "verified": "Verified",
-    "unverified": "Unverified",
-    "resendTitle": "Resend verification email",
-    "resendDescription": "If the current email is not verified, you can send the verification email again.",
-    "submitTitle": "Submit new email",
-    "submitDescription": "After confirmation, the new email becomes the login email.",
+    "description": "Verify your current email, then enter and verify your new email",
     "newEmail": "New email",
-    "sameEmail": "The new email must be different from the current email.",
-    "sessionExpired": "Your session expired. Log in again and retry.",
-    "updateSent": "A confirmation email has been sent to the new inbox. Follow the email to complete the change.",
-    "verificationSent": "Verification email sent. Check your inbox and spam folder.",
-    "updateFailed": "Failed to submit email change",
-    "verificationFailed": "Failed to send verification email",
-    "httpUpdateFailed": "Failed to submit email change (HTTP {status})",
-    "httpVerificationFailed": "Failed to send verification email (HTTP {status})",
-    "resendAction": "Resend verification email",
-    "submitAction": "Send confirmation email",
-    "submitting": "Submitting...",
-    "newEmailPlaceholder": "Enter the new email address"
+    "sessionExpired": "Your session expired; sign in again",
+    "updateFailed": "Could not request an email change",
+    "otp": {
+      "currentTitle": "Verify current email",
+      "newEmailTitle": "Enter new email",
+      "newCodeTitle": "Verify new email",
+      "completeTitle": "Email changed",
+      "proofExpired": "Verification expired. Verify your current email again",
+      "resendProofExpired": "Verify your current email again to resend. A code already sent can still be used",
+      "finishRegistration": "Set up account",
+      "reverifyCurrent": "Verify current email again",
+      "finishChange": "Confirm change",
+      "restartRequired": "The request has changed. Verify your current email again"
+    }
   },
   "notifications": {
     "title": "Notifications",

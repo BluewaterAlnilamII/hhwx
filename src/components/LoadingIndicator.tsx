@@ -4,7 +4,7 @@ export function LoadingSpinner({ className }: { className?: string }) {
   return (
     <span
       aria-hidden="true"
-      className={cn("inline-block h-4 w-4 shrink-0 rounded-full border-2 border-current border-t-transparent text-[var(--theme-color-action-primary-background)] motion-safe:animate-spin", className)}
+      className={cn("inline-block h-4 w-4 shrink-0 rounded-full border-2 border-current border-t-transparent text-[var(--theme-color-loading-indicator)] motion-safe:animate-spin", className)}
     />
   );
 }
