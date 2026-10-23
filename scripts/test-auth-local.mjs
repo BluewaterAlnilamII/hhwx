@@ -7,7 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { createClient } from '@supabase/supabase-js';
 
 const workdir = process.env.AUTH_TEST_WORKDIR || 'temp/auth-otp-local';
-const appUrl = process.env.AUTH_TEST_APP_URL || 'http://localhost:3100';
+const appUrl = process.env.AUTH_TEST_APP_URL || 'http://localhost:3000';
 assert.ok(['localhost', '127.0.0.1'].includes(new URL(appUrl).hostname), 'App must be local');
 const status = JSON.parse(execFileSync(process.execPath, [resolve('node_modules/supabase/dist/supabase.js'), 'status', '--workdir', workdir, '-o', 'json'], {encoding:'utf8',stdio:['ignore','pipe','ignore']}));
 assert.equal(status.API_URL, 'http://127.0.0.1:55321', 'Use the isolated Auth test stack on port 55321');
@@ -75,11 +75,20 @@ async function api(path, session, body, method='POST') {
   const response=await fetch(appUrl+path,{method,headers:{'Content-Type':'application/json',...(session?{Authorization:`Bearer ${session.access_token}`}:{})},...(body?{body:JSON.stringify(body)}:{})});
   return {status:response.status,body:await response.json()};
 }
-async function latestMail(email) {
+async function latestMail(email, nativeEmailChange = false) {
   const list=await fetch(status.MAILPIT_URL+'/api/v1/messages?limit=100').then(r=>r.json());
   const item=list.messages.find(m=>m.To.some(to=>to.Address===email));
   assert.ok(item,`Missing local test mail for ${email}`);
   const mail=await fetch(status.MAILPIT_URL+'/api/v1/message/'+item.ID).then(r=>r.json());
+  if (nativeEmailChange) {
+    const href = mail.HTML.match(/href="([^"]*\/auth\/v1\/verify[^"]*)"/u)?.[1];
+    assert.ok(href, 'Default native email-change mail must contain its confirmation link');
+    const link = new URL(href.replaceAll('&amp;', '&'));
+    assert.equal(link.origin, status.API_URL);
+    assert.equal(link.searchParams.get('type'), 'email_change');
+    assert.ok(link.searchParams.get('token'));
+    return { ...mail, tokenHash: link.searchParams.get('token') };
+  }
   assert.ok(!mail.HTML.includes('/auth/v1/verify'), 'OTP mail must not contain a consumable verification link');
   return {...mail,code:mail.Text.match(/\b\d{8}\b/u)?.[0]};
 }
@@ -130,17 +139,18 @@ try {
     assert.equal((await account.client.auth.setSession(account.session)).error,null);
     assert.equal((await account.client.auth.updateUser({email:newEmail})).error,null);
     assert.equal((await api('/api/account/profile',account.session,null,'GET')).body.data.emailVerified,true);
-    const oldMail=await latestMail(account.email),newMail=await latestMail(newEmail);
-    assert.match(oldMail.Subject,/当前邮箱/u);assert.match(newMail.Subject,/新邮箱/u);assert.notEqual(oldMail.Subject,newMail.Subject);
-    assert.match(oldMail.Text,/「当前邮箱」/u);assert.match(newMail.Text,/「新邮箱」/u);
-    const first=newFirst?{email:newEmail,code:newMail.code}:{email:account.email,code:oldMail.code};
-    const second=newFirst?{email:account.email,code:oldMail.code}:{email:newEmail,code:newMail.code};
-    if(oldMail.code!==newMail.code)assert.ok((await create().auth.verifyOtp({email:first.email,type:'email_change',token:second.code})).error);
-    const one=await create().auth.verifyOtp({email:first.email,type:'email_change',token:first.code});assert.equal(one.error,null);assert.equal(one.data.session,null);
+    const oldMail=await latestMail(account.email,true),newMail=await latestMail(newEmail,true);
+    assert.notEqual(oldMail.tokenHash,newMail.tokenHash);
+    const first=newFirst?newMail.tokenHash:oldMail.tokenHash;
+    const second=newFirst?oldMail.tokenHash:newMail.tokenHash;
+    const invalid=first.slice(0,-1)+(first.endsWith('0')?'1':'0');
+    assert.ok((await create().auth.verifyOtp({type:'email_change',token_hash:invalid})).error);
+    const one=await create().auth.verifyOtp({type:'email_change',token_hash:first});assert.equal(one.error,null);assert.equal(one.data.session,null);
     assert.equal((await admin.auth.admin.getUserById(account.session.user.id)).data.user.email,account.email);
-    const two=await create().auth.verifyOtp({email:second.email,type:'email_change',token:second.code});assert.equal(two.error,null);assert.equal(two.data.user.email,newEmail);assert.ok(two.data.session);
+    const two=await create().auth.verifyOtp({type:'email_change',token_hash:second});assert.equal(two.error,null);assert.equal(two.data.user.email,newEmail);assert.ok(two.data.session);
+    assert.ok((await create().auth.verifyOtp({type:'email_change',token_hash:first})).error);
   }
-  console.log('PASS email change: distinct old/new subjects and bodies, wrong-side code rejected, either confirmation order, first confirmation never switches email');
+  console.log('PASS native email change: separate default links, invalid/replayed links rejected, either confirmation order, first confirmation never switches email');
   // The app's local inbox captures admin-generated new-address codes without Resend.
   const sql = (statement) => execFileSync('docker',['exec','-i','supabase_db_hhwx-auth-test','psql','-U','postgres','-v','ON_ERROR_STOP=1'],{input:statement,stdio:['pipe','pipe','pipe']});
   async function currentProof(account) {
@@ -167,7 +177,7 @@ try {
   assert.deepEqual(requests.map(r=>r.status).sort(),[200,429],JSON.stringify(requests));
   const success=requests.find(r=>r.status===200);assert.deepEqual(Object.keys(success.body.data).sort(),['currentEmail','newEmail']);
   assert.equal(await mailCount(c.email),oldCount,'new email step must not send another old-address mail');
-  const nextMail=await latestMail(nextEmail);assert.match(nextMail.Text,/完成邮箱更换/u);assert.match(nextMail.Subject,/新邮箱/u);
+  const nextMail=await latestMail(nextEmail);assert.match(nextMail.Text,/完成登录邮箱更换/u);assert.match(nextMail.Subject,/新邮箱/u);
   assert.equal(nextMail.Text.match(/\b\d{8}\b/gu)?.length,1,'new email text contains one copyable code');
   assert.equal((await admin.auth.admin.getUserById(c.session.user.id)).data.user.email,c.email);
   assert.ok((await create().auth.verifyOtp({email:nextEmail,type:'email_change',token:nextMail.code==='00000000'?'00000001':'00000000'})).error);

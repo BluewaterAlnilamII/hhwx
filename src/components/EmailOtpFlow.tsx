@@ -80,7 +80,10 @@ export default function EmailOtpFlow({ kind, initialEmail = "", title, loginHref
       if (isTurnstileEnabled && !captchaToken) { setError(t("messages.captchaRequired")); return; }
       const address = email.trim().toLowerCase();
       const result = kind === "register"
-        ? await client.auth.signInWithOtp({ email: address, options: { shouldCreateUser: true, captchaToken } })
+        ? await client.auth.signInWithOtp({ email: address, options: {
+          shouldCreateUser: true, captchaToken,
+          emailRedirectTo: new URL("/auth?mode=register", process.env.NEXT_PUBLIC_SITE_URL || window.location.origin).href,
+        } })
         : await client.auth.resetPasswordForEmail(address, { captchaToken });
       if (!alive.current) return;
       if (result.error) throw result.error;

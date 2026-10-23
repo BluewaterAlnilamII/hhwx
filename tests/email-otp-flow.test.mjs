@@ -63,6 +63,7 @@ function flow({ kind = "register", complete = false, verifyError, sendError, sig
   };
   const exports = {};
   runInNewContext(outputText, {
+    URL, process: { env: { NEXT_PUBLIC_SITE_URL: "https://hhwx.example.test" } },
     exports, require: (id) => { assert.ok(Object.hasOwn(dependencies, id), id); return dependencies[id]; },
     fetch: async (url, options) => {
       calls.push({ type: "http", url, options });
@@ -114,6 +115,7 @@ test("registration keeps the password local until verified email and final usern
   const formId = current.nodes().find((node) => node.type === "form").props.id;
   await current.submit();
   assert.equal(current.calls[0].type, "otp");
+  assert.equal(current.calls[0].input.options.emailRedirectTo, "https://hhwx.example.test/auth?mode=register");
   assert.equal(JSON.stringify(current.calls).includes("LocalTest123"), false);
   const retainedPassword = current.nodes().find((node) => node.type === "field" && node.props.type === "password");
   assert.equal(retainedPassword.hidden, true);

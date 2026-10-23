@@ -23,8 +23,8 @@ export function accountEmailDeliveryConfig(): { inboxUrl: string } | { apiKey: s
 export async function sendNewAccountEmailCode(
   config: ReturnType<typeof accountEmailDeliveryConfig>, email: string, code: string, signal: AbortSignal,
 ): Promise<void> {
-  const subject = "HHWX 新邮箱验证码 / New email verification";
-  const text = `验证新邮箱 / Verify your new email\n\n请在 HHWX 输入以下验证码，完成邮箱更换\nEnter this code on HHWX to finish changing your email\n\n${code}\n\n验证码 1 小时内有效 / Valid for 1 hour\n\n请勿向他人透露验证码。如非本人操作，请忽略此邮件。\nDo not share this code. If you did not request it, ignore this email.`;
+  const subject = "HHWX 更换邮箱：验证新邮箱 / Email change: verify new email";
+  const text = `更换登录邮箱 / Change your email\n\n请输入以下验证码，验证新邮箱并完成登录邮箱更换\nEnter this code on HHWX to verify your new email and finish changing your email\n\n${code}\n\n验证码 1 小时内有效 / Valid for 1 hour\n\n请勿向他人透露验证码。如非本人操作，请忽略此邮件。\nDo not share this code. If you did not request it, ignore this email.`;
   const html = `<!doctype html>
 <html lang="zh-CN" dir="ltr">
 <head>
@@ -32,7 +32,7 @@ export async function sendNewAccountEmailCode(
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <meta name="supported-color-schemes" content="light dark">
-<title>验证新邮箱 / Verify your new email</title>
+<title>更换登录邮箱 / Change your email</title>
 <style>
 @media screen and (max-width:600px) {
   .outer { padding:16px 8px !important; }
@@ -45,7 +45,6 @@ export async function sendNewAccountEmailCode(
   .text { color:#e9f0f5 !important; }
   .muted { color:#a9bdca !important; }
   .brand { color:#80b3cc !important; }
-  .button { background-color:#0070a0 !important; border-color:#0070a0 !important; color:#e9f0f5 !important; }
 }
 </style>
 </head>
@@ -57,10 +56,10 @@ export async function sendNewAccountEmailCode(
 <tr><td class="content text" style="padding:32px;color:#0f172a;font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans CJK SC','Segoe UI',Arial,sans-serif;text-align:left">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed">
 <tr><td align="left" class="brand" style="font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans CJK SC','Segoe UI',Arial,sans-serif;padding:0 0 20px;color:#006699;font-size:14px;mso-line-height-rule:exactly;line-height:20px;font-weight:bold">HHWX Accounts</td></tr>
-<tr><td align="left" style="font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans CJK SC','Segoe UI',Arial,sans-serif;"><h1 class="text" style="font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans CJK SC','Segoe UI',Arial,sans-serif;margin:0;color:#0f172a;font-size:24px;mso-line-height-rule:exactly;line-height:32px;font-weight:bold">验证新邮箱</h1></td></tr>
-<tr><td align="left" lang="en" class="muted" style="font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans CJK SC','Segoe UI',Arial,sans-serif;padding:4px 0 20px;color:#475569;font-size:16px;mso-line-height-rule:exactly;line-height:24px">Verify your new email</td></tr>
-<tr><td align="left" class="text" style="font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans CJK SC','Segoe UI',Arial,sans-serif;padding:0 0 0;color:#0f172a;font-size:16px;mso-line-height-rule:exactly;line-height:24px">请在 HHWX 输入以下验证码，完成邮箱更换</td></tr>
-<tr><td align="left" lang="en" class="muted" style="font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans CJK SC','Segoe UI',Arial,sans-serif;padding:4px 0 0;color:#475569;font-size:16px;mso-line-height-rule:exactly;line-height:24px">Enter this code on HHWX to finish changing your email</td></tr>
+<tr><td align="left" style="font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans CJK SC','Segoe UI',Arial,sans-serif;"><h1 class="text" style="font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans CJK SC','Segoe UI',Arial,sans-serif;margin:0;color:#0f172a;font-size:24px;mso-line-height-rule:exactly;line-height:32px;font-weight:bold">更换登录邮箱</h1></td></tr>
+<tr><td align="left" lang="en" class="muted" style="font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans CJK SC','Segoe UI',Arial,sans-serif;padding:4px 0 20px;color:#475569;font-size:16px;mso-line-height-rule:exactly;line-height:24px">Change your email</td></tr>
+<tr><td align="left" class="text" style="font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans CJK SC','Segoe UI',Arial,sans-serif;padding:0 0 0;color:#0f172a;font-size:16px;mso-line-height-rule:exactly;line-height:24px">请输入以下验证码，验证新邮箱并完成登录邮箱更换</td></tr>
+<tr><td align="left" lang="en" class="muted" style="font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans CJK SC','Segoe UI',Arial,sans-serif;padding:4px 0 0;color:#475569;font-size:16px;mso-line-height-rule:exactly;line-height:24px">Enter this code on HHWX to verify your new email and finish changing your email</td></tr>
 <tr><td style="padding-top:24px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr><td bgcolor="#faf8f4" align="center" dir="ltr" class="code" style="padding:16px 8px;background-color:#faf8f4;color:#0f172a;font-family:Consolas,'Courier New',monospace;font-size:32px;mso-line-height-rule:exactly;line-height:40px;font-weight:bold;letter-spacing:2px;white-space:nowrap">${code}</td></tr>

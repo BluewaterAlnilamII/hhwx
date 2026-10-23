@@ -57,11 +57,11 @@ Supabase 负责邮箱归属、密码和会话。`app_metadata.hhwx_registration`
 
 首次发信显示验证控件。重发保留 60 秒冷却，Turnstile 使用 `interaction-only` 自动运行；普通用户直接点击重发，若结果尚未就绪则等待，只有服务要求额外交互时才显示挑战。失败或超时不会发信，重试取得新的 token。保留 Supabase 原生重发接口的验证要求，不另建重发授权或代发机制。
 
-邮件标题使用 `supabase/templates/auth/subjects.json`，正文使用同目录的 8 份 HTML。认证邮件显示 `.Token`，不包含会被扫描器消耗的验证链接。当前邮箱证明使用中性的 Magic link／OTP 模板；应用发送的新邮箱邮件在 `src/lib/account-email-delivery-server.ts` 使用独立标题和正文。原生更换邮箱模板保留旧／新邮箱的区分文案，供原生直接请求使用。无需自建发信 Hook。模板脚本 `-DryRun` 可以不提供管理凭据进行本地预览，真正更新仍属于需要授权的远程操作。
+邮件标题使用 `supabase/templates/auth/subjects.json`，正文使用同目录的 5 份 HTML。HHWX 不维护账号邀请、独立重新认证及原生换邮箱的自定义模板。网站认证邮件显示 `.Token`，不包含会被扫描器消耗的验证链接。主题直接说明操作，只有完成通知才使用“已更改／已更换”。注册和当前邮箱证明共用 Magic link／OTP 模板，通过 `.RedirectTo` 区分：`/auth?mode=register` 表示注册，`/account/email` 表示当前邮箱证明。两处请求使用 `NEXT_PUBLIC_SITE_URL`（本地缺省时使用浏览器来源），必须与 Supabase Site URL 的来源一致且不带末尾斜杠；对应地址需通过 Auth 回跳校验。首次发送和重发传入同一地址，未知地址保留通用身份验证文案。这些信息只控制邮件展示，不参与权限判断；应用发送的新邮箱邮件在 `src/lib/account-email-delivery-server.ts` 使用独立标题和正文。原生直接换邮箱保留 Supabase 默认模板和双重确认，网站的新邮箱邮件由应用自行发送。部署时在 Supabase 控制台将 Invite user、Reauthentication、Change email address 恢复默认；仅删除本地文件或省略 PATCH 字段不会清除线上已保存的自定义模板。无需自建发信 Hook。发布时同步请求地址与主题／正文条件。模板脚本 `-DryRun` 可以不提供管理凭据进行本地预览，真正更新仍属于需要授权的远程操作。
 
 在**应用服务器配置 `RESEND_API_KEY`**，发信权限限定为 `mail.hhwx.org`。新邮箱邮件发件人为 `HHWX Accounts <accounts@mail.hhwx.org>`。Supabase 的 SMTP 发件地址和密码需单独配置，使用相同发信域名和 API key。应用通过原生 `fetch` 调用 Resend HTTP API，不新增运行时依赖。生产环境不要设置 `AUTH_EMAIL_TEST_INBOX_URL`。
 
-邮件沿用账号页面的暖色背景、中性标题、中文系统无衬线字体和蓝色操作样式。内联样式与布局表格保证正文不依赖远程资源；响应式和深色样式增强支持它们的客户端。纵向间距由表格单元格内边距控制，文字单元格明确指定字体，并保留 Outlook 宽度与行高兼容处理。通知按钮采用表格背景和可点击的链接边框；不支持圆角的客户端可以显示直角按钮。精简的中英文说明共用一个可复制的验证码。安全通知明确变更结果，邮箱变更通知使用 `OldEmail` 和 `Email`。应用生成的新邮箱 HTML 与纯文本邮件保持内容一致。`config.toml` 和 `subjects.json` 的主题必须一致。检查前先同步隔离测试栈的模板副本和 Auth 主题，再捕获新的 Mailpit 邮件；旧邮件不会自动更新。逐项审阅 HTML Check 警告并检查手机渲染，不把分数当作投递或显示成功率。
+邮件沿用账号页面的暖色背景、中性标题、中文系统无衬线字体和蓝色操作样式。内联样式与布局表格保证正文不依赖远程资源；响应式和深色样式增强支持它们的客户端。纵向间距由表格单元格内边距控制，文字单元格明确指定字体，并保留 Outlook 宽度与行高兼容处理。通知按钮采用表格背景和可点击的链接边框；不支持圆角的客户端可以显示直角按钮。精简的中英文说明共用一个可复制的验证码。安全通知明确变更结果，邮箱变更通知使用 `OldEmail` 和 `Email`。应用生成的新邮箱 HTML 与纯文本邮件保持内容一致。`config.toml` 和 `subjects.json` 的主题必须一致。检查前先同步隔离测试栈的模板副本和 Auth 主题，并重启 Auth，再捕获新的 Mailpit 邮件；旧邮件不会自动更新。逐项审阅 HTML Check 警告并检查手机渲染，不把分数当作投递或显示成功率。
 
 使用已验证的 Resend `mail.hhwx.org` 域名，区域为东京，开启 Forge 和 Enforced TLS，关闭点击／打开跟踪，并保留其 SPF/DKIM 记录。`accounts@mail.hhwx.org` 不接收回复；安全通知应提示联系网站维护者，不承诺通过回复邮件获得支持。Supabase SMTP 和应用 API 均使用新地址和密钥成功发信后，再移除旧根域名的 Resend 配置。验证码邮件移除了跨域验证链接，不需要付费 Supabase 自定义域名。本地邮件箱不能证明公网投递、垃圾箱情况、DNS 或真实 Turnstile 成功，这些保留为上线验收项目。
 
@@ -82,6 +82,8 @@ Supabase 负责邮箱归属、密码和会话。`app_metadata.hhwx_registration`
 
 ## 本地测试
 
+同步隔离栈后，运行 `node --conditions=react-server --import tsx scripts/test-auth-email-templates.mjs`，通过实际 Auth SMTP 和应用新邮箱发信代码检查按操作区分的主题与正文。覆盖首次／重复注册、已确认账号再次注册、当前邮箱重发、密码恢复、顺序更换邮箱、完成通知和通用回退文案。脚本清理生成的测试账号，并在 Mailpit 保留邮件供预览，不需要启动 Next.js 开发服务。
+
 隔离项目为 `hhwx-auth-test`，API **55321**、数据库 **55322**、邮件箱 **55324**；保留原 `hhwx` 实例及其数据。把仓库 `supabase/config.toml`、migrations 和 templates 复制到 `temp/auth-otp-local/supabase`，仅把项目 ID 改为上述名称、端口前缀 `543` 改为 `553`：
 
 ```powershell
@@ -91,12 +93,12 @@ $env:NEXT_PUBLIC_SUPABASE_URL = $authTest.API_URL
 $env:SUPABASE_URL = $authTest.API_URL
 $env:NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = $authTest.PUBLISHABLE_KEY
 $env:SUPABASE_SECRET_KEY = $authTest.SECRET_KEY
-$env:NEXT_PUBLIC_SITE_URL = 'http://localhost:3100'
+$env:NEXT_PUBLIC_SITE_URL = 'http://localhost:3000'
 $env:NEXT_PUBLIC_TURNSTILE_SITE_KEY = '1x00000000000000000000AA'
 $env:TURNSTILE_SECRET_KEY = '1x0000000000000000000000000000000AA'
 $env:AUTH_EMAIL_TEST_INBOX_URL = $authTest.MAILPIT_URL
 $env:RESEND_API_KEY = ''
-npm run dev -- --port 3100
+npm run dev
 ```
 
 另开终端执行测试，不要打印或提交本地凭据对象。`scripts/test-auth-local.mjs` 拒绝非本地地址和错误测试端口；为补足 CLI 2.117 尚未暴露的配置，它只重建这个隔离实例的无状态 Auth 容器，增加 `GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD=true` 并启用 Turnstile 官方测试密钥，然后生成测试用户并在结束后清理。先运行该脚本，再进行手动交互测试；它会保留启用 CAPTCHA 的 Auth 服务。不重置数据库、不访问生产。Auth 邮件由本地 SMTP 捕获，应用的新邮箱邮件通过 `AUTH_EMAIL_TEST_INBOX_URL` 投入 Mailpit API。该覆盖配置拒绝生产模式及非本地 Auth／邮件箱地址。测试只调整自身临时样本的时间戳来检查过期和重发，无需长时间等待。
