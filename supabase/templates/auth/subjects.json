@@ -1,10 +1,7 @@
 {
-  "confirmation": "HHWX 邮箱验证码 / Verification code",
-  "magic_link": "HHWX 邮箱验证码 / Verification code",
-  "recovery": "HHWX 密码重置验证码 / Password reset code",
-  "invite": "HHWX 邀请验证码 / Invitation code",
-  "reauthentication": "HHWX 身份验证码 / Identity verification code",
-  "email_change": "{{ if eq .SendingTo .Email }}HHWX 当前邮箱验证码 / Current email verification{{ else }}HHWX 新邮箱验证码 / New email verification{{ end }}",
+  "confirmation": "HHWX 账号注册 / Account registration",
+  "magic_link": "{{ if eq .RedirectTo (print .SiteURL \"/auth?mode=register\") }}HHWX 账号注册 / Account registration{{ else if eq .RedirectTo (print .SiteURL \"/account/email\") }}HHWX 更换邮箱：验证当前邮箱 / Email change: verify current email{{ else }}HHWX 身份验证 / Identity verification{{ end }}",
+  "recovery": "HHWX 重置密码 / Reset your password",
   "password_changed": "HHWX 密码已更改 / Password changed",
   "email_changed": "HHWX 登录邮箱已更换 / Email address changed"
 }

@@ -87,7 +87,10 @@ function AccountEmailContent() {
         const captchaToken = (currentCodeSent ? await captchaRef.current?.waitForToken() : captchaRef.current?.getToken()) || undefined;
         if (!alive.current) return;
         if (isTurnstileEnabled && !captchaToken) { setError(authT("messages.captchaRequired")); return; }
-        const result = await client.auth.signInWithOtp({ email: profile.email!, options: { shouldCreateUser: false, captchaToken } });
+        const result = await client.auth.signInWithOtp({ email: profile.email!, options: {
+          shouldCreateUser: false, captchaToken,
+          emailRedirectTo: new URL("/account/email", process.env.NEXT_PUBLIC_SITE_URL || window.location.origin).href,
+        } });
         if (!alive.current) return;
         if (result.error) throw result.error;
         setCurrentCodeSent(true); setCode("");

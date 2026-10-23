@@ -249,29 +249,17 @@ otp_expiry = 3600
 
 # Bilingual HHWX authentication email templates for local development.
 # Hosted Supabase projects must be updated from the Dashboard or Management API.
-[auth.email.template.invite]
-subject = "HHWX 邀请验证码 / Invitation code"
-content_path = "./supabase/templates/auth/invite.html"
-
 [auth.email.template.confirmation]
-subject = "HHWX 邮箱验证码 / Verification code"
+subject = "HHWX 账号注册 / Account registration"
 content_path = "./supabase/templates/auth/confirmation.html"
 
 [auth.email.template.recovery]
-subject = "HHWX 密码重置验证码 / Password reset code"
+subject = "HHWX 重置密码 / Reset your password"
 content_path = "./supabase/templates/auth/recovery.html"
 
 [auth.email.template.magic_link]
-subject = "HHWX 邮箱验证码 / Verification code"
+subject = '{{ if eq .RedirectTo (print .SiteURL "/auth?mode=register") }}HHWX 账号注册 / Account registration{{ else if eq .RedirectTo (print .SiteURL "/account/email") }}HHWX 更换邮箱：验证当前邮箱 / Email change: verify current email{{ else }}HHWX 身份验证 / Identity verification{{ end }}'
 content_path = "./supabase/templates/auth/magic_link.html"
-
-[auth.email.template.email_change]
-subject = "{{ if eq .SendingTo .Email }}HHWX 当前邮箱验证码 / Current email verification{{ else }}HHWX 新邮箱验证码 / New email verification{{ end }}"
-content_path = "./supabase/templates/auth/email_change.html"
-
-[auth.email.template.reauthentication]
-subject = "HHWX 身份验证码 / Identity verification code"
-content_path = "./supabase/templates/auth/reauthentication.html"
 
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
