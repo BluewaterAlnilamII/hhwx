@@ -1,7 +1,7 @@
 import "server-only";
 import { ApiRouteError } from "@/lib/api-contracts";
 
-const sender = { Email: "accounts@hhwx.org", Name: "HHWX Accounts" };
+const sender = { Email: "accounts@mail.hhwx.org", Name: "HHWX Accounts" };
 
 export function accountEmailDeliveryConfig(): { inboxUrl: string } | { apiKey: string } {
   const inboxUrl = process.env.AUTH_EMAIL_TEST_INBOX_URL;

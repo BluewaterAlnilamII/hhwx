@@ -45,8 +45,8 @@ Supabase 负责邮箱归属、密码和会话。`app_metadata.hhwx_registration`
 | 邮箱 OTP | 8 位，3600 秒有效 |
 | 邮件限流／同一用户最短间隔 | 每小时 60 封／60 秒 |
 | Turnstile | Supabase Auth 中启用，使用现有站点对应的 secret；HHWX 保留相同 site key 和服务端 secret |
-| SMTP | 保留现有 Resend：`smtp.resend.com`、465、用户名 `resend` 和已有凭据 |
-| 发件地址／名称 | `accounts@hhwx.org`／`HHWX Accounts` |
+| SMTP | Resend：`smtp.resend.com`、465、用户名 `resend`；密码使用具有 `mail.hhwx.org` 发信权限的 API key |
+| 发件地址／名称 | `accounts@mail.hhwx.org`／`HHWX Accounts` |
 | Site URL | `https://hhwx.org` |
 | Redirect URLs | 保留确实需要的精确生产／本地路径，OTP 不需要通配回跳地址 |
 | 密码已修改／邮箱已更换通知 | 开启，使用仓库模板 |
@@ -59,11 +59,11 @@ Supabase 负责邮箱归属、密码和会话。`app_metadata.hhwx_registration`
 
 邮件标题使用 `supabase/templates/auth/subjects.json`，正文使用同目录的 8 份 HTML。认证邮件显示 `.Token`，不包含会被扫描器消耗的验证链接。当前邮箱证明使用中性的 Magic link／OTP 模板；应用发送的新邮箱邮件在 `src/lib/account-email-delivery-server.ts` 使用独立标题和正文。原生更换邮箱模板保留旧／新邮箱的区分文案，供原生直接请求使用。无需自建发信 Hook。模板脚本 `-DryRun` 可以不提供管理凭据进行本地预览，真正更新仍属于需要授权的远程操作。
 
-在**应用服务器配置 `RESEND_API_KEY`**，授权向 `hhwx.org` 域发信。新邮箱邮件发件人为 `HHWX Accounts <accounts@hhwx.org>`。这不替换 Supabase 已有 SMTP 配置。应用通过原生 `fetch` 调用 Resend HTTP API，不新增运行时依赖。生产环境不要设置 `AUTH_EMAIL_TEST_INBOX_URL`。
+在**应用服务器配置 `RESEND_API_KEY`**，发信权限限定为 `mail.hhwx.org`。新邮箱邮件发件人为 `HHWX Accounts <accounts@mail.hhwx.org>`。Supabase 的 SMTP 发件地址和密码需单独配置，使用相同发信域名和 API key。应用通过原生 `fetch` 调用 Resend HTTP API，不新增运行时依赖。生产环境不要设置 `AUTH_EMAIL_TEST_INBOX_URL`。
 
 邮件沿用账号页面的暖色背景、中性标题、中文系统无衬线字体和蓝色操作样式。内联样式与布局表格保证正文不依赖远程资源；响应式和深色样式增强支持它们的客户端。纵向间距由表格单元格内边距控制，文字单元格明确指定字体，并保留 Outlook 宽度与行高兼容处理。通知按钮采用表格背景和可点击的链接边框；不支持圆角的客户端可以显示直角按钮。精简的中英文说明共用一个可复制的验证码。安全通知明确变更结果，邮箱变更通知使用 `OldEmail` 和 `Email`。应用生成的新邮箱 HTML 与纯文本邮件保持内容一致。`config.toml` 和 `subjects.json` 的主题必须一致。检查前先同步隔离测试栈的模板副本和 Auth 主题，再捕获新的 Mailpit 邮件；旧邮件不会自动更新。逐项审阅 HTML Check 警告并检查手机渲染，不把分数当作投递或显示成功率。
 
-Resend 的 SPF/DKIM 保持验证，认证邮件关闭点击／打开跟踪。`accounts@hhwx.org` 不接收回复；安全通知应提示联系网站维护者，不承诺通过回复邮件获得支持。独立发信子域是可选项，不是本次切换前提。验证码邮件移除了跨域验证链接，不需要付费 Supabase 自定义域名。本地邮件箱不能证明公网投递、垃圾箱情况、DNS 或真实 Turnstile 成功，这些保留为上线验收项目。
+使用已验证的 Resend `mail.hhwx.org` 域名，区域为东京，开启 Forge 和 Enforced TLS，关闭点击／打开跟踪，并保留其 SPF/DKIM 记录。`accounts@mail.hhwx.org` 不接收回复；安全通知应提示联系网站维护者，不承诺通过回复邮件获得支持。Supabase SMTP 和应用 API 均使用新地址和密钥成功发信后，再移除旧根域名的 Resend 配置。验证码邮件移除了跨域验证链接，不需要付费 Supabase 自定义域名。本地邮件箱不能证明公网投递、垃圾箱情况、DNS 或真实 Turnstile 成功，这些保留为上线验收项目。
 
 ## 历史账号和切换顺序
 
