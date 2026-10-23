@@ -45,8 +45,8 @@ The private `account_private.email_change_dispatches` table stores only attempt 
 | Email OTP | 8 digits, 3600 seconds |
 | Email send limit / per-user minimum interval | 60 emails/hour / 60 seconds |
 | Turnstile | Enable natively in Supabase Auth using the site's existing widget secret; retain the same site key/server secret in HHWX |
-| SMTP | Keep existing Resend host `smtp.resend.com`, port 465, user `resend`, existing credential |
-| Sender | `accounts@hhwx.org` / `HHWX Accounts` |
+| SMTP | Resend host `smtp.resend.com`, port 465, user `resend`; password is an API key with sending access to `mail.hhwx.org` |
+| Sender | `accounts@mail.hhwx.org` / `HHWX Accounts` |
 | Site URL | `https://hhwx.org` |
 | Redirect allowlist | Keep exact required production/local paths; OTP flows do not need wildcard redirects |
 | Password changed / email changed notifications | Enabled, use the repository templates |
@@ -59,11 +59,11 @@ Initial sends display the widget. Resends keep the 60-second cooldown and run Tu
 
 Use `supabase/templates/auth/subjects.json` and all eight HTML templates. Authentication templates display `.Token`, never a consumable verification URL. Current-email proof uses the neutral Magic link/OTP template; the application-generated new-email message has a separate title/body in `src/lib/account-email-delivery-server.ts`. The native email-change template retains separate old/new wording for native direct requests. No custom mail hook is needed. The template-update script supports `-DryRun` without a Management API credential; applying templates remains an explicitly authorized remote operation.
 
-Set **`RESEND_API_KEY` on the application server**, with sending permission for `hhwx.org`. The new-address sender is `HHWX Accounts <accounts@hhwx.org>`. This does not replace Supabase's existing SMTP configuration. The application calls the Resend HTTP API using native `fetch`; no new runtime dependency is added. Never set `AUTH_EMAIL_TEST_INBOX_URL` in production.
+Set **`RESEND_API_KEY` on the application server**, with sending permission restricted to `mail.hhwx.org`. The new-address sender is `HHWX Accounts <accounts@mail.hhwx.org>`. Configure Supabase's SMTP sender and password separately with the same sending domain and API key. The application calls the Resend HTTP API using native `fetch`; no new runtime dependency is added. Never set `AUTH_EMAIL_TEST_INBOX_URL` in production.
 
 Email templates follow the account pages' warm canvas, neutral headings, Chinese system sans-serif fonts and blue actions. Inline styles and presentation tables keep the message readable without remote assets; responsive and dark-mode styles enhance supported clients. Table-cell padding controls vertical spacing, with fonts set on text cells and an Outlook width/line-height fallback. The notification button uses a table background and a clickable link border; clients without rounded corners may show a rectangular button. Compact Chinese/English instructions share one copyable OTP. Security notifications state the actual change; the email-change notification uses `OldEmail` and `Email`. Keep the application-generated new-email HTML and plain text aligned with this presentation. Template subjects in `config.toml` and `subjects.json` must agree. Sync the isolated test stack's template copies and Auth subjects before capturing fresh Mailpit messages; existing messages do not update. Review individual HTML Check warnings and mobile rendering instead of treating the percentage as a delivery or rendering success rate.
 
-Keep Resend SPF/DKIM verification and disable click/open tracking for authentication mail. `accounts@hhwx.org` does not receive replies; security notices direct users to contact the website maintainer and must not promise reply-based support. A dedicated sending subdomain is optional, not required for this cutover. OTP emails remove the cross-domain verification links without a paid Supabase custom domain. SMTP delivery, spam placement, DNS and real Turnstile challenges require hosted acceptance checks; the local inbox cannot prove them.
+Use the verified Resend `mail.hhwx.org` domain in Tokyo with Forge enabled, Enforced TLS, and click/open tracking disabled. Keep its SPF/DKIM records. `accounts@mail.hhwx.org` does not receive replies; security notices direct users to contact the website maintainer and must not promise reply-based support. Retire the old root-domain Resend configuration only after both Supabase SMTP and application API delivery work with the new sender and key. OTP emails remove the cross-domain verification links without a paid Supabase custom domain. SMTP delivery, spam placement, DNS and real Turnstile challenges require hosted acceptance checks; the local inbox cannot prove them.
 
 ## Historical accounts and rollout
 
