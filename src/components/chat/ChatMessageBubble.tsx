@@ -1,7 +1,7 @@
 "use client";
 
 import * as ContextMenu from "@radix-ui/react-context-menu";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ChevronRight, Trash2, VolumeX } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { CommentContent } from "@/components/comments/CommentContent";
@@ -16,7 +16,7 @@ export const chatBubbleClass = "max-w-full rounded-2xl px-3 py-2 text-sm leading
 export const menuClass = "hhwx-floating-surface z-1010 min-w-40 max-w-[calc(100vw-2rem)] rounded-xl border border-[var(--theme-color-border-subtle)] p-1.5 shadow-lg";
 export const itemClass = "flex min-h-10 cursor-default select-none items-center gap-2 rounded-lg px-3 py-2 text-sm outline-hidden data-highlighted:bg-[var(--theme-color-control-background-hover)] data-disabled:opacity-40";
 
-export function ChatMessageBubble({ message, own, canModerate, busy, onDelete, onMute, onOpenImage }: {
+export function ChatMessageBubble({ message, own, canModerate, busy, onDelete, onMute, onOpenImage, imageSource }: {
   message: ChatMessage;
   own: boolean;
   canModerate: boolean;
@@ -24,10 +24,13 @@ export function ChatMessageBubble({ message, own, canModerate, busy, onDelete, o
   onDelete(message: ChatMessage): void;
   onMute(userId: string, minutes: number | null): Promise<boolean>;
   onOpenImage(): void;
+  imageSource?: string;
 }) {
   const t = useTranslations("chat");
+  const trigger = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [muteFailed, setMuteFailed] = useState(false);
+  const source = message.image ? imageSource ?? chatImageUrl(message.image) : undefined;
   const mute = async (minutes: number | null) => {
     setMuteFailed(false);
     if (await onMute(message.author.userId, minutes)) setMenuOpen(false);
@@ -35,7 +38,7 @@ export function ChatMessageBubble({ message, own, canModerate, busy, onDelete, o
   };
   return <ContextMenu.Root open={menuOpen} onOpenChange={(open) => { setMenuOpen(open); setMuteFailed(false); }}>
     <ContextMenu.Trigger asChild>
-      <div tabIndex={0} data-chat-bubble aria-label={t("messageActions")}
+      <div ref={trigger} tabIndex={0} data-chat-bubble aria-label={t("messageActions")}
         className={message.image ? "max-w-full [-webkit-touch-callout:none]" : cn(chatBubbleClass, "w-fit [-webkit-touch-callout:none]", own
           ? "bg-[var(--theme-color-chat-own-background)] text-[var(--theme-color-chat-own-foreground)]"
           : "bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-default)]")}
@@ -46,16 +49,18 @@ export function ChatMessageBubble({ message, own, canModerate, busy, onDelete, o
             event.currentTarget.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: rect.left + rect.width / 2, clientY: rect.bottom }));
           }
         }}>
-        {message.image ? <ChatImageContent src={chatImageUrl(message.image)} width={message.image.width} height={message.image.height} onOpen={onOpenImage} />
+        {message.image ? <ChatImageContent src={source!} width={message.image.width} height={message.image.height} onOpen={() => { if (!menuOpen) onOpenImage(); }} />
           : <CommentContent content={message.content} isDeleted={false} className="m-0 text-sm text-inherit leading-[22px]" />}
       </div>
     </ContextMenu.Trigger>
     <ContextMenu.Portal>
-      <ContextMenu.Content className={menuClass} collisionPadding={12}>
+      <ContextMenu.Content className={menuClass} collisionPadding={12} onCloseAutoFocus={(event) => {
+        event.preventDefault(); trigger.current?.focus({ preventScroll: true });
+      }}>
         <ContextMenu.Group>
-          <ChatCopyMenuItem content={message.content} imageSource={message.image ? chatImageUrl(message.image) : undefined}
+          <ChatCopyMenuItem content={message.content} imageSource={source}
             className={itemClass} onCopied={() => setMenuOpen(false)} />
-          {message.image && <ChatSaveImageMenuItem source={chatImageUrl(message.image)} contentType={message.image.contentType} className={itemClass} />}
+          {message.image && <ChatSaveImageMenuItem source={source!} contentType={message.image.contentType} onPreview={onOpenImage} className={itemClass} />}
           {(own || canModerate) && <ContextMenu.Item className={cn(itemClass, "text-[var(--theme-color-action-destructive-foreground)]")}
             disabled={busy} onSelect={() => onDelete(message)}><Trash2 size={16} aria-hidden="true" />{t("delete")}</ContextMenu.Item>}
         </ContextMenu.Group>

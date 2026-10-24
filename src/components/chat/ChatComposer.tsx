@@ -130,14 +130,13 @@ export function ChatComposer({ draft, blocked, images, onChange, onSend, onStamp
     requestAnimationFrame(() => { field?.focus(); field?.setSelectionRange(nextCursor, nextCursor); });
   };
 
-  return <form className="shrink-0 px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pb-4"
+  return <form autoComplete="off" className="shrink-0 px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pb-4"
     onSubmit={(event) => {
       event.preventDefault();
       if (!blocked && imagesReady && chars <= CHAT_MAX_LENGTH) {
         setEmojiOpen(false); setExtrasOpen(false);
         if (!onSend(attachments.items.map((item) => item.image!))) return;
         clear(); setPreviewId(null);
-        textarea.current?.focus();
       }
     }}>
     {!!attachments.items.length && <ul aria-label={t("attachments")} className="mb-2 flex gap-2 overflow-x-auto overscroll-x-contain px-1 pb-1">
@@ -180,7 +179,7 @@ export function ChatComposer({ draft, blocked, images, onChange, onSend, onStamp
       </div>
       <div data-chat-input className="hhwx-control flex min-w-0 flex-1 items-end rounded-3xl border pl-3 pr-0.5 focus-within:border-[var(--theme-color-focus-ring)] sm:pl-4">
         <label className="sr-only" htmlFor="chat-draft">{t("draft")}</label>
-        <textarea ref={textarea} id="chat-draft" value={draft} placeholder={t("placeholder")} rows={1}
+        <textarea ref={textarea} id="chat-draft" value={draft} placeholder={t("placeholder")} rows={1} autoComplete="off"
           className="block max-h-40 min-h-12 min-w-0 flex-1 resize-none border-0 bg-transparent py-3 pr-1 text-base leading-6 outline-hidden placeholder:text-[var(--theme-color-text-muted)] sm:text-sm"
           onChange={(event) => onChange(event.target.value)}
           onPaste={(event) => {
@@ -207,7 +206,7 @@ export function ChatComposer({ draft, blocked, images, onChange, onSend, onStamp
           <StampPickerButton variant="composer" open={stampOpen} label={t("stamp")} disabled={stampDisabled}
             selectedRegion={stampRegion} onRegionChange={setStampRegion} onPreview={preloadStampVoice}
             onOpenChange={(value) => { setStampOpen(value); if (value) { setExtrasOpen(false); setEmojiOpen(false); } }}
-            onSelect={(stamp) => { if (!stampDisabled) onStamp(stamp); setStampOpen(false); textarea.current?.focus(); }} />
+            onSelect={(stamp) => { if (!stampDisabled) onStamp(stamp); setStampOpen(false); }} />
         </div>
       </div>
       <button type="submit" aria-label={t("send")} title={t("send")}

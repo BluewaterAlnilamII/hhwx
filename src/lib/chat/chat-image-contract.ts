@@ -26,5 +26,6 @@ export function isChatImage(value: unknown): value is ChatImage {
 
 export function chatImageUrl(image: ChatImage): string {
   const base = (process.env.NEXT_PUBLIC_SITE_ASSET_CDN_BASE_URL || "https://cdn.hhwx.org").replace(/\/+$/u, "");
-  return `${base}/${image.key}`;
+  // Leave pre-CORS browser cache entries behind once, then retain normal immutable caching.
+  return `${base}/${image.key}?cors=1`;
 }

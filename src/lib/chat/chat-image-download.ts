@@ -5,10 +5,24 @@ type SaveFilePicker = (options: {
   types: { accept: Record<string, string[]> }[];
 }) => Promise<FileSystemFileHandle>;
 
-export async function saveChatImage(source: string, contentType: ChatImageType): Promise<void> {
+export async function saveChatImage(source: string, contentType: ChatImageType, onPreview: () => void): Promise<void> {
   const extension = contentType === "image/jpeg" ? "jpg" : contentType === "image/apng" ? "png" : contentType.slice(6);
   const filename = `image.${extension}`;
   const picker = (window as Window & { showSaveFilePicker?: SaveFilePicker }).showSaveFilePicker;
+  if (!picker && window.matchMedia("(pointer: coarse)").matches) {
+    if (!navigator.share || !navigator.canShare) { onPreview(); return; }
+    try {
+      const response = await fetch(source, { credentials: "omit", signal: AbortSignal.timeout(15000) });
+      if (!response.ok) throw new Error("Image download unavailable");
+      const file = new File([await response.blob()], filename, { type: contentType });
+      if (!navigator.canShare({ files: [file] })) { onPreview(); return; }
+      await navigator.share({ files: [file] });
+    } catch (error) {
+      // A slow read can outlive iOS user activation; native image actions remain available.
+      if (!(error instanceof DOMException && error.name === "AbortError")) onPreview();
+    }
+    return;
+  }
   let handle: FileSystemFileHandle | undefined;
   if (picker) {
     try {

@@ -106,6 +106,53 @@ test("token refresh does not reconnect or reread history", async () => {
   h.session.dispose();
 });
 
+test("closing keeps the latest 50 records including the tail; reopening displays them until one fresh page replaces them", async () => {
+  const h = harness(); await h.start();
+  const rows = Array.from({ length: 360 }, (_, i) => message(i));
+  rows.slice(0, 300).forEach((m) => h.handlers.publication(created(m)));
+  h.session.setFollowing(false);
+  rows.slice(300).forEach((m) => h.handlers.publication(created(m)));
+  h.session.setDraft("failed send"); await h.session.send(); h.session.setDraft("keep draft");
+  const calls = h.calls.length;
+  h.session.pause(true);
+  assert.deepEqual(h.session.getSnapshot().messages.map((m) => m.id), rows.slice(-50).map((m) => m.id));
+  assert.equal(h.session.getSnapshot().newMessages, 0);
+  assert.equal(h.session.getSnapshot().hasNewerMessages, false);
+  assert.equal(h.session.getSnapshot().nextCursor, null);
+  assert.equal(h.session.getSnapshot().draft, "keep draft");
+  assert.equal(h.session.getSnapshot().pending.length, 1);
+  assert.equal(h.calls.length, calls, "closing does not query history");
+  h.handlers.publication(created(message(400)));
+  assert.equal(h.session.getSnapshot().messages.length, 50, "closed sessions ignore publications");
+  const gate = deferred(); h.setRead(() => gate.promise);
+  await h.session.activate(); h.handlers.subscribed();
+  assert.equal(h.session.getSnapshot().messages.length, 50, "cached records remain during connection and history loading");
+  const latest = message(401);
+  gate.resolve({ messages: [latest], nextCursor: null }); await tick();
+  assert.deepEqual(h.session.getSnapshot().messages, [latest], "the authoritative page removes stale/deleted cached records");
+  assert.equal(h.calls.length, calls + 2, "reopen still uses just one credential request and one history read");
+  h.session.dispose();
+  assert.equal(h.session.getSnapshot().messages.length, 0, "account disposal clears retained records");
+});
+
+test("closing during a send keeps its late confirmation inside the 50-record limit and rejects a stale history read", async () => {
+  const h = harness(); await h.start();
+  for (let i = 0; i < 60; i++) h.handlers.publication(created(message(i)));
+  const reply = deferred(), history = deferred(); h.setWrite(() => reply.promise); h.setRead(() => history.promise);
+  const syncing = h.session.syncLatest();
+  h.session.setDraft("late send"); const sending = h.session.send();
+  const requestId = h.session.getSnapshot().pending[0].clientRequestId;
+  h.session.pause(true);
+  const saved = { ...message(61), clientRequestId: requestId };
+  reply.resolve({ message: saved, messageId: saved.id, clientRequestId: requestId, deleted: false, nextSendAt: null });
+  await sending;
+  history.resolve({ messages: [message(0)], nextCursor: null }); await syncing;
+  assert.equal(h.session.getSnapshot().messages.length, 50);
+  assert.equal(h.session.getSnapshot().messages.at(-1).id, saved.id);
+  assert.equal(h.session.getSnapshot().pending.length, 0);
+  h.session.dispose();
+});
+
 test("failed bootstrap and history recover automatically without polling a healthy connection", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const h = harness();

@@ -9,6 +9,7 @@ export class ChatRequestError extends Error {
   constructor(public code: string, public retryAt: string | null = null) { super(code); }
 }
 type Transport = { connect(): void; disconnect(): void };
+const CHAT_CLOSED_WINDOW_SIZE = 50;
 type TransportHandlers = {
   publication(data: unknown): void;
   subscribed(): void;
@@ -62,11 +63,13 @@ export class ChatSession {
   private tail = new Map<string, ChatMessage>();
   private tailOverflow = false;
   private following = true;
+  private windowSize = CHAT_WINDOW_SIZE;
   private mountGeneration = 0;
   private sending = false;
   private sendStateVersion = 0;
   private sendingImages = false;
   private imageJobs = new Map<string, { image: PreparedChatImage; previewUrl: string; upload?: ChatImageUpload; uploaded: boolean; abort: AbortController }>();
+  private imagePreviews = new Map<string, string>();
 
   constructor(readonly userId: string, private deps: ChatSessionDependencies) {}
   mount = () => {
@@ -78,6 +81,7 @@ export class ChatSession {
     };
   };
   getSnapshot = () => this.snapshot;
+  getImagePreview = (messageId: string) => this.imagePreviews.get(messageId);
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   subscribeStamps = (listener: (event: ChatStampPublication) => void) => {
     this.stampListeners.add(listener);
@@ -111,6 +115,13 @@ export class ChatSession {
   private update(patch: Partial<ChatSnapshot>) {
     if (this.disposed) return;
     this.snapshot = { ...this.snapshot, ...patch, hasNewerMessages: this.tailOverflow || this.tail.size > 0 };
+    if (this.imagePreviews.size && !this.synchronizing && (patch.messages || patch.newMessages !== undefined || patch.status === "live")) {
+      const retained = new Set([...this.snapshot.messages.map((message) => message.id), ...this.tail.keys()]);
+      for (const [id, url] of this.imagePreviews) if (!retained.has(id)) {
+        URL.revokeObjectURL(url);
+        this.imagePreviews.delete(id);
+      }
+    }
     for (const listener of this.listeners) listener();
   }
   private cancelReads() {
@@ -142,7 +153,7 @@ export class ChatSession {
   private merge(messages: ChatMessage[], keep: "newest" | "oldest" = "newest", nextCursor = this.snapshot.nextCursor): ChatPage {
     const unique = new Map(messages.filter((m) => this.live(m)).map((m) => [m.id, m]));
     const sorted = [...unique.values()].sort(compareChatMessages);
-    const retained = keep === "newest" ? sorted.slice(-CHAT_WINDOW_SIZE) : sorted.slice(0, CHAT_WINDOW_SIZE);
+    const retained = keep === "newest" ? sorted.slice(-this.windowSize) : sorted.slice(0, this.windowSize);
     if (keep === "newest" && sorted.length > retained.length) {
       // Evicted older rows must remain reachable, including when the original page had no cursor.
       const first = retained[0];
@@ -150,11 +161,20 @@ export class ChatSession {
     }
     return { messages: retained, nextCursor };
   }
-  private confirm(message: ChatMessage) {
-    if (message.author.userId === this.userId && this.snapshot.pending.some((p) => p.clientRequestId === message.clientRequestId)) {
-      this.releaseImage(message.clientRequestId);
-      this.update({ pending: this.snapshot.pending.filter((p) => p.clientRequestId !== message.clientRequestId) });
+  private confirm(messages: ChatMessage[]) {
+    const confirmed = new Set<string>();
+    for (const message of messages) {
+      if (message.author.userId !== this.userId || !this.snapshot.pending.some((p) => p.clientRequestId === message.clientRequestId)) continue;
+      confirmed.add(message.clientRequestId);
+      const job = this.imageJobs.get(message.clientRequestId);
+      if (job && message.image && this.live(message) && this.snapshot.status !== "paused") {
+        // Transfer the displayed preview; release the upload job without reloading its image.
+        this.imagePreviews.set(message.id, job.previewUrl);
+        job.abort.abort();
+        this.imageJobs.delete(message.clientRequestId);
+      } else this.releaseImage(message.clientRequestId);
     }
+    return confirmed.size ? this.snapshot.pending.filter((p) => !confirmed.has(p.clientRequestId)) : this.snapshot.pending;
   }
   private apply(event: ChatEvent) {
     if (event.type === "message.deleted") {
@@ -166,17 +186,17 @@ export class ChatSession {
       return;
     }
     const message = event.message;
-    this.confirm(message);
-    if (!this.live(message)) return;
+    const pending = this.confirm([message]);
+    if (!this.live(message)) { this.update({ pending }); return; }
     if (this.following || this.snapshot.messages.some((m) => m.id === message.id)) {
-      this.update(this.merge([...this.snapshot.messages, message]));
+      this.update({ ...this.merge([...this.snapshot.messages, message]), pending });
     } else {
       this.tail.set(message.id, message);
       if (this.tail.size > CHAT_WINDOW_SIZE) {
         this.tail.delete(this.tail.keys().next().value!);
         this.tailOverflow = true;
       }
-      this.update({ newMessages: this.tail.size });
+      this.update({ pending, newMessages: this.tail.size });
     }
   }
   receive = (value: unknown) => {
@@ -211,7 +231,8 @@ export class ChatSession {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
     this.active = true;
-    this.update({ status: "connecting", error: null });
+    this.windowSize = CHAT_WINDOW_SIZE;
+    this.update({ messages: this.snapshot.messages.filter((message) => this.live(message)), status: "connecting", error: null });
     if (this.socket) { this.socket.connect(); return; }
     if (this.opening) return;
     this.opening = true;
@@ -256,20 +277,25 @@ export class ChatSession {
     this.cancelReads();
     this.socket?.disconnect();
     if (close) {
+      this.windowSize = CHAT_CLOSED_WINDOW_SIZE;
+      const { messages } = this.merge([...this.snapshot.messages, ...this.tail.values()]);
       this.socket = null;
       this.baselineReady = false;
       this.tail.clear();
       this.deleted.clear();
       this.tailOverflow = false;
       this.following = true;
-      this.update({ messages: [], nextCursor: null, newMessages: 0 });
+      // Keep only message records for reopening; displayed media belongs to the open panel.
+      for (const url of this.imagePreviews.values()) URL.revokeObjectURL(url);
+      this.imagePreviews.clear();
+      this.update({ messages, nextCursor: null, newMessages: 0 });
     }
     this.update({ status: "paused" });
   };
   dispose = () => {
     this.pause(true);
     for (const id of this.imageJobs.keys()) this.releaseImage(id);
-    this.update({ draft: "", pending: [], viewer: null });
+    this.update({ messages: [], draft: "", pending: [], viewer: null });
     this.disposed = true;
     this.listeners.clear();
     this.stampListeners.clear();
@@ -292,13 +318,12 @@ export class ChatSession {
       this.tail.clear();
       this.tailOverflow = false;
       this.following = true;
-      this.update({ ...this.merge(page.messages, "newest", page.nextCursor), newMessages: 0 });
+      this.update({ ...this.merge(page.messages, "newest", page.nextCursor), pending: this.confirm(page.messages), newMessages: 0 });
       for (const event of events) this.apply(event);
       // Compact only after reconciliation; leave room so each subsequent delete does not fetch again.
       if (this.deleted.size > 1000) {
         while (this.deleted.size > 500) this.deleted.delete(this.deleted.values().next().value!);
       }
-      for (const message of this.snapshot.messages) this.confirm(message);
       this.baselineReady = true;
       this.synchronizing = false;
       this.reconnectAttempt = 0;
@@ -397,8 +422,10 @@ export class ChatSession {
       this.apply(event);
       if (this.synchronizing) this.buffered.push(event);
     }
-    this.releaseImage(id);
-    this.update({ pending: this.snapshot.pending.filter((p) => p.clientRequestId !== id) });
+    if (this.snapshot.pending.some((p) => p.clientRequestId === id)) {
+      this.releaseImage(id);
+      this.update({ pending: this.snapshot.pending.filter((p) => p.clientRequestId !== id) });
+    }
   }
   private async drainImages() {
     if (this.sendingImages || this.disposed) return;

@@ -8,6 +8,29 @@ import { ChatStampPlayback, chatStampPlayer, placeChatStamp } from "../src/lib/c
 const stamp = { id: 1, region: "cn", kind: "normal", imageName: "stamp001", characterId: 1, imageUrl: "/stamp.png", voiceUrl: "" };
 const event = (userId, id = userId) => ({ id, userId, publicUid: 10001, username: userId, stamp });
 
+test("stamp names fit measured width before animation, respect the minimum and reset after resizing", () => {
+  const exports = {};
+  const source = readFileSync(new URL("../src/components/chat/ChatStampLayer.tsx", import.meta.url), "utf8");
+  const code = ts.transpileModule(`${source}\nexport { fitStampName };`, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const plate = { clientWidth: 120, fontSize: "11px", paddingLeft: "8px", paddingRight: "8px" };
+  runInNewContext(code, { exports, getComputedStyle: () => plate,
+    require: () => ({ memo: (component) => component, buildBandoriChatStampResources: () => ({}) }) });
+  let naturalWidth = 110;
+  const text = { parentElement: plate, style: { fontSize: "" },
+    get scrollWidth() { return Math.ceil(naturalWidth * parseFloat(this.style.fontSize || plate.fontSize) / parseFloat(plate.fontSize)); },
+    getBoundingClientRect() { throw new Error("entrance transforms must not affect fitting"); } };
+  exports.fitStampName(text);
+  assert.equal(text.style.fontSize, "10.3px", "ten 11px-wide glyphs fit the 104px mobile text area");
+  assert.ok(text.scrollWidth <= 104);
+  exports.fitStampName(text); assert.equal(text.style.fontSize, "10.3px", "repeated measurement does not shrink cumulatively");
+  naturalWidth = 264; exports.fitStampName(text); assert.equal(text.style.fontSize, "9px", "very long names keep a readable lower bound");
+  naturalWidth = 40; exports.fitStampName(text); assert.equal(text.style.fontSize, "", "short names return to the default font");
+  plate.clientWidth = 144; plate.fontSize = "11.5px"; naturalWidth = 115;
+  exports.fitStampName(text); assert.equal(text.style.fontSize, "", "the same ten glyphs fit the desktop default size");
+});
+
 test("atlas loading shares concurrent requests without retaining completed images", async () => {
   const images = [], exports = {};
   const source = readFileSync(new URL("../src/components/bandori/BandoriAtlasAnimationCanvas.tsx", import.meta.url), "utf8");
@@ -89,7 +112,7 @@ test("duplicate current event does not restart playback", (context) => {
 
 test("complete composition fits desktop, mobile, keyboard and tiny viewports", () => {
   for (const area of [{ width: 672, height: 620 }, { width: 390, height: 500 }, { width: 390, height: 120 }, { width: 75, height: 50 }, { width: 0, height: 0 }]) {
-    for (const size of [{ width: 114, height: 100.8 }, { width: 96, height: 85.2 }]) {
+    for (const size of [{ width: 144, height: 126 }, { width: 120, height: 106 }]) {
       for (const point of [0, .5, 1]) {
         const p = placeChatStamp(area, size, point, point);
         assert.ok(p.left >= 0 && p.top >= 0);

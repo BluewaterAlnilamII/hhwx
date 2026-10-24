@@ -17,7 +17,7 @@ const soundEffectDataLoads = new Map<string, Promise<ArrayBuffer>>();
 const soundEffectAudioLoads = new Map<string, Promise<AudioBuffer>>();
 
 function getSoundEffectAudioContext(): AudioContext {
-  if (soundEffectAudioContext) {
+  if (soundEffectAudioContext && soundEffectAudioContext.state !== "closed") {
     return soundEffectAudioContext;
   }
 
@@ -115,7 +115,7 @@ function stopActiveSoundEffect(): void {
 
 export async function resumeSoundEffectAudio(): Promise<void> {
   const context = getSoundEffectAudioContext();
-  if (context.state === "suspended") await context.resume();
+  if (context.state !== "running") await context.resume();
 }
 
 export async function preloadSoundEffect(sourceUrl: string): Promise<void> {
@@ -128,7 +128,7 @@ export async function playSoundEffect(sourceUrl: string): Promise<void> {
 
   try {
     const context = getSoundEffectAudioContext();
-    if (context.state === "suspended") {
+    if (context.state !== "running") {
       await context.resume();
     }
 
@@ -163,29 +163,44 @@ export async function playSoundEffect(sourceUrl: string): Promise<void> {
 export async function playIndependentSoundEffect(sourceUrl: string, signal: AbortSignal, startBefore: number): Promise<void> {
   if (signal.aborted || Date.now() >= startBefore) return;
   const context = getSoundEffectAudioContext();
-  const buffer = await loadSoundEffectAudioBuffer(sourceUrl, context);
-  if (signal.aborted || Date.now() >= startBefore || context.state !== "running") return;
+  // Changing the iOS audio session can interrupt an already-unlocked context.
+  const releaseAudioSession = claimAmbientBrowserAudioSession();
+  try {
+    const resuming = context.state === "running" ? Promise.resolve() : context.resume().catch(() => {});
+    const buffer = await loadSoundEffectAudioBuffer(sourceUrl, context);
+    if (signal.aborted || Date.now() >= startBefore) return;
+    if (context.state !== "running") await new Promise<void>((resolve) => {
+      const finish = () => {
+        clearTimeout(timer);
+        signal.removeEventListener("abort", finish);
+        resolve();
+      };
+      // A current effect may wait for recovery, but never for a later playback gesture.
+      const timer = setTimeout(finish, Math.max(0, startBefore - Date.now()));
+      signal.addEventListener("abort", finish, { once: true });
+      void resuming.then(finish);
+    });
+    if (signal.aborted || Date.now() >= startBefore || context.state !== "running") return;
 
-  await new Promise<void>((resolve, reject) => {
-    const source = context.createBufferSource();
-    source.buffer = buffer;
-    source.connect(context.destination);
-    const releaseAudioSession = claimAmbientBrowserAudioSession();
-    let completed = false;
-    const finish = () => {
-      if (completed) return;
-      completed = true;
-      signal.removeEventListener("abort", stop);
-      source.disconnect();
-      source.buffer = null;
-      releaseAudioSession();
-      resolve();
-    };
-    const stop = () => {
-      try { source.stop(); } catch { /* Already ended. */ } finally { finish(); }
-    };
-    source.onended = finish;
-    signal.addEventListener("abort", stop, { once: true });
-    try { source.start(0); } catch (error) { reject(error); finish(); }
-  });
+    await new Promise<void>((resolve, reject) => {
+      const source = context.createBufferSource();
+      source.buffer = buffer;
+      source.connect(context.destination);
+      let completed = false;
+      const finish = () => {
+        if (completed) return;
+        completed = true;
+        signal.removeEventListener("abort", stop);
+        source.disconnect();
+        source.buffer = null;
+        resolve();
+      };
+      const stop = () => {
+        try { source.stop(); } catch { /* Already ended. */ } finally { finish(); }
+      };
+      source.onended = finish;
+      signal.addEventListener("abort", stop, { once: true });
+      try { source.start(0); } catch (error) { reject(error); finish(); }
+    });
+  } finally { releaseAudioSession(); }
 }

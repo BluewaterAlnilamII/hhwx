@@ -6,6 +6,33 @@ Original validation: 2026-10-13, with Auth compatibility and sending-policy foll
 
 ## 2026-10-25 Release integration
 
+### Stamp size and username fitting
+
+- Chat image frames are now 120×80 / 144×96, with 120×24 / 144×28 nameplates; comment frames are unchanged. Names use normal weight and shrink to fit before paint, with a 9 px minimum and ellipsis only beyond that limit. Resize and font-loading events remeasure without animation-frame polling.
+- Chrome desktop 1280×900 and touch emulation 390×900 displayed the ten-character name `春日花开一起听音乐吧` completely: 11.5 px / 115 px text width on desktop, 10.3 px / 103 px on mobile. Short names kept the default size; a 24-character sample reached 9 px and used ellipsis. Initial painted frames already fit, breakpoint changes reset/recomputed font sizes, and all five effects stayed inside a reduced 390×240 viewport.
+- All 82 chat tests, typecheck, scoped ESLint and production build passed. Browser HTTP/WebSocket fixtures created no production chat writes, page exceptions or console errors. Physical iOS was not tested; these changes remain local and uncommitted.
+
+### Reopening and loading indicators
+
+- Closing retains only the latest 50 received records, including unseen tail records, and releases confirmed local image previews. Drafts and pending messages remain separate. Late send confirmations stay within the 50-record limit, stale cancelled history responses cannot replace it, and account disposal clears it.
+- Chrome desktop 1280×900 and touch emulation 390×900 held history responses while reopening: all 50 records and the draft remained visible until the fresh page replaced them. Initial loading, reopening, older-history loading and a simulated WebSocket reconnect each used one top-center spinner with no reconnect text. Closing disconnected the socket; reopening issued one credential request and one history request, with no extra polling.
+- Browser plugin unavailable; used bundled Playwright on `http://localhost:3001` with local HTTP/WebSocket fixtures. No chat production writes, page exceptions or console errors. The 81 chat tests, typecheck, scoped ESLint, two-locale catalog check and production build passed. Physical iOS was not tested. Changes remain local and uncommitted.
+
+### Pre-release follow-up: image continuity, menu layering and audio recovery
+
+- Image acknowledgements now replace pending state atomically and transfer the existing Blob URL to the bounded displayed-message owner. Tests cover HTTP/WS order, duplicate acknowledgements, an older in-flight history response, deletion, closure during upload, window/tail eviction and exactly-once release. No API or database contract changes.
+- Updated the existing context-menu package from 2.3.7 to 2.4.1 so it shares focus/layer implementations with the installed dialog. Desktop browser checks now keep the chat open after menu Escape and navigate menu items using Shift+F10 and arrow keys.
+- Audio tests now delay context recovery until after cached audio loads: the current sound starts after recovery, replacement cancels waiting, and expiration prevents later playback. This does not prove physical iOS audio output.
+- Chrome 1280×900 and touch emulation 390×900 retained the same preview URL across confirmation with **zero blank frames** in 50/48 sampled frames, **zero CDN image reads** on confirmation/copy, no page errors, and normal history loading after closing/reopening. Uploads and message writes were intercepted locally; no production messages or accounts were created. Touch long-press still opens only the message menu, and copy does not focus the input.
+- Chat tests: **79 passed**; shared audio/music checks: **17 passed**. Typecheck, scoped ESLint and the final production build passed. Physical iOS keyboard, clipboard/share-sheet behavior and audible recovery still need device verification. These fixes remain local; this validation does not authorize commit or deployment.
+
+### Browser image actions and mobile follow-up
+
+- Reproduced failed copy with default Chrome permissions after displaying an image first: the Worker fetch reused a non-CORS cached response. Earlier checks that fetched first or pregranted permissions did not cover this order. Anonymous-CORS display fixes fresh loads; a fixed `?cors=1` version was separately verified to recover images previously cached without CORS.
+- Chrome at 1280×900 and touch emulation at 390×900 passed real image copy without pregranted clipboard access, menu focus returning to the message, and long-press release without accidentally opening the viewer. Touch save handed the unchanged file to an instrumented share API and opened the existing viewer when sharing was unavailable. This is not evidence of an actual iOS Photos save.
+- A controlled visual-viewport change to height 400 and offset 20 kept the conversation at 20–420 while the opaque outer surface covered the full 900-pixel layout. Tap-send and stamp selection did not focus the draft; Enter retained existing focus. Send requests in these focus checks were intercepted, not persisted.
+- Chat tests: **75 passed**; shared audio/music tests: **9 passed**. Typecheck, scoped ESLint and production build passed. Audio tests cover interrupted/closed contexts, pending browser resumption, cancellation and released buffers. No physical iOS device was available; native keyboard chrome, photo-library actions and audible interruption recovery still require device verification. Refresh restoring audio is supporting evidence, not proof of a unique cause.
+
 The release is prepared from production/main `c3bacca4`, preserving the already deployed native Auth flow, Node 26 CI, React 19.3.1 and TypeScript 6.0.3. Only chat changes and their shared consumers are transferred from the earlier working tree. The `next/dynamic` test stub now declares its ES-module shape for TypeScript 6; its attachment lifecycle assertions are unchanged. Chat tests (73), Auth tests (25), locale validation and the production-dependency audit passed on this release tree.
 
 The operator explicitly deferred R2 bucket configuration and dedicated upload credentials to a separate manual step. The app can deploy text and stamps, but production image sending must remain reported as unavailable until the setup and real-browser checks in the integration guide are completed. Earlier local evidence below is not evidence of production R2 readiness.

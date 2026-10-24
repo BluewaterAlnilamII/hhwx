@@ -17,12 +17,13 @@ export type ImageViewerLabels = {
   imageLoading: string;
 };
 
-export default function ImageViewer({ src, alt, label, labels, loading = false, onClose, onPrevious, onNext }: {
+export default function ImageViewer({ src, alt, label, labels, loading = false, crossOrigin, onClose, onPrevious, onNext }: {
   src: string | null;
   alt?: string;
   label: string;
   labels: ImageViewerLabels;
   loading?: boolean;
+  crossOrigin?: "anonymous";
   onClose: () => void;
   onPrevious?: () => void;
   onNext?: () => void;
@@ -237,6 +238,7 @@ export default function ImageViewer({ src, alt, label, labels, loading = false, 
                 <img
                   ref={bindImage}
                   key={src}
+                  crossOrigin={crossOrigin}
                   src={src}
                   alt={alt ?? label}
                   decoding="async"
