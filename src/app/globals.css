@@ -41,6 +41,24 @@
 
 /* Shared appearance follows theme roles; utilities retain component layout. */
 @layer components {
+  .chat-icon-button {
+    display: inline-flex;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    color: var(--theme-color-text-muted);
+  }
+  .chat-icon-button:hover:not(:disabled) {
+    background: var(--theme-color-control-background-hover);
+    color: var(--theme-color-action-secondary-foreground);
+  }
+  .chat-icon-button:focus-visible {
+    outline: 2px solid var(--theme-color-focus-ring);
+    outline-offset: 2px;
+  }
   .hhwx-panel {
     border-radius: 0;
     border-color: var(--theme-color-panel-border);

@@ -13,7 +13,8 @@ interface ActiveSoundEffectAudio {
 
 let soundEffectAudioContext: AudioContext | null = null;
 let activeSoundEffectAudio: ActiveSoundEffectAudio | null = null;
-const soundEffectAudioBufferCache = new Map<string, Promise<AudioBuffer>>();
+const soundEffectDataLoads = new Map<string, Promise<ArrayBuffer>>();
+const soundEffectAudioLoads = new Map<string, Promise<AudioBuffer>>();
 
 function getSoundEffectAudioContext(): AudioContext {
   if (soundEffectAudioContext) {
@@ -45,16 +46,11 @@ async function decodeSoundEffectAudioData(
   });
 }
 
-function loadSoundEffectAudioBuffer(
-  sourceUrl: string,
-  context: AudioContext,
-): Promise<AudioBuffer> {
-  const cachedBuffer = soundEffectAudioBufferCache.get(sourceUrl);
-  if (cachedBuffer) {
-    return cachedBuffer;
-  }
+function loadSoundEffectData(sourceUrl: string): Promise<ArrayBuffer> {
+  const pending = soundEffectDataLoads.get(sourceUrl);
+  if (pending) return pending;
 
-  const bufferPromise = fetch(sourceUrl, {
+  const dataPromise = fetch(sourceUrl, {
     cache: "force-cache",
     credentials: "omit",
     mode: "cors",
@@ -66,13 +62,20 @@ function loadSoundEffectAudioBuffer(
 
       return response.arrayBuffer();
     })
-    .then((audioData) => decodeSoundEffectAudioData(context, audioData))
-    .catch((error) => {
-      soundEffectAudioBufferCache.delete(sourceUrl);
-      throw error;
-    });
+    .finally(() => { soundEffectDataLoads.delete(sourceUrl); });
 
-  soundEffectAudioBufferCache.set(sourceUrl, bufferPromise);
+  soundEffectDataLoads.set(sourceUrl, dataPromise);
+  return dataPromise;
+}
+
+function loadSoundEffectAudioBuffer(sourceUrl: string, context: AudioContext): Promise<AudioBuffer> {
+  const pending = soundEffectAudioLoads.get(sourceUrl);
+  if (pending) return pending;
+  const bufferPromise = loadSoundEffectData(sourceUrl)
+    .then((audioData) => decodeSoundEffectAudioData(context, audioData))
+    .finally(() => { soundEffectAudioLoads.delete(sourceUrl); });
+
+  soundEffectAudioLoads.set(sourceUrl, bufferPromise);
   return bufferPromise;
 }
 
@@ -82,6 +85,8 @@ function finishSoundEffect(activeAudio: ActiveSoundEffectAudio): void {
   }
 
   activeAudio.completed = true;
+  activeAudio.source.disconnect();
+  activeAudio.source.buffer = null;
   if (activeSoundEffectAudio === activeAudio) {
     activeSoundEffectAudio = null;
   }
@@ -106,6 +111,16 @@ function stopActiveSoundEffect(): void {
   if (activeSoundEffectAudio) {
     stopSoundEffect(activeSoundEffectAudio);
   }
+}
+
+export async function resumeSoundEffectAudio(): Promise<void> {
+  const context = getSoundEffectAudioContext();
+  if (context.state === "suspended") await context.resume();
+}
+
+export async function preloadSoundEffect(sourceUrl: string): Promise<void> {
+  // Warm the HTTP cache without retaining or decoding audio in application memory.
+  await loadSoundEffectData(sourceUrl);
 }
 
 export async function playSoundEffect(sourceUrl: string): Promise<void> {
@@ -142,4 +157,35 @@ export async function playSoundEffect(sourceUrl: string): Promise<void> {
     releaseAudioSession();
     throw error;
   }
+}
+
+// Concurrent loads are shared; each sender owns its playback and cancellation.
+export async function playIndependentSoundEffect(sourceUrl: string, signal: AbortSignal, startBefore: number): Promise<void> {
+  if (signal.aborted || Date.now() >= startBefore) return;
+  const context = getSoundEffectAudioContext();
+  const buffer = await loadSoundEffectAudioBuffer(sourceUrl, context);
+  if (signal.aborted || Date.now() >= startBefore || context.state !== "running") return;
+
+  await new Promise<void>((resolve, reject) => {
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    source.connect(context.destination);
+    const releaseAudioSession = claimAmbientBrowserAudioSession();
+    let completed = false;
+    const finish = () => {
+      if (completed) return;
+      completed = true;
+      signal.removeEventListener("abort", stop);
+      source.disconnect();
+      source.buffer = null;
+      releaseAudioSession();
+      resolve();
+    };
+    const stop = () => {
+      try { source.stop(); } catch { /* Already ended. */ } finally { finish(); }
+    };
+    source.onended = finish;
+    signal.addEventListener("abort", stop, { once: true });
+    try { source.start(0); } catch (error) { reject(error); finish(); }
+  });
 }

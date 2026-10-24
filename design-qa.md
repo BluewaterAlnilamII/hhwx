@@ -1,5 +1,43 @@
 # Historical design and QA records
 
+## Chat frontend, 2026-10-24
+
+final result: passed
+
+This result covers the scoped visual/interaction checks below, not a production rollout.
+
+Source visual truth: `C:/Users/bluew/.codex/generated_images/01a12eb1-3666-72d3-9dde-79af81054a92/exec-2ccb60e0-6f05-41e3-a3a1-badcd76e400b.png`. The user subsequently requested smaller type, tighter bubble spacing and a fully visible emoji picker; these corrections supersede the mock's type/spacing scale.
+
+Implementation: `http://localhost:3000/`, authenticated disposable local preview, existing real preview messages. Evidence directory: `C:/Users/bluew/.codex/generated_images/chat-design-20261024/`.
+
+- Full view: `implemented-desktop.png` at 1280 x 900 CSS/pixels, DPR 1; modal bounds 672 x 768. The source is a 1185 x 1327 generated visual, with approximately 1083 x 1257 occupied by the modal and no encoded CSS density. Both images were opened together in one comparison input, judging the modal region rather than the unrelated page backdrop. This is a layout/interaction comparison, not a pixel-identical or same-content claim: the live preview retains existing messages instead of replacing them with fictional mock messages.
+- Focused state: `final-desktop-picker.png` at 1280 x 720, modal 672 x 688. The menu now ends at x=960, 16 px inside the modal's right edge at x=976. The input and title remain visible.
+- Mobile: `implemented-mobile.png` and `implemented-mobile-dark.png`, each 390 x 844, DPR 1. `implemented-short-viewport.png` is 390 x 420 with five draft lines: header ends at y=61, picker occupies y=77..254, and input starts at y=262. These screenshots directly expose the typography, bubble padding, UID/icon, picker edges and input states; no additional raster crop is required.
+
+Findings and corrections:
+
+1. P2, emoji popup clipping: the initial desktop popup used window bounds and extended to x=1031 beyond the modal's x=976 clipping edge. It was missed in the first mobile-only placement check and identified after user feedback. The composer variant now intersects the visual viewport and chat panel bounds, reserves the header and uses a scrollable height. Rechecked in the desktop and short-view screenshots above.
+2. P2, excessive text/bubble density: the first implementation used 15 px text, 24 px line height and 10 px vertical padding. It now uses 14 px / 22 px, zero paragraph margins and symmetric 8 px padding. A measured single-line bubble is 38 px high, with the inner line box exactly 8 px from both edges. Title is 16 px; desktop input is 14 px. Mobile input remains 16 px to avoid input-focus zoom.
+3. P2, multi-line composer overlap: positioning above the small emoji button still covered draft lines. Placement now uses the top of the whole input frame and updates when the form resizes. The five-line/420 px screenshot confirms an 8 px gap without hiding the header or draft.
+4. P1, context-menu keyboard focus: the initially selected newest Context Menu installed a second Focus Scope/Dismissable Layer, conflicting with Dialog. Context Menu 2.3.7 now shares the existing Dialog 1.1.23 internals. Right click, Shift+F10, Escape returning to the bubble, delete confirmation and cancel returning to the draft passed after dependency alignment.
+5. P2, bounded-history navigation: loading old pages could remove the newest messages while hiding the jump action at the visible bottom. A client-only `hasNewerMessages` flag retains the action until the latest window is restored; the new regression covers this without adding polling.
+
+Fidelity surfaces:
+
+- Typography: existing site font/fallback retained; body, title, identity and time remain distinct. Current compact sizing follows the user's correction. Multiline text wraps within bubbles without extra paragraph spacing.
+- Layout: other users left, own messages right; own avatar/name/UID omitted; other UID follows the name using the existing comment symbol. Header/composer controls remain reachable; timestamps are centered and shared. Existing preview message content and count differ intentionally from the mock. The arrow appears in the historical viewport because newer content is below it.
+- Tokens: neutral/light blue canvas, white other bubbles and cyan-tinted own bubbles use theme roles. Dark mode uses the existing paired theme colors. No local palette or image assets were introduced.
+- Assets: actual account-card avatars and comment PNG/WebP emoji are reused, with no broken visible images. Existing Lucide controls match the established UI. Comment emoji supports inline and jumbo rendering; stamps/images remain disabled placeholders.
+- Copy: `输入消息...`, title and contextual actions only; persistent connection, retention and keyboard-instruction text removed. Old seeded messages can still mention the previous delete-button interface; these are test data, not current UI instructions.
+
+Interaction/network evidence: consecutive text/emoji sends, per-message offline failure/retry preserving a newer draft, picker insertion without auto-send, plus containing only disabled image upload, popup Escape, conditional jump, delete-confirmation cancellation and focus restoration. Opening/selecting/closing emoji and opening/closing plus produced zero chat API requests; reopening made one connection POST and one history GET. After the full reload, no new console warnings/errors appeared in the final checks. An earlier Fast Refresh dependency-array warning occurred during live source edits and did not recur after reload. Offline errors were intentionally induced.
+
+Checks: 28 chat tests and 45 comment tests passed; typecheck, i18n, production build and scoped ESLint passed. Full lint: 0 errors, 21 warnings in unrelated files. Production dependency audit: 0 vulnerabilities. No backend/Auth/schema changes in this frontend round.
+
+Remaining verification limits: actual touch long-press and a physical phone's software keyboard were not exercised; the browser bridge does not expose touch dispatch. The standard Radix long-press implementation was inspected, while pointer/keyboard paths and short viewport geometry were exercised. No unresolved P0/P1/P2 finding remains in the tested states; real-device touch verification is a follow-up.
+
+Implementation checklist: compact bubble geometry, constrained picker, multi-line placement, compatible menu focus, scroll restoration, paired translations/docs and required checks completed. Image upload and transient stamp delivery remain outside this release.
+
 The current light/dark configuration and component contract are maintained in the [Theme Guide](documents/theme-guide.md) ([中文](documents/theme-guide.zh-CN.md)). The records below describe earlier iterations, including rejected alternatives and the pre-dark-theme state. Their palette values, migration status and coverage claims apply only to the named iteration; they are not the current theme specification.
 
 ## Component and light-theme unification (PR #201)

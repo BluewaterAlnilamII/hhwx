@@ -15,6 +15,7 @@ type EmojiPickerButtonProps = {
   compact?: boolean;
   disabled?: boolean;
   label?: string;
+  variant?: "default" | "composer";
 };
 
 export const EmojiPickerButton = memo(function EmojiPickerButton({
@@ -24,6 +25,7 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
   compact = false,
   disabled = false,
   label,
+  variant = "default",
 }: EmojiPickerButtonProps) {
   const t = useTranslations("comments");
   const pickerLabel = label ?? t("pickers.emoji");
@@ -38,15 +40,23 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
     const rect = buttonRef.current.getBoundingClientRect();
     const containerRect = containerRef.current.getBoundingClientRect();
     const viewport = window.visualViewport;
+    const panelElement = variant === "composer" ? containerRef.current.closest("[data-chat-panel]") : null;
+    const panel = panelElement?.getBoundingClientRect();
+    const left = Math.max(viewport?.offsetLeft ?? 0, panel?.left ?? 0);
+    const right = Math.min((viewport?.offsetLeft ?? 0) + (viewport?.width ?? window.innerWidth), panel?.right ?? window.innerWidth);
+    const top = Math.max(viewport?.offsetTop ?? 0, panelElement?.querySelector("header")?.getBoundingClientRect().bottom ?? panel?.top ?? 0);
+    const inputTop = containerRef.current.closest("[data-chat-input]")?.getBoundingClientRect().top ?? rect.top;
+    // Leave room for the trigger gap, viewport inset, and popover padding/border.
+    const gridHeight = Math.max(0, Math.min(256, inputTop - top - 8 - 16 - 18));
 
-    setPopoverStyle(getCommentPopoverHorizontalPosition({
+    setPopoverStyle({ ...getCommentPopoverHorizontalPosition({
       anchorRect: rect,
       containerLeft: containerRect.left,
       preferredWidth: 384,
-      viewportLeft: viewport?.offsetLeft ?? 0,
-      viewportWidth: viewport?.width ?? window.innerWidth,
-    }));
-  }, [open]);
+      viewportLeft: left,
+      viewportWidth: right - left,
+    }), ...(panel ? { bottom: containerRect.bottom - inputTop + 8, "--emoji-picker-max-height": `${gridHeight}px` } : {}) } as CSSProperties);
+  }, [open, variant]);
 
   useEffect(() => {
     if (!open) return;
@@ -80,13 +90,17 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
     window.addEventListener("resize", updatePopoverPosition);
     viewport?.addEventListener("resize", updatePopoverPosition);
     viewport?.addEventListener("scroll", updatePopoverPosition);
+    const composer = variant === "composer" ? containerRef.current?.closest("form") : null;
+    const observer = composer ? new ResizeObserver(updatePopoverPosition) : null;
+    if (composer) observer?.observe(composer);
 
     return () => {
       window.removeEventListener("resize", updatePopoverPosition);
       viewport?.removeEventListener("resize", updatePopoverPosition);
       viewport?.removeEventListener("scroll", updatePopoverPosition);
+      observer?.disconnect();
     };
-  }, [open, updatePopoverPosition]);
+  }, [open, updatePopoverPosition, variant]);
 
   return (
     <div ref={containerRef} className="relative flex items-center">
@@ -98,11 +112,11 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
         }}
         disabled={disabled}
         className={cn(
-          "inline-flex items-center justify-center rounded-full border text-[var(--theme-color-text-muted)] transition hover:bg-[var(--theme-color-action-secondary-background-hover)] hover:text-[var(--theme-color-action-secondary-foreground)] disabled:cursor-not-allowed disabled:opacity-60",
-          compact ? "h-8 w-8 sm:h-7 sm:w-7" : "h-8 w-8",
+          "inline-flex shrink-0 items-center justify-center rounded-full text-[var(--theme-color-text-muted)] transition hover:bg-[var(--theme-color-action-secondary-background-hover)] hover:text-[var(--theme-color-action-secondary-foreground)] focus-visible:outline-2 focus-visible:outline-[var(--theme-color-focus-ring)] disabled:cursor-not-allowed disabled:opacity-60",
+          variant === "composer" ? "size-11" : compact ? "h-8 w-8 border sm:h-7 sm:w-7" : "h-8 w-8 border",
           open
             ? "border-[var(--theme-color-selection-subtle-ring)] bg-[var(--theme-color-selection-subtle-background)] text-[var(--theme-color-selection-subtle-foreground)] hover:bg-[var(--theme-color-selection-subtle-background)] hover:text-[var(--theme-color-selection-subtle-foreground)]"
-            : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)]",
+            : variant === "composer" ? "bg-transparent" : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)]",
         )}
         aria-haspopup="dialog"
         aria-controls={popoverId}
@@ -110,7 +124,7 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
         aria-label={pickerLabel}
         title={pickerLabel}
       >
-        <Smile size={15} />
+        <Smile size={variant === "composer" ? 20 : 15} aria-hidden="true" />
       </button>
       {open ? (
         <div
@@ -118,9 +132,9 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
           role="dialog"
           aria-label={pickerLabel}
           style={popoverStyle}
-          className="absolute bottom-10 z-20 overflow-x-hidden rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-floating-background)] p-2 shadow-xl"
+          className={cn("absolute z-20 overflow-x-hidden rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-floating-background)] p-2 shadow-xl", variant === "composer" ? "bottom-full" : "bottom-10")}
         >
-          <div className="grid max-h-64 grid-cols-9 gap-1 overflow-x-hidden overflow-y-auto pr-1 [scrollbar-color:var(--theme-color-shell-scrollbar-thumb)_var(--theme-color-shell-scrollbar-track)] scrollbar-thin [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--theme-color-shell-scrollbar-thumb)] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-[var(--theme-color-shell-scrollbar-track)]">
+          <div className="grid max-h-[var(--emoji-picker-max-height,16rem)] grid-cols-9 gap-1 overflow-x-hidden overflow-y-auto pr-1 [scrollbar-color:var(--theme-color-shell-scrollbar-thumb)_var(--theme-color-shell-scrollbar-track)] scrollbar-thin [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--theme-color-shell-scrollbar-thumb)] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-[var(--theme-color-shell-scrollbar-track)]">
             {COMMENT_EMOJI_NAMES.map((name) => {
               const src = getCommentEmojiSrc(name);
               if (!src) return null;

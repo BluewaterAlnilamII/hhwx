@@ -22,6 +22,14 @@ function buildMenuAtlasSpriteUrl(spriteName: string): string | null {
   );
 }
 
+export function buildBandoriChatStampResources() {
+  return {
+    voiceBadge: buildMenuAtlasSpriteUrl("icon_voice_stamp"),
+    nameplate: buildMenuAtlasSpriteUrl("label_round_white"),
+    popSound: buildBandoriAssetCdnUrl(`${BUILTIN_RESOURCE_PREFIX}/audio/common/SE_UI_STUMP.wav`),
+  };
+}
+
 export function buildBandoriFullCardFrameUrl(
   frameName: BandoriFullCardFrameName,
 ): string | null {

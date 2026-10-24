@@ -1,0 +1,15 @@
+{
+  "http_server": { "address": "127.0.0.1", "port": "8000", "internal_port": "9000" },
+  "http_api": { "disabled": false },
+  "health": { "enabled": true },
+  "prometheus": { "enabled": true },
+  "client": {
+    "token": { "issuer": "hhwx-chat", "audience": "hhwx-chat" },
+    "queue_max_size": 2097152,
+    "channel_limit": 1
+  },
+  "channel": {
+    "namespaces": [{ "name": "chat" }]
+  },
+  "websocket": { "compression": false }
+}

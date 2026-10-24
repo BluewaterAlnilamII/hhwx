@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { memo, useMemo } from "react";
 import { useTranslations } from "next-intl";
-import BandoriStampView from "@/components/bandori/BandoriStampView";
+import dynamic from "next/dynamic";
 import { getCommentEmojiSrc } from "@/lib/comments/emoji";
 import {
   isCommentStampRegion,
@@ -14,6 +14,9 @@ import {
   type CommentStampLookup,
 } from "@/lib/comments/comment-content";
 import { cn } from "@/lib/utils";
+
+const BandoriStampView = dynamic(() => import("@/components/bandori/BandoriStampView"));
+const NO_STAMPS: CommentStampLookup = new Map();
 
 type CommentContentTextToken = {
   type: "text";
@@ -174,11 +177,13 @@ function renderJumboEmojiRows(tokens: readonly CommentContentToken[]) {
 export const CommentContent = memo(function CommentContent({
   content,
   isDeleted,
-  stampLookup,
+  stampLookup = NO_STAMPS,
+  className,
 }: {
   content: string;
   isDeleted: boolean;
-  stampLookup: CommentStampLookup;
+  stampLookup?: CommentStampLookup;
+  className?: string;
 }) {
   const t = useTranslations("comments");
   const contentClassName = isDeleted ? "text-[var(--theme-color-text-muted)] opacity-70" : "text-[var(--theme-color-text-default)]";
@@ -189,7 +194,7 @@ export const CommentContent = memo(function CommentContent({
 
   if (isDeleted) {
     return (
-      <p className={cn("mt-2 whitespace-pre-wrap wrap-break-word text-[15px] leading-[26px] wrap-anywhere", contentClassName)}>
+      <p className={cn("mt-2 whitespace-pre-wrap wrap-break-word text-[15px] leading-[26px] wrap-anywhere", contentClassName, className)}>
         {t("states.deleted")}
       </p>
     );
@@ -197,14 +202,14 @@ export const CommentContent = memo(function CommentContent({
 
   if (isJumboEmojiContent(tokens)) {
     return (
-      <div className={cn("mt-2 flex flex-col items-start gap-1 wrap-anywhere", contentClassName)}>
+      <div className={cn("mt-2 flex flex-col items-start gap-1 wrap-anywhere", contentClassName, className)}>
         {renderJumboEmojiRows(tokens)}
       </div>
     );
   }
 
   return (
-    <p className={cn("mt-2 whitespace-pre-wrap wrap-break-word text-[15px] leading-[26px] wrap-anywhere", contentClassName)}>
+    <p className={cn("mt-2 whitespace-pre-wrap wrap-break-word text-[15px] leading-[26px] wrap-anywhere", contentClassName, className)}>
       {renderCommentContentTokens(tokens)}
     </p>
   );

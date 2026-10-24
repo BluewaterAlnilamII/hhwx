@@ -30,8 +30,8 @@ jobs:
       - name: Start disposable database and apply migrations
         run: npx --no-install supabase db start
 
-      - name: Test account database permissions and registration
-        run: npx --no-install supabase test db supabase/tests/auth_registration.sql supabase/tests/account_email_change.sql supabase/tests/auto_game_profile_ownership.sql
+      - name: Test account and chat database permissions and behavior
+        run: npx --no-install supabase test db supabase/tests/auth_registration.sql supabase/tests/account_email_change.sql supabase/tests/auto_game_profile_ownership.sql supabase/tests/realtime_message_board.sql supabase/tests/chat_images.sql supabase/tests/chat_stamps.sql supabase/tests/chat_rooms.sql
 
       - name: Stop disposable database
         if: always()
@@ -86,6 +86,9 @@ jobs:
 
       - name: Test account authentication
         run: npm run test:auth
+
+      - name: Test chat messages and images
+        run: npm run test:chat
 
       - name: Test Bandori chart simulator
         run: npm run test:bandori-chart-simulator

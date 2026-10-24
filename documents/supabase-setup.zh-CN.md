@@ -49,6 +49,8 @@ English version: [supabase-setup.md](supabase-setup.md)
 
 ## 迁移工作流
 
+聊天房间版本在此前四份聊天迁移后增加 `20261024162353_chat_rooms_and_bounded_retention.sql`。先应用迁移，再部署对应应用：旧记录及省略房间参数的调用仍使用 `main`，仅服务端可调用的 RPC 签名和分页索引增加房间范围，同时修正清理批次。回滚应用时保留新结构。范围见[聊天接入文档](realtime-message-board.zh-CN.md)，本地升级、权限及查询计划证据见[验证记录](realtime-message-board-validation.zh-CN.md)。
+
 评论 UID 发布包含 `20260908145451_add_comment_reaction_public_uid.sql`。先应用迁移再部署应用，回应预览和完整用户列表才能都显示公开 UID。迁移只在现有回应汇总 JSON 中增加 `profiles.public_uid`，不改变仅 service role 可执行的边界、排序、数量限制或 RLS。旧应用会忽略新增字段；新应用也兼容旧 RPC，只是不显示预览中的 UID。回滚应用时无需撤销这份迁移。
 
 使用项目本地安装的 Supabase CLI，不需要全局安装。依赖版本相关行为前，检查对应命令的 `--help` 和当前 [Supabase 官方迁移说明](https://supabase.com/docs/guides/deployment/database-migrations)。
@@ -158,3 +160,9 @@ Web 应用需要：
 Bandori tracker 实时传输固定使用 Private Broadcast。浏览器只会在恢复的 session 完成登录 bootstrap 后订阅，不再提供环境变量传输开关。
 
 `SUPABASE_SECRET_KEY` 只允许服务端使用，绝不能加 `NEXT_PUBLIC_` 前缀。
+
+可选的[即时留言板](realtime-message-board.zh-CN.md)使用私有 `chat_private` 表和仅服务端 public RPC。迁移创建两张私有表及 `pg_cron` 保留期任务，不创建 outbox、消费者登录或真实管理员授权。修改事务提交后，由网站调用 Centrifugo 私有 HTTP 发布 API；Centrifugo 不连接数据库。启用前在隔离栈验证 `supabase/tests/realtime_message_board.sql`、多连接并发和提交后广播；浏览器复用既有账号会话，不能直接访问私有表或这些 RPC。
+
+聊天增量迁移 `20261023205032_chat_sending_and_query_cleanup.sql` 保留既有消息和禁言，将三秒时间戳替换为每账号 20 条/60 秒计数，删除聊天的邮箱状态读取并合并作者/状态查询。迁移和应用切换期间关闭聊天；新 RPC 不再返回 viewer 的 emailVerified 字段。浏览器表/RPC 授权仍被撤销。
+
+留言板图片扩展迁移 `20261024065425_chat_images.sql` 在既有消息/账号状态表上增加图片字段和上传计数，未新增表或 cron。另运行 `supabase/tests/chat_images.sql` 验证共享额度、上传限频、去重、禁言、删除、回滚及权限；公开 R2 配置见留言板接入说明。
