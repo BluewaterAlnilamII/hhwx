@@ -53,18 +53,26 @@
     "test:ournotes-songs": "node --import tsx --test tests/ournotes-songs.test.mjs tests/ournotes-song-meta.test.mjs",
     "test:ournotes-cards": "node --import tsx --test tests/ournotes-cards.test.mjs",
     "test:ournotes-tracker": "node --import tsx --test tests/ournotes-tracker-api.test.mjs tests/ournotes-participation-api.test.mjs",
-    "test:auth": "node --import tsx --test tests/auth-errors.test.mjs tests/auth-registration.test.mjs tests/account-email-change.test.mjs tests/auth-server.test.mjs tests/email-otp-flow.test.mjs"
+    "test:auth": "node --import tsx --test tests/auth-errors.test.mjs tests/auth-registration.test.mjs tests/account-email-change.test.mjs tests/auth-server.test.mjs tests/email-otp-flow.test.mjs",
+    "test:chat": "node --import tsx --test tests/chat-session.test.mjs tests/chat-server.test.mjs tests/chat-presentation.test.mjs tests/chat-images.test.mjs tests/chat-http.test.mjs tests/chat-stamps.test.mjs tests/chat-stamp-server.test.mjs tests/sound-effect-audio.test.mjs",
+    "test:chat:realtime": "node scripts/test-chat-realtime.mjs",
+    "test:chat:postgres": "node --import tsx scripts/test-chat-postgres.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1156.0",
+    "@aws-sdk/s3-request-presigner": "3.1156.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@marsidev/react-turnstile": "^1.6.3",
+    "@radix-ui/react-context-menu": "2.3.7",
     "@radix-ui/react-dialog": "^1.3.1",
     "@radix-ui/react-tabs": "^1.2.1",
     "@supabase/supabase-js": "2.118.0",
     "@tanstack/react-virtual": "^3.14.21",
+    "centrifuge": "5.7.4",
     "clsx": "^2.1.0",
+    "jose": "6.2.12",
     "lucide-react": "^1.61.0",
     "next": "16.4.2",
     "next-intl": "^4.14.9",
@@ -72,10 +80,10 @@
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "recharts": "^3.10.1",
+    "server-only": "0.0.1",
     "signalsmith-stretch": "1.3.2",
     "tailwind-merge": "^3.7.0",
-    "zustand": "^5.0.15",
-    "server-only": "0.0.1"
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@next/env": "16.4.2",

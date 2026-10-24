@@ -48,6 +48,14 @@ function buildSupabaseConnectSources() {
     return [...new Set([supabaseOrigin, websocketOrigin])];
 }
 
+function buildChatConnectSources() {
+    const origin = normalizeOrigin(process.env.CHAT_WEBSOCKET_URL);
+    if (process.env.NEXT_PUBLIC_CHAT_ENABLED !== "true") return [];
+    const upload = normalizeOrigin(process.env.CHAT_R2_ENDPOINT);
+    return [origin && /^wss?:\/\//.test(origin) ? origin : null,
+        upload?.startsWith("https://") ? upload : null].filter(Boolean);
+}
+
 function buildImageSources() {
     const origins = [
         DEFAULT_SITE_ASSET_CDN_BASE_URL,
@@ -89,7 +97,7 @@ function buildContentSecurityPolicyReportOnly() {
         // Signalsmith performs WebAssembly compilation inside its same-origin
         // AudioWorklet. Keep eval disallowed while permitting WASM explicitly.
         ["script-src", ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'", CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN, TURNSTILE_ORIGIN]],
-        ["connect-src", ["'self'", ...buildSupabaseConnectSources(), ...buildImageSources()]],
+        ["connect-src", ["'self'", ...buildSupabaseConnectSources(), ...buildChatConnectSources(), ...buildImageSources()]],
         ["report-uri", [CSP_REPORT_ENDPOINT]],
     ];
 

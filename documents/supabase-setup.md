@@ -36,6 +36,8 @@ This document describes HHWX's Supabase schema workflow. New schema changes shou
 
 ## Migration Workflow
 
+The chat room release adds `20261024162353_chat_rooms_and_bounded_retention.sql` after the four earlier chat migrations. Apply migrations before the matching app: old rows and omitted room arguments keep `main`; service-only RPC signatures and the visible-history index become room-aware. The migration also fixes bounded retention cleanup. Keep the new schema when rolling the app back. See [chat integration](realtime-message-board.md#room-scope-and-bounded-resources-2026-10-25) for scope and [validation](realtime-message-board-validation.md) for local upgrade, permission and query-plan evidence.
+
 The comment UID release includes `20260908145451_add_comment_reaction_public_uid.sql`. Apply it before deploying the app so reaction previews and full participant lists both show public UIDs. It only adds `profiles.public_uid` to the existing reaction-summary JSON; service-role-only execution, ordering, limits, and RLS stay unchanged. The previous app ignores this extra field, and the new app tolerates an older RPC by omitting preview UIDs. Rolling back the app does not require reverting the migration.
 
 Use the project-local Supabase CLI. It is installed as a development dependency, so global installation is not required. Check the relevant command's `--help` and current [Supabase migration guidance](https://supabase.com/docs/guides/deployment/database-migrations) before relying on version-sensitive behavior.
@@ -150,3 +152,9 @@ Before deploying tracker-live migrations, run `npm run test:supabase` against th
 Bandori tracker live delivery is a fixed Private Broadcast contract. The browser subscribes only after the restored session has completed authenticated bootstrap; there is no environment-variable transport switch.
 
 `SUPABASE_SECRET_KEY` is required only on the server and must never use a `NEXT_PUBLIC_` prefix.
+
+The optional [realtime message board](realtime-message-board.md) uses private `chat_private` tables and service-only public RPCs. Its migration creates two private tables and a `pg_cron` retention job, without an outbox, consumer login or real moderator assignment. After a mutation commits, the website invokes Centrifugo's private HTTP publish API; Centrifugo needs no database connection. Validate `supabase/tests/realtime_message_board.sql`, multi-connection concurrency and post-commit publication on an isolated stack before enabling the feature; the browser uses the existing account session and cannot access the private tables or RPCs directly.
+
+The chat follow-up `20261023205032_chat_sending_and_query_cleanup.sql` preserves existing messages/mutes, replaces the three-second timestamp with a per-account 20/60-second counter, removes chat email-status reads and batches author/state reads. Disable chat during the migration/app cutover; it removes the viewer emailVerified field. Browser table/RPC grants remain revoked.
+
+Chat image migration `20261024065425_chat_images.sql` adds image metadata and upload counters to the existing message/state tables, with no new table or cron. Also run `supabase/tests/chat_images.sql` for shared quotas, upload limits, deduplication, mute, deletion, rollback and grants. Public R2 configuration is documented in the chat integration guide.

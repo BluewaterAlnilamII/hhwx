@@ -74,6 +74,7 @@
 | 实色成功、危险或错误重试操作 | 配套的 `action-success-*` 或 `action-danger-*` 背景和文字；未单独配置时悬停保留同一底色 |
 | 弱强调破坏性操作 | 既有 `action-destructive-*` 角色；弱背景与实色危险反馈的职责分开 |
 | 菜单、帮助、提示或对话框浮层 | `hhwx-floating-surface`；专用几何结构使用对应浮层角色 |
+| 聊天消息区域与自己的气泡 | `chat-background` 及配套 `chat-own-background` / `chat-own-foreground`；他人使用控件底色和默认文字。Smile Patrol 为自己的气泡在控件底色中混入天蓝，随当前浅深主题角色变化。 |
 | 选中、焦点 | 各自的角色；即使颜色相同，也保持职责独立 |
 | 活动完成度等只读进度 | `progress-*` 信息角色 |
 | 可拖动播放进度与音量 | 填充或 accent 调用 `action-accent-background`，与播放按钮一致；自定义滑轨调用 `range-track-background` |

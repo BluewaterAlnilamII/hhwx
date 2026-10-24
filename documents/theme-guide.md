@@ -74,6 +74,7 @@ The legacy `--theme-seed-surface: #FFFEF4` still supplies light chart-axis and o
 | Solid success or danger/retry action | Matching `action-success-*` or `action-danger-*` background/foreground pair; hover keeps the same fill unless separately configured |
 | Quiet destructive action | Existing `action-destructive-*` roles; these use a quiet surface, distinct from solid danger feedback |
 | Floating menu, help, tooltip or dialog | `hhwx-floating-surface`, or matching floating roles when geometry is specialized |
+| Chat message canvas and own bubbles | `chat-background` and paired `chat-own-background` / `chat-own-foreground`; others use control fill and default text. Smile Patrol mixes cyan into the control fill for own bubbles, inheriting the active light/dark roles. |
 | Selection / focus | Their respective roles; these are separate responsibilities even when colors match |
 | Passive progress, such as event completion | `progress-*` information roles |
 | Draggable seek and volume | `action-accent-background` for fill/accent, matching the play button; custom tracks use `range-track-background` |

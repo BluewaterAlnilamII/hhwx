@@ -12,26 +12,25 @@ import {
   type BandoriAtlasAnimationFrame,
 } from "@/lib/bandori-atlas-animation";
 
-const atlasImageCache = new Map<string, Promise<HTMLImageElement>>();
+const atlasImageLoads = new Map<string, Promise<HTMLImageElement>>();
 const pageVisibilitySubscribers = new Set<() => void>();
 const reducedMotionSubscribers = new Set<() => void>();
 let reducedMotionQuery: MediaQueryList | null = null;
 
 function loadAtlasImage(atlasUrl: string): Promise<HTMLImageElement> {
-  const cachedImage = atlasImageCache.get(atlasUrl);
-  if (cachedImage) return cachedImage;
+  const pending = atlasImageLoads.get(atlasUrl);
+  if (pending) return pending;
 
   const promise = new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new window.Image();
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error(`Failed to load Bandori atlas: ${atlasUrl}`));
     image.src = atlasUrl;
-  }).catch((error) => {
-    atlasImageCache.delete(atlasUrl);
-    throw error;
+  }).finally(() => {
+    atlasImageLoads.delete(atlasUrl);
   });
 
-  atlasImageCache.set(atlasUrl, promise);
+  atlasImageLoads.set(atlasUrl, promise);
   return promise;
 }
 

@@ -2,6 +2,7 @@ export const MESSAGE_NAMESPACES = [
   "metadata",
   "common",
   "comments",
+  "chat",
   "navigation",
   "serviceStatus",
   "testFeatures",

@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { Link, usePathname } from "@/i18n/navigation";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
 import ToolbarMusicPlayer from "@/components/music-player/ToolbarMusicPlayer";
+import ChatLauncher from "@/components/chat/ChatLauncher";
 import {
     toolbarIconButtonClassName,
     toolbarIconInnerClassName,
@@ -490,6 +491,10 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                         onToggle={() => setOpenToolbarMenu((currentValue) => currentValue === "player" ? null : "player")}
                         onRequestClose={() => setOpenToolbarMenu((currentValue) => currentValue === "player" ? null : currentValue)}
                     />
+                    {process.env.NEXT_PUBLIC_CHAT_ENABLED === "true" && authReady && userId && <ChatLauncher key={userId} onOpen={() => {
+                        setOpenToolbarMenu(null);
+                        if (isSidebarOpen) onToggleSidebar?.();
+                    }} />}
 
                     <div className="relative">
                         <button

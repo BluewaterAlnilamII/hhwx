@@ -26,14 +26,20 @@ type StampPickerButtonProps = {
   onOpenChange: (open: boolean) => void;
   onRegionChange: (region: CommentStampRegion) => void;
   onSelect: (stamp: CommentStamp) => void;
+  onPreview?: (stamp: CommentStamp) => void;
+  variant?: "default" | "composer";
+  disabled?: boolean;
+  label?: string;
 };
 
 const StampPickerOption = memo(function StampPickerOption({
   stamp,
   onSelect,
+  onPreview,
 }: {
   stamp: CommentStamp;
   onSelect: (stamp: CommentStamp) => void;
+  onPreview?: (stamp: CommentStamp) => void;
 }) {
   const shortcode = buildStampShortcode(stamp);
   const hasVoice = Boolean(stamp.voiceUrl);
@@ -58,9 +64,9 @@ const StampPickerOption = memo(function StampPickerOption({
         setPreviewActive(false);
         onSelect(stamp);
       }}
-      onPointerEnter={(event) => { if (event.pointerType === "mouse") setPreviewActive(true); }}
+      onPointerEnter={(event) => { if (event.pointerType === "mouse") { setPreviewActive(true); onPreview?.(stamp); } }}
       onPointerLeave={() => setPreviewActive(false)}
-      onFocus={(event) => { if (event.currentTarget.matches(":focus-visible")) setPreviewActive(true); }}
+      onFocus={(event) => { if (event.currentTarget.matches(":focus-visible")) { setPreviewActive(true); onPreview?.(stamp); } }}
       onBlur={() => setPreviewActive(false)}
       className="relative flex h-20 w-full min-w-0 items-center justify-center rounded-lg p-1 transition hover:bg-[var(--theme-color-control-background-hover)] focus-visible:bg-[var(--theme-color-control-background-hover)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]"
       aria-label={shortcode}
@@ -100,9 +106,13 @@ export const StampPickerButton = memo(function StampPickerButton({
   onOpenChange,
   onRegionChange,
   onSelect,
+  onPreview,
+  variant = "default",
+  disabled = false,
+  label,
 }: StampPickerButtonProps) {
   const t = useTranslations("comments");
-  const pickerLabel = t("pickers.stamp");
+  const pickerLabel = label ?? t("pickers.stamp");
   const commonT = useTranslations("common");
   const popoverId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -116,15 +126,21 @@ export const StampPickerButton = memo(function StampPickerButton({
     const rect = buttonRef.current.getBoundingClientRect();
     const containerRect = containerRef.current.getBoundingClientRect();
     const viewport = window.visualViewport;
-
-    setPopoverStyle(getCommentPopoverHorizontalPosition({
+    const panelElement = variant === "composer" ? containerRef.current.closest("[data-chat-panel]") : null;
+    const panel = panelElement?.getBoundingClientRect();
+    const left = Math.max(viewport?.offsetLeft ?? 0, panel?.left ?? 0);
+    const right = Math.min((viewport?.offsetLeft ?? 0) + (viewport?.width ?? window.innerWidth), panel?.right ?? window.innerWidth);
+    const top = Math.max(viewport?.offsetTop ?? 0, panelElement?.querySelector("header")?.getBoundingClientRect().bottom ?? panel?.top ?? 0);
+    const inputTop = containerRef.current.closest("[data-chat-input]")?.getBoundingClientRect().top ?? rect.top;
+    const gridHeight = Math.max(0, Math.min(320, inputTop - top - 8 - 16 - 53));
+    setPopoverStyle({ ...getCommentPopoverHorizontalPosition({
       anchorRect: rect,
       containerLeft: containerRect.left,
       preferredWidth: 456,
-      viewportLeft: viewport?.offsetLeft ?? 0,
-      viewportWidth: viewport?.width ?? window.innerWidth,
-    }));
-  }, [open]);
+      viewportLeft: left,
+      viewportWidth: right - left,
+    }), ...(panel ? { bottom: containerRect.bottom - inputTop + 8, "--stamp-picker-max-height": `${gridHeight}px` } : {}) } as CSSProperties);
+  }, [open, variant]);
 
   useEffect(() => {
     if (!open) return;
@@ -158,25 +174,31 @@ export const StampPickerButton = memo(function StampPickerButton({
     window.addEventListener("resize", updatePopoverPosition);
     viewport?.addEventListener("resize", updatePopoverPosition);
     viewport?.addEventListener("scroll", updatePopoverPosition);
+    const composer = variant === "composer" ? containerRef.current?.closest("form") : null;
+    const observer = composer ? new ResizeObserver(updatePopoverPosition) : null;
+    if (composer) observer?.observe(composer);
 
     return () => {
       window.removeEventListener("resize", updatePopoverPosition);
       viewport?.removeEventListener("resize", updatePopoverPosition);
       viewport?.removeEventListener("scroll", updatePopoverPosition);
+      observer?.disconnect();
     };
-  }, [open, updatePopoverPosition]);
+  }, [open, updatePopoverPosition, variant]);
 
   return (
     <div ref={containerRef} className="relative flex items-center">
       <button
         ref={buttonRef}
         type="button"
+        disabled={disabled}
         onClick={() => onOpenChange(!open)}
         className={cn(
-          "inline-flex h-8 w-8 items-center justify-center rounded-full border text-[var(--theme-color-text-muted)] transition hover:bg-[var(--theme-color-action-secondary-background-hover)] hover:text-[var(--theme-color-action-secondary-foreground)]",
+          "inline-flex shrink-0 items-center justify-center rounded-full text-[var(--theme-color-text-muted)] transition hover:bg-[var(--theme-color-action-secondary-background-hover)] hover:text-[var(--theme-color-action-secondary-foreground)] focus-visible:outline-2 focus-visible:outline-[var(--theme-color-focus-ring)] disabled:opacity-40",
+          variant === "composer" ? "size-11" : "h-8 w-8 border",
           open
             ? "border-[var(--theme-color-selection-subtle-ring)] bg-[var(--theme-color-selection-subtle-background)] text-[var(--theme-color-selection-subtle-foreground)] hover:bg-[var(--theme-color-selection-subtle-background)] hover:text-[var(--theme-color-selection-subtle-foreground)]"
-            : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)]",
+            : variant === "composer" ? "bg-transparent" : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)]",
         )}
         aria-haspopup="dialog"
         aria-controls={popoverId}
@@ -184,7 +206,7 @@ export const StampPickerButton = memo(function StampPickerButton({
         aria-label={pickerLabel}
         title={pickerLabel}
       >
-        <Sticker size={15} />
+        <Sticker size={variant === "composer" ? 20 : 15} aria-hidden="true" />
       </button>
       {open ? (
         <div
@@ -211,7 +233,7 @@ export const StampPickerButton = memo(function StampPickerButton({
               </button>
             ))}
           </div>
-          <div className="grid max-h-80 grid-cols-4 gap-1 overflow-x-hidden overflow-y-auto pr-1 [scrollbar-color:var(--theme-color-shell-scrollbar-thumb)_var(--theme-color-shell-scrollbar-track)] scrollbar-thin [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--theme-color-shell-scrollbar-thumb)] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-[var(--theme-color-shell-scrollbar-track)]">
+          <div className="grid max-h-[var(--stamp-picker-max-height,20rem)] grid-cols-4 gap-1 overflow-x-hidden overflow-y-auto pr-1 [scrollbar-color:var(--theme-color-shell-scrollbar-thumb)_var(--theme-color-shell-scrollbar-track)] scrollbar-thin [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--theme-color-shell-scrollbar-thumb)] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-[var(--theme-color-shell-scrollbar-track)]">
             {loading ? <LoadingIndicator label={t("states.loading")} className="col-span-4 min-h-40" /> : null}
             {error ? (
               <div role="alert" className="col-span-4 flex min-h-20 items-center justify-center gap-2 text-sm text-[var(--theme-color-text-muted)]">
@@ -226,6 +248,7 @@ export const StampPickerButton = memo(function StampPickerButton({
                 key={`${stamp.region}-${stamp.id}-${stamp.kind}`}
                 stamp={stamp}
                 onSelect={onSelect}
+                onPreview={onPreview}
               />
             ))}
           </div>

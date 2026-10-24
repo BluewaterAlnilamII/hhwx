@@ -42,10 +42,17 @@ export default function ImageViewer({ src, alt, label, labels, loading = false, 
   const viewRef = useRef(view);
   const closeRef = useRef(onClose);
   useLayoutEffect(() => { closeRef.current = onClose; }, [onClose]);
+  const clampZoom = useCallback((zoom: number) => {
+    const image = imageRef.current;
+    const fittedWidth = image ? parseFloat(getComputedStyle(image).width) : 0;
+    // Long screenshots must be readable at their native resolution after fitting the viewport.
+    const max = image && fittedWidth > 0 ? Math.max(3, image.naturalWidth / fittedWidth) : 3;
+    return Math.min(max, Math.max(1, zoom));
+  }, []);
   const updateView = useCallback((value: ImageView) => {
     const viewport = viewportRef.current;
     const image = imageRef.current;
-    const zoom = Math.min(3, Math.max(1, value.zoom));
+    const zoom = clampZoom(value.zoom);
     const style = image ? getComputedStyle(image) : null;
     const limitX = viewport && style ? Math.max(0, (parseFloat(style.width) * zoom - viewport.clientWidth) / 2) : 0;
     const limitY = viewport && style ? Math.max(0, (parseFloat(style.height) * zoom - viewport.clientHeight) / 2) : 0;
@@ -54,7 +61,7 @@ export default function ImageViewer({ src, alt, label, labels, loading = false, 
     if (next.zoom === previous.zoom && next.x === previous.x && next.y === previous.y) return;
     viewRef.current = next;
     setView(next);
-  }, []);
+  }, [clampZoom]);
   const bindImage = useCallback((image: HTMLImageElement | null) => {
     imageRef.current = image;
     if (!image) return;
@@ -73,14 +80,14 @@ export default function ImageViewer({ src, alt, label, labels, loading = false, 
     if (!rect) return;
     const x = from ? from.x - rect.left - rect.width / 2 : 0;
     const y = from ? from.y - rect.top - rect.height / 2 : 0;
-    const ratio = Math.min(3, Math.max(1, zoom)) / previous.zoom;
+    const ratio = clampZoom(zoom) / previous.zoom;
     // Keep the same image point under the cursor or moving pinch midpoint.
     updateView({
       zoom,
       x: x - (x - previous.x) * ratio + (from && to ? to.x - from.x : 0),
       y: y - (y - previous.y) * ratio + (from && to ? to.y - from.y : 0),
     });
-  }, [updateView]);
+  }, [updateView, clampZoom]);
   const bindGestures = useCallback((viewport: HTMLDivElement | null) => {
     if (!viewport) return;
     viewportRef.current = viewport;
@@ -103,7 +110,6 @@ export default function ImageViewer({ src, alt, label, labels, loading = false, 
       if (event.button !== 0 || isControl(event)) return;
       if (pointers.size === 0) suppressClick = false;
       pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY });
-      viewport.setPointerCapture(event.pointerId);
       if (pointers.size === 2) {
         pinch = { ...gesture(), view: viewRef.current };
         suppressClick = true;
@@ -116,12 +122,16 @@ export default function ImageViewer({ src, alt, label, labels, loading = false, 
       const dy = event.clientY - point.y;
       point.x = event.clientX;
       point.y = event.clientY;
-      if (Math.hypot(point.x - point.startX, point.y - point.startY) > 5) suppressClick = true;
+      if (Math.hypot(point.x - point.startX, point.y - point.startY) > 5) {
+        suppressClick = true;
+        // Touch keeps its implicit capture on the image for native long-press actions.
+        if (event.pointerType === "mouse" && !viewport.hasPointerCapture(event.pointerId)) viewport.setPointerCapture(event.pointerId);
+      }
       if (pointers.size >= 2 && pinch) {
         const current = gesture();
         const zoom = pinch.view.zoom * current.distance / pinch.distance;
         zoomAt(zoom, pinch.center, current.center, pinch.view);
-        if (zoom <= 1 || zoom >= 3) pinch = { ...current, view: viewRef.current };
+        if (zoom <= 1 || zoom >= clampZoom(Infinity)) pinch = { ...current, view: viewRef.current };
       } else if (suppressClick) {
         const current = viewRef.current;
         updateView({ ...current, x: current.x + dx, y: current.y + dy });
@@ -134,7 +144,12 @@ export default function ImageViewer({ src, alt, label, labels, loading = false, 
       if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
     };
     const click = (event: MouseEvent) => {
-      if (!suppressClick && !isControl(event)) closeRef.current();
+      if (!suppressClick && !isControl(event) && event.target !== imageRef.current) closeRef.current();
+    };
+    const contextMenu = () => {
+      suppressClick = true;
+      pointers.clear();
+      pinch = null;
     };
     const resize = new ResizeObserver(() => updateView(viewRef.current));
     resize.observe(viewport);
@@ -146,6 +161,7 @@ export default function ImageViewer({ src, alt, label, labels, loading = false, 
     viewport.addEventListener("pointercancel", pointerEnd);
     viewport.addEventListener("lostpointercapture", pointerEnd);
     viewport.addEventListener("click", click);
+    viewport.addEventListener("contextmenu", contextMenu);
     return () => {
       resize.disconnect();
       viewportRef.current = null;
@@ -156,8 +172,9 @@ export default function ImageViewer({ src, alt, label, labels, loading = false, 
       viewport.removeEventListener("pointercancel", pointerEnd);
       viewport.removeEventListener("lostpointercapture", pointerEnd);
       viewport.removeEventListener("click", click);
+      viewport.removeEventListener("contextmenu", contextMenu);
     };
-  }, [updateView, zoomAt]);
+  }, [updateView, zoomAt, clampZoom]);
   const changeImage = (change?: () => void) => {
     if (change) {
       change();
@@ -203,7 +220,7 @@ export default function ImageViewer({ src, alt, label, labels, loading = false, 
               </button>
             </Dialog.Close>
           </div>
-          <div ref={bindGestures} className="relative min-h-0 flex-1 touch-none overflow-hidden overscroll-contain select-none">
+          <div ref={bindGestures} className="relative min-h-0 flex-1 touch-none overflow-hidden overscroll-contain">
             {onPrevious ? (
               <button type="button" onClick={() => changeImage(onPrevious)} aria-label={labels.previous} title={labels.previous} className="fixed left-3 top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/12 text-white backdrop-blur-sm transition hover:bg-white/22 sm:left-6">
                 <ChevronLeft className="h-6 w-6" aria-hidden="true" />
@@ -224,7 +241,7 @@ export default function ImageViewer({ src, alt, label, labels, loading = false, 
                   alt={alt ?? label}
                   decoding="async"
                   draggable={false}
-                  className={`block h-auto origin-center shrink-0 ${view.zoom > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-out"}`}
+                  className={`block h-auto origin-center shrink-0 [-webkit-touch-callout:default] ${view.zoom > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-default"}`}
                   style={{
                     opacity: currentSize ? 1 : 0,
                     width: imageWidth,

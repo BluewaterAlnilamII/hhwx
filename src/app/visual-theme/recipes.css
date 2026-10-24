@@ -25,6 +25,9 @@
   /* Page panels and nested content containers share a fill, independent of chart ink and controls. */
   --theme-color-panel-background: var(--theme-color-surface-background);
   --theme-color-comment-reaction-background: var(--theme-color-surface-background);
+  --theme-color-chat-background: color-mix(in srgb, var(--theme-color-action-secondary-foreground) 4%, var(--theme-color-control-background));
+  --theme-color-chat-own-background: color-mix(in srgb, var(--theme-color-action-secondary-foreground) 14%, var(--theme-color-control-background));
+  --theme-color-chat-own-foreground: var(--theme-color-text-default);
   --theme-color-panel-border: var(--theme-color-border-default);
   --theme-shadow-panel: var(--theme-shadow-surface-raised);
   --theme-color-text-default: var(--theme-seed-text-primary);
@@ -198,4 +201,51 @@
   --theme-color-calendar-rest-day-background: color-mix(in srgb, var(--theme-seed-brand-emphasis) 4%, var(--theme-color-panel-background));
   --theme-color-calendar-event-foreground: var(--theme-color-text-on-emphasis);
   --theme-color-calendar-event-shade: transparent;
+}
+
+/* Bandori player colors and nameplate geometry are game artwork, not theme accents. */
+[data-chat-stamp][data-player="1"] { --chat-stamp-name-color: #ff395a; }
+[data-chat-stamp][data-player="2"] { --chat-stamp-name-color: #0090ff; }
+[data-chat-stamp][data-player="3"] { --chat-stamp-name-color: #ff7800; }
+[data-chat-stamp][data-player="4"] { --chat-stamp-name-color: #00a669; }
+[data-chat-stamp][data-player="5"] { --chat-stamp-name-color: #b431ff; }
+
+.chat-stamp-name {
+  position: relative;
+  background: var(--chat-stamp-name-fallback, var(--chat-stamp-name-color));
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 89.28px;
+  height: 19.2px;
+  margin-top: 2px;
+  padding-inline: 8px;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.chat-stamp-name::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--chat-stamp-name-color);
+  mask-image: var(--chat-stamp-nameplate), linear-gradient(black, black), var(--chat-stamp-nameplate);
+  mask-size: auto 100%, calc(100% - 19px) 100%, auto 100%;
+  mask-position: left, center, right;
+  mask-repeat: no-repeat;
+}
+
+.chat-stamp-name > span {
+  position: relative;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (min-width: 640px) {
+  .chat-stamp-name { width: 106.02px; height: 22.8px; font-size: 12px; }
+  .chat-stamp-name::before { mask-size: auto 100%, calc(100% - 22px) 100%, auto 100%; }
 }

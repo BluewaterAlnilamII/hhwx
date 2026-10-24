@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 
 export { BandoriAtlasAnimationCanvas as BandoriStampAnimationCanvas };
 
+export const COMMENT_STAMP_SIZE = "h-16 w-24 sm:h-[76px] sm:w-[114px]";
+
 export default function BandoriStampView({
   stamp,
   label,
@@ -63,7 +65,7 @@ export default function BandoriStampView({
     "relative mx-0.5 inline-flex shrink-0 items-center justify-center align-[-1.35em]",
     variant === "reward"
       ? "h-[74px] w-[111px] sm:h-[76px] sm:w-[114px]"
-      : "h-16 w-24 sm:h-[76px] sm:w-[114px]",
+      : COMMENT_STAMP_SIZE,
   );
   if (!stamp.voiceUrl) return <span className={className}>{image}</span>;
 
