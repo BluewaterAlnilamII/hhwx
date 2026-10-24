@@ -3,13 +3,13 @@ import test from "node:test";
 import { playSoundEffect, playIndependentSoundEffect, preloadSoundEffect, resumeSoundEffectAudio } from "../src/lib/sound-effect-audio.ts";
 
 test("sound effects share only pending loads and release buffers after playback", async (t) => {
-  const sources = [], fetches = [];
-  let releaseFetch, decoded = 0, contexts = 0, failOnce = true;
+  const sources = [], fetches = [], contextInstances = [];
+  let releaseFetch, decoded = 0, contexts = 0, resumes = 0, failOnce = true;
   class AudioContext {
     state = "suspended";
     destination = {};
-    constructor() { contexts++; }
-    async resume() { this.state = "running"; }
+    constructor() { contexts++; contextInstances.push(this); }
+    async resume() { resumes++; this.state = "running"; }
     decodeAudioData(_bytes, resolve) { decoded++; resolve({ duration: 4 }); }
     createBufferSource() {
       const source = { started: false, stopped: false, disconnected: false, connect() {},
@@ -78,4 +78,29 @@ test("sound effects share only pending loads and release buffers after playback"
   await assert.rejects(preloadSoundEffect("/retry"), /offline/);
   await preloadSoundEffect("/retry");
   assert.equal(fetches.filter(u => u === "/retry").length, 2, "failed loads remain retryable");
+
+  for (const play of [
+    () => resumeSoundEffectAudio(),
+    () => playSoundEffect("/voice"),
+    () => playIndependentSoundEffect("/voice", new AbortController().signal, Date.now() + 3000),
+  ]) {
+    const before = resumes;
+    contextInstances.at(-1).state = "interrupted";
+    const playing = play(); await new Promise(setImmediate);
+    assert.equal(contextInstances.at(-1).state, "running", "iOS interruptions are resumed without refreshing");
+    assert.equal(resumes, before + 1);
+    sources.at(-1)?.onended(); await playing;
+  }
+  const context = contextInstances.at(-1), originalResume = context.resume;
+  context.state = "interrupted";
+  context.resume = () => new Promise(() => {});
+  const sourceCount = sources.length;
+  await playIndependentSoundEffect("/voice", new AbortController().signal, Date.now() + 3000);
+  assert.equal(sources.length, sourceCount, "blocked browser resumption neither waits nor queues later audio");
+  context.resume = originalResume;
+  contextInstances.at(-1).state = "closed";
+  await playSoundEffect("/voice");
+  assert.equal(contexts, 2, "a closed context is replaced");
+  sources.at(-1).onended();
+  assert.ok(sources.every(source => source.disconnected && source.buffer === null));
 });

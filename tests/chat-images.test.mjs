@@ -63,6 +63,10 @@ test("attachment drafts reuse prepared previews and release URLs/workers with th
 
 test("20 MiB and 4096 boundaries; only supported formats and fixed CDN object keys",()=>{
   assert.ok(images.isChatImage(image));
+  const url = new URL(images.chatImageUrl(image));
+  assert.equal(url.pathname, `/${image.key}`, "cache migration preserves the stored object key");
+  assert.equal(url.searchParams.get("cors"), "1");
+  assert.equal(images.chatImageUrl(image), url.href, "the cache version stays fixed across reads");
   assert.ok(images.isChatImageMetadata({...metadata,bytes:20*1024*1024,width:4096}));
   for(const patch of [{bytes:20*1024*1024+1},{height:4097},{bytes:-1},{width:NaN},{width:1.5},{contentType:"image/svg+xml"},{hash:"bad"}])
     assert.equal(images.isChatImageMetadata({...metadata,...patch}),false);
@@ -156,15 +160,36 @@ test("image copy starts the clipboard write within the click and releases its wo
 });
 function downloadHarness(){
   const source=readFileSync(new URL("../src/lib/chat/chat-image-download.ts",import.meta.url),"utf8");
-  const exports={},reads=[],downloads=[],blobs=[],revoked=[],timers=[],window={};let ok=true;
+  const exports={},reads=[],downloads=[],blobs=[],revoked=[],timers=[],previews=[],navigator={},window={matchMedia:()=>({matches:false})};let ok=true;
   const original=new Blob(["GIF89a-original-animation"],{type:"image/gif"});
   runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,
-    {exports,window,DOMException,AbortSignal,async fetch(source,options){reads.push({source,...options});return {ok,async blob(){return original;}};},
+    {exports,window,navigator,File,DOMException,AbortSignal,async fetch(source,options){reads.push({source,...options});return {ok,async blob(){return original;}};},
       document:{body:{append(){}},createElement(){return {click(){downloads.push({href:this.href,name:this.download});},remove(){}};}},
       URL:{createObjectURL(blob){blobs.push(blob);return "blob:download";},revokeObjectURL(url){revoked.push(url);}},
       setTimeout(fn){timers.push(fn);}});
-  return {save:exports.saveChatImage,window,reads,downloads,blobs,revoked,timers,original,fail(){ok=false;}};
+  return {save:(source,type)=>exports.saveChatImage(source,type,()=>previews.push(source)),window,navigator,previews,reads,downloads,blobs,revoked,timers,original,fail(){ok=false;}};
 }
+
+test("touch devices hand the unchanged original file to the native image share sheet",async()=>{
+  const h=downloadHarness(),shared=[];h.window.matchMedia=()=>({matches:true});
+  h.navigator.canShare=({files})=>files.length===1&&files[0].type==="image/gif";
+  h.navigator.share=async data=>shared.push(data);
+  await h.save("https://cdn.test/image.gif","image/gif");
+  assert.equal(shared.length,1);assert.equal(shared[0].files[0].name,"image.gif");
+  assert.deepEqual(await shared[0].files[0].arrayBuffer(),await h.original.arrayBuffer());
+  assert.equal(h.downloads.length,0);assert.equal(h.blobs.length,0);assert.equal(h.previews.length,0);
+});
+
+test("unsupported or activation-expired mobile saving opens the original preview; cancellation does nothing",async()=>{
+  const h=downloadHarness();h.window.matchMedia=()=>({matches:true});
+  await h.save("blob:pending","image/gif");assert.deepEqual(h.previews,["blob:pending"]);assert.equal(h.reads.length,0);
+  h.navigator.canShare=()=>false;h.navigator.share=async()=>{throw new Error("must not share");};
+  await h.save("blob:pending","image/gif");assert.equal(h.previews.length,2);
+  h.navigator.canShare=()=>true;h.navigator.share=async()=>{throw new DOMException("expired activation","NotAllowedError");};
+  await h.save("blob:pending","image/gif");assert.equal(h.previews.length,3);
+  h.navigator.share=async()=>{throw new DOMException("cancelled","AbortError");};
+  await h.save("blob:pending","image/gif");assert.equal(h.previews.length,3);assert.equal(h.downloads.length,0);
+});
 
 test("download fallback hands original CDN bytes to the browser, with no encoding or empty-file download on failure",async()=>{
   const h=downloadHarness();await h.save("https://cdn.test/image.gif","image/gif");

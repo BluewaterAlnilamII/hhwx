@@ -6,6 +6,13 @@ Original validation: 2026-10-13, with Auth compatibility and sending-policy foll
 
 ## 2026-10-25 Release integration
 
+### Browser image actions and mobile follow-up
+
+- Reproduced failed copy with default Chrome permissions after displaying an image first: the Worker fetch reused a non-CORS cached response. Earlier checks that fetched first or pregranted permissions did not cover this order. Anonymous-CORS display fixes fresh loads; a fixed `?cors=1` version was separately verified to recover images previously cached without CORS.
+- Chrome at 1280×900 and touch emulation at 390×900 passed real image copy without pregranted clipboard access, menu focus returning to the message, and long-press release without accidentally opening the viewer. Touch save handed the unchanged file to an instrumented share API and opened the existing viewer when sharing was unavailable. This is not evidence of an actual iOS Photos save.
+- A controlled visual-viewport change to height 400 and offset 20 kept the conversation at 20–420 while the opaque outer surface covered the full 900-pixel layout. Tap-send and stamp selection did not focus the draft; Enter retained existing focus. Send requests in these focus checks were intercepted, not persisted.
+- Chat tests: **75 passed**; shared audio/music tests: **9 passed**. Typecheck, scoped ESLint and production build passed. Audio tests cover interrupted/closed contexts, pending browser resumption, cancellation and released buffers. No physical iOS device was available; native keyboard chrome, photo-library actions and audible interruption recovery still require device verification. Refresh restoring audio is supporting evidence, not proof of a unique cause.
+
 The release is prepared from production/main `c3bacca4`, preserving the already deployed native Auth flow, Node 26 CI, React 19.3.1 and TypeScript 6.0.3. Only chat changes and their shared consumers are transferred from the earlier working tree. The `next/dynamic` test stub now declares its ES-module shape for TypeScript 6; its attachment lifecycle assertions are unchanged. Chat tests (73), Auth tests (25), locale validation and the production-dependency audit passed on this release tree.
 
 The operator explicitly deferred R2 bucket configuration and dedicated upload credentials to a separate manual step. The app can deploy text and stamps, but production image sending must remain reported as unavailable until the setup and real-browser checks in the integration guide are completed. Earlier local evidence below is not evidence of production R2 readiness.

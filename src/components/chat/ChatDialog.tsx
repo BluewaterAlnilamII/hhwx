@@ -176,7 +176,7 @@ function Conversation({ userId, open, images, session, state }: {
           <ChatMessages messages={state.messages} userId={userId} canModerate={state.viewer?.canModerate ?? false}
             busy={busy} onDelete={confirmDelete} onMute={mute} onOpenImage={setViewingImage} />
           {state.pending.map((pending) => <ChatPendingMessage key={pending.clientRequestId} pending={pending} blocked={blocked}
-            onRetry={() => void session.retry(pending.clientRequestId)} onDiscard={() => { session.discard(pending.clientRequestId); document.getElementById("chat-draft")?.focus(); }} />)}
+            onRetry={() => void session.retry(pending.clientRequestId)} onDiscard={() => session.discard(pending.clientRequestId)} />)}
         </ol>
       </div>
       <ChatStampLayer ref={stampLayer} />
@@ -201,12 +201,12 @@ function Conversation({ userId, open, images, session, state }: {
         jumpLatest(); void sending; return true;
       }} />
     </div>
-    {viewingImage && <ImageViewer src={chatImageUrl(viewingImage)} label={t("image")} onClose={() => setViewingImage(null)}
+    {viewingImage && <ImageViewer src={chatImageUrl(viewingImage)} crossOrigin="anonymous" label={t("image")} onClose={() => setViewingImage(null)}
       labels={{ close: t("closeImage"), instructions: t("imageInstructions"), previous: t("previousImage"), next: t("nextImage"), imageLoading: t("loading") }} />}
     <Dialog.Root open={!!deleting} onOpenChange={(value) => { if (!value && !busy) setDeleting(null); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-1020 bg-[var(--theme-color-overlay-background)]" />
-        <Dialog.Content aria-describedby={undefined} onCloseAutoFocus={(event) => { event.preventDefault(); document.getElementById("chat-draft")?.focus(); }}
+        <Dialog.Content aria-describedby={undefined} onCloseAutoFocus={(event) => { event.preventDefault(); document.querySelector<HTMLElement>("[data-chat-panel]")?.focus({ preventScroll: true }); }}
           className="hhwx-floating-surface fixed left-1/2 top-1/2 z-1020 w-[calc(100%-2rem)] max-w-xs -translate-x-1/2 -translate-y-1/2 rounded-2xl p-5">
           <Dialog.Title className="text-base font-semibold">{t("confirmDelete")}</Dialog.Title>
           {deleteFailed && <p role="alert" className="mt-3 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{t("deleteFailed")}</p>}
@@ -250,17 +250,20 @@ function AccountDialog({ open, onOpenChange, trigger, userId }: Props & { userId
   // The session survives panel closure; Radix releases focus and scroll locks on unmount.
   return <Dialog.Root open={open} onOpenChange={onOpenChange}>
     <Dialog.Portal>
-      <Dialog.Overlay className="fixed inset-0 z-1000 bg-[var(--theme-color-overlay-background)] data-[state=closed]:hidden" />
+      <Dialog.Overlay className="fixed inset-0 z-1000 bg-[var(--theme-color-panel-background)] data-[state=closed]:hidden sm:bg-[var(--theme-color-overlay-background)]" />
       <Dialog.Content ref={panel} data-chat-panel aria-describedby={undefined} onCloseAutoFocus={(event) => { event.preventDefault(); trigger.current?.focus(); }}
         onEscapeKeyDown={(event) => {
           if (document.querySelector("[data-chat-popover], [data-chat-picker] [role=dialog]")) event.preventDefault();
         }}
-        className="hhwx-floating-surface fixed left-1/2 top-[calc(var(--chat-viewport-top,0px)+var(--chat-viewport-height,100dvh)/2)] z-1000 flex h-[var(--chat-viewport-height,100dvh)] w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden text-[var(--theme-color-text-default)] focus:outline-hidden data-[state=closed]:hidden sm:h-[min(48rem,calc(var(--chat-viewport-height,100dvh)-2rem))] sm:w-[calc(100%-2rem)] sm:rounded-2xl">
+        className="hhwx-floating-surface fixed left-1/2 top-0 z-1000 h-dvh w-full max-w-2xl -translate-x-1/2 overflow-hidden text-[var(--theme-color-text-default)] focus:outline-hidden data-[state=closed]:hidden sm:top-[calc(var(--chat-viewport-top,0px)+var(--chat-viewport-height,100dvh)/2)] sm:h-[min(48rem,calc(var(--chat-viewport-height,100dvh)-2rem))] sm:w-[calc(100%-2rem)] sm:-translate-y-1/2 sm:rounded-2xl">
+        {/* Keep the mobile surface behind browser keyboard controls; only its contents shrink. */}
+        <div data-chat-viewport className="flex h-[var(--chat-viewport-height,100dvh)] translate-y-[var(--chat-viewport-top,0px)] flex-col sm:h-full sm:translate-y-0">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-2 sm:px-5">
           <Dialog.Title className="text-base font-semibold">{t("title")}</Dialog.Title>
           <Dialog.Close className="chat-icon-button" aria-label={t("close")}><X size={22} aria-hidden="true" /></Dialog.Close>
         </header>
         {userId && <Conversation userId={userId} open={open} images={images} {...chat} />}
+        </div>
       </Dialog.Content>
     </Dialog.Portal>
   </Dialog.Root>;

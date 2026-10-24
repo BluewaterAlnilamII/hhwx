@@ -1,7 +1,7 @@
 "use client";
 
 import * as ContextMenu from "@radix-ui/react-context-menu";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { CircleAlert, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { CommentContent } from "@/components/comments/CommentContent";
@@ -18,6 +18,7 @@ export function ChatPendingMessage({ pending, blocked, onRetry, onDiscard }: {
   pending: ChatSnapshot["pending"][number]; blocked: boolean; onRetry(): void; onDiscard(): void;
 }) {
   const t = useTranslations("chat");
+  const trigger = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const failed = pending.status === "failed";
@@ -36,7 +37,7 @@ export function ChatPendingMessage({ pending, blocked, onRetry, onDiscard }: {
     </span>}
     <ContextMenu.Root open={menuOpen} onOpenChange={setMenuOpen}>
       <ContextMenu.Trigger asChild disabled={!failed}>
-        <div tabIndex={failed ? 0 : undefined} aria-label={t("messageActions")}
+        <div ref={trigger} tabIndex={failed ? 0 : undefined} aria-label={t("messageActions")}
           className={cn("min-w-0 max-w-[82%] sm:max-w-[78%] [-webkit-touch-callout:none]", !failed && "opacity-70",
             !pending.image && chatBubbleClass, !pending.image && "bg-[var(--theme-color-chat-own-background)] text-[var(--theme-color-chat-own-foreground)]")}
           onKeyDown={(event) => {
@@ -46,15 +47,17 @@ export function ChatPendingMessage({ pending, blocked, onRetry, onDiscard }: {
               event.currentTarget.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: rect.left + rect.width / 2, clientY: rect.bottom }));
             }
           }}>
-          {pending.image ? <ChatImageContent src={pending.image.url} width={pending.image.width} height={pending.image.height} onOpen={() => setPreviewOpen(true)} />
+          {pending.image ? <ChatImageContent src={pending.image.url} width={pending.image.width} height={pending.image.height} onOpen={() => { if (!menuOpen) setPreviewOpen(true); }} />
             : <CommentContent content={pending.content} isDeleted={false} className="m-0 text-sm text-inherit leading-[22px]" />}
         </div>
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
-        <ContextMenu.Content className={menuClass} collisionPadding={12}>
+        <ContextMenu.Content className={menuClass} collisionPadding={12} onCloseAutoFocus={(event) => {
+          event.preventDefault(); trigger.current?.focus({ preventScroll: true });
+        }}>
           <ContextMenu.Group>
             <ChatCopyMenuItem content={pending.content} imageSource={pending.image?.url} className={itemClass} onCopied={() => setMenuOpen(false)} />
-            {pending.image && <ChatSaveImageMenuItem source={pending.image.url} contentType={pending.image.contentType} className={itemClass} />}
+            {pending.image && <ChatSaveImageMenuItem source={pending.image.url} contentType={pending.image.contentType} onPreview={() => setPreviewOpen(true)} className={itemClass} />}
             <ContextMenu.Item className={cn(itemClass, "text-[var(--theme-color-action-destructive-foreground)]")} onSelect={onDiscard}>
               <Trash2 size={16} aria-hidden="true" />{t("delete")}
             </ContextMenu.Item>
