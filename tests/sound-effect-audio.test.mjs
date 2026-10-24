@@ -92,11 +92,29 @@ test("sound effects share only pending loads and release buffers after playback"
     sources.at(-1)?.onended(); await playing;
   }
   const context = contextInstances.at(-1), originalResume = context.resume;
+  let finishResume;
+  context.state = "interrupted";
+  context.resume = () => new Promise(resolve => { finishResume = () => { context.state = "running"; resolve(); }; });
+  const beforeRecovery = sources.length;
+  const recovering = playIndependentSoundEffect("/voice", new AbortController().signal, Date.now() + 3000);
+  await new Promise(setImmediate);
+  assert.equal(sources.length, beforeRecovery, "a cached voice waits for asynchronous audio recovery");
+  finishResume(); await new Promise(setImmediate);
+  assert.equal(sources.length, beforeRecovery + 1, "the current voice starts once recovery completes");
+  sources.at(-1).onended(); await recovering;
+
+  context.state = "interrupted";
+  const abortRecovery = new AbortController();
+  const cancelledRecovery = playIndependentSoundEffect("/voice", abortRecovery.signal, Date.now() + 3000);
+  await new Promise(setImmediate); abortRecovery.abort(); await cancelledRecovery;
+  finishResume(); await new Promise(setImmediate);
+  assert.equal(sources.length, beforeRecovery + 1, "recovery cannot resurrect a replaced effect");
+
   context.state = "interrupted";
   context.resume = () => new Promise(() => {});
   const sourceCount = sources.length;
-  await playIndependentSoundEffect("/voice", new AbortController().signal, Date.now() + 3000);
-  assert.equal(sources.length, sourceCount, "blocked browser resumption neither waits nor queues later audio");
+  await playIndependentSoundEffect("/voice", new AbortController().signal, Date.now() + 20);
+  assert.equal(sources.length, sourceCount, "blocked resumption expires with the effect rather than queuing later audio");
   context.resume = originalResume;
   contextInstances.at(-1).state = "closed";
   await playSoundEffect("/voice");

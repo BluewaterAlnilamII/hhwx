@@ -21,19 +21,20 @@ import { ChatComposer, useChatAttachments } from "./ChatComposer";
 import { ChatMessageBubble } from "./ChatMessageBubble";
 import { ChatPendingMessage } from "./ChatPendingMessage";
 import ImageViewer from "@/components/ImageViewer";
-import { chatImageUrl, type ChatImage } from "@/lib/chat/chat-image-contract";
+import { chatImageUrl } from "@/lib/chat/chat-image-contract";
 
 type Props = { open: boolean; onOpenChange(open: boolean): void; trigger: RefObject<HTMLButtonElement | null> };
 const ChatStampLayer = dynamic(() => import("./ChatStampLayer").then((module) => module.ChatStampLayer), { ssr: false });
 
-const ChatMessages = memo(function ChatMessages({ messages, userId, canModerate, busy, onDelete, onMute, onOpenImage }: {
+const ChatMessages = memo(function ChatMessages({ messages, userId, canModerate, busy, onDelete, onMute, onOpenImage, getImagePreview }: {
   messages: ChatMessage[];
   userId: string;
   canModerate: boolean;
   busy: boolean;
   onDelete(message: ChatMessage): void;
   onMute(userId: string, minutes: number | null): Promise<boolean>;
-  onOpenImage(image: ChatImage): void;
+  onOpenImage(source: string): void;
+  getImagePreview(messageId: string): string | undefined;
 }) {
   const t = useTranslations("chat");
   const locale = useLocale();
@@ -41,6 +42,7 @@ const ChatMessages = memo(function ChatMessages({ messages, userId, canModerate,
   return <>{rows.map(({ message, showTime, showAuthor }) => {
     const own = message.author.userId === userId;
     const author = message.author;
+    const imageSource = message.image ? getImagePreview(message.id) ?? chatImageUrl(message.image) : undefined;
     const avatar = resolveStoredAccountAvatarCardIdentity(author.avatarCardId, author.avatarCardServer);
     return <li key={message.id} data-message-id={message.id}>
       {showTime && <div className="flex justify-center py-3"><time dateTime={message.createdAt}
@@ -58,7 +60,7 @@ const ChatMessages = memo(function ChatMessages({ messages, userId, canModerate,
             <CommentPublicUid publicUid={author.publicUid} />
           </div>}
           <ChatMessageBubble message={message} own={own} canModerate={canModerate}
-            onOpenImage={() => { if (message.image) onOpenImage(message.image); }}
+            imageSource={imageSource} onOpenImage={() => { if (imageSource) onOpenImage(imageSource); }}
             busy={busy} onDelete={onDelete} onMute={onMute} />
         </div>
       </div>
@@ -83,8 +85,8 @@ function Conversation({ userId, open, images, session, state }: {
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState<ChatMessage | null>(null);
   const [deleteFailed, setDeleteFailed] = useState(false);
-  const [viewingImage, setViewingImage] = useState<ChatImage | null>(null);
-  const [showReconnecting, setShowReconnecting] = useState(false);
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const loading = open && (state.status === "paused" || state.status === "connecting" || state.status === "syncing" || state.loadingOlder);
   const deadline = Math.max(Date.parse(state.viewer?.nextSendAt ?? "") || 0, Date.parse(state.viewer?.mutedUntil ?? "") || 0);
   const stampDeadline = Date.parse(state.nextStampAt ?? "") || 0;
 
@@ -101,10 +103,6 @@ function Conversation({ userId, open, images, session, state }: {
     const timeout = window.setTimeout(() => setNow(Date.now()), Math.min(muted ? 2147483647 : 1000, Math.max(0, deadline - Date.now()) + 30));
     return () => window.clearTimeout(timeout);
   }, [deadline, open, state.status, state.viewer?.mutedUntil, now]);
-  useEffect(() => {
-    const timeout = window.setTimeout(() => setShowReconnecting(state.status === "connecting"), state.status === "connecting" ? 1500 : 0);
-    return () => window.clearTimeout(timeout);
-  }, [state.status]);
 
   const captureAnchor = () => {
     const el = scroll.current;
@@ -155,8 +153,8 @@ function Conversation({ userId, open, images, session, state }: {
 
   return <>
     <div className="relative flex min-h-0 flex-1 flex-col bg-[var(--theme-color-chat-background)]">
-      {showReconnecting && state.messages.length > 0 && <p role="status" className="absolute inset-x-0 top-2 z-10 text-center text-xs text-[var(--theme-color-text-muted)]"><span className="rounded-full bg-[var(--theme-color-control-background)] px-3 py-1">{t("reconnecting")}</span></p>}
-      <div ref={scroll} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 [overflow-anchor:none] sm:px-5"
+      {loading && <span role="status" aria-label={t("loading")} className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center"><LoadingSpinner /></span>}
+      <div ref={scroll} className="min-h-0 flex-1 select-none overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 [overflow-anchor:none] sm:px-5"
         aria-label={t("messages")} onScroll={() => {
           const el = scroll.current!;
           following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
@@ -167,14 +165,12 @@ function Conversation({ userId, open, images, session, state }: {
         {state.nextCursor && <div className="mb-4 text-center"><button type="button"
           className="min-h-10 rounded-full px-4 text-xs text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background)] disabled:opacity-50"
           disabled={state.loadingOlder} onClick={() => { following.current = false; captureAnchor(); void session.loadOlder(); }}>
-          {state.loadingOlder ? <LoadingSpinner /> : t("older")}
+          {t("older")}
         </button></div>}
-        {!state.messages.length && !state.pending.length && <div className="flex min-h-40 items-center justify-center py-12 text-sm text-[var(--theme-color-text-muted)]">
-          {state.status === "live" ? <p>{t("empty")}</p> : state.status !== "error" ? <span role="status"><LoadingSpinner /><span className="sr-only">{t("loading")}</span></span> : null}
-        </div>}
+        {state.status === "live" && !state.messages.length && !state.pending.length && <p className="flex min-h-40 items-center justify-center py-12 text-sm text-[var(--theme-color-text-muted)]">{t("empty")}</p>}
         <ol ref={list} className="flex flex-col">
           <ChatMessages messages={state.messages} userId={userId} canModerate={state.viewer?.canModerate ?? false}
-            busy={busy} onDelete={confirmDelete} onMute={mute} onOpenImage={setViewingImage} />
+            busy={busy} onDelete={confirmDelete} onMute={mute} onOpenImage={setViewingImage} getImagePreview={session.getImagePreview} />
           {state.pending.map((pending) => <ChatPendingMessage key={pending.clientRequestId} pending={pending} blocked={blocked}
             onRetry={() => void session.retry(pending.clientRequestId)} onDiscard={() => session.discard(pending.clientRequestId)} />)}
         </ol>
@@ -201,7 +197,7 @@ function Conversation({ userId, open, images, session, state }: {
         jumpLatest(); void sending; return true;
       }} />
     </div>
-    {viewingImage && <ImageViewer src={chatImageUrl(viewingImage)} crossOrigin="anonymous" label={t("image")} onClose={() => setViewingImage(null)}
+    {viewingImage && <ImageViewer src={viewingImage} crossOrigin="anonymous" label={t("image")} onClose={() => setViewingImage(null)}
       labels={{ close: t("closeImage"), instructions: t("imageInstructions"), previous: t("previousImage"), next: t("nextImage"), imageLoading: t("loading") }} />}
     <Dialog.Root open={!!deleting} onOpenChange={(value) => { if (!value && !busy) setDeleting(null); }}>
       <Dialog.Portal>

@@ -166,9 +166,20 @@ export async function playIndependentSoundEffect(sourceUrl: string, signal: Abor
   // Changing the iOS audio session can interrupt an already-unlocked context.
   const releaseAudioSession = claimAmbientBrowserAudioSession();
   try {
-    // Incoming effects must not wait indefinitely for a new browser playback gesture.
-    if (context.state !== "running") void context.resume().catch(() => {});
+    const resuming = context.state === "running" ? Promise.resolve() : context.resume().catch(() => {});
     const buffer = await loadSoundEffectAudioBuffer(sourceUrl, context);
+    if (signal.aborted || Date.now() >= startBefore) return;
+    if (context.state !== "running") await new Promise<void>((resolve) => {
+      const finish = () => {
+        clearTimeout(timer);
+        signal.removeEventListener("abort", finish);
+        resolve();
+      };
+      // A current effect may wait for recovery, but never for a later playback gesture.
+      const timer = setTimeout(finish, Math.max(0, startBefore - Date.now()));
+      signal.addEventListener("abort", finish, { once: true });
+      void resuming.then(finish);
+    });
     if (signal.aborted || Date.now() >= startBefore || context.state !== "running") return;
 
     await new Promise<void>((resolve, reject) => {

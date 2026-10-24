@@ -309,12 +309,14 @@ test("older image acknowledgement cannot clear a newer text quota; logout aborts
 
 function batchHarness() {
   const calls=[],saved=[],uploads=new Map(); let failCommit=0,holdUpload=null,echo=null,quotaAt=0;
+  let readHistory=async()=>({messages:[...saved],nextCursor:null});
   let number=0;
   const session=new ChatSession(actor,{
     transport(){return {connect(){},disconnect(){}};},
     async uploadImage(upload){calls.push({kind:'put',id:upload.receipt});if(holdUpload)await holdUpload;},
     async request(path,init){
       if(path==='/api/chat/connection')return {token:'test',url:'ws://local',viewer:{userId:actor,canModerate:false,mutedUntil:null,nextSendAt:null}};
+      if(!init.method)return readHistory();
       const body=JSON.parse(init.body),id=body.clientRequestId;
       if(path.endsWith('/upload')){
         calls.push({kind:'authorize',id});uploads.set(id,{...body.image,key:`user/images/temporary/${actor}/${id}/${body.image.hash}.png`});
@@ -328,9 +330,80 @@ function batchHarness() {
       return {...result,messageId:id,clientRequestId:id,message:current,nextSendAt:saved.length===quotaAt?new Date(Date.now()+60000).toISOString():null};
     }
   });
-  return {session,calls,saved,setFailure(n){failCommit=n;},exhaustQuotaAfter(n){quotaAt=n;},hold(promise){holdUpload=promise;},confirmByEcho(){echo=session.receive;}};
+  return {session,calls,saved,setFailure(n){failCommit=n;},exhaustQuotaAfter(n){quotaAt=n;},hold(promise){holdUpload=promise;},readWith(fn){readHistory=fn;},confirmByEcho(){echo=session.receive;}};
 }
 const prepared=()=>({...metadata,blob:new Blob(['image'])});
+
+test('confirmation keeps the displayed local image and atomically replaces the pending row',async(t)=>{
+  const revoked=[];t.mock.method(URL,'revokeObjectURL',url=>revoked.push(url));
+  const h=batchHarness();await h.session.activate();let release;h.hold(new Promise(resolve=>{release=resolve;}));
+  const sending=h.session.send([prepared()]);
+  const pending=h.session.getSnapshot().pending[0],url=pending.image.url;
+  const states=[];const unsubscribe=h.session.subscribe(()=>{
+    const snapshot=h.session.getSnapshot();
+    states.push({pending:snapshot.pending.some(p=>p.clientRequestId===pending.clientRequestId),
+      saved:snapshot.messages.some(m=>m.clientRequestId===pending.clientRequestId)});
+  });
+  release();await sending;
+  assert.ok(states.every(s=>s.pending!==s.saved),'every notification has exactly one pending or confirmed row');
+  assert.equal(h.session.getImagePreview(h.saved[0].id),url,'confirmation reuses the original object URL');
+  assert.deepEqual(revoked,[],'the displayed image is not released on confirmation');
+  unsubscribe();h.session.pause(true);
+  assert.deepEqual(revoked,[url],'closing the panel releases confirmed previews');
+  assert.equal(h.session.getSnapshot().messages[0].id,h.saved[0].id,'closing retains the record without its local image file');
+  assert.equal(h.session.getImagePreview(h.saved[0].id),undefined);h.session.dispose();
+  assert.deepEqual(revoked,[url],'each preview is released once');
+});
+
+test('echoes, reconnects and duplicate replies preserve previews; deletion and history eviction release them',async(t)=>{
+  const revoked=[];t.mock.method(URL,'revokeObjectURL',url=>revoked.push(url));
+  const h=batchHarness();await h.session.activate();h.confirmByEcho();
+  await h.session.send([prepared()]);
+  const saved=h.saved[0],url=h.session.getImagePreview(saved.id);assert.ok(url);
+  await h.session.syncLatest();h.session.receive({type:'message.created',message:saved});
+  assert.equal(h.session.getImagePreview(saved.id),url);assert.deepEqual(revoked,[]);
+  h.session.receive({type:'message.deleted',messageId:saved.id,deletedAt:new Date().toISOString()});
+  assert.equal(h.session.getImagePreview(saved.id),undefined);assert.deepEqual(revoked,[url]);
+  h.session.receive({type:'message.created',message:saved});
+  assert.equal(h.session.getSnapshot().messages.length,0,'a late acknowledgement cannot restore a deleted image');
+
+  await h.session.send([prepared()]);const next=h.saved.at(-1),nextUrl=h.session.getImagePreview(next.id);assert.ok(nextUrl);
+  h.saved.splice(0);await h.session.syncLatest();
+  assert.equal(h.session.getImagePreview(next.id),undefined);assert.deepEqual(revoked,[url,nextUrl]);
+  h.session.dispose();assert.deepEqual(revoked,[url,nextUrl]);
+});
+
+test('an older history response cannot release a just-confirmed preview; closed panels do not retain completed uploads',async(t)=>{
+  const revoked=[];t.mock.method(URL,'revokeObjectURL',url=>revoked.push(url));
+  const h=batchHarness();await h.session.activate();let finishHistory;
+  h.readWith(()=>new Promise(resolve=>{finishHistory=resolve;}));
+  const syncing=h.session.syncLatest();await h.session.send([prepared()]);
+  const saved=h.saved[0],url=h.session.getImagePreview(saved.id);assert.ok(url);
+  finishHistory({messages:[],nextCursor:null});await syncing;
+  assert.equal(h.session.getImagePreview(saved.id),url);assert.deepEqual(revoked,[]);
+  assert.equal(h.session.getSnapshot().messages[0].id,saved.id);
+  h.session.pause(true);assert.deepEqual(revoked,[url]);
+
+  await h.session.activate();let finishUpload;h.hold(new Promise(resolve=>{finishUpload=resolve;}));
+  const sending=h.session.send([prepared()]),pending=h.session.getSnapshot().pending[0];
+  h.session.pause(true);finishUpload();await sending;
+  assert.equal(h.session.getImagePreview(h.saved.at(-1).id),undefined);
+  assert.deepEqual(revoked,[url,pending.image.url]);h.session.dispose();
+});
+
+test('confirmed preview ownership stays bounded with both the visible window and unseen tail',async(t)=>{
+  let created=0;const revoked=[];
+  t.mock.method(URL,'createObjectURL',()=>`blob:window-${created++}`);
+  t.mock.method(URL,'revokeObjectURL',url=>revoked.push(url));
+  const h=batchHarness();await h.session.activate();await h.session.syncLatest();
+  for(let i=0;i<301;i++)await h.session.send([prepared()]);
+  assert.equal(created-revoked.length,300);assert.equal(h.session.getImagePreview(h.saved[0].id),undefined);
+  h.session.setFollowing(false);
+  for(let i=0;i<301;i++)await h.session.send([prepared()]);
+  assert.equal(created-revoked.length,600,'only the bounded visible window and tail keep previews');
+  assert.equal(h.session.getImagePreview(h.saved[301].id),undefined);
+  h.session.dispose();assert.equal(created,revoked.length);assert.equal(new Set(revoked).size,created);
+});
 
 test('a submission saves images in order then its text, while a later text remains independent',async()=>{
   const h=batchHarness();let release;h.hold(new Promise(resolve=>{release=resolve;}));

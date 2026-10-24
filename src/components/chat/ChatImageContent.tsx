@@ -14,9 +14,9 @@ export function ChatImageContent({ src, width, height, compact = false, onOpen }
   const content = failed === src
     ? <span className="absolute inset-0 flex items-center justify-center bg-[var(--theme-color-control-background)] p-2 text-center text-xs text-[var(--theme-color-text-muted)]">{common("states.imageUnavailable")}</span>
     : <LoadingImage src={src} width={width} height={height} alt={t("image")} loadingLabel={t("loading")}
-      crossOrigin="anonymous" loading="lazy" decoding="async" draggable={false} className="block h-full w-full object-contain"
+      crossOrigin="anonymous" loading="lazy" decoding="async" draggable={false} className="block h-full w-full select-none object-contain [-webkit-touch-callout:none]"
       onError={() => setFailed(src)} />;
-  const className = "relative block max-w-full shrink-0 overflow-hidden rounded-xl";
+  const className = "relative block max-w-full shrink-0 select-none overflow-hidden rounded-xl [-webkit-touch-callout:none]";
   return onOpen ? <button type="button" className={className} style={style} onClick={onOpen} aria-label={t("openImage")}>{content}</button>
     : <div className={className} style={style}>{content}</div>;
 }
