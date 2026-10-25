@@ -56,7 +56,8 @@
     "test:auth": "node --import tsx --test tests/auth-errors.test.mjs tests/auth-registration.test.mjs tests/account-email-change.test.mjs tests/auth-server.test.mjs tests/email-otp-flow.test.mjs",
     "test:chat": "node --import tsx --test tests/chat-session.test.mjs tests/chat-server.test.mjs tests/chat-presentation.test.mjs tests/chat-images.test.mjs tests/chat-http.test.mjs tests/chat-stamps.test.mjs tests/chat-stamp-server.test.mjs tests/sound-effect-audio.test.mjs",
     "test:chat:realtime": "node scripts/test-chat-realtime.mjs",
-    "test:chat:postgres": "node --import tsx scripts/test-chat-postgres.mjs"
+    "test:chat:postgres": "node --import tsx scripts/test-chat-postgres.mjs",
+    "test:csp": "node --import tsx --test tests/csp.test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1156.0",

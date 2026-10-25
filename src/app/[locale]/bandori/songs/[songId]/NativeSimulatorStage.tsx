@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+// Install Pixi's static shader/uniform implementations for CSP without unsafe-eval.
+import "pixi.js/unsafe-eval";
 import {
   Application,
   Container,

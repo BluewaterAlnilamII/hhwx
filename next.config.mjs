@@ -97,7 +97,9 @@ function buildContentSecurityPolicyReportOnly() {
         // Signalsmith performs WebAssembly compilation inside its same-origin
         // AudioWorklet. Keep eval disallowed while permitting WASM explicitly.
         ["script-src", ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'", CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN, TURNSTILE_ORIGIN]],
-        ["connect-src", ["'self'", ...buildSupabaseConnectSources(), ...buildChatConnectSources(), ...buildImageSources()]],
+        // Pixi probes a data URL in its image Worker; chat saves local blob images.
+        // Turnstile also sends feedback from the page to its challenge origin.
+        ["connect-src", ["'self'", "data:", "blob:", TURNSTILE_ORIGIN, ...buildSupabaseConnectSources(), ...buildChatConnectSources(), ...buildImageSources()]],
         ["report-uri", [CSP_REPORT_ENDPOINT]],
     ];
 
@@ -105,10 +107,6 @@ function buildContentSecurityPolicyReportOnly() {
         .map(([directive, values]) => `${directive} ${values.join(" ")}`)
         .join("; ");
 }
-
-const HTML_ACCEPT_MATCHERS = [
-    { type: "header", key: "accept", value: ".*text/html.*" },
-];
 
 const BASE_SECURITY_HEADERS = [
     { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" },
@@ -146,12 +144,10 @@ const nextConfig = {
             },
             {
                 source: "/",
-                has: HTML_ACCEPT_MATCHERS,
                 headers: PAGE_SECURITY_HEADERS,
             },
             {
                 source: "/:path((?!api(?:/|$)).*)",
-                has: HTML_ACCEPT_MATCHERS,
                 headers: PAGE_SECURITY_HEADERS,
             },
             {

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NO_STORE_HTTP_CACHE_POLICY, withHttpCachePolicy } from "@/lib/api-cache";
 
 export const dynamic = "force-dynamic";
@@ -6,6 +7,7 @@ type JsonRecord = Record<string, unknown>;
 
 type NormalizedCspReport = {
   source: "legacy" | "reporting-api";
+  originalPolicyHash: string | null;
   documentUri: string | null;
   blockedUri: string | null;
   effectiveDirective: string | null;
@@ -15,7 +17,7 @@ type NormalizedCspReport = {
   lineNumber: number | null;
   columnNumber: number | null;
   statusCode: number | null;
-  sample: string | null;
+  sample: null;
   userAgent: string | null;
 };
 
@@ -31,6 +33,31 @@ function asNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function hashOriginalPolicy(value: unknown): string | null {
+  const policy = asString(value);
+  return policy ? createHash("sha256").update(policy).digest("hex") : null;
+}
+
+function sanitizeReportUri(value: unknown): string | null {
+  const uri = asString(value);
+  if (!uri) return null;
+  try {
+    const url = new URL(uri);
+    // Inline data, local file paths and extension identifiers are not log data.
+    if (!["http:", "https:", "ws:", "wss:"].includes(url.protocol)) {
+      return url.protocol.slice(0, -1);
+    }
+    url.username = "";
+    url.password = "";
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    // Browsers also report tokens such as inline, eval, wasm-eval and null.
+    return /^[a-z][a-z0-9+-]*$/i.test(uri) ? uri : null;
+  }
+}
+
 function normalizeLegacyCspReport(value: unknown, userAgent: string | null): NormalizedCspReport | null {
   if (!isJsonRecord(value)) {
     return null;
@@ -38,16 +65,18 @@ function normalizeLegacyCspReport(value: unknown, userAgent: string | null): Nor
 
   return {
     source: "legacy",
-    documentUri: asString(value["document-uri"]),
-    blockedUri: asString(value["blocked-uri"]),
+    originalPolicyHash: hashOriginalPolicy(value["original-policy"]),
+    documentUri: sanitizeReportUri(value["document-uri"]),
+    blockedUri: sanitizeReportUri(value["blocked-uri"]),
     effectiveDirective: asString(value["effective-directive"]),
     violatedDirective: asString(value["violated-directive"]),
     disposition: asString(value.disposition),
-    sourceFile: asString(value["source-file"]),
+    sourceFile: sanitizeReportUri(value["source-file"]),
     lineNumber: asNumber(value["line-number"]),
     columnNumber: asNumber(value["column-number"]),
     statusCode: asNumber(value["status-code"]),
-    sample: asString(value["script-sample"]),
+    // Script samples can contain user data; retain the log shape without the text.
+    sample: null,
     userAgent,
   };
 }
@@ -64,16 +93,17 @@ function normalizeReportingApiReport(value: unknown, fallbackUserAgent: string |
 
   return [{
     source: "reporting-api",
-    documentUri: asString(body.documentURL) ?? asString(value.url),
-    blockedUri: asString(body.blockedURL),
+    originalPolicyHash: hashOriginalPolicy(body.originalPolicy),
+    documentUri: sanitizeReportUri(body.documentURL) ?? sanitizeReportUri(value.url),
+    blockedUri: sanitizeReportUri(body.blockedURL),
     effectiveDirective: asString(body.effectiveDirective),
     violatedDirective: asString(body.violatedDirective),
     disposition: asString(body.disposition),
-    sourceFile: asString(body.sourceFile),
+    sourceFile: sanitizeReportUri(body.sourceFile),
     lineNumber: asNumber(body.lineNumber),
     columnNumber: asNumber(body.columnNumber),
     statusCode: asNumber(body.statusCode),
-    sample: asString(body.sample),
+    sample: null,
     userAgent: asString(value.user_agent) ?? fallbackUserAgent,
   }];
 }
@@ -122,15 +152,17 @@ function buildResponseHeaders() {
 }
 
 export async function POST(request: Request) {
+  const receivedAt = new Date().toISOString();
   const contentType = request.headers.get("content-type") ?? null;
   const userAgent = request.headers.get("user-agent");
   const payload = await readCspPayload(request);
   const reports = normalizeCspReports(payload, userAgent);
 
   if (reports.length > 0) {
-    console.warn("CSP report received:", JSON.stringify(reports));
+    console.warn("CSP report received:", JSON.stringify(reports.map((report) => ({ receivedAt, ...report }))));
   } else {
     console.warn("CSP report received with unsupported payload:", JSON.stringify({
+      receivedAt,
       contentType,
       hasPayload: payload !== null,
       userAgent,
