@@ -6,7 +6,6 @@ export const CHAT_DEFAULT_ROOM_ID = "main";
 export const chatChannel = (roomId: string) => `chat:${roomId}`;
 export const CHAT_CHANNEL = chatChannel(CHAT_DEFAULT_ROOM_ID);
 export const CHAT_MAX_LENGTH = 1000;
-export const CHAT_WINDOW_SIZE = 300;
 export const CHAT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 export const CHAT_UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/iu;
 
@@ -27,6 +26,7 @@ export type ChatMessage = {
 };
 export type ChatCursor = { createdAt: string; id: string };
 export type ChatPage = { messages: ChatMessage[]; nextCursor: ChatCursor | null };
+export type ChatNewerPage = { messages: ChatMessage[]; hasMore: boolean };
 export type ChatViewer = { userId: string; canModerate: boolean; mutedUntil: string | null; nextSendAt: string | null };
 export type ChatConnection = { token: string; url: string; channel?: string; viewer: ChatViewer };
 export type ChatEvent = { type: "message.created"; message: ChatMessage }
@@ -59,7 +59,7 @@ export function parseChatEvent(value: unknown): ChatEvent | null {
   return null;
 }
 
-export function compareChatMessages(a: ChatMessage, b: ChatMessage): number {
+export function compareChatMessages(a: ChatCursor, b: ChatCursor): number {
   // SQL returns fixed-width UTC microseconds; Date would discard cursor precision.
   return a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
 }

@@ -72,7 +72,7 @@ test("initial snapshot merges buffered events and deletes before rendering; even
   gate.resolve({ messages: [a, b], nextCursor: null }); await tick();
   assert.deepEqual(h.session.getSnapshot().messages.map((m) => m.id), [b.id]);
   for (let i = 0; i < 1000; i++) h.handlers.publication(created(message(i + 5)));
-  assert.equal(h.session.getSnapshot().messages.length, 300);
+  assert.equal(h.session.getSnapshot().messages.length, 1001);
   assert.equal(h.calls.length, 2);
   h.session.dispose();
 });
@@ -84,12 +84,15 @@ test("every reconnect reads one authoritative page including unpublished databas
   h.setRead(async () => ({ messages: [a,missed], nextCursor: null }));
   h.session.pause(); await h.session.activate(); h.handlers.subscribed(); await tick();
   assert.equal(h.calls.length, 3);
-  assert.equal(h.session.getSnapshot().messages.length,2,"committed but unpublished message is restored");
+  assert.deepEqual(h.session.getSnapshot().messages, [a, missed], "overlapping recovery merges without changing reading intent");
+  assert.equal(h.session.getSnapshot().newMessages, 1);
+  await h.session.jumpLatest();
+  assert.equal(h.session.getSnapshot().messages.length, 2, "navigation keeps the merged history");
   const gate = deferred(); h.setRead(() => gate.promise);
   h.handlers.connecting(); h.handlers.subscribed();
   h.handlers.publication(deleted(a));
   gate.resolve({ messages: [a], nextCursor: null }); await tick();
-  assert.equal(h.session.getSnapshot().messages.length, 0);
+  assert.deepEqual(h.session.getSnapshot().messages, [missed]);
   assert.equal(h.calls.length, 4);
   h.session.pause(true); await h.session.activate(); h.handlers.subscribed(); await tick();
   assert.equal(h.calls.length, 6, "reopening refreshes permissions and loads a new baseline");
@@ -275,51 +278,53 @@ test("delete response racing a snapshot and a late older page cannot restore del
   assert.equal(h.session.getSnapshot().messages.length, 0); h.session.dispose();
 });
 
-test("reading old messages keeps a bounded tail, jump overflow performs exactly one reload", async () => {
+test("reading old messages appends every new publication without following or querying on jump", async () => {
   const h = harness(); await h.start(); h.session.setFollowing(false);
-  for (let i = 0; i < 500; i++) h.handlers.publication(created(message(i)));
-  assert.equal(h.session.getSnapshot().messages.length, 0);
-  assert.equal(h.session.getSnapshot().newMessages, 300);
-  await h.session.jumpLatest(); assert.equal(h.calls.length, 3); h.session.dispose();
+  const rows = Array.from({length: 1200}, (_, i) => message(i));
+  for (const row of rows) h.handlers.publication(created(row));
+  assert.deepEqual(h.session.getSnapshot().messages, rows);
+  assert.equal(h.session.getSnapshot().following, false);
+  assert.equal(h.session.getSnapshot().newMessages, rows.length);
+  await h.session.jumpLatest();
+  assert.deepEqual(h.session.getSnapshot().messages, rows);
+  assert.equal(h.calls.length, 2); h.session.dispose();
 });
 
-test("an older bounded window exposes the jump action even without new publications", async () => {
+test("loading older history retains the newest rows without creating a forward gap", async () => {
   const h = harness();
-  const latest = Array.from({ length: 300 }, (_, index) => message(index + 100));
+  const latest = Array.from({ length: 600 }, (_, index) => message(index + 100));
+  const older = message(1);
   h.setRead(async () => ({ messages: latest, nextCursor: { createdAt: latest[0].createdAt, id: latest[0].id } }));
   await h.start();
-  h.setRead(async () => ({ messages: [message(1)], nextCursor: null }));
+  h.setRead(async () => ({ messages: [older], nextCursor: null }));
   await h.session.loadOlder();
+  assert.deepEqual(h.session.getSnapshot().messages, [older, ...latest]);
+  assert.equal(h.session.getSnapshot().nextCursor, null);
   assert.equal(h.session.getSnapshot().newMessages, 0);
-  assert.equal(h.session.getSnapshot().hasNewerMessages, true);
-  h.session.setFollowing(true);
-  assert.equal(h.session.getSnapshot().hasNewerMessages, true, "the end of old history is not the latest page");
-  h.setRead(async () => ({ messages: latest, nextCursor: null }));
-  await h.session.jumpLatest();
   assert.equal(h.session.getSnapshot().hasNewerMessages, false);
-  assert.equal(h.calls.length, 4, "open, first page, older page, one explicit latest read");
   h.session.dispose();
 });
 
-test("evicting old rows advances pagination, including an initially complete history and a buffered tail", async () => {
+test("live and buffered arrivals preserve loaded history and its older-page cursor", async () => {
   for (const initialHasOlder of [false, true]) for (const tail of [false, true]) {
-    const h = harness(), all = Array.from({ length: 750 }, (_, i) => message(i));
+    const h = harness(), all = Array.from({ length: 950 }, (_, i) => message(i));
     const cursor = (m) => ({ id: m.id, createdAt: m.createdAt });
     h.setRead(async () => ({ messages: all.slice(350, 400), nextCursor: initialHasOlder ? cursor(all[350]) : null }));
     await h.start();
     if (tail) h.session.setFollowing(false);
-    const end = tail ? 700 : 750;
+    const end = tail ? 900 : 950;
     for (const m of all.slice(400, end)) h.handlers.publication(created(m));
     if (tail) await h.session.jumpLatest();
-    const first = end - 300;
-    assert.deepEqual(h.session.getSnapshot().nextCursor, cursor(all[first]));
-    assert.equal(h.calls.length, 2, "moving the cursor does not request history");
+    assert.deepEqual(h.session.getSnapshot().messages, all.slice(350, end));
+    assert.deepEqual(h.session.getSnapshot().nextCursor, initialHasOlder ? cursor(all[350]) : null);
+    assert.equal(h.calls.length, 2);
     h.setRead(async (path) => {
-      assert.equal(new URL(path, "http://local").searchParams.get("before"), `${all[first].createdAt}|${all[first].id}`);
-      return { messages: all.slice(first - 50, first), nextCursor: cursor(all[first - 50]) };
+      assert.equal(new URL(path, "http://local").searchParams.get("before"), `${all[350].createdAt}|${all[350].id}`);
+      return { messages: all.slice(300, 350), nextCursor: cursor(all[300]) };
     });
     await h.session.loadOlder();
-    assert.deepEqual(h.session.getSnapshot().messages.map(m => m.id), all.slice(first - 50, end - 50).map(m => m.id));
+    assert.deepEqual(h.session.getSnapshot().messages, all.slice(initialHasOlder ? 300 : 350, end));
+    assert.equal(h.calls.length, initialHasOlder ? 3 : 2);
     h.session.dispose();
   }
 });
@@ -433,4 +438,257 @@ test("late connection metadata cannot clear quota received from an independent s
   assert.equal(h.session.getSnapshot().viewer.nextSendAt,deadline);
   h.session.setDraft("blocked");await h.session.send();assert.equal(h.calls.filter(c=>c.method==="POST"&&c.path.endsWith("messages")).length,1);
   h.session.dispose();
+});
+
+test('recovery preserves the reading segment and pages forward without gaps', async () => {
+  const h = harness(), rows = Array.from({length: 780}, (_, i) => message(i));
+  let available = rows.slice(0, 50), afterCalls = 0;
+  h.setRead(async (path) => {
+    const after = new URL(path, 'http://local').searchParams.get('after');
+    if (after) {
+      afterCalls++;
+      const id = after.split('|')[1], index = available.findIndex(m => m.id === id);
+      return {messages: available.slice(index + 1, index + 51), hasMore: available.length > index + 51};
+    }
+    return {messages: available.slice(-50), nextCursor: available.length > 50 ? available.at(-50) : null};
+  });
+  await h.start();
+  h.session.pause(); available = rows; await h.session.activate(); h.handlers.subscribed(); await tick();
+  assert.deepEqual(h.session.getSnapshot().messages, rows.slice(0, 50));
+  assert.equal(h.session.getSnapshot().following, false);
+  assert.ok(h.session.getSnapshot().newMessages);
+  const seen = new Set(rows.slice(0, 50).map(m => m.id));
+  while (h.session.getSnapshot().hasNewerMessages) {
+    await Promise.all([h.session.loadNewer(), h.session.loadNewer()]);
+    h.session.getSnapshot().messages.forEach(m => seen.add(m.id));
+    assert.equal(h.session.getSnapshot().messages.length, seen.size);
+    assert.ok(h.session.getSnapshot().newMessages, 'loading is not reading the bottom');
+  }
+  assert.equal(afterCalls, 14); assert.equal(seen.size, 780);
+  assert.equal(h.session.getSnapshot().following, false);
+  h.session.setFollowing(true);
+  assert.equal(h.session.getSnapshot().newMessages, 0);
+  h.handlers.publication(created(message(800)));
+  assert.equal(h.session.getSnapshot().messages.at(-1).id, message(800).id);
+  h.session.dispose();
+});
+
+test('recovery reads one latest page regardless of retained history and leaves offline deletes until reload', async () => {
+  const h = harness(), rows = Array.from({length: 2501}, (_, i) => message(i));
+  h.setRead(async () => ({messages: rows.slice(0, 50), nextCursor: null})); await h.start();
+  for (const row of rows.slice(50, 2500)) h.handlers.publication(created(row));
+  const before = h.calls.length;
+  h.setRead(async (path, init) => {
+    assert.equal(path, '/api/chat/messages'); assert.equal(init.method, undefined); assert.equal(init.body, undefined);
+    h.handlers.publication(deleted(rows[200]));
+    return {messages: rows.slice(-50), nextCursor: rows.at(-50)};
+  });
+  h.session.pause(); await h.session.activate(); h.handlers.subscribed(); await tick();
+  assert.equal(h.calls.length, before + 1);
+  assert.deepEqual(h.session.getSnapshot().messages, rows.filter(m => m.id !== rows[200].id));
+  assert.ok(h.session.getSnapshot().messages.some(m => m.id === rows[2].id), 'unqueried old rows remain cached');
+  assert.equal(h.session.getSnapshot().following, false);
+  await h.session.jumpLatest();
+  assert.equal(h.session.getSnapshot().messages.length, 2500, 'jumping a continuous list does not replace it');
+  assert.equal(h.calls.length, before + 1);
+  h.session.pause(true); await h.start();
+  assert.deepEqual(h.session.getSnapshot().messages, rows.slice(-50), 'reopening starts with fresh history');
+  h.session.dispose();
+});
+
+test('pausing recovery discards the late result', async () => {
+  const h = harness(), rows = Array.from({length: 80}, (_, i) => message(i)), gate = deferred();
+  h.setRead(async () => ({messages: rows.slice(0, 50), nextCursor: null})); await h.start();
+  h.setRead(() => gate.promise);
+  const reading = h.session.syncLatest(); h.session.pause();
+  gate.resolve({messages: rows.slice(-50), nextCursor: rows.at(-50)}); await reading;
+  assert.deepEqual(h.session.getSnapshot().messages, rows.slice(0, 50));
+  h.session.dispose();
+});
+
+test('publications buffered during overlapping recovery append without creating a gap', async () => {
+  const h = harness(), rows = Array.from({length: 80}, (_, i) => message(i)), gate = deferred();
+  h.setRead(async () => ({messages: rows.slice(0, 50), nextCursor: null})); await h.start();
+  h.setRead(() => gate.promise);
+  h.session.pause(); await h.session.activate(); h.handlers.subscribed();
+  for (const row of rows.slice(60)) h.handlers.publication(created(row));
+  gate.resolve({messages: rows.slice(10, 60), nextCursor: rows[10]}); await tick();
+  assert.deepEqual(h.session.getSnapshot().messages, rows);
+  assert.equal(h.session.getSnapshot().hasNewerMessages, false);
+  assert.equal(h.session.getSnapshot().following, false);
+  h.session.dispose();
+});
+
+test('an out-of-order publication inside a gap does not skip the remaining forward pages', async () => {
+  const h = harness(), rows = Array.from({length: 200}, (_, i) => message(i));
+  h.setRead(async () => ({messages: rows.slice(0, 50), nextCursor: null})); await h.start();
+  h.setRead(async () => ({messages: rows.slice(150), nextCursor: rows[150]}));
+  h.session.pause(); await h.session.activate(); h.handlers.subscribed(); await tick();
+  h.handlers.publication(created(rows[75]));
+  h.setRead(async path => {
+    const id = new URL(path, 'http://local').searchParams.get('after').split('|')[1];
+    const index = rows.findIndex(m => m.id === id) + 1;
+    return {messages: rows.slice(index, index + 50), hasMore: index + 50 < rows.length};
+  });
+  await h.session.loadNewer();
+  assert.deepEqual(h.session.getSnapshot().messages, rows.slice(0, 100));
+  assert.equal(h.session.getSnapshot().hasNewerMessages, true);
+  while (h.session.getSnapshot().hasNewerMessages) await h.session.loadNewer();
+  assert.deepEqual(h.session.getSnapshot().messages, rows);
+  h.session.dispose();
+});
+
+test('no-news recovery stays continuous; deleting the latest row makes its predecessor the bottom', async () => {
+  const h = harness(), rows = Array.from({length: 90}, (_, i) => message(i));
+  h.setRead(async () => ({messages: rows.slice(0, 50), nextCursor: null})); await h.start();
+  h.session.pause(); await h.session.activate(); h.handlers.subscribed(); await tick();
+  assert.equal(h.session.getSnapshot().newMessages, 0);
+  h.setRead(async () => ({messages: rows.slice(-50), nextCursor: rows[40]}));
+  h.handlers.connecting(); h.handlers.subscribed(); await tick();
+  assert.deepEqual(h.session.getSnapshot().messages, rows);
+  assert.equal(h.session.getSnapshot().hasNewerMessages, false);
+  h.handlers.publication(deleted(rows.at(-1)));
+  await h.session.jumpLatest();
+  assert.deepEqual(h.session.getSnapshot().messages, rows.slice(0, -1));
+  assert.equal(h.calls.length, 4);
+  h.session.dispose();
+});
+
+test('deleting a disconnected latest segment cannot replace the reading list with an empty cache', async () => {
+  const h = harness(), rows = Array.from({length: 200}, (_, i) => message(i));
+  h.setRead(async () => ({messages: rows.slice(0, 50), nextCursor: null})); await h.start();
+  h.setRead(async () => ({messages: rows.slice(-50), nextCursor: rows[150]}));
+  h.session.pause(); await h.session.activate(); h.handlers.subscribed(); await tick();
+  for (const row of rows.slice(-50)) h.handlers.publication(deleted(row));
+  assert.deepEqual(h.session.getSnapshot().messages, rows.slice(0, 50));
+  h.setRead(async () => ({messages: rows.slice(100, 150), nextCursor: rows[100]}));
+  await h.session.jumpLatest();
+  assert.deepEqual(h.session.getSnapshot().messages, rows.slice(100, 150));
+  assert.equal(h.session.getSnapshot().following, true);
+  h.session.dispose();
+});
+
+test('failed forward page retries at the same cursor; explicit latest cancels a stale page', async () => {
+  const h = harness(), rows = Array.from({length: 170}, (_, i) => message(i));
+  h.setRead(async () => ({messages: rows.slice(0, 50), nextCursor: null})); await h.start();
+  h.setRead(async () => ({messages: rows.slice(-50), nextCursor: rows[120]}));
+  h.session.pause(); await h.session.activate(); h.handlers.subscribed(); await tick();
+  h.setRead(async () => {throw new Error('offline');}); await h.session.loadNewer();
+  assert.equal(h.session.getSnapshot().newerError, true);
+  const cursorPath = h.calls.at(-1).path, gate = deferred(); h.setRead(() => gate.promise);
+  const loading = h.session.loadNewer(); assert.equal(h.calls.at(-1).path, cursorPath);
+  await h.session.jumpLatest();
+  gate.resolve({messages: rows.slice(50, 100), hasMore: true}); await loading;
+  assert.deepEqual(h.session.getSnapshot().messages, rows.slice(-50));
+  assert.equal(h.session.getSnapshot().following, true); assert.equal(h.session.getSnapshot().loadingNewer, false);
+  h.session.dispose();
+});
+
+test('cancelling navigation during recovery preserves the original reading segment', async () => {
+  const h = harness(), rows = Array.from({length: 60}, (_, i) => message(i));
+  h.setRead(async () => ({messages: rows.slice(0, 10), nextCursor: null})); await h.start();
+  const gate = deferred(); h.setRead(() => gate.promise);
+  h.session.pause(); await h.session.activate(); h.handlers.subscribed();
+  await h.session.jumpLatest(); h.session.setFollowing(false);
+  gate.resolve({messages: rows.slice(-50), nextCursor: rows[10]}); await tick();
+  assert.deepEqual(h.session.getSnapshot().messages, rows.slice(0, 10));
+  assert.equal(h.session.getSnapshot().following, false);
+  h.setRead(async path => {
+    assert.ok(decodeURIComponent(path).includes(rows[9].id));
+    return {messages: rows.slice(10), hasMore: false};
+  });
+  await h.session.loadNewer(); assert.deepEqual(h.session.getSnapshot().messages, rows);
+  h.session.setFollowing(true); assert.equal(h.session.getSnapshot().following, true);
+  h.session.dispose();
+});
+
+test('forward reads merge live arrivals, suppress late deleted rows and advance past an empty filtered page', async () => {
+  const h = harness(), rows = Array.from({length:170}, (_,i)=>message(i));
+  h.setRead(async()=>({messages:rows.slice(0,50),nextCursor:null})); await h.start();
+  h.setRead(async()=>({messages:rows.slice(-50),nextCursor:rows[120]}));
+  h.session.pause();await h.session.activate();h.handlers.subscribed();await tick();
+  const gate=deferred();h.setRead(()=>gate.promise);const load=h.session.loadNewer();
+  rows.slice(50,100).forEach(m=>h.handlers.publication(deleted(m)));
+  const fresh=message(175);h.handlers.publication(created(fresh));
+  gate.resolve({messages:rows.slice(50,100),hasMore:true});await load;
+  assert.deepEqual(h.session.getSnapshot().messages,rows.slice(0,50));
+  h.setRead(async path=>{assert.ok(decodeURIComponent(path).includes(rows[99].id));return {messages:rows.slice(100,150),hasMore:true};});
+  await h.session.loadNewer();
+  assert.equal(h.session.getSnapshot().messages.at(-1).id,fresh.id);
+  assert.equal(new Set(h.session.getSnapshot().messages.map(m=>m.id)).size,121);
+  h.session.dispose();
+});
+
+test('an initially empty board merges its first recovered messages without a gap', async () => {
+  const h=harness();await h.start();const row=message(1);
+  h.setRead(async()=>({messages:[row],nextCursor:null}));
+  h.session.pause();await h.session.activate();h.handlers.subscribed();await tick();
+  assert.deepEqual(h.session.getSnapshot().messages,[row]);
+  assert.equal(h.session.getSnapshot().hasNewerMessages,false);
+  await h.session.loadNewer();assert.deepEqual(h.session.getSnapshot().messages,[row]);
+  h.session.dispose();
+});
+
+test('sending during connecting or syncing preserves the gap and defers navigation until recovery completes', async () => {
+  for (const phase of ['connecting', 'syncing']) for (const keepReading of [false, true]) {
+    const h = harness(), rows = Array.from({length: 200}, (_, i) => message(i));
+    let available = rows.slice(0, 50);
+    const page = () => ({messages: available.slice(-50), nextCursor: available.at(-50)});
+    h.setRead(async () => page()); await h.start();
+    h.session.pause(); available = [...rows]; await h.session.activate();
+    const gate = deferred();
+    if (phase === 'syncing') { h.setRead(() => gate.promise); h.handlers.subscribed(); }
+    h.setWrite(async (_path, init) => {
+      const body = JSON.parse(init.body), saved = {...message(201, body.content), clientRequestId: body.clientRequestId};
+      available.push(saved);
+      return {message: saved, messageId: saved.id, clientRequestId: body.clientRequestId, deleted: false, nextSendAt: null};
+    });
+    h.session.setDraft('send during recovery'); const sending = h.session.send();
+    await h.session.jumpLatest(); await sending;
+    assert.deepEqual(h.session.getSnapshot().messages, rows.slice(0, 50));
+    assert.equal(h.session.getSnapshot().pending.length, 0, 'HTTP sending completes independently');
+    if (keepReading) h.session.setFollowing(false);
+    if (phase === 'connecting') h.handlers.subscribed(); else gate.resolve(page());
+    await tick();
+    if (keepReading) {
+      assert.deepEqual(h.session.getSnapshot().messages, rows.slice(0, 50));
+      h.setRead(async path => {
+        const id = new URL(path, 'http://local').searchParams.get('after').split('|')[1];
+        const start = available.findIndex(m => m.id === id) + 1;
+        return {messages: available.slice(start, start + 50), hasMore: start + 50 < available.length};
+      });
+      while (h.session.getSnapshot().hasNewerMessages) await h.session.loadNewer();
+      assert.deepEqual(h.session.getSnapshot().messages, available, 'all intervening messages remain reachable');
+    } else {
+      assert.deepEqual(h.session.getSnapshot().messages, available.slice(-50));
+      assert.equal(h.session.getSnapshot().following, true);
+    }
+    h.session.dispose();
+  }
+});
+
+test('pagination is exclusive and appends in either direction without discarding loaded rows', async () => {
+  for (const direction of ['older', 'newer']) {
+    const h = harness(), rows = Array.from({length: 600}, (_, i) => message(i));
+    const original = rows.slice(50, 550), before = original[0];
+    h.setRead(async () => ({messages: original, nextCursor: before})); await h.start();
+    h.setRead(async () => ({messages: rows.slice(-50), nextCursor: rows[550]}));
+    h.session.pause(); await h.session.activate(); h.handlers.subscribed(); await tick();
+    const gate = deferred(); h.setRead(() => gate.promise);
+    const method = direction === 'older' ? 'loadOlder' : 'loadNewer';
+    const response = direction === 'older' ? {messages: rows.slice(0, 50), nextCursor: null}
+      : {messages: rows.slice(550), hasMore: false};
+    const reading = h.session[method](), calls = h.calls.length;
+    assert.deepEqual(h.session.getSnapshot().messages, original, 'request start removes nothing');
+    await Promise.all([h.session.loadOlder(), h.session.loadNewer()]);
+    assert.equal(h.calls.length, calls, 'neither direction can start while a page is in flight');
+    h.session.setFollowing(true);
+    assert.equal(h.session.getSnapshot().following, false);
+    gate.resolve(response); await reading;
+    assert.deepEqual(h.session.getSnapshot().messages, direction === 'older' ? rows.slice(0, 550) : rows.slice(50));
+    assert.deepEqual(h.session.getSnapshot().nextCursor, direction === 'older' ? null : before);
+    assert.equal(h.session.getSnapshot().hasNewerMessages, direction === 'older');
+    assert.equal(h.calls.length, calls, 'one completed page needs no retry');
+    h.session.dispose();
+  }
 });

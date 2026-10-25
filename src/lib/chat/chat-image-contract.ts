@@ -1,5 +1,6 @@
 export const CHAT_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
-export const CHAT_IMAGE_MAX_DIMENSION = 4096;
+export const CHAT_IMAGE_MAX_DIMENSION = 16383;
+export const CHAT_IMAGE_MAX_PIXELS = 16_777_216;
 export const CHAT_IMAGE_MAX_ATTACHMENTS = 10;
 export const CHAT_IMAGE_PREFIX = "user/images/temporary/";
 export const CHAT_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/apng"] as const;
@@ -14,6 +15,7 @@ export function isChatImageMetadata(value: unknown): value is ChatImageMetadata 
   const m = value as ChatImageMetadata;
   return Number.isSafeInteger(m.width) && m.width > 0 && m.width <= CHAT_IMAGE_MAX_DIMENSION
     && Number.isSafeInteger(m.height) && m.height > 0 && m.height <= CHAT_IMAGE_MAX_DIMENSION
+    && m.width * m.height <= CHAT_IMAGE_MAX_PIXELS
     && Number.isSafeInteger(m.bytes) && m.bytes > 0 && m.bytes <= CHAT_IMAGE_MAX_BYTES
     && CHAT_IMAGE_TYPES.includes(m.contentType) && typeof m.hash === "string" && /^[a-f0-9]{64}$/u.test(m.hash);
 }
