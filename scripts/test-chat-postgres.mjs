@@ -64,10 +64,10 @@ const server=await compile("../src/lib/chat/chat-server.ts",{
     auth:{getUser:async()=>({data:{user:{id:actor,is_anonymous:false}},error:null}),
       getClaims:async()=>({data:{claims:{sub:actor,iss:"https://local.example/auth/v1",aud:"authenticated",role:"authenticated",exp:Math.floor(Date.now()/1000)+7200}},error:null})},
     rpc:async(name,args)=>{
-      assert.ok(["send_chat_message","delete_chat_message","read_chat_messages","read_chat_viewer"].includes(name));
-      if(name==="read_chat_messages")rpcReads++;
+      assert.ok(["send_chat_message","delete_chat_message","read_chat_messages","read_chat_viewer","read_newer_chat_messages"].includes(name));
+      if(["read_chat_messages","read_newer_chat_messages"].includes(name))rpcReads++;
       const parameters=Object.entries(args).map(([k,v])=>{
-        assert.match(k,/^p_[a-z_]+$/);return `${k} => ${v==null?"null":"'"+String(v).replaceAll("'","''")+"'"}`;
+        assert.match(k,/^p_[a-z_]+$/);return `${k} => ${v==null?"null":"'"+(Array.isArray(v)?"{"+v.join(",")+"}":String(v)).replaceAll("'","''")+"'"}`;
       }).join(",");
       try{return{data:JSON.parse(await sql(`set role service_role; select public.${name}(${parameters});`)),error:null};}
       catch(error){return{data:null,error:{message:error.message.match(/ERROR:\s+(CHAT_[A-Z_]+)/)?.[1]??"database failure"}};}
@@ -75,7 +75,7 @@ const server=await compile("../src/lib/chat/chat-server.ts",{
   })},
 },{process:{env},console:{warn:(...args)=>warnings.push(args)},fetch:(...args)=>{publishAttempts++;return fetch(...args);}});
 const scheduled = new Set();
-const dependencies={"@/lib/api-response":responses,"@/lib/chat/chat-server":server,
+const dependencies={"@/lib/api-contracts":contracts,"@/lib/chat/chat-contract":chatContract,"@/lib/api-response":responses,"@/lib/chat/chat-server":server,
   "next/server":{after(callback){
     const task = new Promise((resolve) => setImmediate(resolve)).then(callback);
     scheduled.add(task);void task.finally(() => scheduled.delete(task));
@@ -163,13 +163,20 @@ try{
   const missed=await send();await finishPublications();env.CHAT_PUBLISH_API_KEY=key;
   assert.equal(seen(missed.messageId),0);assert.ok(!session.getSnapshot().messages.some((m)=>m.id===missed.messageId));
   const beforeReads=rpcReads;session.pause();await session.activate();
-  await until(()=>session.getSnapshot().status==="live"&&session.getSnapshot().messages.some((m)=>m.id===missed.messageId));
+  await until(()=>session.getSnapshot().status==="live");
+  assert.ok(session.getSnapshot().messages.some(m=>m.id===missed.messageId),"overlapping recovery merges directly");
+  assert.ok(session.getSnapshot().newMessages);
+  await session.jumpLatest();
+  assert.ok(session.getSnapshot().messages.some(m=>m.id===missed.messageId));
   assert.equal(lastRecovered,false);assert.equal(rpcReads,beforeReads+1);report.failedPublishRecoveredFromDatabase=true;
   env.CHAT_PUBLISH_API_KEY="intentionally-wrong";
   assert.equal((await api(`/api/chat/messages/${missed.messageId}`,{method:"DELETE"})).status,200);await finishPublications();env.CHAT_PUBLISH_API_KEY=key;
   assert.ok(session.getSnapshot().messages.some((m)=>m.id===missed.messageId));session.pause();await session.activate();
-  await until(()=>session.getSnapshot().status==="live"&&!session.getSnapshot().messages.some((m)=>m.id===missed.messageId));
-  assert.equal(lastRecovered,false);assert.equal(warnings.length,2);report.failedDeletePublishReconciled=true;
+  await until(()=>session.getSnapshot().status==="live");
+  assert.ok(session.getSnapshot().messages.some(m=>m.id===missed.messageId),"offline deletion stays cached until reload");
+  session.pause(true);await session.activate();await until(()=>session.getSnapshot().status==="live");
+  assert.ok(!session.getSnapshot().messages.some(m=>m.id===missed.messageId));
+  assert.equal(lastRecovered,false);assert.equal(warnings.length,2);report.offlineDeleteRemovedOnReopen=true;
   session.pause();await resetCooldown();const cached=await send();await finishPublications();
   env.CHAT_PUBLISH_API_KEY="intentionally-wrong";
   assert.equal((await api(`/api/chat/messages/${cached.messageId}`,{method:"DELETE"})).status,200);await finishPublications();env.CHAT_PUBLISH_API_KEY=key;

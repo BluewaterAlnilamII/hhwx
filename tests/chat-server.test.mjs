@@ -49,7 +49,7 @@ const request = (method="GET", body) => new Request("http://localhost/api/chat/m
 
 test("only main is public; unknown rooms stop before RPC, upload and broadcast", async () => {
   const h = harness();
-  const dependencies = { "@/lib/api-response": responses, "@/lib/chat/chat-server": h.server,
+  const dependencies = { "@/lib/api-contracts": contracts, "@/lib/chat/chat-contract": chatContract, "@/lib/api-response": responses, "@/lib/chat/chat-server": h.server,
     "@/lib/chat/chat-image-server": { issueChatImageUpload() { assert.fail("unexpected upload"); }, verifyChatImageUpload() { assert.fail("unexpected HEAD"); } },
     "@/lib/chat/chat-stamp-server": { requireChatStamp() { assert.fail("unexpected catalog read"); }, publishChatStamp() { assert.fail("unexpected stamp"); } } };
   assert.equal(h.server.requireChatRoom(request()), "main");
@@ -127,7 +127,7 @@ test("connection and history use the public JWT issuer even with an internal Sup
   const publicUrl = h.env.SUPABASE_URL;
   h.env.NEXT_PUBLIC_SUPABASE_URL = publicUrl;
   h.env.SUPABASE_URL = "http://internal-auth.test:8000";
-  const dependencies = { "@/lib/api-response": responses, "@/lib/chat/chat-server": h.server };
+  const dependencies = { "@/lib/api-contracts": contracts, "@/lib/chat/chat-contract": chatContract, "@/lib/api-response": responses, "@/lib/chat/chat-server": h.server };
   const connection = compile("../src/app/api/chat/connection/route.ts", dependencies);
   const messages = compile("../src/app/api/chat/messages/route.ts", dependencies);
   for (const [handler, method, rpc] of [[connection.POST, "POST", "read_chat_viewer"], [messages.GET, "GET", "read_chat_messages"]]) {
@@ -166,7 +166,7 @@ test("content, microsecond cursors and body byte limit reject bad input; DB inte
 test("message routes publish committed results once without readback and never publish rejected writes", async () => {
   const h=harness(); const saved={messageId:userId,deleted:false,message:{id:userId,content:"hi"}}; h.setData(saved);
   const route=compile("../src/app/api/chat/messages/route.ts",{
-    "@/lib/api-response":responses,"@/lib/chat/chat-server":h.server,
+    "@/lib/api-contracts":contracts,"@/lib/api-response":responses,"@/lib/chat/chat-server":h.server,
   });
   const result=await route.POST(request("POST",{clientRequestId:userId,content:" hi ",userId:"forged"}));
   assert.equal(result.status,200); assert.match(result.headers.get("cache-control"),/no-store/);
@@ -194,7 +194,7 @@ test("message routes publish committed results once without readback and never p
 test("failed publication preserves successful send and delete responses; failures never log payloads or keys", async () => {
   const h=harness(), saved={messageId:userId,deleted:false,message:{id:userId,content:"private message"}};
   h.setData(saved);
-  const route=compile("../src/app/api/chat/messages/route.ts",{"@/lib/api-response":responses,"@/lib/chat/chat-server":h.server});
+  const route=compile("../src/app/api/chat/messages/route.ts",{"@/lib/api-contracts":contracts,"@/lib/api-response":responses,"@/lib/chat/chat-server":h.server});
   for(const response of [() => Response.json({error:{code:102,message:"private upstream details"}}),
     () => new Response("private upstream details",{status:503}), () => new Response("not JSON"),
     () => { throw new Error("private connection details"); }]) {
@@ -205,7 +205,7 @@ test("failed publication preserves successful send and delete responses; failure
   }
   const deletion={type:"message.deleted",messageId:userId,deletedAt:new Date().toISOString()};
   h.setData(deletion);
-  const remove=compile("../src/app/api/chat/messages/[messageId]/route.ts",{"@/lib/api-response":responses,"@/lib/chat/chat-server":h.server});
+  const remove=compile("../src/app/api/chat/messages/[messageId]/route.ts",{"@/lib/api-contracts":contracts,"@/lib/api-response":responses,"@/lib/chat/chat-server":h.server});
   const deleted=await remove.DELETE(request("DELETE"),{params:Promise.resolve({messageId:userId})});
   assert.equal(deleted.status,200); assert.deepEqual((await deleted.json()).data,deletion);
   await remove.runAfter();
@@ -229,4 +229,17 @@ test("publish timeout aborts the single attempt without rejecting a saved mutati
   assert.ok(performance.now()-start<3500);
   assert.equal(h.publications.length,1); assert.equal(h.warnings.length,1);
   assert.equal(h.publications[0].signal.aborted,true);
+});
+
+test('forward reads validate cursors and authorization before invoking RPC', async () => {
+  const h = harness(), deps = {'@/lib/api-contracts':contracts,'@/lib/api-response':responses,
+    '@/lib/chat/chat-contract':chatContract,'@/lib/chat/chat-server':h.server};
+  const history = compile('../src/app/api/chat/messages/route.ts',deps);
+  const cursor = `2026-10-25T00:00:00.123456Z|${userId}`;
+  const get = query => history.GET(new Request(`http://localhost/api/chat/messages?${query}`,{headers:{authorization:'Bearer test'}}));
+  for(const query of ['after=', 'after=invalid', `before=${cursor}&after=${cursor}`]) assert.equal((await get(query)).status,400);
+  assert.equal((await get(`after=${cursor}`)).status,200);
+  assert.equal(h.calls.at(-1).name,'read_newer_chat_messages');
+  assert.equal(h.calls.at(-1).args.p_after_at,'2026-10-25T00:00:00.123456Z');
+  assert.equal((await history.GET(new Request('http://localhost/api/chat/messages?after='+cursor))).status,401);
 });

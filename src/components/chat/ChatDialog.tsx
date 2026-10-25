@@ -78,9 +78,9 @@ function Conversation({ userId, open, images, session, state }: {
   const profile = useAccountProfileStore((state) => state.userId === userId ? state.profile : null);
   const list = useRef<HTMLOListElement>(null);
   const following = useRef(true);
-  const previousStatus = useRef(state.status);
-  const anchor = useRef<{ id: string; top: number } | null>(null);
-  const [away, setAway] = useState(false);
+  const anchors = useRef<{ id: string; top: number }[]>([]);
+  const expectedScroll = useRef<number | null>(null);
+  const lastScroll = useRef(0);
   const [now, setNow] = useState(Date.now);
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState<ChatMessage | null>(null);
@@ -104,39 +104,54 @@ function Conversation({ userId, open, images, session, state }: {
     return () => window.clearTimeout(timeout);
   }, [deadline, open, state.status, state.viewer?.mutedUntil, now]);
 
-  const captureAnchor = () => {
+  const captureAnchor = useCallback(() => {
     const el = scroll.current;
     if (!el) return;
     const top = el.getBoundingClientRect().top;
-    const row = [...el.querySelectorAll<HTMLElement>("[data-message-id]")].find((item) => item.getBoundingClientRect().bottom > top);
-    anchor.current = row ? { id: row.dataset.messageId!, top: row.getBoundingClientRect().top - top } : null;
-  };
-  const preserveScroll = () => {
+    const rows = [...el.querySelectorAll<HTMLElement>("[data-message-id]")];
+    const index = rows.findIndex(item => item.getBoundingClientRect().bottom > top);
+    // Neighbours preserve the viewport when the first visible row is deleted offline.
+    anchors.current = [...rows.slice(Math.max(0, index)), ...rows.slice(0, Math.max(0, index)).reverse()]
+      .map(row => ({ id: row.dataset.messageId!, top: row.getBoundingClientRect().top - top }));
+  }, []);
+  const preserveScroll = useCallback(() => {
     const el = scroll.current;
     if (!el) return;
     if (following.current) el.scrollTop = el.scrollHeight;
-    else if (anchor.current) {
-      const row = el.querySelector<HTMLElement>(`[data-message-id="${anchor.current.id}"]`);
-      if (row) el.scrollTop += row.getBoundingClientRect().top - el.getBoundingClientRect().top - anchor.current.top;
+    else {
+      for (const anchor of anchors.current) {
+        const row = el.querySelector<HTMLElement>(`[data-message-id="${anchor.id}"]`);
+        if (!row) continue;
+        el.scrollTop += row.getBoundingClientRect().top - el.getBoundingClientRect().top - anchor.top;
+        break;
+      }
     }
-  };
+    expectedScroll.current = el.scrollTop;
+    lastScroll.current = el.scrollTop;
+    captureAnchor();
+  }, [captureAnchor]);
+  const checkPosition = useCallback(() => {
+    const el = scroll.current;
+    const current = session.getSnapshot();
+    if (!el || current.status !== "live" || current.loadingOlder || current.loadingNewer) return;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (!current.hasNewerMessages && distance <= 2) session.setFollowing(true);
+    if (current.hasNewerMessages && !current.newerError && distance < 120) void session.loadNewer();
+  }, [session]);
   useLayoutEffect(() => {
-    if (state.status === "live" && previousStatus.current === "syncing") {
-      following.current = true; anchor.current = null;
-    }
-    previousStatus.current = state.status;
+    following.current = state.following;
     preserveScroll();
-  }, [state.messages, state.pending, state.status, open]);
+    if (open) checkPosition();
+  }, [state.messages, state.pending, state.status, state.following, state.hasNewerMessages,
+    state.loadingOlder, state.loadingNewer, open, preserveScroll, checkPosition]);
   useEffect(() => {
-    const observer = new ResizeObserver(preserveScroll);
+    const observer = new ResizeObserver(() => { preserveScroll(); checkPosition(); });
     if (scroll.current) observer.observe(scroll.current);
     if (list.current) observer.observe(list.current);
     return () => observer.disconnect();
-  }, []);
+  }, [preserveScroll, checkPosition]);
   const jumpLatest = () => {
-    following.current = true; anchor.current = null; setAway(false);
     void session.jumpLatest();
-    preserveScroll();
   };
   const blocked = deadline > now;
   const muted = Date.parse(state.viewer?.mutedUntil ?? "") > now;
@@ -157,29 +172,37 @@ function Conversation({ userId, open, images, session, state }: {
       <div ref={scroll} className="min-h-0 flex-1 select-none overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 [overflow-anchor:none] sm:px-5"
         aria-label={t("messages")} onScroll={() => {
           const el = scroll.current!;
-          following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
-          setAway(!following.current);
-          session.setFollowing(following.current);
+          if (expectedScroll.current !== null && Math.abs(el.scrollTop - expectedScroll.current) < 1) {
+            expectedScroll.current = null; return;
+          }
+          expectedScroll.current = null;
+          const downward = el.scrollTop > lastScroll.current;
+          lastScroll.current = el.scrollTop;
+          const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
           captureAnchor();
+          session.setFollowing(downward && distance <= 2);
+          if (downward && distance < 120) void session.loadNewer();
         }}>
         {state.nextCursor && <div className="mb-4 text-center"><button type="button"
           className="min-h-10 rounded-full px-4 text-xs text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background)] disabled:opacity-50"
-          disabled={state.loadingOlder} onClick={() => { following.current = false; captureAnchor(); void session.loadOlder(); }}>
+          disabled={state.loadingOlder || state.loadingNewer || state.status !== "live"} onClick={() => { following.current = false; captureAnchor(); void session.loadOlder(); }}>
           {t("older")}
         </button></div>}
-        {state.status === "live" && !state.messages.length && !state.pending.length && <p className="flex min-h-40 items-center justify-center py-12 text-sm text-[var(--theme-color-text-muted)]">{t("empty")}</p>}
+        {state.status === "live" && !state.messages.length && !state.pending.length && !state.hasNewerMessages && <p className="flex min-h-40 items-center justify-center py-12 text-sm text-[var(--theme-color-text-muted)]">{t("empty")}</p>}
         <ol ref={list} className="flex flex-col">
           <ChatMessages messages={state.messages} userId={userId} canModerate={state.viewer?.canModerate ?? false}
             busy={busy} onDelete={confirmDelete} onMute={mute} onOpenImage={setViewingImage} getImagePreview={session.getImagePreview} />
           {state.pending.map((pending) => <ChatPendingMessage key={pending.clientRequestId} pending={pending} blocked={blocked}
             onRetry={() => void session.retry(pending.clientRequestId)} onDiscard={() => session.discard(pending.clientRequestId)} />)}
         </ol>
+        {state.loadingNewer && <div role="status" aria-label={t("loading")} className="flex justify-center py-3"><LoadingSpinner /></div>}
+        {state.newerError && <p role="status" className="py-3 text-center text-xs text-[var(--theme-color-text-muted)]">{t("newerFailed")}</p>}
       </div>
       <ChatStampLayer ref={stampLayer} />
-      {(away || state.hasNewerMessages) && <button type="button" onClick={jumpLatest}
-        aria-label={state.newMessages ? t("newMessages", { count: state.newMessages }) : t("latest")}
+      {state.status === "live" && (!state.following || state.hasNewerMessages) && <button type="button" onClick={jumpLatest}
+        aria-label={t("latest")}
         title={t("latest")} className="hhwx-floating-surface absolute bottom-3 right-4 z-10 flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-full border border-[var(--theme-color-border-subtle)] px-3 text-sm shadow-md">
-        <ArrowDown size={18} aria-hidden="true" />{state.newMessages > 0 && <span>{state.newMessages}</span>}
+        <ArrowDown size={18} aria-hidden="true" />
       </button>}
     </div>
     <div className="shrink-0 border-t border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)]">
@@ -255,7 +278,8 @@ function AccountDialog({ open, onOpenChange, trigger, userId }: Props & { userId
         {/* Keep the mobile surface behind browser keyboard controls; only its contents shrink. */}
         <div data-chat-viewport className="flex h-[var(--chat-viewport-height,100dvh)] translate-y-[var(--chat-viewport-top,0px)] flex-col sm:h-full sm:translate-y-0">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-2 sm:px-5">
-          <Dialog.Title className="text-base font-semibold">{t("title")}</Dialog.Title>
+          <Dialog.Title title={t("title")} className="min-w-0 truncate text-base font-semibold">{t("title")}</Dialog.Title>
+          {chat.state.newMessages > 0 && <span role="status" className="shrink-0 whitespace-nowrap text-xs text-[var(--theme-color-semantic-info-foreground)]">{t("newMessages")}</span>}
           <Dialog.Close className="chat-icon-button" aria-label={t("close")}><X size={22} aria-hidden="true" /></Dialog.Close>
         </header>
         {userId && <Conversation userId={userId} open={open} images={images} {...chat} />}

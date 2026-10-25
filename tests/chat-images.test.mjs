@@ -61,14 +61,14 @@ test("attachment drafts reuse prepared previews and release URLs/workers with th
   workers[1].onmessage({ data: { image: { ...metadata, blob } } }); assert.equal(created.length, 2, "late completion cannot recreate a disposed preview");
 });
 
-test("20 MiB and 4096 boundaries; only supported formats and fixed CDN object keys",()=>{
+test("20 MiB, total-pixel and side-length boundaries; only supported formats and fixed CDN object keys",()=>{
   assert.ok(images.isChatImage(image));
   const url = new URL(images.chatImageUrl(image));
   assert.equal(url.pathname, `/${image.key}`, "cache migration preserves the stored object key");
   assert.equal(url.searchParams.get("cors"), "1");
   assert.equal(images.chatImageUrl(image), url.href, "the cache version stays fixed across reads");
   assert.ok(images.isChatImageMetadata({...metadata,bytes:20*1024*1024,width:4096}));
-  for(const patch of [{bytes:20*1024*1024+1},{height:4097},{bytes:-1},{width:NaN},{width:1.5},{contentType:"image/svg+xml"},{hash:"bad"}])
+  for(const patch of [{bytes:20*1024*1024+1},{height:16384},{width:4096,height:4097},{bytes:-1},{width:NaN},{width:1.5},{contentType:"image/svg+xml"},{hash:"bad"}])
     assert.equal(images.isChatImageMetadata({...metadata,...patch}),false);
   assert.equal(images.isChatImage({...image,key:"https://untrusted.test/image.png"}),false);
 });
@@ -95,7 +95,7 @@ test("ordinary animation bytes stay unchanged; oversize animations never enter a
     const processed=await prepareChatImage(blob);
     assert.deepEqual(Buffer.from(await processed.blob.arrayBuffer()),Buffer.from(await blob.arrayBuffer()));
     assert.equal(processed.contentType,"image/gif");assert.equal(closed,1);
-    globalThis.createImageBitmap=async()=>({width:5000,height:100,close(){closed++;}});
+    globalThis.createImageBitmap=async()=>({width:16384,height:100,close(){closed++;}});
     await assert.rejects(prepareChatImage(blob),/CHAT_IMAGE_ANIMATED_LIMIT/);
     assert.equal(closed,2);
   } finally {globalThis.createImageBitmap=prior;}
@@ -355,7 +355,7 @@ test('confirmation keeps the displayed local image and atomically replaces the p
   assert.deepEqual(revoked,[url],'each preview is released once');
 });
 
-test('echoes, reconnects and duplicate replies preserve previews; deletion and history eviction release them',async(t)=>{
+test('echoes, reconnects and duplicate replies preserve previews; deletion and reconciliation release them',async(t)=>{
   const revoked=[];t.mock.method(URL,'revokeObjectURL',url=>revoked.push(url));
   const h=batchHarness();await h.session.activate();h.confirmByEcho();
   await h.session.send([prepared()]);
@@ -368,7 +368,7 @@ test('echoes, reconnects and duplicate replies preserve previews; deletion and h
   assert.equal(h.session.getSnapshot().messages.length,0,'a late acknowledgement cannot restore a deleted image');
 
   await h.session.send([prepared()]);const next=h.saved.at(-1),nextUrl=h.session.getImagePreview(next.id);assert.ok(nextUrl);
-  h.saved.splice(0);await h.session.syncLatest();
+  h.saved.splice(0);h.session.pause(true);await h.session.activate();await h.session.syncLatest();
   assert.equal(h.session.getImagePreview(next.id),undefined);assert.deepEqual(revoked,[url,nextUrl]);
   h.session.dispose();assert.deepEqual(revoked,[url,nextUrl]);
 });
@@ -391,17 +391,20 @@ test('an older history response cannot release a just-confirmed preview; closed 
   assert.deepEqual(revoked,[url,pending.image.url]);h.session.dispose();
 });
 
-test('confirmed preview ownership stays bounded with both the visible window and unseen tail',async(t)=>{
+test('confirmed previews remain available beyond 500 visible and unseen messages until closure',async(t)=>{
   let created=0;const revoked=[];
   t.mock.method(URL,'createObjectURL',()=>`blob:window-${created++}`);
   t.mock.method(URL,'revokeObjectURL',url=>revoked.push(url));
   const h=batchHarness();await h.session.activate();await h.session.syncLatest();
-  for(let i=0;i<301;i++)await h.session.send([prepared()]);
-  assert.equal(created-revoked.length,300);assert.equal(h.session.getImagePreview(h.saved[0].id),undefined);
+  for(let i=0;i<601;i++)await h.session.send([prepared()]);
+  assert.equal(h.session.getSnapshot().messages.length,601);
+  assert.equal(created-revoked.length,601);assert.ok(h.session.getImagePreview(h.saved[0].id));
   h.session.setFollowing(false);
-  for(let i=0;i<301;i++)await h.session.send([prepared()]);
-  assert.equal(created-revoked.length,600,'only the bounded visible window and tail keep previews');
-  assert.equal(h.session.getImagePreview(h.saved[301].id),undefined);
+  for(let i=0;i<601;i++)await h.session.send([prepared()]);
+  assert.equal(created-revoked.length,1202);
+  assert.ok(h.session.getImagePreview(h.saved[601].id));
+  h.session.pause(true);
+  assert.equal(h.session.getSnapshot().messages.length,50,'closed-panel cleanup still applies');
   h.session.dispose();assert.equal(created,revoked.length);assert.equal(new Set(revoked).size,created);
 });
 
@@ -478,4 +481,32 @@ test("image completion authorizes before HEAD and only broadcasts saved messages
   calls.length=0;unauthorized=false;storageFailed=true;assert.equal((await exports.POST(request())).status,503);assert.deepEqual(calls,['auth','head']);
   calls.length=0;storageFailed=false;deleted=true;assert.equal((await exports.POST(request())).status,200);assert.deepEqual(calls,['auth','head','rpc']);
   assert.equal(scheduled.length,0,'rejected and deleted messages schedule no publication');
+});
+
+test('static rescaling obeys both pixel limits and preserves ordinary long images', async () => {
+  let size = [1000, 12000], closes = 0, canvases = [];
+  const previousBitmap = globalThis.createImageBitmap;
+  globalThis.createImageBitmap = async () => ({width: size[0], height: size[1], close(){closes++;}});
+  const previous = globalThis.OffscreenCanvas;
+  globalThis.OffscreenCanvas = class {
+    constructor(w,h){canvases.push([w,h]);}
+    getContext(){return {drawImage(){}};}
+    async convertToBlob(){return new Blob(['encoded'], {type:'image/webp'});}
+  };
+  try {
+    const original = new Blob([new Uint8Array([255,216,255,1])]);
+    const long = await prepareChatImage(original);
+    assert.deepEqual([long.width,long.height],size);
+    assert.deepEqual(await long.blob.arrayBuffer(),await original.arrayBuffer());
+    assert.equal(canvases.length,0);
+    for(size of [[8192,4096],[1000,20000],[4096,4097],[1,20000]]) {
+      const output = await prepareChatImage(original);
+      assert.ok(images.isChatImageMetadata(output));
+      assert.ok(output.width * output.height <= 16777216);
+      assert.ok(Math.max(output.width,output.height) <= 16383);
+    }
+    assert.equal(closes,5); assert.equal(canvases.length,4);
+    assert.ok(images.isChatImageMetadata({...metadata,width:4096,height:4096}));
+    assert.ok(images.isChatImageMetadata({...metadata,width:1,height:16383}));
+  } finally {globalThis.OffscreenCanvas = previous; globalThis.createImageBitmap = previousBitmap;}
 });

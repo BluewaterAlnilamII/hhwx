@@ -1,4 +1,4 @@
-import { CHAT_IMAGE_MAX_BYTES, CHAT_IMAGE_MAX_DIMENSION, type ChatImageType, type PreparedChatImage } from "./chat-image-contract";
+import { CHAT_IMAGE_MAX_BYTES, CHAT_IMAGE_MAX_DIMENSION, CHAT_IMAGE_MAX_PIXELS, type ChatImageType, type PreparedChatImage } from "./chat-image-contract";
 
 /** Inspect container markers, not file extensions: PNG and WebP may also animate. */
 export function inspectChatImage(bytes: Uint8Array): { contentType: ChatImageType; animated: boolean } {
@@ -39,10 +39,10 @@ export async function prepareChatImage(file: Blob): Promise<PreparedChatImage> {
   let contentType = info.contentType;
   try {
     if (!width || !height) throw new Error("CHAT_IMAGE_INVALID");
-    const scale = Math.min(1, CHAT_IMAGE_MAX_DIMENSION / Math.max(width, height));
+    const scale = Math.min(1, CHAT_IMAGE_MAX_DIMENSION / Math.max(width, height), Math.sqrt(CHAT_IMAGE_MAX_PIXELS / (width * height)));
     if (info.animated && scale < 1) throw new Error("CHAT_IMAGE_ANIMATED_LIMIT");
     if (scale < 1 || file.size > CHAT_IMAGE_MAX_BYTES) {
-      width = Math.max(1, Math.round(width * scale)); height = Math.max(1, Math.round(height * scale));
+      width = Math.max(1, Math.floor(width * scale)); height = Math.max(1, Math.floor(height * scale));
       // Bounded attempts in a worker; WebP retains transparency unlike JPEG.
       for (let round = 0; round < 3; round++) {
         const canvas = new OffscreenCanvas(width, height);

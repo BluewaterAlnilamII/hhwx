@@ -91,7 +91,7 @@ export function parseChatCursor(value: string | null): ChatCursor | null {
   return { createdAt, id: id.toLowerCase() };
 }
 
-export async function readChatBody(request: Request): Promise<Record<string, unknown>> {
+export async function readChatBody(request: Request, maxBytes = 16384): Promise<Record<string, unknown>> {
   const reader = request.body?.getReader();
   if (!reader) throw new ApiRouteError(400, "INVALID_JSON", "请求内容无效");
   let size = 0;
@@ -101,7 +101,7 @@ export async function readChatBody(request: Request): Promise<Record<string, unk
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > 16384) {
+      if (size > maxBytes) {
         await reader.cancel();
         throw new ApiRouteError(413, "CHAT_BODY_TOO_LARGE", "请求内容过长");
       }

@@ -1,6 +1,6 @@
-import { CHAT_RETENTION_MS, CHAT_WINDOW_SIZE, compareChatMessages, parseChatEvent,
+import { CHAT_RETENTION_MS, compareChatMessages, parseChatEvent,
   type ChatConnection, type ChatCursor, type ChatEvent, type ChatMessage, type ChatPage,
-  type ChatSendResult, type ChatViewer } from "./chat-contract";
+  type ChatNewerPage, type ChatSendResult, type ChatViewer } from "./chat-contract";
 import { truncateCommentContent } from "../comments/comment-contract";
 import { CHAT_IMAGE_MAX_ATTACHMENTS, type ChatImageUpload, type PreparedChatImage } from "./chat-image-contract";
 import { parseChatStampPublication, type ChatStampPublication, type ChatStampReference, type ChatStampSendResult } from "./chat-stamp-contract";
@@ -33,6 +33,9 @@ export type ChatSnapshot = {
   draft: string;
   pending: PendingMessage[];
   loadingOlder: boolean;
+  loadingNewer: boolean;
+  newerError: boolean;
+  following: boolean;
   newMessages: number;
   hasNewerMessages: boolean;
   nextStampAt: string | null;
@@ -42,7 +45,8 @@ export type ChatSnapshot = {
 export class ChatSession {
   private snapshot: ChatSnapshot = {
     messages: [], nextCursor: null, viewer: null, status: "paused", error: null,
-    draft: "", pending: [], loadingOlder: false, newMessages: 0, hasNewerMessages: false, nextStampAt: null,
+    draft: "", pending: [], loadingOlder: false, loadingNewer: false, newerError: false,
+    following: true, newMessages: 0, hasNewerMessages: false, nextStampAt: null,
   };
   private listeners = new Set<() => void>();
   private stampListeners = new Set<(event: ChatStampPublication) => void>();
@@ -60,10 +64,13 @@ export class ChatSession {
   private readAbort = new AbortController();
   private buffered: ChatEvent[] = [];
   private deleted = new Set<string>();
-  private tail = new Map<string, ChatMessage>();
-  private tailOverflow = false;
   private following = true;
-  private windowSize = CHAT_WINDOW_SIZE;
+  private initialized = false;
+  private latestPage: ChatPage | null = null;
+  private latestSeen: ChatCursor | null = null;
+  private readingEnd: ChatCursor | null = null;
+  private jumpRequested = false;
+  private closed = false;
   private mountGeneration = 0;
   private sending = false;
   private sendStateVersion = 0;
@@ -114,9 +121,13 @@ export class ChatSession {
   };
   private update(patch: Partial<ChatSnapshot>) {
     if (this.disposed) return;
-    this.snapshot = { ...this.snapshot, ...patch, hasNewerMessages: this.tailOverflow || this.tail.size > 0 };
+    this.snapshot = { ...this.snapshot, ...patch, following: this.following, hasNewerMessages: this.latestPage !== null };
+    const last = this.snapshot.messages.at(-1);
+    if (patch.messages && last && (!this.readingEnd || compareChatMessages(last, this.readingEnd) > 0)) {
+      this.readingEnd = { createdAt: last.createdAt, id: last.id };
+    }
     if (this.imagePreviews.size && !this.synchronizing && (patch.messages || patch.newMessages !== undefined || patch.status === "live")) {
-      const retained = new Set([...this.snapshot.messages.map((message) => message.id), ...this.tail.keys()]);
+      const retained = new Set([...this.snapshot.messages.map((message) => message.id), ...(this.latestPage?.messages.map(m => m.id) ?? [])]);
       for (const [id, url] of this.imagePreviews) if (!retained.has(id)) {
         URL.revokeObjectURL(url);
         this.imagePreviews.delete(id);
@@ -131,7 +142,7 @@ export class ChatSession {
     if (this.synchronizing) this.baselineReady = false;
     this.synchronizing = false;
     this.buffered = [];
-    this.update({ loadingOlder: false });
+    this.update({ loadingOlder: false, loadingNewer: false });
   }
   private recover(error: unknown) {
     const code = error instanceof ChatRequestError ? error.code : "CHAT_UNAVAILABLE";
@@ -144,22 +155,20 @@ export class ChatSession {
   }
   setDraft = (draft: string) => this.update({ draft: truncateCommentContent(draft) });
   setFollowing = (following: boolean) => {
-    this.following = following && !this.tailOverflow;
-    if (this.following && this.tail.size) void this.jumpLatest();
+    if (!following) this.jumpRequested = false;
+    const next = following && !this.snapshot.hasNewerMessages && this.baselineReady
+      && !this.snapshot.loadingOlder && !this.snapshot.loadingNewer;
+    if (this.following === next && (!next || !this.snapshot.newMessages)) return;
+    this.following = next;
+    this.update(this.following ? { newMessages: 0 } : {});
   };
   private live(message: ChatMessage) {
     return !this.deleted.has(message.id) && Date.parse(message.createdAt) > Date.now() - CHAT_RETENTION_MS;
   }
-  private merge(messages: ChatMessage[], keep: "newest" | "oldest" = "newest", nextCursor = this.snapshot.nextCursor): ChatPage {
+  private merge(messages: ChatMessage[], nextCursor = this.snapshot.nextCursor): ChatPage {
     const unique = new Map(messages.filter((m) => this.live(m)).map((m) => [m.id, m]));
     const sorted = [...unique.values()].sort(compareChatMessages);
-    const retained = keep === "newest" ? sorted.slice(-this.windowSize) : sorted.slice(0, this.windowSize);
-    if (keep === "newest" && sorted.length > retained.length) {
-      // Evicted older rows must remain reachable, including when the original page had no cursor.
-      const first = retained[0];
-      nextCursor = { createdAt: first.createdAt, id: first.id };
-    }
-    return { messages: retained, nextCursor };
+    return { messages: this.closed ? sorted.slice(-CHAT_CLOSED_WINDOW_SIZE) : sorted, nextCursor };
   }
   private confirm(messages: ChatMessage[]) {
     const confirmed = new Set<string>();
@@ -179,8 +188,8 @@ export class ChatSession {
   private apply(event: ChatEvent) {
     if (event.type === "message.deleted") {
       this.deleted.add(event.messageId);
-      this.tail.delete(event.messageId);
-      this.update({ messages: this.snapshot.messages.filter((m) => m.id !== event.messageId), newMessages: this.tail.size });
+      if (this.latestPage) this.latestPage.messages = this.latestPage.messages.filter((m) => m.id !== event.messageId);
+      this.update({ messages: this.snapshot.messages.filter((m) => m.id !== event.messageId) });
       // A new snapshot replaces the bounded deletion window and cancels stale page reads.
       if (this.deleted.size > 1000 && this.active && !this.synchronizing) void this.syncLatest();
       return;
@@ -188,17 +197,19 @@ export class ChatSession {
     const message = event.message;
     const pending = this.confirm([message]);
     if (!this.live(message)) { this.update({ pending }); return; }
-    if (this.following || this.snapshot.messages.some((m) => m.id === message.id)) {
-      this.update({ ...this.merge([...this.snapshot.messages, message]), pending });
+    const isNew = !this.latestSeen || compareChatMessages(message, this.latestSeen) > 0;
+    if (isNew) this.latestSeen = { createdAt: message.createdAt, id: message.id };
+    const newMessages = !this.following && isNew ? this.snapshot.newMessages + 1 : this.snapshot.newMessages;
+    if (this.initialized && !this.closed && (this.latestPage || !this.baselineReady)
+      && (!this.readingEnd || compareChatMessages(message, this.readingEnd) > 0)) {
+      const page = this.latestPage ?? { messages: [], nextCursor: null };
+      this.latestPage = this.merge([...page.messages, message], page.nextCursor);
+      this.update({ pending, newMessages });
     } else {
-      this.tail.set(message.id, message);
-      if (this.tail.size > CHAT_WINDOW_SIZE) {
-        this.tail.delete(this.tail.keys().next().value!);
-        this.tailOverflow = true;
-      }
-      this.update({ pending, newMessages: this.tail.size });
+      this.update({ ...this.merge([...this.snapshot.messages, message]), pending, newMessages });
     }
   }
+
   receive = (value: unknown) => {
     if (!this.active || this.disposed) return;
     const stamp = parseChatStampPublication(value);
@@ -231,7 +242,8 @@ export class ChatSession {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
     this.active = true;
-    this.windowSize = CHAT_WINDOW_SIZE;
+    this.baselineReady = false;
+    this.closed = false;
     this.update({ messages: this.snapshot.messages.filter((message) => this.live(message)), status: "connecting", error: null });
     if (this.socket) { this.socket.connect(); return; }
     if (this.opening) return;
@@ -251,6 +263,8 @@ export class ChatSession {
         },
         connecting: () => {
           if (!this.active) return;
+          if (this.initialized) this.following = false;
+          this.baselineReady = false;
           this.cancelReads();
           this.update({ status: "connecting" });
         },
@@ -272,23 +286,28 @@ export class ChatSession {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
     this.active = false;
+    this.baselineReady = false;
+    if (this.initialized) this.following = false;
+    this.jumpRequested = false;
     this.stampAbort.abort();
     this.stampAbort = new AbortController();
     this.cancelReads();
     this.socket?.disconnect();
     if (close) {
-      this.windowSize = CHAT_CLOSED_WINDOW_SIZE;
-      const { messages } = this.merge([...this.snapshot.messages, ...this.tail.values()]);
+      this.closed = true;
+      const { messages } = this.merge([...this.snapshot.messages, ...(this.latestPage?.messages ?? [])]);
       this.socket = null;
       this.baselineReady = false;
-      this.tail.clear();
       this.deleted.clear();
-      this.tailOverflow = false;
       this.following = true;
+      this.initialized = false;
+      this.latestPage = null;
+      this.latestSeen = null;
+      this.readingEnd = null;
       // Keep only message records for reopening; displayed media belongs to the open panel.
       for (const url of this.imagePreviews.values()) URL.revokeObjectURL(url);
       this.imagePreviews.clear();
-      this.update({ messages, nextCursor: null, newMessages: 0 });
+      this.update({ messages, nextCursor: null, newMessages: 0, newerError: false });
     }
     this.update({ status: "paused" });
   };
@@ -315,19 +334,39 @@ export class ChatSession {
       const events = this.buffered;
       this.buffered = [];
       for (const event of events) if (event.type === "message.deleted") this.deleted.add(event.messageId);
-      this.tail.clear();
-      this.tailOverflow = false;
-      this.following = true;
-      this.update({ ...this.merge(page.messages, "newest", page.nextCursor), pending: this.confirm(page.messages), newMessages: 0 });
+      const latest = page.messages.at(-1);
+      const hasNew = !!latest && (!this.latestSeen || compareChatMessages(latest, this.latestSeen) > 0);
+      if (hasNew) this.latestSeen = { createdAt: latest.createdAt, id: latest.id };
+      // A confirmed send can arrive after the database read took its snapshot.
+      const received = (this.latestPage?.messages ?? []).filter(m => !latest || compareChatMessages(m, latest) > 0);
+      const recovered = this.merge([...page.messages, ...received], page.nextCursor);
+      if (!this.initialized || this.jumpRequested) {
+        this.latestPage = null;
+        this.readingEnd = null;
+        this.following = true;
+        this.jumpRequested = false;
+        this.update({ ...recovered, pending: this.confirm(page.messages), newMessages: 0, newerError: false });
+      } else {
+        const first = page.messages[0];
+        const gap = !!first && !!this.readingEnd && !!page.nextCursor && compareChatMessages(first, this.readingEnd) > 0;
+        this.latestPage = gap ? recovered : null;
+        this.following = false;
+        this.update({ ...this.merge(gap ? this.snapshot.messages : [...this.snapshot.messages, ...recovered.messages]),
+          pending: this.confirm(page.messages),
+          newMessages: hasNew ? Math.max(1, this.snapshot.newMessages) : this.snapshot.newMessages, newerError: false });
+      }
+      this.baselineReady = true;
       for (const event of events) this.apply(event);
       // Compact only after reconciliation; leave room so each subsequent delete does not fetch again.
       if (this.deleted.size > 1000) {
         while (this.deleted.size > 500) this.deleted.delete(this.deleted.values().next().value!);
       }
       this.baselineReady = true;
+      this.initialized = true;
       this.synchronizing = false;
       this.reconnectAttempt = 0;
       this.update({ status: "live" });
+      if (this.jumpRequested) await this.jumpLatest();
     } catch (error) {
       if (generation !== this.readGeneration || !this.active || this.disposed) return;
       this.recover(error);
@@ -336,17 +375,16 @@ export class ChatSession {
 
   loadOlder = async () => {
     const cursor = this.snapshot.nextCursor;
-    if (!cursor || !this.active || !this.baselineReady || this.snapshot.loadingOlder) return;
+    if (!cursor || !this.active || !this.baselineReady || this.snapshot.loadingOlder || this.snapshot.loadingNewer) return;
     const generation = this.readGeneration;
     this.following = false;
+    this.jumpRequested = false;
     this.update({ loadingOlder: true, error: null });
     try {
       const before = encodeURIComponent(`${cursor.createdAt}|${cursor.id}`);
       const page = await this.deps.request<ChatPage>(`/api/chat/messages?before=${before}`, { signal: this.readAbort.signal });
       if (generation !== this.readGeneration || this.disposed) return;
-      // Keep the visible older window; discarded newer rows remain reachable via Jump to latest.
-      if (this.snapshot.messages.length + page.messages.length > CHAT_WINDOW_SIZE) this.tailOverflow = true;
-      this.update(this.merge([...page.messages, ...this.snapshot.messages], "oldest", page.nextCursor));
+      this.update(this.merge([...page.messages, ...this.snapshot.messages], page.nextCursor));
     } catch (error) {
       if (generation !== this.readGeneration || this.disposed) return;
       this.update({ error: error instanceof ChatRequestError ? error.code : "CHAT_UNAVAILABLE" });
@@ -354,12 +392,46 @@ export class ChatSession {
       if (generation === this.readGeneration) this.update({ loadingOlder: false });
     }
   };
+  loadNewer = async () => {
+    const cursor = this.readingEnd;
+    if (!this.active || !this.baselineReady || !this.snapshot.hasNewerMessages
+      || this.snapshot.loadingNewer || this.snapshot.loadingOlder) return;
+    if (!cursor) { await this.jumpLatest(); return; }
+    const generation = this.readGeneration;
+    this.following = false;
+    this.update({ loadingNewer: true, newerError: false });
+    try {
+      const after = encodeURIComponent(`${cursor.createdAt}|${cursor.id}`);
+      const page = await this.deps.request<ChatNewerPage>(`/api/chat/messages?after=${after}`, { signal: this.readAbort.signal });
+      if (generation !== this.readGeneration || this.disposed) return;
+      const end = page.messages.at(-1) ?? cursor;
+      const first = this.latestPage?.nextCursor;
+      const connected = !page.hasMore || (!!first && compareChatMessages(end, first) >= 0);
+      const messages = [...this.snapshot.messages, ...page.messages, ...(connected ? this.latestPage?.messages ?? [] : [])];
+      if (connected) this.latestPage = null;
+      this.update({ ...this.merge(messages), pending: this.confirm(page.messages) });
+      if (!this.readingEnd || compareChatMessages(end, this.readingEnd) > 0) this.readingEnd = { createdAt: end.createdAt, id: end.id };
+    } catch {
+      if (generation !== this.readGeneration || this.disposed) return;
+      this.update({ newerError: true });
+    } finally {
+      if (generation === this.readGeneration) this.update({ loadingNewer: false });
+    }
+  };
   jumpLatest = async () => {
-    if (this.tailOverflow) { await this.syncLatest(); return; }
+    if (!this.baselineReady) { this.jumpRequested = this.active; return; }
+    if (this.latestPage && !this.latestPage.messages.length) {
+      this.jumpRequested = true;
+      await this.syncLatest();
+      return;
+    }
+    this.cancelReads();
+    this.jumpRequested = false;
     this.following = true;
-    const page = this.merge([...this.snapshot.messages, ...this.tail.values()]);
-    this.tail.clear();
-    this.update({ ...page, newMessages: 0 });
+    const page = this.latestPage;
+    this.latestPage = null;
+    if (page) this.readingEnd = null;
+    this.update({ ...(page ? this.merge(page.messages, page.nextCursor) : {}), newMessages: 0, newerError: false });
   };
 
   private setViewer(viewer: ChatViewer, version: number) {
