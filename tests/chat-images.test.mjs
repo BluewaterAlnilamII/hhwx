@@ -312,10 +312,10 @@ function batchHarness() {
   let readHistory=async()=>({messages:[...saved],nextCursor:null});
   let number=0;
   const session=new ChatSession(actor,{
-    transport(){return {connect(){},disconnect(){}};},
+    transport(c,r,h){return {connect(){h.subscribed();},disconnect(){},subscribeMessages(){queueMicrotask(()=>h.subscribed({recovered:true}));},unsubscribeMessages(){}};},
     async uploadImage(upload){calls.push({kind:'put',id:upload.receipt});if(holdUpload)await holdUpload;},
     async request(path,init){
-      if(path==='/api/chat/connection')return {token:'test',url:'ws://local',viewer:{userId:actor,canModerate:false,mutedUntil:null,nextSendAt:null}};
+      if(path==='/api/chat/connection?activity=1')return {token:'test',url:'ws://local',viewer:{userId:actor,canModerate:false,mutedUntil:null,nextSendAt:null}};
       if(!init.method)return readHistory();
       const body=JSON.parse(init.body),id=body.clientRequestId;
       if(path.endsWith('/upload')){
@@ -330,6 +330,7 @@ function batchHarness() {
       return {...result,messageId:id,clientRequestId:id,message:current,nextSendAt:saved.length===quotaAt?new Date(Date.now()+60000).toISOString():null};
     }
   });
+  session.setOpen(true);
   return {session,calls,saved,setFailure(n){failCommit=n;},exhaustQuotaAfter(n){quotaAt=n;},hold(promise){holdUpload=promise;},readWith(fn){readHistory=fn;},confirmByEcho(){echo=session.receive;}};
 }
 const prepared=()=>({...metadata,blob:new Blob(['image'])});
@@ -348,7 +349,7 @@ test('confirmation keeps the displayed local image and atomically replaces the p
   assert.ok(states.every(s=>s.pending!==s.saved),'every notification has exactly one pending or confirmed row');
   assert.equal(h.session.getImagePreview(h.saved[0].id),url,'confirmation reuses the original object URL');
   assert.deepEqual(revoked,[],'the displayed image is not released on confirmation');
-  unsubscribe();h.session.pause(true);
+  unsubscribe();h.session.setOpen(false);
   assert.deepEqual(revoked,[url],'closing the panel releases confirmed previews');
   assert.equal(h.session.getSnapshot().messages[0].id,h.saved[0].id,'closing retains the record without its local image file');
   assert.equal(h.session.getImagePreview(h.saved[0].id),undefined);h.session.dispose();
@@ -368,25 +369,25 @@ test('echoes, reconnects and duplicate replies preserve previews; deletion and r
   assert.equal(h.session.getSnapshot().messages.length,0,'a late acknowledgement cannot restore a deleted image');
 
   await h.session.send([prepared()]);const next=h.saved.at(-1),nextUrl=h.session.getImagePreview(next.id);assert.ok(nextUrl);
-  h.saved.splice(0);h.session.pause(true);await h.session.activate();await h.session.syncLatest();
+  h.saved.splice(0);h.session.setOpen(false);h.session.setOpen(true);await h.session.activate();await h.session.syncLatest();
   assert.equal(h.session.getImagePreview(next.id),undefined);assert.deepEqual(revoked,[url,nextUrl]);
   h.session.dispose();assert.deepEqual(revoked,[url,nextUrl]);
 });
 
 test('an older history response cannot release a just-confirmed preview; closed panels do not retain completed uploads',async(t)=>{
   const revoked=[];t.mock.method(URL,'revokeObjectURL',url=>revoked.push(url));
-  const h=batchHarness();await h.session.activate();let finishHistory;
+  const h=batchHarness();await h.session.activate();await new Promise(setImmediate);let finishHistory;
   h.readWith(()=>new Promise(resolve=>{finishHistory=resolve;}));
   const syncing=h.session.syncLatest();await h.session.send([prepared()]);
   const saved=h.saved[0],url=h.session.getImagePreview(saved.id);assert.ok(url);
   finishHistory({messages:[],nextCursor:null});await syncing;
   assert.equal(h.session.getImagePreview(saved.id),url);assert.deepEqual(revoked,[]);
   assert.equal(h.session.getSnapshot().messages[0].id,saved.id);
-  h.session.pause(true);assert.deepEqual(revoked,[url]);
+  h.session.setOpen(false);assert.deepEqual(revoked,[url]);
 
-  await h.session.activate();let finishUpload;h.hold(new Promise(resolve=>{finishUpload=resolve;}));
+  h.session.setOpen(true);await h.session.activate();let finishUpload;h.hold(new Promise(resolve=>{finishUpload=resolve;}));
   const sending=h.session.send([prepared()]),pending=h.session.getSnapshot().pending[0];
-  h.session.pause(true);finishUpload();await sending;
+  h.session.setOpen(false);finishUpload();await sending;
   assert.equal(h.session.getImagePreview(h.saved.at(-1).id),undefined);
   assert.deepEqual(revoked,[url,pending.image.url]);h.session.dispose();
 });
@@ -395,7 +396,7 @@ test('confirmed previews remain available beyond 500 visible and unseen messages
   let created=0;const revoked=[];
   t.mock.method(URL,'createObjectURL',()=>`blob:window-${created++}`);
   t.mock.method(URL,'revokeObjectURL',url=>revoked.push(url));
-  const h=batchHarness();await h.session.activate();await h.session.syncLatest();
+  const h=batchHarness();h.session.setOpen(true);await h.session.activate();await h.session.syncLatest();
   for(let i=0;i<601;i++)await h.session.send([prepared()]);
   assert.equal(h.session.getSnapshot().messages.length,601);
   assert.equal(created-revoked.length,601);assert.ok(h.session.getImagePreview(h.saved[0].id));
@@ -403,8 +404,8 @@ test('confirmed previews remain available beyond 500 visible and unseen messages
   for(let i=0;i<601;i++)await h.session.send([prepared()]);
   assert.equal(created-revoked.length,1202);
   assert.ok(h.session.getImagePreview(h.saved[601].id));
-  h.session.pause(true);
-  assert.equal(h.session.getSnapshot().messages.length,50,'closed-panel cleanup still applies');
+  h.session.setOpen(false);
+  assert.equal(h.session.getSnapshot().messages.length,1202,'closing retains message records');
   h.session.dispose();assert.equal(created,revoked.length);assert.equal(new Set(revoked).size,created);
 });
 

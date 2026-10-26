@@ -20,6 +20,7 @@ function harness(fetch) {
     listeners = {};
     constructor() { transports.push(this); }
     on(name, callback) { this.listeners[name] = callback; }
+    newSubscription() { const sub = new Client(); sub.subscribe = () => {}; sub.unsubscribe = () => {}; this.messages = sub; return sub; }
     connect() {}
     disconnect() {}
   }
@@ -44,28 +45,25 @@ function harness(fetch) {
   return { session: exports.useChatSession(userId, false).session, durations, transports };
 }
 
-test("transport accepts only its issued channel and old connections still default to main", async () => {
-  for (const channel of ["chat:other", undefined]) {
-    const expected = channel ?? "chat:main"; let historyReads = 0;
-    const h = harness(async path => {
-      if (path.endsWith("/connection")) return ok({ token: "token", url: "ws://local", channel,
-        viewer: { userId, canModerate: false, mutedUntil: null, nextSendAt: null } });
-      historyReads++; return ok({ messages: [], nextCursor: null });
-    });
-    await h.session.activate();
-    const callbacks = h.transports[0].listeners;
-    callbacks.subscribed({ channel: "chat:wrong" });
-    assert.equal(historyReads, 0);
-    callbacks.subscribed({ channel: expected });
-    await new Promise(setImmediate);
-    assert.equal(historyReads, 1);
-    const event = { type: "message.created", message: saved(userId, "scoped").message };
-    callbacks.publication({ channel: "chat:wrong", data: event });
-    assert.equal(h.session.getSnapshot().messages.length, 0);
-    callbacks.publication({ channel: expected, data: event });
-    assert.equal(h.session.getSnapshot().messages.length, 1);
-    h.session.dispose();
-  }
+test("full messages use the authorized subscription; unrelated server channels cannot deliver messages", async () => {
+  let historyReads = 0;
+  const h = harness(async path => {
+    if (path.includes("/connection")) return ok({ token: "token", subscriptionToken: "sub", url: "ws://local", channel: "chat:main", activityChannel: "chat_activity:main",
+      viewer: { userId, canModerate: false, mutedUntil: null, nextSendAt: null } });
+    historyReads++; return ok({ messages: [], nextCursor: null });
+  });
+  h.session.setOpen(true); await h.session.activate();
+  const client = h.transports[0];
+  client.listeners.subscribed({channel:"chat:wrong",recovered:false});
+  assert.equal(historyReads,0);
+  client.messages.listeners.subscribed({recovered:false}); await new Promise(setImmediate);
+  assert.equal(historyReads,1);
+  const event = {type:"message.created", message:saved(userId,"scoped").message};
+  client.listeners.publication({channel:"chat:wrong",data:event});
+  assert.equal(h.session.getSnapshot().messages.length,0);
+  client.messages.listeners.publication({data:event});
+  assert.equal(h.session.getSnapshot().messages.length,1);
+  h.session.dispose();
 });
 
 test("API timeout releases the text queue, preserves drafts, and retry keeps the request ID", async () => {

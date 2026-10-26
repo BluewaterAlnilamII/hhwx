@@ -64,8 +64,8 @@ const server=await compile("../src/lib/chat/chat-server.ts",{
     auth:{getUser:async()=>({data:{user:{id:actor,is_anonymous:false}},error:null}),
       getClaims:async()=>({data:{claims:{sub:actor,iss:"https://local.example/auth/v1",aud:"authenticated",role:"authenticated",exp:Math.floor(Date.now()/1000)+7200}},error:null})},
     rpc:async(name,args)=>{
-      assert.ok(["send_chat_message","delete_chat_message","read_chat_messages","read_chat_viewer","read_newer_chat_messages"].includes(name));
-      if(["read_chat_messages","read_newer_chat_messages"].includes(name))rpcReads++;
+      assert.ok(["send_chat_message","delete_chat_message","read_chat_messages","read_chat_viewer","read_newer_chat_messages","read_chat_activity","read_chat_snapshot"].includes(name));
+      if(["read_chat_messages","read_newer_chat_messages","read_chat_activity","read_chat_snapshot"].includes(name))rpcReads++;
       const parameters=Object.entries(args).map(([k,v])=>{
         assert.match(k,/^p_[a-z_]+$/);return `${k} => ${v==null?"null":"'"+(Array.isArray(v)?"{"+v.join(",")+"}":String(v)).replaceAll("'","''")+"'"}`;
       }).join(",");
@@ -86,7 +86,7 @@ const deletion=await compile("../src/app/api/chat/messages/[messageId]/route.ts"
 const connection=await compile("../src/app/api/chat/connection/route.ts",dependencies);
 const api=async(path,init={})=>{
   const request=new Request(`http://localhost${path}`,{...init,headers:{...init.headers,authorization:"Bearer fixture"}});
-  if(path==="/api/chat/connection")return connection.POST(request);
+  if(path.startsWith("/api/chat/connection"))return connection.POST(request);
   if(init.method==="DELETE")return deletion.DELETE(request,{params:Promise.resolve({messageId:path.split("/").at(-1)})});
   return init.method==="POST"?messages.POST(request):messages.GET(request);
 };
@@ -115,18 +115,24 @@ try{
   session=new ChatSession(actor,{
     request:async(path,init)=>{const result=await(await api(path,init)).json();if(!result.success)throw new Error(result.error.code);return result.data;},
     transport:(auth,refresh,handlers)=>{
-      client=new Centrifuge(auth.url,{token:auth.token,getToken:refresh,websocket:WebSocket});
-      client.on("publication",(ctx)=>{publications.push(ctx.data);handlers.publication(ctx.data);});
-      client.on("subscribed",(ctx)=>{subscriptions++;lastRecovered=ctx.recovered;handlers.subscribed();});
-      client.on("connecting",handlers.connecting);client.on("disconnected",handlers.disconnected);return client;
+      client=new Centrifuge(auth.url,{token:auth.token,getToken:async()=>(await refresh()).token,websocket:WebSocket});
+      const sub=client.newSubscription(auth.channel,{token:auth.subscriptionToken,getToken:async()=>(await refresh()).subscriptionToken});
+      sub.on("subscribing",handlers.subscribing);sub.on("unsubscribed",handlers.unsubscribed);
+      sub.on("publication",ctx=>{publications.push(ctx.data);handlers.publication(ctx.data);});
+      sub.on("subscribed",ctx=>{subscriptions++;lastRecovered=ctx.recovered;handlers.subscribed(ctx);});
+      client.on("publication",ctx=>{if(ctx.channel===auth.activityChannel)handlers.activityPublication(ctx.data);});
+      client.on("subscribed",ctx=>{if(ctx.channel===auth.activityChannel)handlers.activitySubscribed(ctx);});
+      client.on("connecting",handlers.connecting);client.on("disconnected",handlers.disconnected);
+      return {connect:()=>client.connect(),disconnect:()=>client.disconnect(),subscribeMessages:()=>sub.subscribe(),unsubscribeMessages:()=>sub.unsubscribe()};
     },
   });
-  await session.activate();await until(()=>session.getSnapshot().status==="live");
+  session.setOpen(true);await session.activate();await until(()=>session.getSnapshot().status==="live");
   const otherConnection=await server.issueChatConnection({userId:actor,expiresAt:Math.floor(Date.now()/1000)+3600},"other");
   const otherPublications=[];let otherSubscribed=false;
   otherClient=new Centrifuge(otherConnection.url,{token:otherConnection.token,websocket:WebSocket});
-  otherClient.on("subscribed",()=>{otherSubscribed=true;});
-  otherClient.on("publication",ctx=>otherPublications.push(ctx.data));otherClient.connect();
+  const otherSub=otherClient.newSubscription(otherConnection.channel,{token:otherConnection.subscriptionToken});
+  otherSub.on("subscribed",()=>{otherSubscribed=true;});
+  otherSub.on("publication",ctx=>otherPublications.push(ctx.data));otherSub.subscribe();otherClient.connect();
   await until(()=>otherSubscribed);
   const otherEvent={type:"stamp.sent",id:randomUUID()};
   await server.publishChatEvent(otherEvent,"other");await until(()=>otherPublications.length===1);
@@ -148,7 +154,7 @@ try{
   await finishPublications();
   assert.equal(distinct.filter((x)=>x.status==="fulfilled").length,20);
   assert.ok(distinct.filter((x)=>x.status==="rejected").every((x)=>/CHAT_COOLDOWN/.test(x.reason.message)));
-  assert.equal(publishAttempts-beforeRejected,20);report.concurrentIdempotencyAndQuota=true;
+  assert.equal(publishAttempts-beforeRejected,40);report.concurrentIdempotencyAndQuota=true;
   assert.equal(await sql(`select send_count from chat_private.user_state where user_id='${actor}';`),"20");
   await resetCooldown();
   const mute=sql(`begin; set role service_role; select public.set_chat_mute('${moderator}','${actor}',now()+interval '1 hour'); select pg_sleep(1); commit;`);
@@ -164,25 +170,19 @@ try{
   assert.equal(seen(missed.messageId),0);assert.ok(!session.getSnapshot().messages.some((m)=>m.id===missed.messageId));
   const beforeReads=rpcReads;session.pause();await session.activate();
   await until(()=>session.getSnapshot().status==="live");
-  assert.ok(session.getSnapshot().messages.some(m=>m.id===missed.messageId),"overlapping recovery merges directly");
-  assert.ok(session.getSnapshot().newMessages);
-  await session.jumpLatest();
-  assert.ok(session.getSnapshot().messages.some(m=>m.id===missed.messageId));
-  assert.equal(lastRecovered,false);assert.equal(rpcReads,beforeReads+1);report.failedPublishRecoveredFromDatabase=true;
-  env.CHAT_PUBLISH_API_KEY="intentionally-wrong";
-  assert.equal((await api(`/api/chat/messages/${missed.messageId}`,{method:"DELETE"})).status,200);await finishPublications();env.CHAT_PUBLISH_API_KEY=key;
-  assert.ok(session.getSnapshot().messages.some((m)=>m.id===missed.messageId));session.pause();await session.activate();
-  await until(()=>session.getSnapshot().status==="live");
-  assert.ok(session.getSnapshot().messages.some(m=>m.id===missed.messageId),"offline deletion stays cached until reload");
-  session.pause(true);await session.activate();await until(()=>session.getSnapshot().status==="live");
-  assert.ok(!session.getSnapshot().messages.some(m=>m.id===missed.messageId));
-  assert.equal(lastRecovered,false);assert.equal(warnings.length,2);report.offlineDeleteRemovedOnReopen=true;
-  session.pause();await resetCooldown();const cached=await send();await finishPublications();
-  env.CHAT_PUBLISH_API_KEY="intentionally-wrong";
-  assert.equal((await api(`/api/chat/messages/${cached.messageId}`,{method:"DELETE"})).status,200);await finishPublications();env.CHAT_PUBLISH_API_KEY=key;
-  await session.activate();await until(()=>session.getSnapshot().status==="live");
-  assert.equal(lastRecovered,false);assert.equal(seen(cached.messageId),0,"No stale cached replay");
-  assert.ok(!session.getSnapshot().messages.some((m)=>m.id===cached.messageId));report.staleReplayCannotRestoreDeleted=true;
+  assert.equal(lastRecovered,true);assert.equal(rpcReads,beforeReads,"native recovery makes no database read");
+  assert.ok(!session.getSnapshot().messages.some(m=>m.id===missed.messageId),"an unpublished commit is outside the broker's recovery guarantee");
+  await session.syncLatest();
+  assert.ok(session.getSnapshot().messages.some(m=>m.id===missed.messageId));report.failedPublishWaitsForFreshSnapshot=true;
+  session.pause();await resetCooldown();const offline=await send();await finishPublications();
+  const readsBeforeRecovery=rpcReads;await session.activate();await until(()=>session.getSnapshot().status==="live");
+  await until(()=>session.getSnapshot().messages.some(m=>m.id===offline.messageId));
+  assert.equal(lastRecovered,true);assert.equal(rpcReads,readsBeforeRecovery);report.offlinePublicationRecovered=true;
+  session.setOpen(false);const beforeClosed=rpcReads;
+  await resetCooldown();const closed=await send();await finishPublications();
+  assert.ok(!session.getSnapshot().messages.some(m=>m.id===closed.messageId));
+  session.setOpen(true);await until(()=>session.getSnapshot().messages.some(m=>m.id===closed.messageId));
+  assert.equal(rpcReads,beforeClosed);report.reopenWithoutSnapshot=true;
   const beforeRestart=subscriptions,beforeRestartReads=rpcReads;await stop();await start();
   await until(()=>subscriptions>beforeRestart&&session.getSnapshot().status==="live");
   assert.equal(rpcReads,beforeRestartReads+1);assert.equal(lastRecovered,false);report.restartSnapshot=true;report.privatePublishApi=true;

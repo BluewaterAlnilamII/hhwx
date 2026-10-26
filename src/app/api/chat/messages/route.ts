@@ -19,6 +19,9 @@ export async function GET(request: Request) {
       }), { headers });
     }
     const cursor = parseChatCursor(params.get("before"));
+    if (!cursor && params.get("activity") === "1") {
+      return jsonSuccess(await chatRpc<ChatPage>("read_chat_snapshot", { p_actor: actor.userId, p_room_id: roomId }), { headers });
+    }
     return jsonSuccess(await chatRpc<ChatPage>("read_chat_messages", {
       p_actor: actor.userId, p_before_at: cursor?.createdAt ?? null, p_before_id: cursor?.id ?? null, p_room_id: roomId,
     }), { headers });

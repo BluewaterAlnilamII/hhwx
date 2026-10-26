@@ -5,11 +5,10 @@ import dynamic from "next/dynamic";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ArrowDown, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
-import { useGameStore } from "@/store/useGameStore";
 import { useAccountProfileStore } from "@/store/useAccountProfileStore";
 import { resumeSoundEffectAudio } from "@/lib/sound-effect-audio";
 import type { ChatStampLayerHandle } from "./ChatStampLayer";
-import { useChatSession } from "@/hooks/useChatSession";
+import type { useChatSession } from "@/hooks/useChatSession";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
 import { CommentPublicUid } from "@/components/comments/CommentPublicUid";
 import { LoadingSpinner } from "@/components/LoadingIndicator";
@@ -23,7 +22,7 @@ import { ChatPendingMessage } from "./ChatPendingMessage";
 import ImageViewer from "@/components/ImageViewer";
 import { chatImageUrl } from "@/lib/chat/chat-image-contract";
 
-type Props = { open: boolean; onOpenChange(open: boolean): void; trigger: RefObject<HTMLButtonElement | null> };
+type Props = { open: boolean; onOpenChange(open: boolean): void; trigger: RefObject<HTMLButtonElement | null>; userId: string } & ReturnType<typeof useChatSession>;
 const ChatStampLayer = dynamic(() => import("./ChatStampLayer").then((module) => module.ChatStampLayer), { ssr: false });
 
 const ChatMessages = memo(function ChatMessages({ messages, userId, canModerate, busy, onDelete, onMute, onOpenImage, getImagePreview }: {
@@ -77,8 +76,8 @@ function Conversation({ userId, open, images, session, state }: {
   const stampLayer = useRef<ChatStampLayerHandle>(null);
   const profile = useAccountProfileStore((state) => state.userId === userId ? state.profile : null);
   const list = useRef<HTMLOListElement>(null);
-  const following = useRef(true);
-  const anchors = useRef<{ id: string; top: number }[]>([]);
+  const following = useRef(state.following);
+  const anchors = useRef(session.scrollAnchors);
   const expectedScroll = useRef<number | null>(null);
   const lastScroll = useRef(0);
   const [now, setNow] = useState(Date.now);
@@ -86,7 +85,7 @@ function Conversation({ userId, open, images, session, state }: {
   const [deleting, setDeleting] = useState<ChatMessage | null>(null);
   const [deleteFailed, setDeleteFailed] = useState(false);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
-  const loading = open && (state.status === "paused" || state.status === "connecting" || state.status === "syncing" || state.loadingOlder);
+  const loading = open && ((!state.messages.length && ["paused", "connecting", "syncing"].includes(state.status)) || state.loadingOlder);
   const deadline = Math.max(Date.parse(state.viewer?.nextSendAt ?? "") || 0, Date.parse(state.viewer?.mutedUntil ?? "") || 0);
   const stampDeadline = Date.parse(state.nextStampAt ?? "") || 0;
 
@@ -113,7 +112,8 @@ function Conversation({ userId, open, images, session, state }: {
     // Neighbours preserve the viewport when the first visible row is deleted offline.
     anchors.current = [...rows.slice(Math.max(0, index)), ...rows.slice(0, Math.max(0, index)).reverse()]
       .map(row => ({ id: row.dataset.messageId!, top: row.getBoundingClientRect().top - top }));
-  }, []);
+    session.setScrollAnchors(anchors.current);
+  }, [session]);
   const preserveScroll = useCallback(() => {
     const el = scroll.current;
     if (!el) return;
@@ -133,23 +133,33 @@ function Conversation({ userId, open, images, session, state }: {
   const checkPosition = useCallback(() => {
     const el = scroll.current;
     const current = session.getSnapshot();
-    if (!el || current.status !== "live" || current.loadingOlder || current.loadingNewer) return;
+    if (!el || current.loadingOlder) return;
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (!current.hasNewerMessages && distance <= 2) session.setFollowing(true);
-    if (current.hasNewerMessages && !current.newerError && distance < 120) void session.loadNewer();
+    if (distance <= 2) { session.setFollowing(true); session.markRead(); }
   }, [session]);
   useLayoutEffect(() => {
     following.current = state.following;
     preserveScroll();
     if (open) checkPosition();
-  }, [state.messages, state.pending, state.status, state.following, state.hasNewerMessages,
-    state.loadingOlder, state.loadingNewer, open, preserveScroll, checkPosition]);
+  }, [state.messages, state.pending, state.status, state.following,
+    state.loadingOlder, open, preserveScroll, checkPosition]);
   useEffect(() => {
     const observer = new ResizeObserver(() => { preserveScroll(); checkPosition(); });
     if (scroll.current) observer.observe(scroll.current);
     if (list.current) observer.observe(list.current);
     return () => observer.disconnect();
   }, [preserveScroll, checkPosition]);
+  useEffect(() => {
+    let frame = 0;
+    const check = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(checkPosition); };
+    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("focus", check);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, [checkPosition]);
   const jumpLatest = () => {
     void session.jumpLatest();
   };
@@ -181,25 +191,23 @@ function Conversation({ userId, open, images, session, state }: {
           const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
           captureAnchor();
           session.setFollowing(downward && distance <= 2);
-          if (downward && distance < 120) void session.loadNewer();
+          if (downward && distance <= 2) session.markRead();
         }}>
         {state.nextCursor && <div className="mb-4 text-center"><button type="button"
           className="min-h-10 rounded-full px-4 text-xs text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background)] disabled:opacity-50"
-          disabled={state.loadingOlder || state.loadingNewer || state.status !== "live"} onClick={() => { following.current = false; captureAnchor(); void session.loadOlder(); }}>
+          disabled={state.loadingOlder || state.status === "syncing"} onClick={() => { following.current = false; captureAnchor(); void session.loadOlder(); }}>
           {t("older")}
         </button></div>}
-        {state.status === "live" && !state.messages.length && !state.pending.length && !state.hasNewerMessages && <p className="flex min-h-40 items-center justify-center py-12 text-sm text-[var(--theme-color-text-muted)]">{t("empty")}</p>}
+        {state.status === "live" && !state.messages.length && !state.pending.length && <p className="flex min-h-40 items-center justify-center py-12 text-sm text-[var(--theme-color-text-muted)]">{t("empty")}</p>}
         <ol ref={list} className="flex flex-col">
           <ChatMessages messages={state.messages} userId={userId} canModerate={state.viewer?.canModerate ?? false}
             busy={busy} onDelete={confirmDelete} onMute={mute} onOpenImage={setViewingImage} getImagePreview={session.getImagePreview} />
           {state.pending.map((pending) => <ChatPendingMessage key={pending.clientRequestId} pending={pending} blocked={blocked}
             onRetry={() => void session.retry(pending.clientRequestId)} onDiscard={() => session.discard(pending.clientRequestId)} />)}
         </ol>
-        {state.loadingNewer && <div role="status" aria-label={t("loading")} className="flex justify-center py-3"><LoadingSpinner /></div>}
-        {state.newerError && <p role="status" className="py-3 text-center text-xs text-[var(--theme-color-text-muted)]">{t("newerFailed")}</p>}
       </div>
       <ChatStampLayer ref={stampLayer} />
-      {state.status === "live" && (!state.following || state.hasNewerMessages) && <button type="button" onClick={jumpLatest}
+      {!state.following && <button type="button" onClick={jumpLatest}
         aria-label={t("latest")}
         title={t("latest")} className="hhwx-floating-surface absolute bottom-3 right-4 z-10 flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-full border border-[var(--theme-color-border-subtle)] px-3 text-sm shadow-md">
         <ArrowDown size={18} aria-hidden="true" />
@@ -245,9 +253,9 @@ function Conversation({ userId, open, images, session, state }: {
   </>;
 }
 
-function AccountDialog({ open, onOpenChange, trigger, userId }: Props & { userId: string | null }) {
+export default function ChatDialog({ open, onOpenChange, trigger, userId, session, state }: Props) {
   const t = useTranslations("chat");
-  const chat = useChatSession(userId ?? "", open && !!userId);
+  const chat = { session, state };
   const images = useChatAttachments();
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -287,9 +295,4 @@ function AccountDialog({ open, onOpenChange, trigger, userId }: Props & { userId
       </Dialog.Content>
     </Dialog.Portal>
   </Dialog.Root>;
-}
-
-export default function ChatDialog(props: Props) {
-  const userId = useGameStore((s) => s.userId);
-  return <AccountDialog key={userId ?? "guest"} {...props} userId={userId} />;
 }

@@ -166,3 +166,6 @@ Bandori tracker 实时传输固定使用 Private Broadcast。浏览器只会在�
 聊天增量迁移 `20261023205032_chat_sending_and_query_cleanup.sql` 保留既有消息和禁言，将三秒时间戳替换为每账号 20 条/60 秒计数，删除聊天的邮箱状态读取并合并作者/状态查询。迁移和应用切换期间关闭聊天；新 RPC 不再返回 viewer 的 emailVerified 字段。浏览器表/RPC 授权仍被撤销。
 
 留言板图片扩展迁移 `20261024065425_chat_images.sql` 在既有消息/账号状态表上增加图片字段和上传计数，未新增表或 cron。另运行 `supabase/tests/chat_images.sql` 验证共享额度、上传限频、去重、禁言、删除、回滚及权限；公开 R2 配置见留言板接入说明。
+
+
+留言板摘要迁移 `20261026072628_chat_activity_and_snapshot.sql` 必须先于新应用部署。它只新增 `read_chat_activity` 和 `read_chat_snapshot` 两个 service-role-only invoker RPC，固定空 search_path，复用已有房间游标索引，不新增表或已读写入。运行 `supabase/tests/chat_activity.sql` 检查空房间、自发排除、删除、保留期、房间隔离及真实 anon/authenticated 拒绝。之后更新 [Centrifugo 配置与应用](realtime-message-board.zh-CN.md)；回滚可保留这两个新增 RPC。

@@ -491,7 +491,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                         onToggle={() => setOpenToolbarMenu((currentValue) => currentValue === "player" ? null : "player")}
                         onRequestClose={() => setOpenToolbarMenu((currentValue) => currentValue === "player" ? null : currentValue)}
                     />
-                    {process.env.NEXT_PUBLIC_CHAT_ENABLED === "true" && authReady && userId && <ChatLauncher key={userId} onOpen={() => {
+                    {process.env.NEXT_PUBLIC_CHAT_ENABLED === "true" && authReady && userId && <ChatLauncher key={userId} userId={userId} onOpen={() => {
                         setOpenToolbarMenu(null);
                         if (isSidebarOpen) onToggleSidebar?.();
                     }} />}

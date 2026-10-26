@@ -1,6 +1,6 @@
-import { CHAT_RETENTION_MS, compareChatMessages, parseChatEvent,
+import { CHAT_RETENTION_MS, compareChatMessages, parseChatEvent, parseChatActivityEvent,
   type ChatConnection, type ChatCursor, type ChatEvent, type ChatMessage, type ChatPage,
-  type ChatNewerPage, type ChatSendResult, type ChatViewer } from "./chat-contract";
+  type ChatActivity, type ChatActivityEvent, type ChatSendResult, type ChatViewer } from "./chat-contract";
 import { truncateCommentContent } from "../comments/comment-contract";
 import { CHAT_IMAGE_MAX_ATTACHMENTS, type ChatImageUpload, type PreparedChatImage } from "./chat-image-contract";
 import { parseChatStampPublication, type ChatStampPublication, type ChatStampReference, type ChatStampSendResult } from "./chat-stamp-contract";
@@ -8,18 +8,23 @@ import { parseChatStampPublication, type ChatStampPublication, type ChatStampRef
 export class ChatRequestError extends Error {
   constructor(public code: string, public retryAt: string | null = null) { super(code); }
 }
-type Transport = { connect(): void; disconnect(): void };
-const CHAT_CLOSED_WINDOW_SIZE = 50;
+type Transport = { connect(): void; disconnect(): void; subscribeMessages(): void; unsubscribeMessages(): void };
 type TransportHandlers = {
   publication(data: unknown): void;
-  subscribed(): void;
+  subscribed(context?: { recovered: boolean }): void;
+  subscribing(): void;
+  unsubscribed(): void;
+  activityPublication(data: unknown): void;
+  activitySubscribed(context: { recovered: boolean }): void;
   connecting(): void;
   disconnected(): void;
 };
 export type ChatSessionDependencies = {
   request<T>(path: string, init?: RequestInit): Promise<T>;
+  readCursor?(): ChatCursor | null | undefined;
+  saveReadCursor?(cursor: ChatCursor | null): void;
   uploadImage?(upload: ChatImageUpload, blob: Blob, signal: AbortSignal): Promise<void>;
-  transport(connection: ChatConnection, refresh: () => Promise<string>, handlers: TransportHandlers): Transport;
+  transport(connection: ChatConnection, refresh: () => Promise<ChatConnection>, handlers: TransportHandlers): Transport;
 };
 type PendingMessage = { clientRequestId: string; content: string; startedAt: number; status: "queued" | "uploading" | "sending" | "failed"; error: string | null;
   batchId?: string;
@@ -33,20 +38,17 @@ export type ChatSnapshot = {
   draft: string;
   pending: PendingMessage[];
   loadingOlder: boolean;
-  loadingNewer: boolean;
-  newerError: boolean;
   following: boolean;
   newMessages: number;
-  hasNewerMessages: boolean;
+  unread: boolean;
   nextStampAt: string | null;
 };
 
-/** One account's panel lifetime. Transport continuity never substitutes for a loaded snapshot. */
+/** One signed-in account; the dialog only controls the full-message subscription. */
 export class ChatSession {
   private snapshot: ChatSnapshot = {
     messages: [], nextCursor: null, viewer: null, status: "paused", error: null,
-    draft: "", pending: [], loadingOlder: false, loadingNewer: false, newerError: false,
-    following: true, newMessages: 0, hasNewerMessages: false, nextStampAt: null,
+    draft: "", pending: [], loadingOlder: false, following: true, newMessages: 0, unread: false, nextStampAt: null,
   };
   private listeners = new Set<() => void>();
   private stampListeners = new Set<(event: ChatStampPublication) => void>();
@@ -59,30 +61,39 @@ export class ChatSession {
   private active = false;
   private disposed = false;
   private baselineReady = false;
+  private subscribed = false;
   private synchronizing = false;
   private readGeneration = 0;
   private readAbort = new AbortController();
   private buffered: ChatEvent[] = [];
   private deleted = new Set<string>();
   private following = true;
-  private initialized = false;
-  private latestPage: ChatPage | null = null;
   private latestSeen: ChatCursor | null = null;
-  private readingEnd: ChatCursor | null = null;
-  private jumpRequested = false;
-  private closed = false;
+  private closed = true;
+  private readingAllowed = false;
+  private activity: ChatActivity = { latest: null, latestOther: null };
+  private activityReady = false;
+  private activityConnected = false;
+  private activityBuffer: ChatActivityEvent[] = [];
+  private activityAbort: AbortController | null = null;
+  private activityTimer: ReturnType<typeof setTimeout> | null = null;
+  private readCursor: ChatCursor | null | undefined;
   private mountGeneration = 0;
   private sending = false;
   private sendStateVersion = 0;
   private sendingImages = false;
   private imageJobs = new Map<string, { image: PreparedChatImage; previewUrl: string; upload?: ChatImageUpload; uploaded: boolean; abort: AbortController }>();
   private imagePreviews = new Map<string, string>();
+  scrollAnchors: { id: string; top: number }[] = [];
+  setScrollAnchors = (anchors: { id: string; top: number }[]) => { this.scrollAnchors = anchors; };
 
   constructor(readonly userId: string, private deps: ChatSessionDependencies) {}
   mount = () => {
     const generation = ++this.mountGeneration;
+    this.restoreReadCursor(this.deps.readCursor?.());
+    void this.activate();
     return () => {
-      this.pause(true);
+      this.pause();
       // React Strict Mode immediately reattaches; a real unmount disposes after the turn.
       queueMicrotask(() => { if (generation === this.mountGeneration) this.dispose(); });
     };
@@ -121,54 +132,132 @@ export class ChatSession {
   };
   private update(patch: Partial<ChatSnapshot>) {
     if (this.disposed) return;
-    this.snapshot = { ...this.snapshot, ...patch, following: this.following, hasNewerMessages: this.latestPage !== null };
-    const last = this.snapshot.messages.at(-1);
-    if (patch.messages && last && (!this.readingEnd || compareChatMessages(last, this.readingEnd) > 0)) {
-      this.readingEnd = { createdAt: last.createdAt, id: last.id };
-    }
-    if (this.imagePreviews.size && !this.synchronizing && (patch.messages || patch.newMessages !== undefined || patch.status === "live")) {
-      const retained = new Set([...this.snapshot.messages.map((message) => message.id), ...(this.latestPage?.messages.map(m => m.id) ?? [])]);
+    const other = this.activity.latestOther;
+    const unread = this.readCursor !== undefined && !!other && Date.parse(other.createdAt) > Date.now() - CHAT_RETENTION_MS
+      && (!this.readCursor || compareChatMessages(other, this.readCursor) > 0);
+    this.snapshot = { ...this.snapshot, ...patch, following: this.following, unread };
+    if ((patch.messages || patch.status === "live") && !this.synchronizing) {
+      const retained = new Set(this.snapshot.messages.map(message => message.id));
       for (const [id, url] of this.imagePreviews) if (!retained.has(id)) {
-        URL.revokeObjectURL(url);
-        this.imagePreviews.delete(id);
+        URL.revokeObjectURL(url); this.imagePreviews.delete(id);
       }
     }
     for (const listener of this.listeners) listener();
   }
+  restoreReadCursor = (cursor: ChatCursor | null | undefined) => {
+    if (cursor === undefined || (this.readCursor && (!cursor || compareChatMessages(cursor, this.readCursor) <= 0))) return;
+    this.readCursor = cursor;
+    this.update({});
+  };
+  setReadingAllowed = (allowed: boolean) => {
+    this.readingAllowed = allowed;
+  };
+  markRead = () => {
+    if (this.closed || !this.readingAllowed || !this.following || !this.baselineReady || !this.subscribed) return;
+    const cursor = this.latestSeen;
+    if (cursor && (this.readCursor === undefined || !this.readCursor || compareChatMessages(cursor, this.readCursor) > 0)) {
+      this.readCursor = cursor;
+      this.deps.saveReadCursor?.(cursor);
+      this.update({});
+    }
+  };
+  private acceptActivity(activity: ChatActivity) {
+    this.activity = activity;
+    this.activityReady = true;
+    if (this.readCursor === undefined) {
+      this.readCursor = activity.latest;
+      this.deps.saveReadCursor?.(this.readCursor);
+    }
+    this.update({});
+  }
+  private applyActivity(event: ChatActivityEvent) {
+    if (event.type === "message.created") {
+      if (this.deleted.has(event.cursor.id)) return;
+      if (!this.activity.latest || compareChatMessages(event.cursor, this.activity.latest) > 0) this.activity.latest = event.cursor;
+      if (event.userId !== this.userId && (!this.activity.latestOther || compareChatMessages(event.cursor, this.activity.latestOther) > 0)) {
+        this.activity.latestOther = event.cursor;
+      }
+      this.update({});
+    } else {
+      this.deleted.add(event.messageId);
+      if (this.activity.latest?.id === event.messageId || this.activity.latestOther?.id === event.messageId) {
+        // Only a deletion of a summary marker needs a new summary, not every room event.
+        this.scheduleActivityRead();
+      }
+    }
+  }
+  private replayActivity() {
+    const events = this.activityBuffer; this.activityBuffer = [];
+    events.forEach(event => this.applyActivity(event));
+  }
+  private scheduleActivityRead(delay = 0) {
+    if (this.activityTimer || !this.active) return;
+    this.activityTimer = setTimeout(() => { this.activityTimer = null; void this.syncActivity(); }, delay);
+  }
+  private receiveActivity = (value: unknown) => {
+    if (!this.active) return;
+    const event = parseChatActivityEvent(value);
+    if (!event) return;
+    if (!this.activityReady || this.activityAbort || this.synchronizing) {
+      this.activityBuffer.push(event);
+      if (this.activityBuffer.length > 1000) {
+        this.activityAbort?.abort(); this.activityAbort = null; this.activityBuffer = [];
+        this.activityReady = false; this.scheduleActivityRead();
+      }
+    } else this.applyActivity(event);
+  };
+  private syncActivity = async () => {
+    if (!this.active || !this.activityConnected || this.activityAbort || this.synchronizing) return;
+    if (!this.closed && !this.subscribed) return;
+    if (!this.closed && !this.baselineReady) {
+      if (this.subscribed) void this.syncLatest();
+      return;
+    }
+    const abort = new AbortController();
+    this.activityAbort = abort;
+    try {
+      const activity = await this.deps.request<ChatActivity>("/api/chat/activity", { signal: abort.signal });
+      if (abort.signal.aborted || this.disposed) return;
+      this.acceptActivity(activity);
+      this.activityAbort = null;
+      this.replayActivity();
+    } catch (error) {
+      if (!abort.signal.aborted && this.active && (!(error instanceof ChatRequestError) || error.code === "CHAT_UNAVAILABLE")) {
+        this.scheduleActivityRead(5000);
+      }
+    } finally { if (this.activityAbort === abort) this.activityAbort = null; }
+  };
   private cancelReads() {
     this.readGeneration++;
-    this.readAbort.abort();
-    this.readAbort = new AbortController();
+    this.readAbort.abort(); this.readAbort = new AbortController();
     if (this.synchronizing) this.baselineReady = false;
-    this.synchronizing = false;
-    this.buffered = [];
-    this.update({ loadingOlder: false, loadingNewer: false });
+    this.synchronizing = false; this.buffered = [];
+    this.update({ loadingOlder: false });
   }
-  private recover(error: unknown) {
+  private recover(error: unknown, connection = false) {
     const code = error instanceof ChatRequestError ? error.code : "CHAT_UNAVAILABLE";
-    this.pause();
+    if (connection) this.pause();
     this.update({ status: "error", error: code });
     if (this.disposed || !["CHAT_UNAVAILABLE", "CHAT_SYNC_OVERFLOW"].includes(code)) return;
-    // Retry only a failed connection/snapshot, never a send or a healthy subscription.
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     const delay = Math.min(30_000, 1000 * 2 ** Math.min(this.reconnectAttempt++, 5) * (1 + Math.random() * 0.2));
-    this.reconnectTimer = setTimeout(() => { this.reconnectTimer = null; void this.activate(); }, delay);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (connection) void this.activate(); else void this.syncLatest();
+    }, delay);
   }
   setDraft = (draft: string) => this.update({ draft: truncateCommentContent(draft) });
   setFollowing = (following: boolean) => {
-    if (!following) this.jumpRequested = false;
-    const next = following && !this.snapshot.hasNewerMessages && this.baselineReady
-      && !this.snapshot.loadingOlder && !this.snapshot.loadingNewer;
-    if (this.following === next && (!next || !this.snapshot.newMessages)) return;
-    this.following = next;
-    this.update(this.following ? { newMessages: 0 } : {});
+    if (this.following === following && (!following || !this.snapshot.newMessages)) return;
+    this.following = following;
+    this.update(following ? { newMessages: 0 } : {});
   };
   private live(message: ChatMessage) {
     return !this.deleted.has(message.id) && Date.parse(message.createdAt) > Date.now() - CHAT_RETENTION_MS;
   }
   private merge(messages: ChatMessage[], nextCursor = this.snapshot.nextCursor): ChatPage {
-    const unique = new Map(messages.filter((m) => this.live(m)).map((m) => [m.id, m]));
-    const sorted = [...unique.values()].sort(compareChatMessages);
-    return { messages: this.closed ? sorted.slice(-CHAT_CLOSED_WINDOW_SIZE) : sorted, nextCursor };
+    const unique = new Map(messages.filter(message => this.live(message)).map(message => [message.id, message]));
+    return { messages: [...unique.values()].sort(compareChatMessages), nextCursor };
   }
   private confirm(messages: ChatMessage[]) {
     const confirmed = new Set<string>();
@@ -176,7 +265,7 @@ export class ChatSession {
       if (message.author.userId !== this.userId || !this.snapshot.pending.some((p) => p.clientRequestId === message.clientRequestId)) continue;
       confirmed.add(message.clientRequestId);
       const job = this.imageJobs.get(message.clientRequestId);
-      if (job && message.image && this.live(message) && this.snapshot.status !== "paused") {
+      if (job && message.image && this.live(message) && !this.closed) {
         // Transfer the displayed preview; release the upload job without reloading its image.
         this.imagePreviews.set(message.id, job.previewUrl);
         job.abort.abort();
@@ -186,12 +275,12 @@ export class ChatSession {
     return confirmed.size ? this.snapshot.pending.filter((p) => !confirmed.has(p.clientRequestId)) : this.snapshot.pending;
   }
   private apply(event: ChatEvent) {
+    if (this.activityReady) this.applyActivity(event.type === "message.created"
+      ? { type: event.type, cursor: { id: event.message.id, createdAt: event.message.createdAt }, userId: event.message.author.userId }
+      : { type: event.type, messageId: event.messageId });
     if (event.type === "message.deleted") {
       this.deleted.add(event.messageId);
-      if (this.latestPage) this.latestPage.messages = this.latestPage.messages.filter((m) => m.id !== event.messageId);
-      this.update({ messages: this.snapshot.messages.filter((m) => m.id !== event.messageId) });
-      // A new snapshot replaces the bounded deletion window and cancels stale page reads.
-      if (this.deleted.size > 1000 && this.active && !this.synchronizing) void this.syncLatest();
+      this.update({ messages: this.snapshot.messages.filter(message => message.id !== event.messageId) });
       return;
     }
     const message = event.message;
@@ -199,187 +288,164 @@ export class ChatSession {
     if (!this.live(message)) { this.update({ pending }); return; }
     const isNew = !this.latestSeen || compareChatMessages(message, this.latestSeen) > 0;
     if (isNew) this.latestSeen = { createdAt: message.createdAt, id: message.id };
-    const newMessages = !this.following && isNew ? this.snapshot.newMessages + 1 : this.snapshot.newMessages;
-    if (this.initialized && !this.closed && (this.latestPage || !this.baselineReady)
-      && (!this.readingEnd || compareChatMessages(message, this.readingEnd) > 0)) {
-      const page = this.latestPage ?? { messages: [], nextCursor: null };
-      this.latestPage = this.merge([...page.messages, message], page.nextCursor);
-      this.update({ pending, newMessages });
-    } else {
-      this.update({ ...this.merge([...this.snapshot.messages, message]), pending, newMessages });
-    }
+    this.update({ ...this.merge([...this.snapshot.messages, message]), pending,
+      newMessages: !this.following && isNew ? this.snapshot.newMessages + 1 : this.snapshot.newMessages });
   }
-
   receive = (value: unknown) => {
-    if (!this.active || this.disposed) return;
+    if (!this.active || this.closed || this.disposed) return;
     const stamp = parseChatStampPublication(value);
     if (stamp) {
-      if (!this.ownStamps.has(stamp.id)) this.stampListeners.forEach((listener) => listener(stamp));
-      return; // Ephemeral effects never enter the history/reconnect buffer.
+      if (this.readingAllowed && !this.ownStamps.has(stamp.id)) this.stampListeners.forEach(listener => listener(stamp));
+      return;
     }
     const event = parseChatEvent(value);
     if (!event) return;
     if (this.synchronizing || !this.baselineReady) {
       if (event.type === "message.created" && event.message.author.userId === this.userId
-        && this.snapshot.pending.some((p) => p.clientRequestId === event.message.clientRequestId)) this.apply(event);
+        && this.snapshot.pending.some(p => p.clientRequestId === event.message.clientRequestId)) this.apply(event);
       this.buffered.push(event);
       if (this.buffered.length > 1000) {
-        this.recover(new ChatRequestError("CHAT_SYNC_OVERFLOW"));
+        this.cancelReads(); this.recover(new ChatRequestError("CHAT_SYNC_OVERFLOW"));
       }
     } else this.apply(event);
   };
-
-  private refresh = async (): Promise<string> => {
+  private refresh = async (): Promise<ChatConnection> => {
     const version = this.sendStateVersion;
-    const result = await this.deps.request<ChatConnection>("/api/chat/connection", { method: "POST" });
+    const result = await this.deps.request<ChatConnection>("/api/chat/connection?activity=1", { method: "POST" });
     if (this.disposed || result.viewer.userId !== this.userId) throw new ChatRequestError("AUTHENTICATION_FAILED");
     this.setViewer(result.viewer, version);
-    return result.token;
+    return result;
   };
-
   activate = async () => {
     if (this.disposed || this.active) return;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    this.reconnectTimer = null;
-    this.active = true;
-    this.baselineReady = false;
-    this.closed = false;
-    this.update({ messages: this.snapshot.messages.filter((message) => this.live(message)), status: "connecting", error: null });
+    this.reconnectTimer = null; this.active = true;
+    this.update({ status: "connecting", error: null });
     if (this.socket) { this.socket.connect(); return; }
     if (this.opening) return;
     this.opening = true;
-    const version = this.sendStateVersion;
     try {
-      const result = await this.deps.request<ChatConnection>("/api/chat/connection", { method: "POST" });
+      const result = await this.refresh();
       if (this.disposed) return;
-      if (result.viewer.userId !== this.userId) throw new ChatRequestError("AUTHENTICATION_FAILED");
-      this.setViewer(result.viewer, version);
       this.socket = this.deps.transport(result, this.refresh, {
         publication: this.receive,
-        subscribed: () => {
+        activityPublication: this.receiveActivity,
+        activitySubscribed: context => {
           if (!this.active) return;
-          // Reconnects reload committed writes, including ones whose publication failed.
-          void this.syncLatest();
+          this.activityConnected = true;
+          if (!context.recovered) this.activityReady = false;
+          if (!this.activityReady) this.scheduleActivityRead();
+          else this.replayActivity();
+        },
+        subscribed: context => {
+          if (!this.active || this.closed) return;
+          this.subscribed = true;
+          if (context?.recovered && this.baselineReady) {
+            this.update({ status: "live", error: null });
+            if (!this.activityReady) this.scheduleActivityRead();
+          }
+          else void this.syncLatest();
+        },
+        subscribing: () => {
+          if (!this.active || this.closed) return;
+          this.subscribed = false; this.cancelReads(); this.update({ status: "connecting" });
+        },
+        unsubscribed: () => {
+          if (!this.active || this.closed) return;
+          this.subscribed = false; this.cancelReads();
+          this.update({ status: "error", error: "CHAT_DISCONNECTED" });
         },
         connecting: () => {
           if (!this.active) return;
-          if (this.initialized) this.following = false;
-          this.baselineReady = false;
+          this.subscribed = false; this.activityConnected = false;
           this.cancelReads();
+          if (this.activityAbort) this.activityReady = false;
+          this.activityAbort?.abort(); this.activityAbort = null;
           this.update({ status: "connecting" });
         },
         disconnected: () => {
           if (!this.active) return;
-          // The SDK retries transient failures through connecting; disconnected is terminal.
-          this.pause();
-          this.update({ status: "error", error: "CHAT_DISCONNECTED" });
+          this.pause(); this.update({ status: "error", error: "CHAT_DISCONNECTED" });
         },
       });
-      if (this.active) this.socket.connect();
-    } catch (error) {
-      if (!this.active) return;
-      this.recover(error);
-    } finally { this.opening = false; }
+      if (this.active) {
+        if (!this.closed) this.socket.subscribeMessages();
+        this.socket.connect();
+      }
+    } catch (error) { if (this.active) this.recover(error, true); }
+    finally { this.opening = false; }
   };
-
-  pause = (close = false) => {
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    this.reconnectTimer = null;
-    this.active = false;
-    this.baselineReady = false;
-    if (this.initialized) this.following = false;
-    this.jumpRequested = false;
-    this.stampAbort.abort();
-    this.stampAbort = new AbortController();
-    this.cancelReads();
-    this.socket?.disconnect();
-    if (close) {
-      this.closed = true;
-      const { messages } = this.merge([...this.snapshot.messages, ...(this.latestPage?.messages ?? [])]);
-      this.socket = null;
-      this.baselineReady = false;
-      this.deleted.clear();
-      this.following = true;
-      this.initialized = false;
-      this.latestPage = null;
-      this.latestSeen = null;
-      this.readingEnd = null;
-      // Keep only message records for reopening; displayed media belongs to the open panel.
+  setOpen = (open: boolean) => {
+    if (this.closed === !open) return;
+    this.closed = !open;
+    if (open) {
+      this.update({ messages: this.snapshot.messages.filter(message => this.live(message)) });
+      this.socket?.subscribeMessages();
+    } else {
+      this.subscribed = false;
+      this.cancelReads();
+      this.socket?.unsubscribeMessages();
+      this.stampAbort.abort(); this.stampAbort = new AbortController();
       for (const url of this.imagePreviews.values()) URL.revokeObjectURL(url);
       this.imagePreviews.clear();
-      this.update({ messages, nextCursor: null, newMessages: 0, newerError: false });
+      if (!this.activityReady) this.scheduleActivityRead();
+      else this.replayActivity();
     }
+  };
+  pause = () => {
+    this.active = false; this.subscribed = false; this.activityConnected = false;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    if (this.activityTimer) clearTimeout(this.activityTimer);
+    this.reconnectTimer = null; this.activityTimer = null;
+    if (this.activityAbort) this.activityReady = false;
+    this.activityAbort?.abort(); this.activityAbort = null;
+    this.cancelReads(); this.socket?.disconnect();
     this.update({ status: "paused" });
   };
   dispose = () => {
-    this.pause(true);
+    this.setOpen(false); this.pause();
     for (const id of this.imageJobs.keys()) this.releaseImage(id);
+    this.activity = { latest: null, latestOther: null }; this.readCursor = undefined;
     this.update({ messages: [], draft: "", pending: [], viewer: null });
     this.disposed = true;
-    this.listeners.clear();
-    this.stampListeners.clear();
-    this.ownStamps.clear();
+    this.listeners.clear(); this.stampListeners.clear(); this.ownStamps.clear();
   };
-
   syncLatest = async () => {
-    if (!this.active || this.synchronizing) return;
+    if (!this.active || this.closed || !this.subscribed || this.synchronizing) return;
     this.cancelReads();
+    this.activityAbort?.abort(); this.activityAbort = null;
+    if (this.activityTimer) clearTimeout(this.activityTimer);
+    this.activityTimer = null;
     const generation = this.readGeneration;
-    this.synchronizing = true;
-    this.baselineReady = false;
+    this.synchronizing = true; this.baselineReady = false;
     this.update({ status: "syncing", error: null });
     try {
-      const page = await this.deps.request<ChatPage>("/api/chat/messages", { signal: this.readAbort.signal });
+      const page = await this.deps.request<ChatPage>("/api/chat/messages?activity=1", { signal: this.readAbort.signal });
       if (!this.active || this.disposed || generation !== this.readGeneration) return;
-      const events = this.buffered;
-      this.buffered = [];
+      const events = this.buffered; this.buffered = [];
+      // Start over only when recovery cannot bridge the retained list; preserve drafts and uploads.
       for (const event of events) if (event.type === "message.deleted") this.deleted.add(event.messageId);
-      const latest = page.messages.at(-1);
-      const hasNew = !!latest && (!this.latestSeen || compareChatMessages(latest, this.latestSeen) > 0);
-      if (hasNew) this.latestSeen = { createdAt: latest.createdAt, id: latest.id };
-      // A confirmed send can arrive after the database read took its snapshot.
-      const received = (this.latestPage?.messages ?? []).filter(m => !latest || compareChatMessages(m, latest) > 0);
-      const recovered = this.merge([...page.messages, ...received], page.nextCursor);
-      if (!this.initialized || this.jumpRequested) {
-        this.latestPage = null;
-        this.readingEnd = null;
-        this.following = true;
-        this.jumpRequested = false;
-        this.update({ ...recovered, pending: this.confirm(page.messages), newMessages: 0, newerError: false });
-      } else {
-        const first = page.messages[0];
-        const gap = !!first && !!this.readingEnd && !!page.nextCursor && compareChatMessages(first, this.readingEnd) > 0;
-        this.latestPage = gap ? recovered : null;
-        this.following = false;
-        this.update({ ...this.merge(gap ? this.snapshot.messages : [...this.snapshot.messages, ...recovered.messages]),
-          pending: this.confirm(page.messages),
-          newMessages: hasNew ? Math.max(1, this.snapshot.newMessages) : this.snapshot.newMessages, newerError: false });
-      }
+      this.latestSeen = page.messages.at(-1) ?? null;
+      this.following = true; this.scrollAnchors = [];
+      this.update({ ...this.merge(page.messages, page.nextCursor), pending: this.confirm(page.messages), newMessages: 0 });
       this.baselineReady = true;
       for (const event of events) this.apply(event);
-      // Compact only after reconciliation; leave room so each subsequent delete does not fetch again.
-      if (this.deleted.size > 1000) {
-        while (this.deleted.size > 500) this.deleted.delete(this.deleted.values().next().value!);
-      }
-      this.baselineReady = true;
-      this.initialized = true;
+      if (page.activity) this.acceptActivity(page.activity);
       this.synchronizing = false;
+      this.replayActivity();
       this.reconnectAttempt = 0;
       this.update({ status: "live" });
-      if (this.jumpRequested) await this.jumpLatest();
     } catch (error) {
       if (generation !== this.readGeneration || !this.active || this.disposed) return;
+      this.synchronizing = false;
       this.recover(error);
     }
   };
-
   loadOlder = async () => {
     const cursor = this.snapshot.nextCursor;
-    if (!cursor || !this.active || !this.baselineReady || this.snapshot.loadingOlder || this.snapshot.loadingNewer) return;
+    if (!cursor || this.closed || !this.baselineReady || this.snapshot.loadingOlder) return;
     const generation = this.readGeneration;
-    this.following = false;
-    this.jumpRequested = false;
-    this.update({ loadingOlder: true, error: null });
+    this.following = false; this.update({ loadingOlder: true, error: null });
     try {
       const before = encodeURIComponent(`${cursor.createdAt}|${cursor.id}`);
       const page = await this.deps.request<ChatPage>(`/api/chat/messages?before=${before}`, { signal: this.readAbort.signal });
@@ -388,50 +454,11 @@ export class ChatSession {
     } catch (error) {
       if (generation !== this.readGeneration || this.disposed) return;
       this.update({ error: error instanceof ChatRequestError ? error.code : "CHAT_UNAVAILABLE" });
-    } finally {
-      if (generation === this.readGeneration) this.update({ loadingOlder: false });
-    }
-  };
-  loadNewer = async () => {
-    const cursor = this.readingEnd;
-    if (!this.active || !this.baselineReady || !this.snapshot.hasNewerMessages
-      || this.snapshot.loadingNewer || this.snapshot.loadingOlder) return;
-    if (!cursor) { await this.jumpLatest(); return; }
-    const generation = this.readGeneration;
-    this.following = false;
-    this.update({ loadingNewer: true, newerError: false });
-    try {
-      const after = encodeURIComponent(`${cursor.createdAt}|${cursor.id}`);
-      const page = await this.deps.request<ChatNewerPage>(`/api/chat/messages?after=${after}`, { signal: this.readAbort.signal });
-      if (generation !== this.readGeneration || this.disposed) return;
-      const end = page.messages.at(-1) ?? cursor;
-      const first = this.latestPage?.nextCursor;
-      const connected = !page.hasMore || (!!first && compareChatMessages(end, first) >= 0);
-      const messages = [...this.snapshot.messages, ...page.messages, ...(connected ? this.latestPage?.messages ?? [] : [])];
-      if (connected) this.latestPage = null;
-      this.update({ ...this.merge(messages), pending: this.confirm(page.messages) });
-      if (!this.readingEnd || compareChatMessages(end, this.readingEnd) > 0) this.readingEnd = { createdAt: end.createdAt, id: end.id };
-    } catch {
-      if (generation !== this.readGeneration || this.disposed) return;
-      this.update({ newerError: true });
-    } finally {
-      if (generation === this.readGeneration) this.update({ loadingNewer: false });
-    }
+    } finally { if (generation === this.readGeneration) this.update({ loadingOlder: false }); }
   };
   jumpLatest = async () => {
-    if (!this.baselineReady) { this.jumpRequested = this.active; return; }
-    if (this.latestPage && !this.latestPage.messages.length) {
-      this.jumpRequested = true;
-      await this.syncLatest();
-      return;
-    }
-    this.cancelReads();
-    this.jumpRequested = false;
     this.following = true;
-    const page = this.latestPage;
-    this.latestPage = null;
-    if (page) this.readingEnd = null;
-    this.update({ ...(page ? this.merge(page.messages, page.nextCursor) : {}), newMessages: 0, newerError: false });
+    this.update({ newMessages: 0 });
   };
 
   private setViewer(viewer: ChatViewer, version: number) {

@@ -6,10 +6,13 @@
   "client": {
     "token": { "issuer": "hhwx-chat", "audience": "hhwx-chat" },
     "queue_max_size": 2097152,
-    "channel_limit": 1
+    "channel_limit": 2
   },
   "channel": {
-    "namespaces": [{ "name": "chat" }]
+    "namespaces": [
+      { "name": "chat", "history_size": 256, "history_ttl": "300s", "force_recovery": true },
+      { "name": "chat_activity", "history_size": 256, "history_ttl": "300s", "force_recovery": true }
+    ]
   },
   "websocket": { "compression": false }
 }

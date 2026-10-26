@@ -3,7 +3,7 @@ import { SignJWT } from "jose";
 import { ApiRouteError } from "@/lib/api-contracts";
 import { NO_STORE_HTTP_CACHE_POLICY, withHttpCachePolicy } from "@/lib/api-cache";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
-import { CHAT_DEFAULT_ROOM_ID, chatChannel, CHAT_MAX_LENGTH, CHAT_UUID, type ChatConnection, type ChatCursor, type ChatEvent, type ChatViewer } from "./chat-contract";
+import { CHAT_DEFAULT_ROOM_ID, chatChannel, chatActivityChannel, CHAT_MAX_LENGTH, CHAT_UUID, type ChatConnection, type ChatCursor, type ChatEvent, type ChatViewer } from "./chat-contract";
 import type { ChatStampPublication } from "./chat-stamp-contract";
 
 export const chatHeaders = () => withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY);
@@ -116,7 +116,7 @@ export async function readChatBody(request: Request, maxBytes = 16384): Promise<
   } finally { reader.releaseLock(); }
 }
 
-export async function issueChatConnection(identity: { userId: string; expiresAt: number }, roomId = CHAT_DEFAULT_ROOM_ID): Promise<ChatConnection> {
+export async function issueChatConnection(identity: { userId: string; expiresAt: number }, roomId = CHAT_DEFAULT_ROOM_ID, activity = true): Promise<ChatConnection> {
   const secret = process.env.CHAT_TOKEN_SECRET;
   const url = process.env.CHAT_WEBSOCKET_URL;
   if (!secret || Buffer.byteLength(secret) < 32 || !url || !/^wss?:\/\//u.test(url)
@@ -125,12 +125,18 @@ export async function issueChatConnection(identity: { userId: string; expiresAt:
   }
   const viewer = await chatRpc<ChatViewer>("read_chat_viewer", { p_actor: identity.userId });
   const channel = chatChannel(roomId);
-  const token = await new SignJWT({ channels: [channel] })
+  const activityChannel = chatActivityChannel(roomId);
+  const expiresAt = Math.min(identity.expiresAt, Math.floor(Date.now() / 1000) + 3600);
+  const token = await new SignJWT({ channels: [activity ? activityChannel : channel] })
     .setProtectedHeader({ alg: "HS256" }).setSubject(identity.userId)
     .setIssuer("hhwx-chat").setAudience("hhwx-chat")
-    .setIssuedAt().setExpirationTime(Math.min(identity.expiresAt, Math.floor(Date.now() / 1000) + 3600))
+    .setIssuedAt().setExpirationTime(expiresAt)
     .sign(new TextEncoder().encode(secret));
-  return { token, url, channel, viewer };
+  const subscriptionToken = await new SignJWT({ channel })
+    .setProtectedHeader({ alg: "HS256" }).setSubject(identity.userId)
+    .setIssuer("hhwx-chat").setAudience("hhwx-chat")
+    .setIssuedAt().setExpirationTime(expiresAt).sign(new TextEncoder().encode(secret));
+  return { token, url, channel, activityChannel, subscriptionToken, viewer };
 }
 
 /** Call only after the database mutation or send authorization has committed. */
@@ -140,16 +146,23 @@ export async function publishChatEvent(event: ChatEvent | ChatStampPublication, 
     const url = process.env.CHAT_PUBLISH_URL;
     const key = process.env.CHAT_PUBLISH_API_KEY;
     if (!url || !key || !/^https?:\/\//u.test(url)) throw new Error("Chat publish configuration missing");
-    const response = await fetch(url, {
-      method: "POST", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(2000),
-      headers: { "Content-Type": "application/json", "X-API-Key": key },
-      body: JSON.stringify({ channel: chatChannel(roomId), data: event, idempotency_key: `${event.type}:${messageId}` }),
-    });
-    if (!response.ok) throw new Error("Chat publish HTTP error");
-    const result = await response.json();
-    if (!result || result.error || !result.result || typeof result.result !== "object") throw new Error("Chat publish rejected");
+    const activity = event.type === "message.created" ? { type: event.type,
+      cursor: { createdAt: event.message.createdAt, id: event.message.id }, userId: event.message.author.userId }
+      : event.type === "message.deleted" ? { type: event.type, messageId } : null;
+    const results = await Promise.allSettled([{ channel: chatChannel(roomId), data: event, skip_history: event.type === "stamp.sent" },
+      ...(activity ? [{ channel: chatActivityChannel(roomId), data: activity, skip_history: false }] : [])].map(async (publication) => {
+      const response = await fetch(url, {
+        method: "POST", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(2000),
+        headers: { "Content-Type": "application/json", "X-API-Key": key },
+        body: JSON.stringify({ ...publication, idempotency_key: `${event.type}:${messageId}` }),
+      });
+      if (!response.ok) throw new Error("Chat publish HTTP error");
+      const result = await response.json();
+      if (!result || result.error || !result.result || typeof result.result !== "object") throw new Error("Chat publish rejected");
+    }));
+    if (results.some(result => result.status === "rejected")) throw new Error("Chat publication failed");
   } catch {
-    // shortcut: no durable retry; clients reload saved history on reopen/reconnect. Add a queue only if automatic redelivery becomes required.
+    // shortcut: failed publications wait for a fresh snapshot; add an outbox when durable delivery is required.
     console.warn(event.type === "stamp.sent" ? "[chat] Ephemeral stamp publication failed; not retried."
       : "[chat] Realtime publication failed; database change remains saved.", { type: event.type, messageId });
   }
