@@ -105,7 +105,8 @@ function Conversation({ userId, open, images, session, state }: {
 
   const captureAnchor = useCallback(() => {
     const el = scroll.current;
-    if (!el) return;
+    // Radix hides the closing panel before unmount; its zero-size layout is not a reading position.
+    if (!el?.clientHeight) return;
     const top = el.getBoundingClientRect().top;
     const rows = [...el.querySelectorAll<HTMLElement>("[data-message-id]")];
     const index = rows.findIndex(item => item.getBoundingClientRect().bottom > top);
@@ -116,7 +117,7 @@ function Conversation({ userId, open, images, session, state }: {
   }, [session]);
   const preserveScroll = useCallback(() => {
     const el = scroll.current;
-    if (!el) return;
+    if (!el?.clientHeight) return;
     if (following.current) el.scrollTop = el.scrollHeight;
     else {
       for (const anchor of anchors.current) {
@@ -133,7 +134,7 @@ function Conversation({ userId, open, images, session, state }: {
   const checkPosition = useCallback(() => {
     const el = scroll.current;
     const current = session.getSnapshot();
-    if (!el || current.loadingOlder) return;
+    if (!el?.clientHeight || current.loadingOlder) return;
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
     if (distance <= 2) { session.setFollowing(true); session.markRead(); }
   }, [session]);
@@ -181,7 +182,8 @@ function Conversation({ userId, open, images, session, state }: {
       {loading && <span role="status" aria-label={t("loading")} className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center"><LoadingSpinner /></span>}
       <div ref={scroll} className="min-h-0 flex-1 select-none overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 [overflow-anchor:none] sm:px-5"
         aria-label={t("messages")} onScroll={() => {
-          const el = scroll.current!;
+          const el = scroll.current;
+          if (!el?.clientHeight) return;
           if (expectedScroll.current !== null && Math.abs(el.scrollTop - expectedScroll.current) < 1) {
             expectedScroll.current = null; return;
           }

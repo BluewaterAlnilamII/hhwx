@@ -126,14 +126,32 @@ try{
     assert.equal(await page.evaluate(()=>window.reads.length),reads);
     const offset=await scroll.evaluate((el,id)=>el.querySelector('[data-message-id="'+id+'"]').getBoundingClientRect().top-el.getBoundingClientRect().top,anchor.id);
     assert.ok(Math.abs(offset-anchor.offset)<=2);
+    const savedAnchor=await page.evaluate(()=>window.session.scrollAnchors[0]);
     await page.getByRole('button',{name:labels.close,exact:true}).click();
+    assert.deepEqual(await page.evaluate(()=>window.session.scrollAnchors[0]),savedAnchor,'closing must not replace the visible anchor with hidden geometry');
     assert.equal(await page.evaluate(()=>window.client.disconnects),0);
     await page.evaluate(()=>window.arrive());await page.locator('[data-chat-unread]').waitFor();
     await page.getByRole('button').click();await page.waitForFunction(()=>window.session.getSnapshot().messages.length===60);
     assert.equal(await page.evaluate(()=>window.reads.length),reads);
     assert.equal(await page.evaluate(()=>window.session.getSnapshot().following),false);
+    const reopenedOffset=await scroll.evaluate((el,id)=>el.querySelector('[data-message-id="'+id+'"]').getBoundingClientRect().top-el.getBoundingClientRect().top,anchor.id);
+    assert.ok(Math.abs(reopenedOffset-anchor.offset)<=2,`reopening shifted the reading anchor by ${reopenedOffset-anchor.offset}px`);
     assert.equal(await page.locator('[data-chat-unread]').count(),1,'opening old reading position is not reading the latest');
+    await page.keyboard.press('Escape');await page.getByRole('button').click();
+    await page.waitForFunction(()=>window.session.getSnapshot().status==='live');
+    const repeatedOffset=await scroll.evaluate((el,id)=>el.querySelector('[data-message-id="'+id+'"]').getBoundingClientRect().top-el.getBoundingClientRect().top,anchor.id);
+    assert.ok(Math.abs(repeatedOffset-anchor.offset)<=2,'repeated keyboard close/reopen keeps the reading position');
+    await scroll.evaluate(async el=>{el.scrollTop=el.scrollHeight-el.clientHeight-48;await new Promise(requestAnimationFrame);});
+    await page.waitForFunction(()=>!window.session.getSnapshot().following);
+    await page.getByRole('button',{name:labels.close,exact:true}).click();await page.getByRole('button').click();
+    await page.waitForFunction(()=>window.session.getSnapshot().status==='live');
+    assert.ok(Math.abs(await scroll.evaluate(el=>el.scrollHeight-el.scrollTop-el.clientHeight)-48)<=2,'near-bottom reading stays above the latest messages');
+    assert.equal(await page.locator('[data-chat-unread]').count(),1);
+    assert.equal(await page.evaluate(()=>window.reads.length),reads);
     await page.getByRole('button',{name:labels.latest,exact:true}).click();await page.locator('[data-chat-unread]').waitFor({state:'detached'});
+    await page.getByRole('button',{name:labels.close,exact:true}).click();await page.evaluate(()=>window.arrive());await page.getByRole('button').click();
+    await page.waitForFunction(()=>window.session.getSnapshot().status==='live');
+    assert.ok(await scroll.evaluate(el=>el.scrollHeight-el.scrollTop-el.clientHeight)<=2,'closing at the bottom continues following new messages');
     await page.evaluate(()=>{window.holdRead=true;window.reconnect(210,false);});
     await page.waitForFunction(()=>window.session.getSnapshot().status==='syncing');
     await page.getByLabel('Message text',{exact:true}).fill('visible while syncing');await page.getByRole('button',{name:'Send fixture'}).click();
@@ -155,7 +173,7 @@ try{
     assert.equal(await page.evaluate(()=>window.session.getSnapshot().draft),'');
     assert.equal(await page.locator('[data-chat-panel]').count(),0);
     assert.deepEqual(errors,[]);
-    report.push({width,locale,dark,recoveryReads:0,fallbackReads:1,closedUnread:true,accountIsolation:true,anchorShift:offset-anchor.offset});
+    report.push({width,locale,dark,recoveryReads:0,fallbackReads:1,closedUnread:true,accountIsolation:true,anchorShift:offset-anchor.offset,reopenAnchorShift:reopenedOffset-anchor.offset,repeatedReopen:true,nearBottomPreserved:true});
     if(width===1280&&locale==='en'){
       const results=await page.evaluate(async()=>{
         const output=[];

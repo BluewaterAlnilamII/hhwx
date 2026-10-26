@@ -64,6 +64,19 @@ test('stamp HTTP sending remains usable while the receive connection is disconne
   h.session.dispose();assert.equal(h.session.sendStamp({id:1,region:'cn',kind:'normal'}),null);
 });
 
+test('stamp delivery does not require reading focus and still stops when the panel closes', async () => {
+  const h=harness(),seen=[];
+  h.session.subscribeStamps(event=>seen.push(event));await h.start();
+  h.session.setReadingAllowed(false);
+  const event={type:'stamp.sent',id:crypto.randomUUID(),userId:uuid(2),publicUid:2,username:'other',
+    stamp:{id:1,region:'cn',kind:'normal'}};
+  h.handlers.publication(event);
+  assert.deepEqual(seen,[event],'an unfocused open panel forwards stamps to the visibility-aware player');
+  h.session.setOpen(false);h.handlers.publication({...event,id:crypto.randomUUID()});
+  assert.equal(seen.length,1,'a closed panel does not receive effects');
+  h.session.dispose();
+});
+
 test("initial snapshot merges buffered events and deletes before rendering; events never fetch profiles/history", async () => {
   const h = harness(), gate = deferred(), a = message(1), b = message(2);
   h.setRead(() => gate.promise);

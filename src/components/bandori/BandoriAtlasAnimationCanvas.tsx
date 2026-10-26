@@ -109,6 +109,7 @@ export type BandoriAtlasAnimationCanvasProps = {
   label: string;
   onError: () => void;
   active?: boolean;
+  pauseWhenHidden?: boolean;
   className?: string;
 };
 
@@ -117,6 +118,7 @@ export function BandoriAtlasAnimationCanvas({
   label,
   onError,
   active = true,
+  pauseWhenHidden = true,
   className = "h-full w-full object-contain",
 }: BandoriAtlasAnimationCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -166,7 +168,7 @@ export function BandoriAtlasAnimationCanvas({
     const shouldAnimate = (
       active
       && isIntersecting
-      && isPageVisible
+      && (!pauseWhenHidden || isPageVisible)
       && !prefersReducedMotion
       && frames.length > 1
     );
@@ -240,6 +242,7 @@ export function BandoriAtlasAnimationCanvas({
     firstFrame,
     isIntersecting,
     isPageVisible,
+    pauseWhenHidden,
     prefersReducedMotion,
   ]);
 

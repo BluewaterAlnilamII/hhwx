@@ -295,7 +295,7 @@ export class ChatSession {
     if (!this.active || this.closed || this.disposed) return;
     const stamp = parseChatStampPublication(value);
     if (stamp) {
-      if (this.readingAllowed && !this.ownStamps.has(stamp.id)) this.stampListeners.forEach(listener => listener(stamp));
+      if (!this.ownStamps.has(stamp.id)) this.stampListeners.forEach(listener => listener(stamp));
       return;
     }
     const event = parseChatEvent(value);

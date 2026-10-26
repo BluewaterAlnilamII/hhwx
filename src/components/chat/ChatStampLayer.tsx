@@ -93,7 +93,7 @@ const ChatStampVisual = memo(function ChatStampVisual({ effect, area, stamp }: {
     className="absolute w-max origin-top-left" style={{ left: position.left, top: position.top, transform: `scale(${position.scale})` }}>
     <div ref={visual} className="chat-stamp-visual invisible flex flex-col items-center">
       <div className="relative h-20 w-[120px] sm:h-24 sm:w-36">
-        {oneShot && !animationFailed ? <BandoriStampAnimationCanvas animation={oneShot} label="" onError={failAnimation} />
+        {oneShot && !animationFailed ? <BandoriStampAnimationCanvas animation={oneShot} label="" onError={failAnimation} pauseWhenHidden={false} />
           : stamp && (!stamp.animation || animationFailed) ?
             // eslint-disable-next-line @next/next/no-img-element
             <img src={stamp.imageUrl} alt="" decoding="async" className="h-full w-full object-contain" /> : null}
@@ -133,10 +133,7 @@ export const ChatStampLayer = memo(function ChatStampLayer({ ref }: { ref: Ref<C
   });
   useLayoutEffect(() => { if (catalog) updateCatalog(items); }, [catalog, items, updateCatalog]);
   const effects = useSyncExternalStore(playback.subscribe, playback.getSnapshot, playback.getSnapshot);
-  const play = useCallback((event: ChatStampEvent) => {
-    if (document.visibilityState !== "hidden") playback.play(event);
-  }, [playback]);
-  useImperativeHandle(ref, () => ({ play }), [play]);
+  useImperativeHandle(ref, () => ({ play: playback.play }), [playback]);
 
   useLayoutEffect(() => {
     const observer = new ResizeObserver(([entry]) => {
@@ -149,14 +146,11 @@ export const ChatStampLayer = memo(function ChatStampLayer({ ref }: { ref: Ref<C
   useEffect(() => {
     let active = true;
     void preloadCommonAssets()?.decode().then(() => { if (active) setNameplateLoaded(true); }).catch(() => {});
-    const hide = () => { if (document.visibilityState === "hidden") playback.clear(); };
-    document.addEventListener("visibilitychange", hide);
     return () => {
       active = false;
-      document.removeEventListener("visibilitychange", hide);
       playback.clear();
     };
-  }, [play, playback]);
+  }, [playback]);
 
   return <div ref={root} data-chat-stamp-layer aria-hidden="true" className="pointer-events-none absolute inset-0 z-1 overflow-hidden"
     style={{ "--chat-stamp-nameplate": nameplate ? `url("${nameplate}")` : "none",
