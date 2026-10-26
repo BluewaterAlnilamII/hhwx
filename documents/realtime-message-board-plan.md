@@ -4,20 +4,23 @@
 
 2026-10-24: local implementation is authorized. This scope supersedes the three-second cooldown, single pending send and chat email-status queries. Production operations are not authorized. See [integration](realtime-message-board.md) and [validation](realtime-message-board-validation.md).
 
-## Approved reading and image update (2026-10-26)
+## Activity, unread state and native recovery
 
-The user authorized the simplification below; it replaces the earlier retained-ID validation, separate live-message tail and extra navigation controls. Local implementation is complete. Production operations remain outside this scope.
+A signed-in tab owns one chat connection. `chat_activity:main` stays subscribed while the dialog is closed; `chat:main` is a token-authorized client subscription enabled only while the dialog is open. Personal account notifications retain their existing implementation. Guests create neither subscription.
 
-- Remove the header View latest button and the Continue reading button. Keep only the quiet New messages notice and the existing bottom-right arrow; the title remains readable.
-- Reconnect reads one latest 50-row page. Remove full retained-ID reconciliation, batching, its endpoint/RPC and associated contracts. Offline deleted records may remain locally until reopening; received deletion events still apply immediately.
-- Append continuous live messages directly to the displayed list. Preserve the reader's position unless already following latest. Merge overlapping recovery pages directly; retain a separate latest segment only across an unloaded gap.
-- At the loaded end, read the next 50 rows automatically. Short lists fill until scrollable or latest; no manual Continue action. Merge the cached latest segment once the forward page connects to it. Keep pagination exclusive, cancellation and ID/offset anchor preservation.
-- The sole arrow scrolls an already-continuous list without discarding history. Across a gap it navigates directly to latest; an emptied latest cache is refreshed before replacement. Hide it during recovery and defer send-triggered navigation until recovery finishes.
-- Remove the 500-row cap, opposite-end trimming and page rejection guards. No virtual list, new dependency or background polling. Resizing until the latest bottom is visible resumes following.
-- Images retain 20 MiB, 16,777,216 total pixels and 16,383 per side. In-limit originals remain unchanged; oversized static images resize proportionally, oversized animations are rejected. These output limits do not bound original decoding or animation memory.
-- Apply the unpublished `20261025202652_chat_reading_and_image_limits.sql` before the app. It now adds only the forward-read RPC and relaxed image constraint; sync_chat_messages was removed from this unshipped draft. Keep the additive read and relaxed constraint on rollback; old clients may reject new long-image metadata.
+- Login subscribes to activity before reading `GET /api/chat/activity`. It returns only `{latest,latestOther}` cursors, without bodies, author profiles or unread counts. Creates publish a cursor and author ID; deletes publish an ID. Text and image messages from other accounts can light the launcher's red dot; own messages and stamps cannot.
+- The durable `(createdAt,id)` read cursor lives in `localStorage`, scoped to account and room. First use initializes at the current latest position without flagging old history. Other tabs in the same browser accept monotonic storage updates; cross-device read synchronization is outside scope. A read advances only after the visible, focused dialog renders the latest bottom. Opening an older reading position does not mark it read. Broker offsets are never used as read cursors.
+- First opening subscribes to full messages before requesting `GET /api/chat/messages?activity=1`. One service-only `read_chat_snapshot` RPC returns the latest 50 messages plus the activity summary from one database snapshot; incoming publications are buffered during that read.
+- A valid cached baseline plus `recovered:true` uses SDK replay directly, with **zero history requests**. The retained subscription object carries its recovery position across close/reopen. Create/delete application is idempotent; ephemeral stamps use `skip_history:true` and never replay.
+- If recovery fails or no valid baseline exists, fetch one fresh latest page, replace the old loaded history and return to latest. Preserve drafts, pending uploads, failures and the local read cursor. Do not validate retained IDs, stitch disconnected history or page forward to close a gap. A closed dialog refreshes only its summary; message history waits until opening.
+- Closing preserves loaded message records, pagination and the scroll anchor, releases confirmed media previews and unsubscribes full messages. Pending attachments/uploads remain owned by the account. Hiding or blurring pauses read acknowledgements and stamp playback without disconnecting. Logout/account change disposes the account's memory and transport.
+- Cached reading, navigation and HTTP send confirmations remain usable during reconnect. A history failure retries that read without tearing down a healthy socket. Healthy connections do not poll. A deletion of a current summary marker triggers one coalesced summary refresh; ordinary arrivals do not query.
 
-Evidence and remaining deployment limitations are in the validation record.
+Both namespaces retain at most **256 events for 300 seconds** in Centrifugo's memory engine, with forced recovery. Either count or age can exhaust the window; restart loses it. These are short-disconnection bounds, not durable delivery. A database commit whose publication fails is outside this guarantee and becomes visible at a later fresh snapshot. An outbox remains deferred.
+
+Apply `20261026072628_chat_activity_and_snapshot.sql`, then the new broker configuration, then the app. The migration only adds two service-role invoker RPCs with a fixed empty search path; it adds no table or read-state writes. New tabs opt into the activity connection with `POST /api/chat/connection?activity=1`; legacy requests retain their old full server subscription. Existing before/after history APIs remain compatible, although the new client no longer uses forward recovery. Rollback can keep the additive RPCs/history configuration and restore the old app. No production operation is part of this local change.
+
+The reference is Discord's separation of passive activity and active message delivery, and its resume-or-initialize lifecycle, not a copy of its private web-client protocol: [passive sessions](https://discord.com/blog/how-discord-reduced-websocket-traffic-by-40-percent), [Gateway resuming](https://docs.discord.com/developers/events/gateway#resuming), [Centrifugo recovery](https://centrifugal.dev/docs/server/history_and_recovery). The actual implementation uses the installed Centrifuge SDK.
 
 ## Approved audit follow-up (2026-10-25)
 
@@ -65,15 +68,7 @@ Implemented bounded retention and explicit room context. The later approved foll
 
 ## Synchronization and lifecycle
 
-- Subscribe before fetching the latest 50 messages; buffer concurrent publications. Reopen fetches one page; reconnect and revisibility also read one latest page. Normal credential renewal does not reconnect or reread history.
-- Sending is independent of history. Closing disconnects and keeps only the latest 50 received records from the displayed list and disconnected latest segment, without confirmed image files. Reopening shows them immediately until the fresh page replaces them. Initial loading, reconnection, synchronization and older-history reads share the existing top-center spinner with no reconnect text. Account-local text/image drafts and preparation remain separate; submitted requests finish within the closed-window limit. Hiding disconnects while retaining the window; logout/account change disposes records/drafts/pending sends, terminates preparation, revokes previews, stops unsent requests and ignores old responses. Records and drafts remain memory-only.
-- Preserve loaded messages and the reading position while browsing; allow older pagination and explicit navigation to latest. Known deletes reject late stale responses; crossing 1,000 deletion markers reconciles once and compacts to 500 markers, without per-delete polling. This marker maintenance does not cap retained messages.
-- Isolate saved-message rendering from draft updates with a memoized list and stable callbacks. Apply an own live publication once; preserve early-confirmation buffering during history loading.
-- Keep message/request UUIDs, no business sequence counter. Events contain required IDs, text, timestamps and compact author fields; receiving does not fetch profiles or permissions.
-- Return the saved result after commit, then publish once to Centrifugo's private HTTP API using Next.js `after()`, with a two-second timeout. The response does not wait for publishing. Failure logs remain; no outbox, consumer, durable publication retry or polling for gaps.
-- A connected peer can miss a committed create/delete until reopen, reconnect or an explicit history read. No per-recipient acknowledgement, final-message gap detection or strict global deletion guarantee.
-- Retain 30 days, prune up to 1,000 expired rows every ten minutes, and do not broadcast natural expiry individually.
-- Keep Centrifugo 6.9.7 memory engine, SDK 5.7.4 and jose 6.2.12. No database credentials or history replay; SDK heartbeats/reconnection remain. Connection JWTs last at most an hour and never outlive the authorizing access token.
+The account connection, two channels, native recovery and local-read rules in the opening section are authoritative. Retain messages for 30 days and prune at most 1,000 expired rows every ten minutes without individual expiry events. Personal notifications, an outbox, cross-device read state, a new messaging framework and healthy-session polling are outside scope.
 
 ## Verification and rollout
 

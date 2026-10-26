@@ -73,12 +73,12 @@ test("trusted room context scopes connection tokens and all event publications",
   for (const roomId of ["main", "other"]) {
     const connection = await h.server.issueChatConnection({ userId, expiresAt: Math.floor(Date.now()/1000)+60 }, roomId);
     const { payload } = await jose.jwtVerify(connection.token, new TextEncoder().encode(h.env.CHAT_TOKEN_SECRET));
-    assert.deepEqual(payload.channels, [`chat:${roomId}`]);
+    assert.deepEqual(payload.channels, [`chat_activity:${roomId}`]);
     assert.equal(connection.channel, `chat:${roomId}`);
-    for (const event of [{ type: "message.created", message: { id: userId } },
+    for (const event of [{ type: "message.created", message: { id: userId, createdAt: "2026-10-26T00:00:00.000000Z", author: { userId } } },
       { type: "message.deleted", messageId: userId }, { type: "stamp.sent", id: userId }]) {
       await h.server.publishChatEvent(event, roomId);
-      assert.equal(JSON.parse(h.publications.at(-1).body).channel, `chat:${roomId}`);
+      assert.equal(JSON.parse(h.publications.at(-1).body).channel, `${event.type === "stamp.sent" ? "chat" : "chat_activity"}:${roomId}`);
     }
   }
 });
@@ -91,6 +91,21 @@ test("CSP adds only the configured chat WebSocket origin when the launcher is en
   assert.match(headers("true"),/wss:\/\/chat.example/);
   assert.doesNotMatch(headers("true"),/privatePath/);
   assert.doesNotMatch(headers("false"),/chat.example/);
+});
+
+test("activity reads and combined snapshots preserve authentication, room scope and no-store", async () => {
+  const h=harness();h.setData({latest:null,latestOther:null});
+  const dependencies={"@/lib/api-contracts":contracts,"@/lib/api-response":responses,"@/lib/chat/chat-server":h.server};
+  const activity=compile("../src/app/api/chat/activity/route.ts",dependencies);
+  const response=await activity.GET(request());assert.equal(response.status,200);assert.match(response.headers.get('cache-control'),/no-store/);
+  assert.equal(h.calls.at(-1).name,'read_chat_activity');assert.equal(h.calls.at(-1).args.p_actor,userId);
+  const reads=h.calls.filter(c=>c.name).length;
+  assert.equal((await activity.GET(new Request('http://localhost/api/chat/activity'))).status,401);
+  assert.equal((await activity.GET(new Request('http://localhost/api/chat/activity?roomId=other',{headers:{authorization:'Bearer test'}}))).status,404);
+  assert.equal(h.calls.filter(c=>c.name).length,reads);
+  const messages=compile("../src/app/api/chat/messages/route.ts",dependencies);
+  await messages.GET(new Request('http://localhost/api/chat/messages?activity=1',{headers:{authorization:'Bearer test'}}));
+  assert.equal(h.calls.at(-1).name,'read_chat_snapshot');assert.equal(h.calls.at(-1).args.p_room_id,'main');
 });
 
 test("registered claims only; sends check the authenticated Auth user once without separate email queries", async () => {
@@ -113,10 +128,15 @@ test("JWT has fixed room and never outlives the authorizing session; no private 
   const connection = await h.server.issueChatConnection({ userId,expiresAt });
   const { payload } = await jose.jwtVerify(connection.token,new TextEncoder().encode(h.env.CHAT_TOKEN_SECRET),{ issuer:"hhwx-chat",audience:"hhwx-chat" });
   assert.equal(payload.sub,userId); assert.equal(payload.exp,expiresAt);
-  assert.deepEqual(payload.channels,["chat:main"]);
-  assert.deepEqual(Object.keys(connection).sort(),["channel","token","url","viewer"]);
+  assert.deepEqual(payload.channels,["chat_activity:main"]);
+  assert.deepEqual(Object.keys(connection).sort(),["activityChannel","channel","subscriptionToken","token","url","viewer"]);
   assert.equal(connection.channel,"chat:main");
-  assert.equal(h.calls.length,1);
+  const subscription = (await jose.jwtVerify(connection.subscriptionToken,new TextEncoder().encode(h.env.CHAT_TOKEN_SECRET),
+    {issuer:"hhwx-chat",audience:"hhwx-chat"})).payload;
+  assert.equal(subscription.sub,userId);assert.equal(subscription.channel,"chat:main");assert.equal(subscription.exp,expiresAt);
+  const legacy = await h.server.issueChatConnection({userId,expiresAt},"main",false);
+  assert.deepEqual(jose.decodeJwt(legacy.token).channels,["chat:main"]);
+  assert.equal(h.calls.length,2, "each independently issued credential reads its viewer once");
   const long = await h.server.issueChatConnection({ userId, expiresAt: Math.floor(Date.now()/1000)+7200 });
   const longPayload = jose.decodeJwt(long.token);
   assert.equal(longPayload.exp - longPayload.iat,3600);
@@ -164,7 +184,7 @@ test("content, microsecond cursors and body byte limit reject bad input; DB inte
 });
 
 test("message routes publish committed results once without readback and never publish rejected writes", async () => {
-  const h=harness(); const saved={messageId:userId,deleted:false,message:{id:userId,content:"hi"}}; h.setData(saved);
+  const h=harness(); const saved={messageId:userId,deleted:false,message:{id:userId,content:"hi",createdAt:"2026-10-26T00:00:00.000000Z",author:{userId}}}; h.setData(saved);
   const route=compile("../src/app/api/chat/messages/route.ts",{
     "@/lib/api-contracts":contracts,"@/lib/api-response":responses,"@/lib/chat/chat-server":h.server,
   });
@@ -176,18 +196,18 @@ test("message routes publish committed results once without readback and never p
   assert.equal(h.calls[1].name,"send_chat_message");
   assert.equal(h.publications.length,0,"saved response does not wait for publication");
   await route.runAfter();
-  assert.equal(h.publications.length,1);
-  assert.deepEqual(JSON.parse(h.publications[0].body),{channel:"chat:main",idempotency_key:`message.created:${userId}`,data:{type:"message.created",message:saved.message}});
+  assert.equal(h.publications.length,2);
+  assert.deepEqual(JSON.parse(h.publications[0].body),{channel:"chat:main",skip_history:false,idempotency_key:`message.created:${userId}`,data:{type:"message.created",message:saved.message}});
   assert.equal(h.publications[0].headers["X-API-Key"],h.env.CHAT_PUBLISH_API_KEY);
   assert.equal(h.publications[0].redirect,"error");
   h.setError({message:"CHAT_MUTED"});
   assert.equal((await route.POST(request("POST",{clientRequestId:userId,content:"hi"}))).status,403);
   await route.runAfter();
-  assert.equal(h.publications.length,1);
+  assert.equal(h.publications.length,2);
   h.setError(null); h.setData({...saved,message:null,deleted:true});
   assert.equal((await route.POST(request("POST",{clientRequestId:userId,content:"hi"}))).status,200);
   await route.runAfter();
-  assert.equal(h.publications.length,1,"retry of deleted message must not publish its old body");
+  assert.equal(h.publications.length,2,"retry of deleted message must not publish its old body");
   const read=await route.GET(request()); assert.equal(read.status,200);
 });
 
@@ -227,7 +247,7 @@ test("publish timeout aborts the single attempt without rejecting a saved mutati
   const start=performance.now();
   await h.server.publishChatEvent({type:"message.deleted",messageId:userId,deletedAt:new Date().toISOString()});
   assert.ok(performance.now()-start<3500);
-  assert.equal(h.publications.length,1); assert.equal(h.warnings.length,1);
+  assert.equal(h.publications.length,2); assert.equal(h.warnings.length,1);
   assert.equal(h.publications[0].signal.aborted,true);
 });
 

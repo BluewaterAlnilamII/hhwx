@@ -35,19 +35,23 @@ try {
   let healthy=false;
   for(let i=0;i<100;i++) { try { healthy=(await fetch(`http://127.0.0.1:${internal}/health`)).ok; } catch {} if(healthy)break; await delay(50); }
   assert.ok(healthy,`Local server did not start: ${log.replaceAll(secret,"[redacted]").replaceAll(key,"[redacted]")}`);
-  const tokenFor=(channels)=>new SignJWT({channels}).setProtectedHeader({alg:"HS256"}).setSubject(randomUUID())
+  const actor=randomUUID();
+  const tokenFor=(channels)=>new SignJWT({channels}).setProtectedHeader({alg:"HS256"}).setSubject(actor)
     .setIssuer("hhwx-chat").setAudience("hhwx-chat").setExpirationTime("10m").sign(new TextEncoder().encode(secret));
-  const token=await tokenFor(["chat:main"]);
+  const token=await tokenFor(["chat_activity:main"]);
+  const subscriptionToken=await new SignJWT({channel:"chat:main"}).setProtectedHeader({alg:"HS256"}).setSubject(actor).setIssuer("hhwx-chat").setAudience("hhwx-chat").setExpirationTime("10m").sign(new TextEncoder().encode(secret));
+  const subscriptions=[];
   let subscribed=0,received=0; const durations=[],started=new Map();
-  const publish=async(data,id)=>{
+  const publish=async(data,id,skip_history=false,channel="chat:main")=>{
     const response=await fetch(`http://127.0.0.1:${internal}/api/publish`,{method:"POST",headers:{"Content-Type":"application/json","X-API-Key":key},
-      body:JSON.stringify({channel:"chat:main",data,idempotency_key:id})});
+      body:JSON.stringify({channel,data,idempotency_key:id,skip_history})});
     const body=await response.json(); assert.equal(body.error,undefined); return body;
   };
   for(let i=0;i<200;i++) {
     const c=new Centrifuge(`ws://127.0.0.1:${port}/connection/websocket`,{token,websocket:WebSocket});
-    c.on("subscribed",()=>{subscribed++;});
-    c.on("publication",(ctx)=>{ received++; const at=started.get(ctx.data.message?.id); if(at)durations.push(performance.now()-at); });
+    const sub=c.newSubscription("chat:main",{token:subscriptionToken}); subscriptions.push(sub);
+    sub.on("subscribed",()=>{subscribed++;}); sub.subscribe();
+    sub.on("publication",(ctx)=>{ received++; const at=started.get(ctx.data.message?.id); if(at)durations.push(performance.now()-at); });
     clients.push(c); c.connect();
   }
   await until(()=>subscribed===200);
@@ -58,11 +62,20 @@ try {
   const baseline=received;
   for(let i=0;i<100;i++){const event=makeMessage();started.set(event.message.id,performance.now());await publish(event,randomUUID());}
   await until(()=>received===baseline+20000);
-  const one=clients[0]; let reconnected=false;
-  one.on("subscribed",(ctx)=>{assert.equal(ctx.recoverable,false);assert.equal(ctx.recovered,false);reconnected=true;});
+  const one=clients[0],sub=subscriptions[0]; let recovered=false;
+  sub.on("subscribed",ctx=>{recovered=ctx.recovered;});
   one.disconnect(); await delay(50);
   const before=received; await publish(makeMessage(),randomUUID()); await until(()=>received===before+199);
-  one.connect(); await until(()=>reconnected); await delay(100);assert.equal(received,before+199,"offline events must not replay over a fresh database snapshot");
+  one.connect(); await until(()=>recovered); await until(()=>received===before+200);
+  let activity=0;one.on("publication",ctx=>{if(ctx.channel==="chat_activity:main")activity++;});
+  sub.unsubscribe();await delay(50);
+  const closed=received;
+  await publish({type:"stamp.sent",id:randomUUID()},randomUUID(),true);
+  await publish(makeMessage(),randomUUID());
+  await publish({type:"activity"},randomUUID(),false,"chat_activity:main");
+  await until(()=>received===closed+398&&activity===1);
+  recovered=false;sub.subscribe();await until(()=>recovered);await until(()=>received===closed+399);
+  assert.equal(received,closed+399,"reopening replays the saved message, never the ephemeral stamp");
   const fanoutDeliveries=received;
   const maxMessage=makeMessage();maxMessage.message.content="🌟".repeat(1000);
   await publish(maxMessage,randomUUID());await until(()=>received===fanoutDeliveries+200);
@@ -77,7 +90,7 @@ try {
   durations.sort((a,b)=>a-b);
   console.log(JSON.stringify({server:"6.9.7",sdk:"5.7.4",clients:200,fanoutPublications:102,fanoutDeliveries,
     sampleEventBytes:Buffer.byteLength(JSON.stringify(sample)),p95LocalMs:Math.round(durations[Math.floor(durations.length*.95)]),
-    idempotency:true,reconnectWithoutReplay:true,maxLengthLiveFanout:true,clientPublishDenied:true,databaseIntegration:"not exercised",compression:false,tls:false},null,2));
+    idempotency:true,nativeRecovery:true,reopenRecovery:true,closedActivity:true,stampsNotReplayed:true,maxLengthLiveFanout:true,clientPublishDenied:true,databaseIntegration:"not exercised",compression:false,tls:false},null,2));
 } finally {
   clients.forEach((c)=>c.disconnect()); child.kill();
   await new Promise((resolve)=>{if(child.exitCode!==null)resolve();else child.once("exit",resolve);});

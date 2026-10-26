@@ -4,6 +4,7 @@ import { isChatImage, type ChatImage } from "./chat-image-contract";
 
 export const CHAT_DEFAULT_ROOM_ID = "main";
 export const chatChannel = (roomId: string) => `chat:${roomId}`;
+export const chatActivityChannel = (roomId: string) => `chat_activity:${roomId}`;
 export const CHAT_CHANNEL = chatChannel(CHAT_DEFAULT_ROOM_ID);
 export const CHAT_MAX_LENGTH = 1000;
 export const CHAT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -25,10 +26,13 @@ export type ChatMessage = {
   };
 };
 export type ChatCursor = { createdAt: string; id: string };
-export type ChatPage = { messages: ChatMessage[]; nextCursor: ChatCursor | null };
+export type ChatActivity = { latest: ChatCursor | null; latestOther: ChatCursor | null };
+export type ChatPage = { messages: ChatMessage[]; nextCursor: ChatCursor | null; activity?: ChatActivity };
 export type ChatNewerPage = { messages: ChatMessage[]; hasMore: boolean };
 export type ChatViewer = { userId: string; canModerate: boolean; mutedUntil: string | null; nextSendAt: string | null };
-export type ChatConnection = { token: string; url: string; channel?: string; viewer: ChatViewer };
+export type ChatConnection = { token: string; url: string; channel: string; activityChannel: string; subscriptionToken: string; viewer: ChatViewer };
+export type ChatActivityEvent = { type: "message.created"; cursor: ChatCursor; userId: string }
+  | { type: "message.deleted"; messageId: string };
 export type ChatEvent = { type: "message.created"; message: ChatMessage }
   | { type: "message.deleted"; messageId: string; deletedAt: string };
 export type ChatSendResult = { messageId: string; clientRequestId: string; message: ChatMessage | null; deleted: boolean; nextSendAt: string | null };
@@ -62,4 +66,20 @@ export function parseChatEvent(value: unknown): ChatEvent | null {
 export function compareChatMessages(a: ChatCursor, b: ChatCursor): number {
   // SQL returns fixed-width UTC microseconds; Date would discard cursor precision.
   return a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
+}
+
+export function isChatCursor(value: unknown): value is ChatCursor {
+  if (!value || typeof value !== "object") return false;
+  const cursor = value as ChatCursor;
+  return typeof cursor.id === "string" && CHAT_UUID.test(cursor.id)
+    && typeof cursor.createdAt === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/u.test(cursor.createdAt)
+    && Number.isFinite(Date.parse(cursor.createdAt));
+}
+
+export function parseChatActivityEvent(value: unknown): ChatActivityEvent | null {
+  if (!value || typeof value !== "object") return null;
+  const event = value as ChatActivityEvent;
+  if (event.type === "message.created" && isChatCursor(event.cursor) && typeof event.userId === "string" && CHAT_UUID.test(event.userId)) return event;
+  if (event.type === "message.deleted" && typeof event.messageId === "string" && CHAT_UUID.test(event.messageId)) return event;
+  return null;
 }
