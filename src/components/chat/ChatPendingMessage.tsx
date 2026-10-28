@@ -4,18 +4,19 @@ import * as ContextMenu from "@radix-ui/react-context-menu";
 import { useRef, useState } from "react";
 import { CircleAlert, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { CommentContent } from "@/components/comments/CommentContent";
+import { ChatMessageText } from "./ChatMessageText";
 import { LoadingSpinner } from "@/components/LoadingIndicator";
 import ImageViewer from "@/components/ImageViewer";
 import type { ChatSnapshot } from "@/lib/chat/chat-session";
 import { cn } from "@/lib/utils";
 import { ChatImageContent } from "./ChatImageContent";
-import { chatBubbleClass, itemClass, menuClass } from "./ChatMessageBubble";
+import { chatBubbleClass, itemClass, menuClass } from "./ChatMessageRow";
 import { ChatCopyMenuItem } from "./ChatCopyMenuItem";
 import { ChatSaveImageMenuItem } from "./ChatSaveImageMenuItem";
+import { ChatReplyPreview } from "./ChatReplyPreview";
 
-export function ChatPendingMessage({ pending, blocked, onRetry, onDiscard }: {
-  pending: ChatSnapshot["pending"][number]; blocked: boolean; onRetry(): void; onDiscard(): void;
+export function ChatPendingMessage({ pending, blocked, onRetry, onDiscard, onRetryWithoutReply }: {
+  pending: ChatSnapshot["pending"][number]; blocked: boolean; onRetry(): void; onDiscard(): void; onRetryWithoutReply(): void;
 }) {
   const t = useTranslations("chat");
   const trigger = useRef<HTMLDivElement>(null);
@@ -26,7 +27,7 @@ export function ChatPendingMessage({ pending, blocked, onRetry, onDiscard }: {
   const descriptionId = `chat-retry-${pending.clientRequestId}`;
   const status = failed ? error : t(pending.status === "queued" ? "queued" : pending.status === "uploading" ? "uploadingImage" : "sending");
 
-  return <li data-pending-id={pending.clientRequestId} data-send-status={pending.status} className="mt-2 flex items-center justify-end gap-1" aria-live="polite">
+  return <li data-pending-id={pending.clientRequestId} data-send-status={pending.status} className="mt-2 mr-11.5 flex items-center justify-end gap-1 sm:mr-12.5" aria-live="polite">
     {failed ? <button type="button" disabled={blocked} onClick={onRetry} aria-label={t("retryFailed")}
       aria-describedby={descriptionId} title={`${error} · ${t("retry")}`}
       className="flex size-10 shrink-0 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-[var(--theme-color-focus-ring)] disabled:opacity-40">
@@ -47,8 +48,9 @@ export function ChatPendingMessage({ pending, blocked, onRetry, onDiscard }: {
               event.currentTarget.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: rect.left + rect.width / 2, clientY: rect.bottom }));
             }
           }}>
+          {pending.reply && <ChatReplyPreview reply={pending.error === "CHAT_REPLY_DELETED" ? { id: pending.reply.id, deleted: true } : pending.reply} />}
           {pending.image ? <ChatImageContent src={pending.image.url} width={pending.image.width} height={pending.image.height} onOpen={() => { if (!menuOpen) setPreviewOpen(true); }} />
-            : <CommentContent content={pending.content} isDeleted={false} className="m-0 text-sm text-inherit leading-[22px]" />}
+            : <ChatMessageText content={pending.content} mentions={pending.mentions} />}
         </div>
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
@@ -56,6 +58,7 @@ export function ChatPendingMessage({ pending, blocked, onRetry, onDiscard }: {
           event.preventDefault(); trigger.current?.focus({ preventScroll: true });
         }}>
           <ContextMenu.Group>
+            {pending.reply && pending.error === "CHAT_REPLY_DELETED" && <ContextMenu.Item className={itemClass} disabled={blocked} onSelect={onRetryWithoutReply}>{t("retryWithoutReply")}</ContextMenu.Item>}
             <ChatCopyMenuItem content={pending.content} imageSource={pending.image?.url} className={itemClass} onCopied={() => setMenuOpen(false)} />
             {pending.image && <ChatSaveImageMenuItem source={pending.image.url} contentType={pending.image.contentType} onPreview={() => setPreviewOpen(true)} className={itemClass} />}
             <ContextMenu.Item className={cn(itemClass, "text-[var(--theme-color-action-destructive-foreground)]")} onSelect={onDiscard}>

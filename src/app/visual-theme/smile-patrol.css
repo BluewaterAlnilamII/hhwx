@@ -31,6 +31,7 @@
   --theme-seed-semantic-info: var(--smile-patrol-palette-blue-006699);
   --theme-seed-semantic-success: #008348;
   --theme-seed-semantic-warning: #b14700;
+  --theme-color-chat-mentioned-accent: var(--smile-patrol-palette-yellow-f9e065);
   --theme-seed-semantic-danger: #e0002f;
   --theme-seed-brand-primary: var(--smile-patrol-palette-orange-ff9922);
   --theme-seed-brand-emphasis: var(--smile-patrol-palette-red-ef392b);
@@ -227,6 +228,7 @@
     --theme-shadow-shell-sidebar-overlay: var(--theme-shadow-floating);
     --theme-shadow-surface-raised: 0 3px 14px #00000024;
     --theme-shadow-floating: 0 8px 30px #00000047;
+    --theme-shadow-chat-mention-card: 0 3px 8px #00000033, inset 0 -1px 0 var(--theme-color-border-subtle), inset 0 3px 4px -4px #00000066;
     --theme-shadow-action-primary: none;
 
     --theme-color-heading-page-foreground: var(--smile-patrol-palette-pink-f5a4cd);
@@ -239,6 +241,8 @@
 
     /* Readable status ink is independent from solid action and badge fills. */
     --theme-color-semantic-info-foreground: color-mix(in srgb, var(--smile-patrol-palette-blue-006699) 50%, #ffffff);
+    --theme-color-chat-mention-foreground: color-mix(in srgb, var(--smile-patrol-palette-blue-006699) 35%, #ffffff);
+    --theme-color-chat-mentioned-background: color-mix(in srgb, var(--smile-patrol-palette-yellow-f9e065) 12%, #171717);
     --theme-color-semantic-success-foreground: color-mix(in srgb, var(--theme-seed-semantic-success) 50%, #ffffff);
     --theme-color-semantic-warning-foreground: color-mix(in srgb, var(--theme-seed-semantic-warning) 45%, #ffffff);
     --theme-color-semantic-danger-foreground: color-mix(in srgb, var(--theme-seed-semantic-danger) 40%, #ffffff);

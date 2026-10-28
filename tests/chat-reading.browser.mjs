@@ -44,7 +44,7 @@ const mocks = {
   '@/lib/account-avatar-card': 'export const resolveStoredAccountAvatarCardIdentity=()=>({cardId:1,entityServer:0});',
   './ChatComposer': `import {createElement} from 'react'; export const useChatAttachments=()=>({});
     export const ChatComposer=({draft,onChange,onSend})=>createElement('div',null,createElement('textarea',{value:draft,onChange:e=>onChange(e.target.value),'aria-label':'Message text',style:{height:60,width:'100%'}}),createElement('button',{onClick:()=>onSend([])},'Send fixture'));`,
-  './ChatMessageBubble': `import {createElement} from 'react'; export const ChatMessageBubble=({message})=>createElement('div',{'data-bubble':message.id,style:{minHeight:40,padding:8,borderRadius:12,background:'var(--theme-color-control-background)'}},message.content);`,
+  './ChatMessageRow': `import {createElement} from 'react'; export const ChatMessageRow=({message})=>createElement('div',{'data-bubble':message.id,style:{minHeight:40,padding:8,borderRadius:12,background:'var(--theme-color-control-background)'}},message.content);`,
   './ChatPendingMessage': 'export const ChatPendingMessage=()=>null;',
   '@/components/ImageViewer': 'export default ()=>null;',
 };

@@ -5,14 +5,15 @@ import { parseChatEvent } from "../src/lib/chat/chat-contract.ts";
 
 const uuid = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const userId = uuid(1);
+const messageBase = Date.now() - 20000;
 const message = (n, content = "文字消息") => ({ id: uuid(n + 10), clientRequestId: uuid(n + 100), content,
-  createdAt: new Date(Date.now() - 20000 + n).toISOString().replace("Z", "000Z"),
+  createdAt: new Date(messageBase + n).toISOString().replace("Z", "000Z"),
   author: { userId, username: "tester", publicUid: 1, avatarCardId: 1, avatarCardServer: null, avatarCardTrainType: "normal" } });
 const created = (m) => ({ type: "message.created", message: m });
 const deleted = (m) => ({ type: "message.deleted", messageId: m.id, deletedAt: new Date().toISOString() });
 const tick = () => new Promise(setImmediate);
 const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
-function harness() {
+function harness(extraDeps = {}) {
   let handlers, refresh;
   let read = async () => ({ messages: [], nextCursor: null });
   let write = async () => { throw new Error("unexpected write"); };
@@ -30,6 +31,7 @@ function harness() {
       handlers = events; refresh = _refresh;
       return { connect() { connections++; events.connecting(); }, disconnect() { events.disconnected(); }, subscribeMessages() {}, unsubscribeMessages() {} };
     },
+    ...extraDeps,
   });
   return { session, calls, get handlers() { return handlers; }, get refresh() { return refresh; }, get connections() { return connections; },
     setRead(fn) { read = fn; }, setWrite(fn) { write = fn; }, setConnection(fn) { connect = fn; },
@@ -521,4 +523,204 @@ test('older pagination is exclusive and does not discard loaded rows', async () 
   await h.session.loadOlder();assert.equal(h.calls.length,count);
   gate.resolve({messages:rows.slice(0,50),nextCursor:null});await reading;
   assert.deepEqual(h.session.getSnapshot().messages,rows);assert.equal(h.session.getSnapshot().nextCursor,null);h.session.dispose();
+});
+
+
+test('reply drafts survive closure, submit once, and explicit ordinary sends do not inherit references', async () => {
+  const h=harness(), original=message(1);await h.start();h.session.setReply(original);h.session.setDraft('answer');
+  h.session.setOpen(false);h.session.setOpen(true);h.handlers.subscribed({recovered:true});
+  assert.equal(h.session.getSnapshot().reply.id,original.id);
+  const bodies=[];h.setWrite(async(_path,init)=>{const b=JSON.parse(init.body);bodies.push(b);return {message:{...message(3+bodies.length,b.content),clientRequestId:b.clientRequestId},nextSendAt:null};});
+  await h.session.send();assert.equal(bodies[0].replyToId,original.id);assert.equal(h.session.getSnapshot().reply,null);
+  h.session.setDraft('continuation');await h.session.send();assert.equal(bodies[1].replyToId,undefined);h.session.dispose();
+});
+
+test('deleted reply keeps the draft and rejected pending sends can explicitly retry without a quote', async () => {
+  const h=harness(), original=message(1);await h.start();h.session.setReply(original);h.session.setDraft('keep');
+  h.handlers.publication(deleted(original));assert.equal(h.session.send(),null);assert.equal(h.session.getSnapshot().draft,'keep');
+  h.session.setReply(message(2));let body;
+  h.setWrite(async(_path,init)=>{body=JSON.parse(init.body);throw new ChatRequestError('CHAT_REPLY_DELETED');});await h.session.send();
+  const id=body.clientRequestId;assert.equal(h.session.getSnapshot().pending[0].reply.id,message(2).id);
+  h.setWrite(async(_path,init)=>{const retry=JSON.parse(init.body);assert.equal(retry.clientRequestId,id);assert.equal(retry.replyToId,undefined);return{message:{...message(3,retry.content),clientRequestId:id},nextSendAt:null};});
+  await h.session.retryWithoutReply(id);assert.equal(h.session.getSnapshot().pending.length,0);h.session.dispose();
+});
+
+test('reactions reconcile out-of-order counts and personal selections without unread activity', async () => {
+  const h=harness(),m={...message(1),reactions:[],reactionsVersion:0,reactionsViewerId:userId};h.setRead(async()=>({messages:[m],nextCursor:m}));await h.start();h.session.setFollowing(false);
+  const reaction=(version,actor,keys,reactions)=>({type:'message.reactions',messageId:m.id,version,userId:actor,ownEmojiKeys:keys,reactions});
+  h.handlers.publication(reaction(3,uuid(2),['KanonLove'],[{emojiKey:'KokoroYay',count:1},{emojiKey:'KanonLove',count:1}]));
+  h.handlers.publication(reaction(2,userId,['KokoroYay'],[{emojiKey:'KokoroYay',count:1}]));
+  let shown=h.session.getSnapshot().messages[0];assert.equal(shown.reactionsVersion,3);assert.equal(shown.reactions.find(r=>r.emojiKey==='KokoroYay').reactedByViewer,true);
+  h.handlers.publication(reaction(1,userId,[],[]));
+  await h.session.loadOlder();shown=h.session.getSnapshot().messages[0];assert.equal(shown.reactionsVersion,3);assert.equal(shown.reactions.find(r=>r.emojiKey==='KokoroYay').reactedByViewer,true);
+  assert.equal(h.session.getSnapshot().newMessages,0);assert.equal(h.session.getSnapshot().unread,false);
+  assert.equal(parseChatEvent({...reaction(4,userId,[],[]),version:-1}),null);h.session.dispose();
+});
+
+for (const context of [false, true]) test(`reactions received during ${context ? 'quote-context' : 'main'} pagination survive an older HTTP snapshot`, async () => {
+  const h=harness(),latest=message(100),old={...message(1),reactions:[],reactionsVersion:0,reactionsViewerId:userId};
+  h.setRead(async()=>({messages:[latest],nextCursor:latest}));await h.start();
+  if(context){const target=message(50);h.setRead(async()=>({messages:[target],nextCursor:target}));await h.session.locate(target.id);}
+  const gate=deferred();h.setRead(()=>gate.promise);const loading=h.session.loadOlder();
+  const event=(version,actor,count,keys)=>({type:'message.reactions',messageId:old.id,version,userId:actor,ownEmojiKeys:keys,reactions:count?[{emojiKey:'Tae',count}]:[]});
+  h.handlers.publication(event(3,uuid(2),2,['Tae']));
+  h.handlers.publication(event(2,userId,1,['Tae']));
+  h.handlers.publication(event(1,userId,0,[]));
+  gate.resolve({messages:[old],nextCursor:null});await loading;
+  const shown=(h.session.getSnapshot().context??h.session.getSnapshot()).messages.find(m=>m.id===old.id);
+  assert.equal(shown.reactionsVersion,3);assert.equal(shown.viewerReactionsVersion,2);
+  assert.deepEqual(shown.reactions,[{emojiKey:'Tae',count:2,reactedByViewer:true}]);
+  h.session.dispose();
+});
+
+test('reactions can arrive before message creation, survive reopening and yield to newer snapshots', async () => {
+  const h=harness(),m={...message(1),reactions:[],reactionsVersion:0,reactionsViewerId:userId};await h.start();
+  const event={type:'message.reactions',messageId:m.id,version:1,userId:uuid(2),ownEmojiKeys:['Tae'],reactions:[{emojiKey:'Tae',count:1}]};
+  h.handlers.publication(event);
+  h.session.setOpen(false);h.session.setOpen(true);h.handlers.subscribed({recovered:true});
+  h.handlers.publication(created(m));
+  assert.deepEqual(h.session.getSnapshot().messages[0].reactions,[{emojiKey:'Tae',count:1,reactedByViewer:false}]);
+  const fresh={...m,reactionsVersion:2};h.setRead(async()=>({messages:[fresh],nextCursor:null}));
+  await h.session.syncLatest();h.handlers.publication(created(m));
+  assert.equal(h.session.getSnapshot().messages[0].reactionsVersion,2);
+  assert.deepEqual(h.session.getSnapshot().messages[0].reactions,[]);
+  h.handlers.publication(event);h.handlers.publication(deleted(m));h.handlers.publication(event);h.handlers.publication(created(m));
+  assert.equal(h.session.getSnapshot().messages.length,0);h.session.dispose();
+});
+
+test('excess deferred reaction updates cancel stale pagination and recover from a fresh snapshot', async () => {
+  const h=harness(),latest=message(2000),old=message(1);
+  h.setRead(async()=>({messages:[latest],nextCursor:latest}));await h.start();
+  const gate=deferred();h.setRead(()=>gate.promise);const loading=h.session.loadOlder();
+  for(let i=0;i<1001;i++)h.handlers.publication({type:'message.reactions',messageId:message(i).id,version:1,userId:uuid(2),ownEmojiKeys:['Tae'],reactions:[{emojiKey:'Tae',count:1}]});
+  assert.equal(h.session.getSnapshot().error,'CHAT_SYNC_OVERFLOW');
+  gate.resolve({messages:[old],nextCursor:null});await loading;
+  assert.deepEqual(h.session.getSnapshot().messages.map(m=>m.id),[latest.id]);
+  const fresh={...old,reactionsVersion:1,reactionsViewerId:userId,reactions:[{emojiKey:'Tae',count:1,reactedByViewer:false}]};
+  h.setRead(async()=>({messages:[fresh],nextCursor:null}));await h.session.syncLatest();
+  assert.equal(h.session.getSnapshot().status,'live');assert.deepEqual(h.session.getSnapshot().messages[0].reactions,fresh.reactions);
+  h.session.dispose();
+});
+
+test('quick reactions restore valid distinct names and fill defaults in order', () => {
+  const h=harness();
+  assert.deepEqual(h.session.getSnapshot().quickReactions,['Tae','KokoroYay','LisaMelt']);
+  h.session.restoreQuickReactions(['LisaMelt','LisaMelt','missing-emoji',null,42,'KanonLove']);
+  assert.deepEqual(h.session.getSnapshot().quickReactions,['LisaMelt','KanonLove','Tae']);
+  h.session.restoreQuickReactions(['KanonLove','HinaAAA','Tae','LisaMelt']);
+  assert.deepEqual(h.session.getSnapshot().quickReactions,['KanonLove','HinaAAA','Tae']);
+  h.session.restoreQuickReactions({keys:['KanonLove']});
+  assert.deepEqual(h.session.getSnapshot().quickReactions,['Tae','KokoroYay','LisaMelt']);
+  h.session.dispose();
+});
+
+test('only explicitly selected successful reactions reorder quick choices; joining chips does not', async () => {
+  const saved=[],h=harness({saveQuickReactions:keys=>saved.push([...keys])}),m=message(1);let version=0;
+  h.setRead(async()=>({messages:[m],nextCursor:null}));await h.start();
+  h.setWrite(async(_path,init)=>{const {emojiKey,active}=JSON.parse(init.body);return{type:'message.reactions',messageId:m.id,version:++version,userId,ownEmojiKeys:active?[emojiKey]:[],reactions:active?[{emojiKey,count:1}]:[]};});
+  for(const key of ['KanonLove','HinaAAA','LisaMelt','KanonLove'])await h.session.react(m.id,key,true,{remember:true});
+  const expected=['KanonLove','LisaMelt','HinaAAA'];
+  assert.deepEqual(h.session.getSnapshot().quickReactions,expected);assert.equal(saved.length,4);assert.deepEqual(saved.at(-1),expected);
+  await h.session.react(m.id,'Tae',true);
+  assert.equal(h.session.getSnapshot().messages[0].reactions.find(r=>r.emojiKey==='Tae').reactedByViewer,true);
+  assert.deepEqual(h.session.getSnapshot().quickReactions,expected);assert.equal(saved.length,4);
+  await h.session.react(m.id,'HinaAAA',false,{remember:true});
+  h.setWrite(async()=>{throw new ChatRequestError('CHAT_UNAVAILABLE');});
+  await assert.rejects(h.session.react(m.id,'Tae',true,{remember:true}));
+  h.handlers.publication({type:'message.reactions',messageId:m.id,version:++version,userId:uuid(2),ownEmojiKeys:['Tae'],reactions:[{emojiKey:'Tae',count:1}]});
+  assert.deepEqual(h.session.getSnapshot().quickReactions,expected);assert.equal(saved.length,4);
+  h.session.setOpen(false);h.session.setOpen(true);assert.deepEqual(h.session.getSnapshot().quickReactions,expected);
+  h.session.dispose();
+});
+
+test('quick reactions reload saved preferences while independent sessions keep their own defaults', async () => {
+  const stored=['LisaMelt','HinaAAA','Tae'],h=harness({readQuickReactions:()=>stored}),other=harness();
+  h.setRead(async()=>({latest:null,latestOther:null}));const unmount=h.session.mount();await tick();
+  assert.deepEqual(h.session.getSnapshot().quickReactions,stored);
+  assert.deepEqual(other.session.getSnapshot().quickReactions,['Tae','KokoroYay','LisaMelt']);
+  unmount();await tick();other.session.dispose();
+});
+
+test('an in-flight reaction cannot change quick choices or storage after disposal', async () => {
+  const saved=[],h=harness({saveQuickReactions:keys=>saved.push(keys)}),gate=deferred(),m=message(1);
+  await h.start();h.setWrite(()=>gate.promise);const adding=h.session.react(m.id,'KanonLove',true,{remember:true});
+  assert.deepEqual(h.session.getSnapshot().quickReactions,['Tae','KokoroYay','LisaMelt']);
+  h.session.dispose();gate.resolve({type:'message.reactions',messageId:m.id,version:1,userId,ownEmojiKeys:['KanonLove'],reactions:[{emojiKey:'KanonLove',count:1}]});await adding;
+  assert.equal(saved.length,0);assert.deepEqual(h.session.getSnapshot().quickReactions,['Tae','KokoroYay','LisaMelt']);
+});
+
+test('quote navigation fetches a bounded context, reconciles deletion, and jumps back to the main timeline', async () => {
+  const h=harness(),original=message(1),latest=message(100);h.setRead(async()=>({messages:[latest],nextCursor:latest}));await h.start();
+  h.session.scrollAnchors=[{id:latest.id,top:12}];h.setRead(async path=>{assert.ok(path.endsWith('/context'));return{messages:[original],nextCursor:null};});
+  assert.equal(await h.session.locate(original.id),true);assert.equal(h.session.getSnapshot().context.messages[0].id,original.id);
+  h.handlers.publication(created(message(101)));assert.equal(h.session.getSnapshot().context.messages.length,1);
+  await h.session.jumpLatest();assert.equal(h.session.getSnapshot().context,null);assert.equal(h.session.getSnapshot().following,true);
+  const gate=deferred();h.setRead(()=>gate.promise);const locating=h.session.locate(original.id);h.handlers.publication(deleted(original));gate.resolve({messages:[original],nextCursor:null});
+  assert.equal(await locating,false);assert.equal(h.session.getSnapshot().context,null);h.session.dispose();
+});
+
+test('switching into quote context cancels an older-page read and later navigation wins', async () => {
+  const h=harness(),latest=message(100),old=message(1);h.setRead(async()=>({messages:[latest],nextCursor:latest}));await h.start();const gate=deferred();
+  h.setRead(path=>path.includes('before=')?gate.promise:Promise.resolve({messages:[old],nextCursor:null}));const older=h.session.loadOlder();
+  await h.session.locate(old.id);gate.resolve({messages:[message(80)],nextCursor:null});await older;
+  assert.deepEqual(h.session.getSnapshot().messages.map(m=>m.id),[latest.id]);assert.equal(h.session.getSnapshot().context.messages[0].id,old.id);
+  await h.session.jumpLatest();assert.equal(h.session.getSnapshot().context,null);h.session.dispose();
+});
+
+
+test('mention draft survives closure, trims offsets and belongs only to the text item in an image batch', async () => {
+ const h=harness();await h.start();const sent=[];
+ h.setWrite(async(path,init)=>{sent.push({path,body:JSON.parse(init.body)});throw new ChatRequestError('CHAT_UNAVAILABLE');});
+ h.session.setDraft('  😀 @小明  ',[{userId:uuid(2),start:4,end:7}]);
+ h.session.setOpen(false);h.session.setOpen(true);assert.equal(h.session.getSnapshot().draftMentions.length,1);
+ await h.session.send();assert.deepEqual(sent[0].body.mentions,[{userId:uuid(2),start:2,end:5}]);
+ assert.equal(sent[0].body.content,'😀 @小明');assert.equal(h.session.getSnapshot().draftMentions.length,0);
+ await h.session.retry(h.session.getSnapshot().pending[0].clientRequestId);assert.deepEqual(sent[1].body.mentions,sent[0].body.mentions);
+ h.session.setDraft('@小明',[{userId:uuid(2),start:0,end:3}]);
+ const image={blob:new Blob(['x']),width:1,height:1,bytes:1,contentType:'image/png',hash:'a'.repeat(64)};
+ await h.session.send([image,image]);const pending=h.session.getSnapshot().pending.slice(1);
+ assert.ok(pending.filter(p=>p.image).every(p=>!p.mentions));assert.equal(pending.find(p=>!p.image).mentions.length,1);h.session.dispose();
+});
+
+test('mentions remain independently unread and acknowledge only the selected item',async()=>{
+ const h=harness();await h.start();const items=[{...message(1),username:'A'},{...message(2),username:'B'}].map(({id,createdAt,username})=>({id,createdAt,username}));
+ let inbox={items,total:2};h.setRead(async()=>inbox);await h.session.refreshMentions();
+ h.session.setReadingAllowed(true);h.session.markRead();assert.equal(h.session.getSnapshot().mentions.total,2);assert.equal(h.session.getSnapshot().unread,true);
+ h.setWrite(async(path,init)=>{assert.equal(path,'/api/chat/mentions');assert.deepEqual(JSON.parse(init.body).messageIds,[items[0].id]);inbox={items:[items[1]],total:1};return{acknowledged:true};});
+ await h.session.acknowledgeMentions([items[0].id]);assert.equal(h.session.getSnapshot().mentions.items[0].id,items[1].id);
+ h.session.setReadingAllowed(false);await h.session.acknowledgeMentions([items[1].id],true);assert.equal(h.session.getSnapshot().mentions.total,1);
+ h.setWrite(async()=>{throw Error('offline');});await h.session.acknowledgeMentions([items[1].id]);assert.equal(h.session.getSnapshot().mentions.total,1);assert.equal(h.session.getSnapshot().mentionError,true);h.session.dispose();
+});
+
+test('a mention change during an inbox read triggers a fresh read and cannot restore stale data',async()=>{
+ const h=harness();await h.start();const gate=deferred();let reads=0;
+ const item={id:uuid(42),createdAt:message(1).createdAt,username:'A'};
+ h.setRead(async()=>++reads===1?gate.promise:{items:[item],total:1});
+ const loading=h.session.refreshMentions();h.handlers.mentionChanged();gate.resolve({items:[],total:0});await loading;
+ assert.equal(reads,2);assert.equal(h.session.getSnapshot().mentions.items[0].id,item.id);
+ const late=deferred();h.setRead(()=>late.promise);const loadingLate=h.session.refreshMentions();h.session.dispose();late.resolve({items:[item],total:1});await loadingLate;assert.equal(h.session.getSnapshot().mentions.total,0);
+});
+
+test('reopening refreshes durable mentions and a missing target drops only its alert',async()=>{
+ const h=harness();h.setConnection(async()=>({token:'test',url:'ws://local',mentionChannel:'chat_mentions:'+userId,viewer:{userId,canModerate:false,mutedUntil:null,nextSendAt:null}}));
+ await h.start();const items=[{id:uuid(42),createdAt:message(1).createdAt,username:'A'},{id:uuid(43),createdAt:message(2).createdAt,username:'B'}];let inbox={items,total:2};
+ h.setRead(async path=>{
+  if(path==='/api/chat/mentions')return inbox;
+  if(path.endsWith('/context')){inbox={items:[items[1]],total:1};throw new ChatRequestError('CHAT_NOT_FOUND');}
+  return {messages:[],nextCursor:null};
+ });
+ h.session.setOpen(false);h.session.setOpen(true);await tick();assert.equal(h.session.getSnapshot().mentions.total,2);
+ assert.equal(await h.session.locate(items[0].id),false);await tick();assert.deepEqual(h.session.getSnapshot().mentions,inbox);
+ h.setRead(async()=>{throw new ChatRequestError('CHAT_UNAVAILABLE');});
+ await assert.rejects(h.session.locate(items[1].id));assert.equal(h.session.getSnapshot().mentions.total,1);h.session.dispose();
+});
+
+test('reading a newer mention outside the inbox page acknowledges it without clearing older alerts',async()=>{
+ const h=harness(),newer={...message(100,'@tester'),author:{...message(100).author,userId:uuid(2)},mentions:[{userId,start:0,end:7}]};
+ h.setRead(async()=>({messages:[newer],nextCursor:null}));await h.start();
+ const older=Array.from({length:50},(_,i)=>({id:uuid(i+500),createdAt:message(i).createdAt,username:'A'}));let total=51;
+ h.setRead(async()=>({items:older,total}));await h.session.refreshMentions();let writes=0;
+ h.setWrite(async(_path,init)=>{writes++;assert.deepEqual(JSON.parse(init.body).messageIds,[newer.id]);total--;return{acknowledged:true};});
+ await h.session.acknowledgeMentions([newer.id],true);assert.equal(h.session.getSnapshot().mentions.total,50);assert.equal(h.session.getSnapshot().mentions.items.length,50);
+ await h.session.acknowledgeMentions([newer.id],true);assert.equal(writes,1);h.session.dispose();
 });

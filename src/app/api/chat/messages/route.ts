@@ -1,7 +1,7 @@
 import { after } from "next/server";
 import { ApiRouteError } from "@/lib/api-contracts";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
-import { chatHeaders, chatRpc, parseChatContent, parseChatCursor, parseChatId, publishChatEvent, readChatBody, requireChatIdentity, requireChatRoom } from "@/lib/chat/chat-server";
+import { chatHeaders, chatRpc, parseChatContent, parseChatCursor, parseChatId, parseChatMentions, publishChatEvent, readChatBody, requireChatIdentity, requireChatRoom } from "@/lib/chat/chat-server";
 import type { ChatNewerPage, ChatPage, ChatSendResult } from "@/lib/chat/chat-contract";
 
 export async function GET(request: Request) {
@@ -35,9 +35,12 @@ export async function POST(request: Request) {
   try {
     const actor = await requireChatIdentity(request, true);
     const roomId = requireChatRoom(request);
-    const body = await readChatBody(request);
+    const body = await readChatBody(request, 65536);
+    const content = parseChatContent(body.content);
     const result = await chatRpc<ChatSendResult>("send_chat_message", {
-      p_actor: actor.userId, p_request_id: parseChatId(body.clientRequestId), p_content: parseChatContent(body.content), p_room_id: roomId,
+      p_actor: actor.userId, p_request_id: parseChatId(body.clientRequestId), p_content: content, p_room_id: roomId,
+      p_mentions: parseChatMentions(body.mentions, content),
+      p_reply_to_id: body.replyToId == null ? null : parseChatId(body.replyToId),
     });
     if (!result.deleted && result.message) {
       const message = result.message;

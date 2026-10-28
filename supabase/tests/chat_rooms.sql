@@ -86,8 +86,8 @@ declare role_name text; signature text;
 begin
   foreach role_name in array array['anon','authenticated'] loop
     foreach signature in array array['public.read_chat_messages(uuid,timestamptz,uuid,text)',
-      'public.send_chat_message(uuid,uuid,text,text)','public.send_chat_image(uuid,uuid,jsonb,text)',
-      'public.delete_chat_message(uuid,uuid,text)','chat_private.save_message(uuid,uuid,text,jsonb,text)'] loop
+      'public.send_chat_message(uuid,uuid,text,text,uuid,jsonb)','public.send_chat_image(uuid,uuid,jsonb,text,uuid)',
+      'public.delete_chat_message(uuid,uuid,text)','chat_private.save_message(uuid,uuid,text,jsonb,text,uuid,jsonb)'] loop
       assert not has_function_privilege(role_name,signature,'execute');
       assert has_function_privilege('service_role',signature,'execute');
     end loop;

@@ -19,6 +19,8 @@ export type CommentReactionsDialogProps = {
   reactions: CommentReactionSummary[];
   loadParticipants: CommentReactionParticipantPageLoader;
   onClose: () => void;
+  overlayClassName?: string;
+  className?: string;
 };
 
 function sortReactions(reactions: CommentReactionSummary[]): CommentReactionSummary[] {
@@ -37,6 +39,8 @@ export function CommentReactionsDialog({
   reactions,
   loadParticipants,
   onClose,
+  overlayClassName,
+  className,
 }: CommentReactionsDialogProps) {
   const t = useTranslations("comments");
   const [orderedReactions] = useState(() => sortReactions(reactions));
@@ -92,7 +96,7 @@ export function CommentReactionsDialog({
   return (
     <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-130 bg-[var(--theme-color-overlay-background)] backdrop-blur-[1px] data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:animate-in data-[state=open]:fade-in" />
+        <Dialog.Overlay className={cn("fixed inset-0 z-130 bg-[var(--theme-color-overlay-background)] backdrop-blur-[1px] data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:animate-in data-[state=open]:fade-in", overlayClassName)} />
         <Dialog.Content
           ref={contentRef}
           data-testid="comment-reactions-dialog"
@@ -102,7 +106,7 @@ export function CommentReactionsDialog({
             event.preventDefault();
             contentRef.current?.focus();
           }}
-          className="fixed inset-x-0 bottom-0 z-131 flex h-[min(42rem,88dvh)] flex-col overflow-hidden rounded-t-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-comment-reaction-background)] text-[var(--theme-color-text-default)] shadow-2xl outline-hidden data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom-4 data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom-4 sm:left-1/2 sm:right-auto sm:top-1/2 sm:bottom-auto sm:h-[min(38rem,calc(100dvh-3rem))] sm:w-[min(34rem,calc(100vw-2rem))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:data-[state=closed]:fade-out sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:fade-in sm:data-[state=open]:zoom-in-95"
+          className={cn("fixed inset-x-0 bottom-0 z-131 flex h-[min(42rem,88dvh)] flex-col overflow-hidden rounded-t-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-comment-reaction-background)] text-[var(--theme-color-text-default)] shadow-2xl outline-hidden data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom-4 data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom-4 sm:left-1/2 sm:right-auto sm:top-1/2 sm:bottom-auto sm:h-[min(38rem,calc(100dvh-3rem))] sm:w-[min(34rem,calc(100vw-2rem))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:data-[state=closed]:fade-out sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:fade-in sm:data-[state=open]:zoom-in-95", className)}
         >
           <div className="flex h-16 shrink-0 items-center justify-between border-b border-[var(--theme-color-border-subtle)] px-5">
             <Dialog.Title className="text-lg font-bold tracking-tight">

@@ -17,6 +17,6 @@ export function ChatImageContent({ src, width, height, compact = false, onOpen }
       crossOrigin="anonymous" loading="lazy" decoding="async" draggable={false} className="block h-full w-full select-none object-contain [-webkit-touch-callout:none]"
       onError={() => setFailed(src)} />;
   const className = "relative block max-w-full shrink-0 select-none overflow-hidden rounded-xl [-webkit-touch-callout:none]";
-  return onOpen ? <button type="button" className={className} style={style} onClick={onOpen} aria-label={t("openImage")}>{content}</button>
+  return onOpen ? <button type="button" data-chat-image className={className} style={style} onClick={onOpen} aria-label={t("openImage")}>{content}</button>
     : <div className={className} style={style}>{content}</div>;
 }

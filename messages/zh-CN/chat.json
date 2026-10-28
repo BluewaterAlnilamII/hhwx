@@ -59,7 +59,10 @@
     "CHAT_IMAGES_UNAVAILABLE": "图片上传暂未开放",
     "CHAT_UPLOAD_COOLDOWN": "上传图片过于频繁，请稍后重试",
     "CHAT_STAMP_COOLDOWN": "Stamp 发送过于频繁，请稍后再试",
-    "CHAT_INVALID_STAMP": "这个 Stamp 暂不可用"
+    "CHAT_INVALID_STAMP": "这个 Stamp 暂不可用",
+    "CHAT_REPLY_DELETED": "消息已删除，请在消息菜单中取消引用后重试",
+    "CHAT_INVALID_REACTION": "这个回应暂不可用",
+    "CHAT_INVALID_MENTION": "提及对象已变化，请重新选择用户"
   },
   "queued": "等待发送",
   "rateLimit": "本轮已发送 20 条，请在 {seconds} 秒后重试",
@@ -72,5 +75,24 @@
   "removeImage": "移除图片",
   "preparingImage": "正在处理图片…",
   "uploadingImage": "正在上传…",
-  "stamp": "Stamp"
+  "stamp": "Stamp",
+  "addReaction": "添加回应",
+  "reply": "引用",
+  "reactWith": "用 {emoji} 回应",
+  "viewReactions": "查看回应",
+  "reactionFailed": "回应未完成，请重试",
+  "messageDeleted": "消息已删除",
+  "viewOriginal": "查看原消息",
+  "cancelReply": "取消引用",
+  "replyUnavailable": "请取消引用或选择另一条消息后发送",
+  "locateFailed": "原消息加载失败，请重试",
+  "retryWithoutReply": "取消引用并重新发送",
+  "mentionedYou": "有人 @ 了你",
+  "mentionBy": "<name>{username}</name> @了你",
+  "moreMentions": "还有 {count} 条",
+  "dismissMention": "关闭这条提醒",
+  "mentionUsers": "选择要提及的用户",
+  "mentionNoResults": "未找到用户",
+  "mentionSearchFailed": "暂时无法搜索用户，请重新输入",
+  "mentionSyncFailed": "提及提醒同步失败，点击重试"
 }

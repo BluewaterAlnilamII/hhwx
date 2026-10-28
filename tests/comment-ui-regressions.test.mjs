@@ -64,7 +64,8 @@ test("comment edits use a synchronous single-flight guard and lock editing contr
 });
 
 test("reaction previews stay inside narrow and offset visual viewports", () => {
-  assert.match(itemSource, /relative inline-flex select-none \[-webkit-touch-callout:none\]/u);
+  const chipSource = readFileSync(new URL("../src/components/comments/CommentReactionChip.tsx", import.meta.url), "utf8");
+  assert.match(chipSource, /relative inline-flex select-none \[-webkit-touch-callout:none\]/u);
 
   const cases = [
     { anchorLeft: 24, viewportLeft: 0, viewportWidth: 390 },
@@ -88,13 +89,13 @@ test("reaction previews stay inside narrow and offset visual viewports", () => {
     assert.ok(globalLeft + result.width <= viewportLeft + viewportWidth - 16);
   }
 
-  assert.match(itemSource, /getCommentPopoverHorizontalPosition\(\{/u);
-  assert.match(itemSource, /viewport\?\.offsetLeft \?\? 0/u);
-  assert.match(itemSource, /viewport\?\.width \?\? window\.innerWidth/u);
-  assert.match(itemSource, /window\.addEventListener\("scroll", scheduleUpdate, true\)/u);
-  assert.match(itemSource, /viewport\?\.addEventListener\("resize", scheduleUpdate\)/u);
-  assert.match(itemSource, /viewport\?\.addEventListener\("scroll", scheduleUpdate\)/u);
-  assert.doesNotMatch(itemSource, /absolute bottom-full left-1\/2/u);
+  assert.match(chipSource, /getCommentPopoverHorizontalPosition\(\{/u);
+  assert.match(chipSource, /viewport\?\.offsetLeft \?\? 0/u);
+  assert.match(chipSource, /viewport\?\.width \?\? window\.innerWidth/u);
+  assert.match(chipSource, /window\.addEventListener\("scroll", scheduleUpdate, true\)/u);
+  assert.match(chipSource, /viewport\?\.addEventListener\("resize", scheduleUpdate\)/u);
+  assert.match(chipSource, /viewport\?\.addEventListener\("scroll", scheduleUpdate\)/u);
+  assert.doesNotMatch(chipSource, /absolute bottom-full left-1\/2/u);
 });
 
 test("reaction previews prefer above with no gap, flip only when needed, and constrain tall lists", () => {

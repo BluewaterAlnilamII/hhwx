@@ -12,7 +12,8 @@ export async function POST(request: Request) {
     const body = await readChatBody(request);
     const requestId = parseChatId(body.clientRequestId);
     const image = await verifyChatImageUpload(actor.userId, requestId, body.receipt);
-    const result = await chatRpc<ChatSendResult>("send_chat_image", { p_actor: actor.userId, p_request_id: requestId, p_image: image, p_room_id: roomId });
+    const result = await chatRpc<ChatSendResult>("send_chat_image", { p_actor: actor.userId, p_request_id: requestId, p_image: image, p_room_id: roomId,
+      p_reply_to_id: body.replyToId == null ? null : parseChatId(body.replyToId) });
     if (!result.deleted && result.message) {
       const message = result.message;
       after(() => publishChatEvent({ type: "message.created", message }, roomId));
