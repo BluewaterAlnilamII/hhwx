@@ -44,10 +44,10 @@ test("the shared picker inserts at the selection and preserves the rest of the d
 test("chat and comments share inline and jumbo emoji rendering, with no stamp resolution in chat", () => {
   const inline = render("你好 :KokoroYay:");
   assert.match(inline, /src="\/res\/emoji\/KokoroYay.png"/);
-  assert.match(inline, /width="32"/);
+  assert.match(inline, /width="24"/);
   const jumbo = render(":KokoroYay: :KanonJii:");
   assert.equal((jumbo.match(/<img /g) ?? []).length, 2);
-  assert.match(jumbo, /width="64"/);
+  assert.match(jumbo, /width="48"/);
   assert.match(jumbo, /\/res\/emoji\/KanonJii.webp/);
   const unknown = render(":stamp-jp-1: :unknown: <script>unsafe</script>");
   assert.doesNotMatch(unknown, /<img|<script>/);
@@ -128,4 +128,11 @@ test("viewer retains pinch zoom and stops the gesture for native context menus",
   h.emit("contextmenu"); const count = h.updates.length;
   h.emit("pointermove", h.image, { pointerId: 2, clientX: 95 }); assert.equal(h.updates.length, count);
   h.dispose();
+});
+
+
+test('a deliberate reply starts an author group while its ordinary continuation stays grouped',()=>{
+  const author={userId:'same'},base={author,createdAt:new Date().toISOString()};
+  const rows=getChatMessageLayout([{...base,id:'a'},{...base,id:'b',reply:{id:'target',deleted:true}},{...base,id:'c'}]);
+  assert.deepEqual(rows.map(r=>r.showAuthor),[true,true,false]);
 });

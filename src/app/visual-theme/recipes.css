@@ -28,6 +28,18 @@
   --theme-color-chat-background: color-mix(in srgb, var(--theme-color-action-secondary-foreground) 4%, var(--theme-color-control-background));
   --theme-color-chat-own-background: color-mix(in srgb, var(--theme-color-action-secondary-foreground) 14%, var(--theme-color-control-background));
   --theme-color-chat-own-foreground: var(--theme-color-text-default);
+  --theme-color-chat-mention-foreground: var(--theme-color-semantic-info-foreground);
+  --theme-color-chat-mention-background: color-mix(in srgb, var(--theme-color-chat-mention-foreground) 18%, var(--theme-color-control-background));
+  --theme-color-chat-mentioned-accent: var(--theme-color-semantic-warning-border);
+  --theme-color-chat-mentioned-background: color-mix(in srgb, var(--theme-color-chat-mentioned-accent) 14%, var(--theme-color-chat-background));
+  --theme-color-chat-row-hover: color-mix(in srgb, var(--theme-color-text-muted) 7%, var(--theme-color-chat-background));
+  --theme-color-chat-row-locate: color-mix(in srgb, var(--theme-color-semantic-info-foreground) 15%, var(--theme-color-chat-background));
+  --theme-color-chat-mentioned-hover: color-mix(in srgb, var(--theme-color-chat-mentioned-accent) 8%, var(--theme-color-chat-mentioned-background));
+  --theme-color-chat-mentioned-locate: color-mix(in srgb, var(--theme-color-chat-mentioned-accent) 20%, var(--theme-color-chat-mentioned-background));
+  --theme-shadow-chat-mention-card:
+    0 3px 8px color-mix(in srgb, var(--theme-seed-text-primary) 10%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--theme-color-border-subtle) 45%, transparent),
+    inset 0 3px 4px -4px color-mix(in srgb, var(--theme-seed-text-primary) 20%, transparent);
   --theme-color-panel-border: var(--theme-color-border-default);
   --theme-shadow-panel: var(--theme-shadow-surface-raised);
   --theme-color-text-default: var(--theme-seed-text-primary);

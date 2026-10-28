@@ -27,9 +27,9 @@ declare a uuid := 'c0000000-0000-4000-8000-000000000001';
 begin
   assert not has_schema_privilege('anon','chat_private','USAGE');
   assert not has_schema_privilege('authenticated','chat_private','USAGE');
-  assert not has_function_privilege('authenticated','public.send_chat_message(uuid,uuid,text,text)','EXECUTE');
+  assert not has_function_privilege('authenticated','public.send_chat_message(uuid,uuid,text,text,uuid,jsonb)','EXECUTE');
   assert not has_function_privilege('anon','public.read_chat_messages(uuid,timestamptz,uuid,text)','EXECUTE');
-  assert has_function_privilege('service_role','public.send_chat_message(uuid,uuid,text,text)','EXECUTE');
+  assert has_function_privilege('service_role','public.send_chat_message(uuid,uuid,text,text,uuid,jsonb)','EXECUTE');
   assert not (public.read_chat_viewer(b) ? 'emailVerified');
   assert jsonb_array_length(public.read_chat_messages(b)->'messages') = 0;
   saved := public.send_chat_message(a,r,repeat('汉',1000));

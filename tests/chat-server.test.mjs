@@ -73,7 +73,7 @@ test("trusted room context scopes connection tokens and all event publications",
   for (const roomId of ["main", "other"]) {
     const connection = await h.server.issueChatConnection({ userId, expiresAt: Math.floor(Date.now()/1000)+60 }, roomId);
     const { payload } = await jose.jwtVerify(connection.token, new TextEncoder().encode(h.env.CHAT_TOKEN_SECRET));
-    assert.deepEqual(payload.channels, [`chat_activity:${roomId}`]);
+    assert.deepEqual(payload.channels, [`chat_activity:${roomId}`,`chat_mentions:${userId}`]);
     assert.equal(connection.channel, `chat:${roomId}`);
     for (const event of [{ type: "message.created", message: { id: userId, createdAt: "2026-10-26T00:00:00.000000Z", author: { userId } } },
       { type: "message.deleted", messageId: userId }, { type: "stamp.sent", id: userId }]) {
@@ -128,14 +128,14 @@ test("JWT has fixed room and never outlives the authorizing session; no private 
   const connection = await h.server.issueChatConnection({ userId,expiresAt });
   const { payload } = await jose.jwtVerify(connection.token,new TextEncoder().encode(h.env.CHAT_TOKEN_SECRET),{ issuer:"hhwx-chat",audience:"hhwx-chat" });
   assert.equal(payload.sub,userId); assert.equal(payload.exp,expiresAt);
-  assert.deepEqual(payload.channels,["chat_activity:main"]);
-  assert.deepEqual(Object.keys(connection).sort(),["activityChannel","channel","subscriptionToken","token","url","viewer"]);
+  assert.deepEqual(payload.channels,["chat_activity:main",`chat_mentions:${userId}`]);
+  assert.deepEqual(Object.keys(connection).sort(),["activityChannel","channel","mentionChannel","subscriptionToken","token","url","viewer"]);
   assert.equal(connection.channel,"chat:main");
   const subscription = (await jose.jwtVerify(connection.subscriptionToken,new TextEncoder().encode(h.env.CHAT_TOKEN_SECRET),
     {issuer:"hhwx-chat",audience:"hhwx-chat"})).payload;
   assert.equal(subscription.sub,userId);assert.equal(subscription.channel,"chat:main");assert.equal(subscription.exp,expiresAt);
   const legacy = await h.server.issueChatConnection({userId,expiresAt},"main",false);
-  assert.deepEqual(jose.decodeJwt(legacy.token).channels,["chat:main"]);
+  assert.deepEqual(jose.decodeJwt(legacy.token).channels,["chat:main",`chat_mentions:${userId}`]);
   assert.equal(h.calls.length,2, "each independently issued credential reads its viewer once");
   const long = await h.server.issueChatConnection({ userId, expiresAt: Math.floor(Date.now()/1000)+7200 });
   const longPayload = jose.decodeJwt(long.token);
@@ -262,4 +262,58 @@ test('forward reads validate cursors and authorization before invoking RPC', asy
   assert.equal(h.calls.at(-1).name,'read_newer_chat_messages');
   assert.equal(h.calls.at(-1).args.p_after_at,'2026-10-25T00:00:00.123456Z');
   assert.equal((await history.GET(new Request('http://localhost/api/chat/messages?after='+cursor))).status,401);
+});
+
+
+test('reply and reaction routes validate targets, actor and room; reaction events never publish activity',async()=>{
+ const h=harness(), deps={'@/lib/api-contracts':contracts,'@/lib/api-response':responses,'@/lib/chat/chat-server':h.server,
+ '@/lib/comments/emoji':{COMMENT_EMOJI_NAME_SET:new Set(['KokoroYay'])}};
+ const reactions=compile('../src/app/api/chat/messages/[messageId]/reactions/route.ts',deps);
+ const context=compile('../src/app/api/chat/messages/[messageId]/context/route.ts',deps);
+ const target={params:Promise.resolve({messageId:userId})};
+ for(const body of [{emojiKey:'bogus',active:true},{emojiKey:'KokoroYay',active:1}]){
+  assert.equal((await reactions.PUT(request('PUT',body),target)).status,400);
+ }
+ assert.ok(h.calls.every(c=>typeof c==='string'));
+ const event={type:'message.reactions',messageId:userId,userId,ownEmojiKeys:['KokoroYay'],reactions:[{emojiKey:'KokoroYay',count:1}],version:1};h.setData(event);
+ let response=await reactions.PUT(request('PUT',{emojiKey:'KokoroYay',active:true}),target);assert.equal(response.status,200);
+ assert.equal(h.calls.at(-1).name,'set_chat_reaction');assert.equal(h.calls.at(-1).args.p_actor,userId);await reactions.runAfter();
+ assert.equal(h.publications.length,1);let publication=JSON.parse(h.publications[0].body);assert.equal(publication.channel,'chat:main');assert.equal(publication.idempotency_key,`message.reactions:${userId}:1`);
+ h.setData({...event,version:2});await reactions.PUT(request('PUT',{emojiKey:'KokoroYay',active:false}),target);await reactions.runAfter();assert.notEqual(JSON.parse(h.publications[1].body).idempotency_key,publication.idempotency_key);
+ response=await reactions.GET(new Request('http://localhost/?emojiKey=KokoroYay',{headers:{authorization:'Bearer test'}}),target);assert.equal(response.status,200);assert.match(response.headers.get('cache-control'),/no-store/);
+ response=await context.GET(request(),target);assert.equal(response.status,200);assert.equal(h.calls.at(-1).name,'read_chat_context');
+ const calls=h.calls.filter(c=>typeof c!=='string').length;
+ response=await context.GET(new Request('http://localhost/?roomId=other',{headers:{authorization:'Bearer test'}}),target);assert.equal(response.status,404);assert.equal(h.calls.filter(c=>typeof c!=='string').length,calls);
+ h.setAnonymous(true);assert.equal((await reactions.PUT(request('PUT',{emojiKey:'KokoroYay',active:true}),target)).status,401);
+ const messages=compile('../src/app/api/chat/messages/route.ts',{...deps,'@/lib/chat/chat-contract':chatContract});h.setAnonymous(false);
+ assert.equal((await messages.POST(request('POST',{clientRequestId:userId,content:'answer',replyToId:'bad'}))).status,400);
+ h.setData({deleted:false,message:{id:userId},nextSendAt:null});await messages.POST(request('POST',{clientRequestId:userId,content:'answer',replyToId:userId}));assert.equal(h.calls.at(-1).args.p_reply_to_id,userId);
+ h.setError({message:'CHAT_REPLY_DELETED'});assert.equal((await messages.POST(request('POST',{clientRequestId:userId,content:'answer',replyToId:userId}))).status,409);
+});
+
+
+test('mention routes enforce identity, scope and payload bounds and target only the current recipient',async()=>{
+ const h=harness(),deps={'@/lib/api-contracts':contracts,'@/lib/api-response':responses,'@/lib/chat/chat-server':h.server};
+ const inbox=compile('../src/app/api/chat/mentions/route.ts',deps),users=compile('../src/app/api/chat/mentions/users/route.ts',deps);
+ h.setData({items:[],total:0});assert.equal((await inbox.GET(request())).status,200);assert.equal(h.calls.at(-1).args.p_actor,userId);
+ assert.equal((await inbox.GET(new Request('http://localhost/api/chat/mentions'))).status,401);
+ assert.equal((await inbox.PUT(request('PUT',{messageIds:[]}))).status,400);
+ assert.equal((await inbox.PUT(request('PUT',{messageIds:Array(51).fill(userId)}))).status,400);
+ assert.equal((await inbox.PUT(request('PUT',{messageIds:['bad']}))).status,400);
+ assert.equal((await inbox.PUT(request('PUT',{messageIds:[userId,userId],userId:'someone-else'}))).status,200);
+ assert.equal(h.calls.at(-1).args.p_actor,userId);assert.deepEqual(Array.from(h.calls.at(-1).args.p_message_ids),[userId]);
+ await inbox.runAfter();assert.equal(JSON.parse(h.publications.at(-1).body).channel,`chat_mentions:${userId}`);
+ h.setData([]);assert.equal((await users.GET(new Request('http://localhost/?q=小明',{headers:{authorization:'Bearer test'}}))).status,200);
+ assert.equal(h.calls.at(-1).args.p_query,'小明');
+ assert.equal((await users.GET(new Request('http://localhost/?q='+ 'x'.repeat(97),{headers:{authorization:'Bearer test'}}))).status,400);
+});
+
+test('mention sends reject malformed ranges and publish one private invalidation per unique non-self target',async()=>{
+ const h=harness(),other='10000000-0000-4000-8000-000000000002';
+ const m={userId:other,start:0,end:2};assert.throws(()=>h.server.parseChatMentions([{...m,start:1}],'@A'));
+ assert.throws(()=>h.server.parseChatMentions([m,m],'@A'));assert.deepEqual(Array.from(h.server.parseChatMentions(undefined,'@A')),[]);
+ await h.server.publishChatEvent({type:'message.created',message:{id:userId,createdAt:'2026-10-27T00:00:00.000000Z',author:{userId},mentions:[m,{...m,start:3,end:5},{userId,start:6,end:8}]}});
+ const publications=h.publications.map(p=>JSON.parse(p.body));assert.equal(publications.length,3);
+ assert.equal(publications[2].channel,`chat_mentions:${other}`);assert.deepEqual(publications[2].data,{type:'mentions.changed'});
+ assert.equal(JSON.stringify(publications[1].data).includes(other),false,'Room activity must not expose private inbox state');
 });

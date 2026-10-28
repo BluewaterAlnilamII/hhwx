@@ -1,11 +1,12 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, RefObject } from "react";
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { Smile } from "lucide-react";
+import { SmilePlus } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { RemoveScroll } from "react-remove-scroll";
 import { COMMENT_EMOJI_NAMES, getCommentEmojiSrc } from "@/lib/comments/emoji";
-import { getCommentPopoverHorizontalPosition } from "@/lib/comments/comment-popover-position";
+import { getCommentPopoverHorizontalPosition, getCommentPopoverVerticalPosition } from "@/lib/comments/comment-popover-position";
 import { cn } from "@/lib/utils";
 
 type EmojiPickerButtonProps = {
@@ -15,7 +16,9 @@ type EmojiPickerButtonProps = {
   compact?: boolean;
   disabled?: boolean;
   label?: string;
-  variant?: "default" | "composer";
+  variant?: "default" | "composer" | "message";
+  hideTrigger?: boolean;
+  anchorRef?: RefObject<HTMLElement | null>;
 };
 
 export const EmojiPickerButton = memo(function EmojiPickerButton({
@@ -26,25 +29,36 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
   disabled = false,
   label,
   variant = "default",
+  hideTrigger = false,
+  anchorRef,
 }: EmojiPickerButtonProps) {
   const t = useTranslations("comments");
   const pickerLabel = label ?? t("pickers.emoji");
   const popoverId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({});
 
   const updatePopoverPosition = useCallback(() => {
-    if (!open || !buttonRef.current || !containerRef.current) return;
+    const anchor = buttonRef.current ?? anchorRef?.current;
+    if (!open || !anchor || !containerRef.current) return;
 
-    const rect = buttonRef.current.getBoundingClientRect();
+    const rect = anchor.getBoundingClientRect();
     const containerRect = containerRef.current.getBoundingClientRect();
     const viewport = window.visualViewport;
-    const panelElement = variant === "composer" ? containerRef.current.closest("[data-chat-panel]") : null;
+    const panelElement = variant !== "default" ? containerRef.current.closest("[data-chat-panel]") : null;
     const panel = panelElement?.getBoundingClientRect();
     const left = Math.max(viewport?.offsetLeft ?? 0, panel?.left ?? 0);
     const right = Math.min((viewport?.offsetLeft ?? 0) + (viewport?.width ?? window.innerWidth), panel?.right ?? window.innerWidth);
     const top = Math.max(viewport?.offsetTop ?? 0, panelElement?.querySelector("header")?.getBoundingClientRect().bottom ?? panel?.top ?? 0);
+    if (variant === "message") {
+      const bottom = Math.min((viewport?.offsetTop ?? 0) + (viewport?.height ?? window.innerHeight), panel?.bottom ?? window.innerHeight);
+      const vertical = getCommentPopoverVerticalPosition({ anchorRect: rect, tooltipHeight: 274, viewportTop: top, viewportHeight: bottom - top });
+      setPopoverStyle({ ...getCommentPopoverHorizontalPosition({ anchorRect: rect, containerLeft: 0, preferredWidth: 384,
+        viewportLeft: left, viewportWidth: right - left }), top: Math.max(top + 16, Math.min(vertical.top, bottom - 16 - 274)) });
+      return;
+    }
     const inputTop = containerRef.current.closest("[data-chat-input]")?.getBoundingClientRect().top ?? rect.top;
     // Leave room for the trigger gap, viewport inset, and popover padding/border.
     const gridHeight = Math.max(0, Math.min(256, inputTop - top - 8 - 16 - 18));
@@ -56,7 +70,7 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
       viewportLeft: left,
       viewportWidth: right - left,
     }), ...(panel ? { bottom: containerRect.bottom - inputTop + 8, "--emoji-picker-max-height": `${gridHeight}px` } : {}) } as CSSProperties);
-  }, [open, variant]);
+  }, [open, variant, anchorRef]);
 
   useEffect(() => {
     if (!open) return;
@@ -70,8 +84,12 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
       if (event.key !== "Escape") return;
 
       event.preventDefault();
+      if (variant === "message") event.stopPropagation();
       onOpenChange(false);
-      window.requestAnimationFrame(() => buttonRef.current?.focus());
+      window.requestAnimationFrame(() => {
+        buttonRef.current?.focus({ preventScroll: true });
+        if (!buttonRef.current) anchorRef?.current?.focus({ preventScroll: true });
+      });
     };
 
     document.addEventListener("pointerdown", handlePointerDown);
@@ -80,14 +98,18 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onOpenChange, open]);
+  }, [onOpenChange, open, variant, anchorRef]);
 
   useLayoutEffect(() => {
     if (!open) return;
 
     updatePopoverPosition();
+    // The top layer keeps message pickers outside the scrolling list's clip.
+    if (variant === "message") popoverRef.current?.showPopover();
+    const focusFrame = variant === "message" ? requestAnimationFrame(() => popoverRef.current?.querySelector("button")?.focus({ preventScroll: true })) : 0;
     const viewport = window.visualViewport;
     window.addEventListener("resize", updatePopoverPosition);
+    if (variant === "message") window.addEventListener("scroll", updatePopoverPosition, true);
     viewport?.addEventListener("resize", updatePopoverPosition);
     viewport?.addEventListener("scroll", updatePopoverPosition);
     const composer = variant === "composer" ? containerRef.current?.closest("form") : null;
@@ -96,6 +118,8 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
 
     return () => {
       window.removeEventListener("resize", updatePopoverPosition);
+      window.removeEventListener("scroll", updatePopoverPosition, true);
+      cancelAnimationFrame(focusFrame);
       viewport?.removeEventListener("resize", updatePopoverPosition);
       viewport?.removeEventListener("scroll", updatePopoverPosition);
       observer?.disconnect();
@@ -104,7 +128,7 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
 
   return (
     <div ref={containerRef} className="relative flex items-center">
-      <button
+      {!hideTrigger && <button
         ref={buttonRef}
         type="button"
         onClick={() => {
@@ -124,16 +148,29 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
         aria-label={pickerLabel}
         title={pickerLabel}
       >
-        <Smile size={variant === "composer" ? 20 : 15} aria-hidden="true" />
-      </button>
+        <SmilePlus size={variant === "composer" ? 20 : 15} aria-hidden="true" />
+      </button>}
       {open ? (
+        <RemoveScroll ref={popoverRef} forwardProps enabled={variant !== "default"} allowPinchZoom>
         <div
           id={popoverId}
+          popover={variant === "message" ? "manual" : undefined}
+          data-chat-popover={variant === "message" ? "" : undefined}
           role="dialog"
           aria-label={pickerLabel}
           style={popoverStyle}
-          className={cn("absolute z-20 overflow-x-hidden rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-floating-background)] p-2 shadow-xl", variant === "composer" ? "bottom-full" : "bottom-10")}
+          className={cn("z-20 overflow-x-hidden rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-floating-background)] p-2 shadow-xl text-[var(--theme-color-text-default)]", variant === "message" ? "fixed inset-auto m-0" : variant === "composer" ? "absolute bottom-full" : "absolute bottom-10")}
         >
+          <CommentEmojiGrid onSelect={onSelect} />
+        </div>
+        </RemoveScroll>
+      ) : null}
+    </div>
+  );
+});
+
+export function CommentEmojiGrid({ onSelect }: { onSelect(name: string): void }) {
+  return (
           <div className="grid max-h-[var(--emoji-picker-max-height,16rem)] grid-cols-9 gap-1 overflow-x-hidden overflow-y-auto pr-1 [scrollbar-color:var(--theme-color-shell-scrollbar-thumb)_var(--theme-color-shell-scrollbar-track)] scrollbar-thin [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--theme-color-shell-scrollbar-thumb)] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-[var(--theme-color-shell-scrollbar-track)]">
             {COMMENT_EMOJI_NAMES.map((name) => {
               const src = getCommentEmojiSrc(name);
@@ -162,8 +199,5 @@ export const EmojiPickerButton = memo(function EmojiPickerButton({
               );
             })}
           </div>
-        </div>
-      ) : null}
-    </div>
   );
-});
+}

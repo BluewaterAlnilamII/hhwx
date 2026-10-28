@@ -1,5 +1,42 @@
 # Historical design and QA records
 
+## Chat message feedback, 2026-10-28
+
+final result: passed
+
+Scope: the accepted first batch of row hover, navigation emphasis, open-menu/picker target retention and button press feedback. Reference behavior comes from the supplied Discord/QQ screenshots (`codex-clipboard-89dcb0a1-677e-49dd-83c1-a893fb0f2872.png` and `codex-clipboard-76c5f37c-1480-4a6b-95d5-437b7174269b.png` in the local temporary directory), adapted to HHWX's existing bubbles, theme and persistent mention highlighting. These are interaction references, not pixel-identical full-screen designs.
+
+Follow-up correction: ordinary backdrops now extend 3 px vertically while yellow mention bounds stay unchanged. The user's subsequent blank-area reproduction exposed a gap in the original bubble-only interaction checks. The context-menu trigger now covers the highlighted row, with independent reaction/picker controls and suppressed quote/image release clicks after long-press. Expanded desktop/mobile browser and reading regressions, typecheck, scoped lint and isolated build passed. `hhwx-chat-row-actions/live-blank-context-menu.png` shows the actual previously inert area opening its message menu; mobile dark screenshots were reviewed. Physical phone gestures remain unverified.
+
+Evidence directory: `C:/Users/bluew/AppData/Local/Temp/hhwx-chat-feedback/`. `live-location.png` and `live-menu.png` show the actual local app in the in-app browser at 744 x 884 CSS/pixels, DPR 1. Component fixtures additionally cover 1280 x 900 English/light and 390 x 900 Chinese/dark (`locate-feedback-*`, `menu-*`, `reaction-picker-*`).
+
+- Typography/assets/copy: unchanged fonts, labels, Lucide icons, avatars and message content. No image assets or dependencies added.
+- Layout: the entire individual message row reacts without moving its contents; time separators and neighboring rows are excluded. The existing mention-row inset is shared by normal rows. Actual screenshots confirm no blue location outline or white replacement fill.
+- Color/state: subtle normal hover, stronger temporary blue-gray location, and warm yellow variants for mentions. The independent fade reveals the current menu/hover/base state. Dark screenshots retain readable text and recognizable bubbles.
+- Motion/access: 140 ms background transitions, 100 ms press feedback, and 1.8 s location feedback with a held beginning and fading end. Repeat navigation restarts the same target. Reduced motion disables scaling/transitions and retains a static timed location cue. Original keyboard focus indicators remain.
+- Verification: expanded real-component browser regression passed for both viewports with no page/console errors, including existing scrolling/quote/reaction/mention checks. Typecheck, scoped ESLint, isolated-local Webpack build and diff checks passed. Physical mobile hardware and Safari/Firefox were not tested.
+
+No actionable P0/P1/P2 findings remain in this batch. Picker/quote-preview transitions and new-message entry are deferred as planned.
+
+## Chat mention notification card, 2026-10-28
+
+final result: passed
+
+Scope: the existing in-dialog mention notification, following the accepted header-tucked card mock. No API, schema, notification-order or quote behavior changes.
+
+Source visual truth: `C:/Users/bluew/.codex/generated_images/01a17c91-d028-78b2-9d4f-99a32c928a0f/exec-779ab71f-e3a2-4ad6-b95b-4a5f376f02c2.png` (2127 x 739 generated close-up, without authoritative CSS density). The accepted implementation constraint preserves the existing header and uses a 40–44 px notification rather than enlarging the app to the mock's raster scale.
+
+Rendered evidence: `C:/Users/bluew/AppData/Local/Temp/hhwx-mention-card/implemented-zh-CN.png` (in-app browser, 1280 x 720 CSS/pixels, DPR 1), `mention-card-en-1280.png` (1280 x 900) and `mention-card-zh-CN-390.png` (390 x 900, dark). These use the real dialog, session, styles and translation catalogs with synthetic transport/data. The Chinese reference and implementation were opened together in the same comparison input, matching the single sender `chat_friend`, suffix and `07:23` state. The surrounding fixture messages and backdrop intentionally differ; this is component fidelity, not a pixel-identical full-screen claim.
+
+- Typography/copy: existing 16 px header, 12 px notification and 11 px time retained; only the sender is blue and medium weight. The translated suffix inherits ordinary text color. Long names truncate while the suffix, time and X remain visible.
+- Layout/elevation: the 44 px card is inset 16 px on desktop / 12 px on mobile, tucked directly beneath the existing header, with lower rounded corners, a faint edge and restrained bottom shadow. Its 8 px shadow clearance occupies layout space rather than covering message controls.
+- Colors: existing floating-surface, default/muted text and mention-blue roles; one dedicated shallow-shadow role with a dark override. Both light and dark screenshots were inspected.
+- Assets: existing Lucide X icons retained; no new image assets, fonts or dependencies.
+- Interaction: clicking locates the message; X acknowledges only its current item; the next item preserves geometry and close-button keyboard focus. Last-item retraction collapses the slot to zero height and makes it inert. Reduced motion bypasses animation. Existing reaction, quote, scrolling and persistent yellow mention-row checks pass.
+- Checks: 118 chat tests, typecheck, scoped ESLint, both-locale i18n check, local Webpack production build and desktop/mobile component browser regression passed. In-app preview console had no errors/warnings. The first keyboard fixture reused acknowledged IDs; it was corrected to use distinct unread messages, retaining the original assertion.
+
+No actionable P0/P1/P2 visual findings remain in this scope. Physical mobile keyboards, Safari/Firefox and production deployment were not exercised.
+
 ## Chat frontend, 2026-10-24
 
 final result: passed

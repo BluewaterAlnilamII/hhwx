@@ -4,6 +4,20 @@
 
 2026-10-24: local implementation is authorized. This scope supersedes the three-second cooldown, single pending send and chat email-status queries. Production operations are not authorized. See [integration](realtime-message-board.md) and [validation](realtime-message-board-validation.md).
 
+## Replies and reactions — implemented scope (2026-10-27)
+
+The initial accepted scope adds reactions and single-target replies without a reply notification switch. The separately approved mention phase below supersedes the initial exclusion of @ features. One multi-image/text submission stores a reference only on its first message. Explicit replies start a new author group; ordinary continuations stay grouped. Missing originals use “消息已删除” in Chinese.
+
+Reuse the comment reaction chip/grid/participants components, the existing Radix message menu, account-owned ChatSession queue and service-role RPC boundaries. New chat-specific behavior is immediate-parent previews, temporary original-message context and versioned full-channel reaction events. UI review removed the hover toolbar, separate reaction dialog, reply heading and return-position button. Existing reactions expose the shared inline add button; the reaction grid retains its 256px height limit. Chat emoji pickers reuse Radix's installed `react-remove-scroll` 2.7.2 for background scroll locking, now declared as a direct dependency without a package version change. See the [interaction and rollout contract](realtime-message-board.md#replies-and-reactions-2026-10-27) and [retained validation](realtime-message-board-validation.md). No notification integration or production operation is included.
+
+Quick choices start with `:Tae:`, `:KokoroYay:`, `:LisaMelt:` and retain the three most recently added, explicitly selected emoji per account in browser storage. Joining existing chips, removals and failures do not reorder them. Shared emoji entry points use Lucide `SmilePlus`.
+
+## Mentions — accepted scope (2026-10-28)
+
+Implement the compact @ candidate list with a strict eight-result cap, explicit account references, one count-free outside bubble and an oldest-first in-dialog banner queue. Click locates; close dismisses only one receipt without moving the reading position. Actual focused visibility acknowledges specific messages, including newer messages beyond the first inbox window. Quoting stays independent, without an @ toggle or automatic notification. Repeated recipients, retries and multi-image submissions do not multiply alerts. Reuse existing profile rows, message time formatting, session ownership, authenticated API/RPC boundaries and the same broker connection. Add private durable receipts and an account-only invalidation channel for refresh/offline/device continuity; ordinary unread cursors keep their existing semantics.
+
+No open product choices remain. See the [implemented contract and rollout](realtime-message-board.md#mentions-2026-10-28) and [validation](realtime-message-board-validation.md). Production operations remain outside scope.
+
 ## Activity, unread state and native recovery
 
 A signed-in tab owns one chat connection. `chat_activity:main` stays subscribed while the dialog is closed; `chat:main` is a token-authorized client subscription enabled only while the dialog is open. Personal account notifications retain their existing implementation. Guests create neither subscription.
@@ -31,7 +45,7 @@ Implemented bounded retention and explicit room context. The later approved foll
 - Keep site login, registration, session restoration and legacy-account compatibility unchanged. Chat requires a valid non-anonymous identity, without a separate email-verification condition/query.
 - Hide the launcher while signed out or authentication is unresolved. Guests load no chat UI/SDK and request no history, credentials or socket. Connect only while an authenticated user's panel is open and the page visible. Mutes retain reading and deletion of one's own messages.
 - Reuse comment counting/truncation from `comments/comment-contract.ts`, existing server identity validation and `useChatSession` lifecycle, Toolbar, Radix Dialog, theme and avatar caches.
-- Text with the existing comment emoji picker/rendering, author deletion and moderator deletion/mutes. Independent image messages are supported. Ephemeral stamps are supported. No editing, reactions, member lists or read receipts.
+- Text with the existing comment emoji picker/rendering, author deletion and moderator deletion/mutes. Independent image messages are supported. Ephemeral stamps are supported. Reactions and quotes follow the scope above. No editing, member lists or read receipts.
 - Hardware is deployment context, not an acceptance criterion. The frontend adds Radix Context Menu, aligned with the existing Dialog's focus/dismissal dependencies; no new services, Redis or other repositories.
 
 ## Accepted frontend design

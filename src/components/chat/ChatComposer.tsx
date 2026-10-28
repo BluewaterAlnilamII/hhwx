@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { RemoveScroll } from "react-remove-scroll";
+import AccountCardAvatar from "@/components/account/AccountCardAvatar";
+import { CommentPublicUid } from "@/components/comments/CommentPublicUid";
+import { resolveStoredAccountAvatarCardIdentity } from "@/lib/account-avatar-card";
+import { chatMentionQuery, editChatMentions, insertChatMention } from "@/lib/chat/chat-mentions";
+import type { ChatMention, ChatMentionUser } from "@/lib/chat/chat-contract";
 import dynamic from "next/dynamic";
 import { ArrowUp, ImagePlus, Plus, X } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -10,7 +16,9 @@ import { preloadSoundEffect } from "@/lib/sound-effect-audio";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import { buildEmojiShortcode, insertCommentShortcode } from "@/lib/comments/comment-content";
 import { countCommentCharacters, COMMENT_LENGTH_WARNING_THRESHOLD, truncateCommentContent } from "@/lib/comments/comment-contract";
-import { CHAT_MAX_LENGTH } from "@/lib/chat/chat-contract";
+import { CHAT_MAX_LENGTH, type ChatReply } from "@/lib/chat/chat-contract";
+import { ChatReplyPreview } from "./ChatReplyPreview";
+import { ChatMessageText } from "./ChatMessageText";
 import { CHAT_IMAGE_MAX_ATTACHMENTS, type PreparedChatImage } from "@/lib/chat/chat-image-contract";
 import { LoadingSpinner } from "@/components/LoadingIndicator";
 import { ChatImageContent } from "./ChatImageContent";
@@ -78,17 +86,23 @@ export function useChatAttachments() {
   return { attachments, addFiles, removeImage, clear };
 }
 
-export function ChatComposer({ draft, blocked, images, onChange, onSend, onStamp, stampDisabled = false }: {
+export function ChatComposer({ draft, draftMentions, searchMentionUsers, reply, onCancelReply, blocked, images, onChange, onSend, onStamp, stampDisabled = false }: {
   draft: string;
+  draftMentions: ChatMention[];
+  searchMentionUsers(query: string, signal: AbortSignal): Promise<ChatMentionUser[]>;
+  reply: ChatReply | null;
+  onCancelReply(): void;
   blocked: boolean;
   images: ReturnType<typeof useChatAttachments>;
-  onChange(value: string): void;
+  onChange(value: string, mentions?: ChatMention[]): void;
   onSend(images: PreparedChatImage[]): boolean;
   onStamp: (stamp: CommentStamp) => void;
   stampDisabled?: boolean;
 }) {
   const t = useTranslations("chat");
   const textarea = useAutoResizeTextarea(draft);
+  const draftHighlight = useRef<HTMLDivElement>(null);
+  const hasMentions = draftMentions.length > 0;
   const composing = useRef(false);
   const extras = useRef<HTMLDivElement>(null);
   const plus = useRef<HTMLButtonElement>(null);
@@ -97,6 +111,55 @@ export function ChatComposer({ draft, blocked, images, onChange, onSend, onStamp
   const [stampRegion, setStampRegion] = useState<CommentStampRegion>(COMMENT_STAMP_DEFAULT_REGION);
   const [extrasOpen, setExtrasOpen] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [mentionRange, setMentionRange] = useState<ReturnType<typeof chatMentionQuery>>(null);
+  const [mentionResults, setMentionResults] = useState<{ query: string; users: ChatMentionUser[]; failed: boolean } | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const mentionPanel = useRef<HTMLDivElement>(null);
+  const mentionQuery = mentionRange?.query;
+  const mentionUsers = mentionResults && mentionResults.query === mentionQuery ? mentionResults.users : [];
+  useLayoutEffect(() => {
+    const field = textarea.current, highlight = draftHighlight.current;
+    if (!field || !highlight) return;
+    // Keep native editing/caret behavior while mirroring only its text colors.
+    const sync = () => { highlight.style.width = `${field.clientWidth}px`; highlight.scrollTop = field.scrollTop; };
+    sync();
+    const observer = new ResizeObserver(sync); observer.observe(field);
+    field.addEventListener("scroll", sync);
+    return () => { observer.disconnect(); field.removeEventListener("scroll", sync); };
+  }, [hasMentions, textarea]);
+  useLayoutEffect(() => {
+    if (draftHighlight.current && textarea.current) draftHighlight.current.scrollTop = textarea.current.scrollTop;
+  }, [draft, textarea]);
+  const updateMentionQuery = (value: string, cursor: number, selected = draftMentions) => {
+    const range = chatMentionQuery(value, cursor, selected);
+    setMentionRange(range); setMentionIndex(0);
+    if (range) { setEmojiOpen(false); setStampOpen(false); setExtrasOpen(false); }
+  };
+  const selectMention = (user: ChatMentionUser) => {
+    if (!mentionRange) return;
+    const inserted = insertChatMention(draft, mentionRange, user, draftMentions);
+    if (countCommentCharacters(inserted.text) > CHAT_MAX_LENGTH) return;
+    onChange(inserted.text, inserted.mentions); setMentionRange(null);
+    requestAnimationFrame(() => { textarea.current?.focus({ preventScroll: true }); textarea.current?.setSelectionRange(inserted.cursor, inserted.cursor); });
+  };
+  useEffect(() => {
+    if (mentionQuery === undefined) return;
+    const abort = new AbortController();
+    const timer = setTimeout(() => {
+      void searchMentionUsers(mentionQuery, abort.signal).then(users => {
+        if (!abort.signal.aborted) setMentionResults({ query: mentionQuery, users: users.slice(0, 8), failed: false });
+      }).catch(() => { if (!abort.signal.aborted) setMentionResults({ query: mentionQuery, users: [], failed: true }); });
+    }, mentionQuery ? 150 : 0);
+    return () => { clearTimeout(timer); abort.abort(); };
+  }, [mentionQuery, searchMentionUsers]);
+  useEffect(() => {
+    if (!mentionRange) return;
+    const dismiss = (event: PointerEvent) => {
+      if (!mentionPanel.current?.contains(event.target as Node) && event.target !== textarea.current) setMentionRange(null);
+    };
+    document.addEventListener("pointerdown", dismiss);
+    return () => document.removeEventListener("pointerdown", dismiss);
+  }, [mentionRange, textarea]);
   const chars = countCommentCharacters(draft);
   const fileInput = useRef<HTMLInputElement>(null);
   const { attachments, addFiles, removeImage, clear } = images;
@@ -134,11 +197,17 @@ export function ChatComposer({ draft, blocked, images, onChange, onSend, onStamp
     onSubmit={(event) => {
       event.preventDefault();
       if (!blocked && imagesReady && chars <= CHAT_MAX_LENGTH) {
-        setEmojiOpen(false); setExtrasOpen(false);
+        setEmojiOpen(false); setExtrasOpen(false); setMentionRange(null);
         if (!onSend(attachments.items.map((item) => item.image!))) return;
         clear(); setPreviewId(null);
       }
     }}>
+    {reply && <div className="mb-2 flex items-start gap-2 rounded-xl bg-[var(--theme-color-control-background)] p-2" data-chat-reply-draft>
+      <div className="min-w-0 flex-1"><ChatReplyPreview reply={reply} />
+        {reply.deleted && <p role="alert" className="text-xs text-[var(--theme-color-semantic-danger-foreground)]">{t("replyUnavailable")}</p>}
+      </div>
+      <button type="button" className="chat-icon-button size-9!" aria-label={t("cancelReply")} onClick={onCancelReply}><X size={16} /></button>
+    </div>}
     {!!attachments.items.length && <ul aria-label={t("attachments")} className="mb-2 flex gap-2 overflow-x-auto overscroll-x-contain px-1 pb-1">
       {attachments.items.map((item) => <li key={item.id} className="relative w-32 shrink-0">
         <div className="grid h-24 place-items-center overflow-hidden rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)]">
@@ -177,11 +246,42 @@ export function ChatComposer({ draft, blocked, images, onChange, onSend, onStamp
           </button>
         </div>}
       </div>
-      <div data-chat-input className="hhwx-control flex min-w-0 flex-1 items-end rounded-3xl border pl-3 pr-0.5 focus-within:border-[var(--theme-color-focus-ring)] sm:pl-4">
+      <div data-chat-input className="hhwx-control relative flex min-w-0 flex-1 items-end rounded-3xl border pl-3 pr-0.5 focus-within:border-[var(--theme-color-focus-ring)] sm:pl-4">
+        {mentionRange && <RemoveScroll enabled allowPinchZoom shards={[textarea]}>
+          <div ref={mentionPanel} data-chat-popover data-chat-mention-picker id="chat-mention-options" role="listbox" aria-label={t("mentionUsers")}
+            className="hhwx-floating-surface absolute bottom-[calc(100%+0.5rem)] left-0 z-20 max-h-[min(21rem,50dvh)] w-64 max-w-[calc(100vw-5rem)] overflow-y-auto overscroll-contain rounded-lg border border-[var(--theme-color-border-subtle)] p-1.5 shadow-lg">
+            {mentionUsers.map((user, index) => {
+              const avatar = resolveStoredAccountAvatarCardIdentity(user.avatarCardId, user.avatarCardServer);
+              return <div key={user.userId} id={`chat-mention-${user.userId}`} role="option" aria-selected={mentionIndex === index}
+                onPointerDown={event => event.preventDefault()} onClick={() => selectMention(user)}
+                onPointerMove={() => setMentionIndex(index)}
+                className={`flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 ${index === mentionIndex ? "bg-[var(--theme-color-control-background-hover)]" : ""}`}>
+                <AccountCardAvatar username={user.username} cardId={avatar.cardId} entityServer={avatar.entityServer} trainType={user.avatarCardTrainType} size="toolbar" />
+                <span className="min-w-0 truncate text-xs font-semibold text-[var(--theme-color-text-default)]">{user.username}</span>
+                <CommentPublicUid publicUid={user.publicUid} />
+              </div>;
+            })}
+            {!mentionUsers.length && <div role="status" className="px-2 py-3 text-xs text-[var(--theme-color-text-muted)]">
+              {!mentionResults || mentionResults.query !== mentionQuery ? t("loading") : mentionResults.failed ? t("mentionSearchFailed") : t("mentionNoResults")}
+            </div>}
+          </div>
+        </RemoveScroll>}
         <label className="sr-only" htmlFor="chat-draft">{t("draft")}</label>
+        <div className="relative min-w-0 flex-1">
+        {hasMentions && <div ref={draftHighlight} data-chat-draft-highlight aria-hidden="true"
+          className="chat-draft-highlight pointer-events-none absolute inset-0 overflow-hidden py-3 pr-1 text-base leading-6 text-[var(--theme-color-text-default)] sm:text-sm">
+          <ChatMessageText content={draft} mentions={draftMentions} draft />{"\u200b"}
+        </div>}
         <textarea ref={textarea} id="chat-draft" value={draft} placeholder={t("placeholder")} rows={1} autoComplete="off"
-          className="block max-h-40 min-h-12 min-w-0 flex-1 resize-none border-0 bg-transparent py-3 pr-1 text-base leading-6 outline-hidden placeholder:text-[var(--theme-color-text-muted)] sm:text-sm"
-          onChange={(event) => onChange(event.target.value)}
+          aria-autocomplete="list" aria-controls={mentionRange ? "chat-mention-options" : undefined}
+          aria-activedescendant={mentionRange && mentionUsers[mentionIndex] ? `chat-mention-${mentionUsers[mentionIndex].userId}` : undefined}
+          className={`chat-draft-input relative block max-h-40 min-h-12 w-full resize-none border-0 bg-transparent py-3 pr-1 text-base leading-6 outline-hidden placeholder:text-[var(--theme-color-text-muted)] sm:text-sm ${hasMentions ? "text-transparent caret-[var(--theme-color-text-default)]" : ""}`}
+          onChange={(event) => {
+            const value = event.target.value, mentions = editChatMentions(draft, value, draftMentions);
+            onChange(value, mentions);
+            if (!composing.current) updateMentionQuery(value, event.target.selectionStart, mentions);
+          }}
+          onClick={event => { if (event.currentTarget.selectionStart === event.currentTarget.selectionEnd) updateMentionQuery(draft, event.currentTarget.selectionStart); else setMentionRange(null); }}
           onPaste={(event) => {
             const images = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
             if (!images.length) return;
@@ -194,12 +294,26 @@ export function ChatComposer({ draft, blocked, images, onChange, onSend, onStamp
               requestAnimationFrame(() => field.setSelectionRange(Math.min(start + text.length, next.length), Math.min(start + text.length, next.length)));
             }
           }}
-          onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }}
+          onCompositionStart={() => { composing.current = true; setMentionRange(null); }} onCompositionEnd={event => { composing.current = false; updateMentionQuery(event.currentTarget.value, event.currentTarget.selectionStart); }}
           onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing || composing.current || event.keyCode === 229) return;
+            if (mentionRange) {
+              if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setMentionRange(null); return; }
+              if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                event.preventDefault();
+                const index = (mentionIndex + (event.key === "ArrowDown" ? 1 : -1) + mentionUsers.length) % (mentionUsers.length || 1);
+                setMentionIndex(index); mentionPanel.current?.querySelectorAll('[role="option"]')[index]?.scrollIntoView({ block: "nearest" }); return;
+              }
+              if (!event.shiftKey && (event.key === "Enter" || event.key === "Tab") && mentionUsers[mentionIndex]) {
+                event.preventDefault(); selectMention(mentionUsers[mentionIndex]); return;
+              }
+              if (event.key === "ArrowLeft" || event.key === "ArrowRight" || event.key === "Home" || event.key === "End" || event.key === "Tab") setMentionRange(null);
+            }
             if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && !composing.current && event.keyCode !== 229) {
               event.preventDefault(); event.currentTarget.form?.requestSubmit();
             }
           }} />
+        </div>
         <div className="mb-0.5 flex shrink-0 items-center" data-chat-picker>
           <EmojiPickerButton variant="composer" open={emojiOpen}
             onOpenChange={(value) => { setEmojiOpen(value); if (value) { setExtrasOpen(false); setStampOpen(false); } }} onSelect={insertEmoji} />

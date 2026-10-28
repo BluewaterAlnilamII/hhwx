@@ -322,7 +322,7 @@ function batchHarness() {
         calls.push({kind:'authorize',id});uploads.set(id,{...body.image,key:`user/images/temporary/${actor}/${id}/${body.image.hash}.png`});
         return {url:'https://upload.test',receipt:id,headers:{},expiresAt:Date.now()+3600000};
       }
-      const kind=path==='/api/chat/images'?'image':'text';calls.push({kind,id});
+      const kind=path==='/api/chat/images'?'image':'text';calls.push({kind,id,replyToId:body.replyToId});
       const current={...message,id,clientRequestId:id,createdAt:new Date(Date.now()+number++).toISOString(),content:body.content??'',image:kind==='image'?uploads.get(id):null};
       if(kind==='image'&&failCommit>0&&calls.filter(c=>c.kind==='image').length===failCommit){failCommit=0;throw new ChatRequestError('CHAT_UNAVAILABLE');}
       saved.push(current);
@@ -510,4 +510,14 @@ test('static rescaling obeys both pixel limits and preserves ordinary long image
     assert.ok(images.isChatImageMetadata({...metadata,width:4096,height:4096}));
     assert.ok(images.isChatImageMetadata({...metadata,width:1,height:16383}));
   } finally {globalThis.OffscreenCanvas = previous; globalThis.createImageBitmap = previousBitmap;}
+});
+
+
+test('one multi-image submission references only the first message, including an uncertain retry',async()=>{
+  const h=batchHarness();h.setFailure(1);h.session.setReply(message);h.session.setDraft('caption');
+  await h.session.send([prepared(),prepared()]);
+  const pending=h.session.getSnapshot().pending;assert.equal(pending.filter(p=>p.reply).length,1);assert.equal(pending[0].reply.id,message.id);
+  await h.session.retry(pending[0].clientRequestId);await h.session.retry(pending[1].clientRequestId);await h.session.retry(pending[2].clientRequestId);
+  const commits=h.calls.filter(c=>c.kind==='image'||c.kind==='text');assert.deepEqual(commits.map(c=>c.replyToId),[message.id,message.id,undefined,undefined]);
+  assert.equal(new Set(commits.filter(c=>c.replyToId).map(c=>c.id)).size,1);h.session.dispose();
 });

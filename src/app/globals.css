@@ -41,6 +41,132 @@
 
 /* Shared appearance follows theme roles; utilities retain component layout. */
 @layer components {
+  .chat-mention-banner-slot {
+    grid-template-rows: 0fr;
+    display: grid;
+    transition: grid-template-rows 180ms ease;
+  }
+
+  .chat-mention-banner-slot[data-open="true"] {
+    grid-template-rows: 1fr;
+  }
+
+  .chat-mention-banner {
+    background: var(--theme-color-floating-background);
+    color: var(--theme-color-text-default);
+    box-shadow: var(--theme-shadow-chat-mention-card);
+    opacity: 0;
+    transform: translateY(-6px);
+    visibility: hidden;
+    transition: transform 180ms ease, opacity 180ms ease, visibility 180ms;
+  }
+
+  .chat-mention-banner-slot[data-open="true"] .chat-mention-banner {
+    opacity: 1;
+    transform: translateY(0);
+    visibility: visible;
+  }
+
+  @starting-style {
+    .chat-mention-banner-slot[data-open="true"] { grid-template-rows: 0fr; }
+    .chat-mention-banner-slot[data-open="true"] .chat-mention-banner { opacity: 0; transform: translateY(-6px); }
+  }
+
+  .chat-mention-banner-content {
+    animation: chat-mention-content-in 160ms ease;
+  }
+
+  @keyframes chat-mention-content-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chat-mention-banner-slot,
+    .chat-mention-banner { transition: none; }
+    .chat-mention-banner-content { animation: none; }
+  }
+
+  .chat-mention {
+    color: var(--theme-color-chat-mention-foreground);
+    background: var(--theme-color-chat-mention-background);
+    border-radius: 0.2rem;
+  }
+
+  .chat-message-row {
+    --chat-row-outset: 0.1875rem;
+    --chat-row-hover: var(--theme-color-chat-row-hover);
+    --chat-row-locate: var(--theme-color-chat-row-locate);
+    position: relative;
+    isolation: isolate;
+    margin-inline: -0.5rem;
+    padding-inline: 0.5rem;
+    margin-block: calc(var(--chat-row-gap, 0.375rem) - var(--chat-row-outset)) calc(-1 * var(--chat-row-outset));
+    padding-block: var(--chat-row-outset);
+    border-radius: 0.375rem;
+    background: var(--chat-row-rest, transparent);
+    transition: background-color 140ms ease;
+  }
+
+  .chat-mentioned-message {
+    --chat-row-outset: 0rem;
+    --chat-row-rest: var(--theme-color-chat-mentioned-background);
+    --chat-row-hover: var(--theme-color-chat-mentioned-hover);
+    --chat-row-locate: var(--theme-color-chat-mentioned-locate);
+    box-shadow: inset 2px 0 var(--theme-color-chat-mentioned-accent);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .chat-message-row:hover { background: var(--chat-row-hover); }
+  }
+
+  .chat-message-row[data-chat-actions-open="true"] {
+    background: var(--chat-row-hover);
+  }
+
+  .chat-message-locate-feedback {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    border-radius: inherit;
+    box-shadow: inherit;
+    background: var(--chat-row-locate);
+    animation: chat-message-locate 1800ms ease-out forwards;
+  }
+
+  @keyframes chat-message-locate {
+    0%, 60% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  [data-chat-panel] :is(.chat-icon-button, button[type="submit"], button[aria-haspopup="dialog"], button[aria-pressed]),
+  [data-chat-quick-reactions] [role="menuitem"] {
+    transition: scale 100ms ease, background-color 140ms ease, color 140ms ease, opacity 140ms ease;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    [data-chat-panel] :is(.chat-icon-button, button[type="submit"], button[aria-haspopup="dialog"], button[aria-pressed]):active:not(:disabled):not([aria-disabled="true"]),
+    [data-chat-quick-reactions] [role="menuitem"]:active:not([data-disabled]) { scale: 0.96; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chat-message-row,
+    [data-chat-panel] :is(.chat-icon-button, button[type="submit"], button[aria-haspopup="dialog"], button[aria-pressed]),
+    [data-chat-quick-reactions] [role="menuitem"] { transition: none; }
+    .chat-message-locate-feedback { animation: none; }
+  }
+
+  .chat-draft-highlight,
+  .chat-draft-input {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+  }
+
+  .chat-draft-input::selection {
+    color: var(--theme-color-text-default);
+  }
+
   .chat-icon-button {
     display: inline-flex;
     width: 2.75rem;

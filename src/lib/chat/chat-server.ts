@@ -3,7 +3,7 @@ import { SignJWT } from "jose";
 import { ApiRouteError } from "@/lib/api-contracts";
 import { NO_STORE_HTTP_CACHE_POLICY, withHttpCachePolicy } from "@/lib/api-cache";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
-import { CHAT_DEFAULT_ROOM_ID, chatChannel, chatActivityChannel, CHAT_MAX_LENGTH, CHAT_UUID, type ChatConnection, type ChatCursor, type ChatEvent, type ChatViewer } from "./chat-contract";
+import { CHAT_DEFAULT_ROOM_ID, chatChannel, chatActivityChannel, chatMentionChannel, isChatMentions, CHAT_MAX_LENGTH, CHAT_UUID, type ChatConnection, type ChatCursor, type ChatEvent, type ChatViewer } from "./chat-contract";
 import type { ChatStampPublication } from "./chat-stamp-contract";
 
 export const chatHeaders = () => withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY);
@@ -45,7 +45,7 @@ const CHAT_ERROR_STATUS: Record<string, number> = {
   CHAT_ACCOUNT_REQUIRED: 403, CHAT_FORBIDDEN: 403,
   CHAT_MUTED: 403, CHAT_COOLDOWN: 429, CHAT_STAMP_COOLDOWN: 429, CHAT_REQUEST_CONFLICT: 409,
   CHAT_UPLOAD_COOLDOWN: 429, CHAT_IMAGE_INVALID: 400,
-  CHAT_NOT_FOUND: 404, CHAT_INVALID_CONTENT: 400, CHAT_INVALID_CURSOR: 400, CHAT_INVALID_MUTE: 400,
+  CHAT_NOT_FOUND: 404, CHAT_REPLY_DELETED: 409, CHAT_INVALID_MENTION: 400, CHAT_INVALID_REACTION: 400, CHAT_INVALID_CONTENT: 400, CHAT_INVALID_CURSOR: 400, CHAT_INVALID_MUTE: 400,
 };
 
 export async function chatRpc<T>(name: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -78,6 +78,11 @@ export function parseChatContent(value: unknown): string {
     throw new ApiRouteError(400, "CHAT_INVALID_CONTENT", "消息须为 1 至 1000 字的文本");
   }
   return value.trim();
+}
+export function parseChatMentions(value: unknown, content: string) {
+  if (value === undefined) return [];
+  if (!isChatMentions(value, content)) throw new ApiRouteError(400, "CHAT_INVALID_MENTION", "无效的提及");
+  return value.map(({ userId, start, end }) => ({ userId: userId.toLowerCase(), start, end }));
 }
 
 export function parseChatCursor(value: string | null): ChatCursor | null {
@@ -126,8 +131,9 @@ export async function issueChatConnection(identity: { userId: string; expiresAt:
   const viewer = await chatRpc<ChatViewer>("read_chat_viewer", { p_actor: identity.userId });
   const channel = chatChannel(roomId);
   const activityChannel = chatActivityChannel(roomId);
+  const mentionChannel = chatMentionChannel(identity.userId);
   const expiresAt = Math.min(identity.expiresAt, Math.floor(Date.now() / 1000) + 3600);
-  const token = await new SignJWT({ channels: [activity ? activityChannel : channel] })
+  const token = await new SignJWT({ channels: [activity ? activityChannel : channel, mentionChannel] })
     .setProtectedHeader({ alg: "HS256" }).setSubject(identity.userId)
     .setIssuer("hhwx-chat").setAudience("hhwx-chat")
     .setIssuedAt().setExpirationTime(expiresAt)
@@ -136,7 +142,7 @@ export async function issueChatConnection(identity: { userId: string; expiresAt:
     .setProtectedHeader({ alg: "HS256" }).setSubject(identity.userId)
     .setIssuer("hhwx-chat").setAudience("hhwx-chat")
     .setIssuedAt().setExpirationTime(expiresAt).sign(new TextEncoder().encode(secret));
-  return { token, url, channel, activityChannel, subscriptionToken, viewer };
+  return { token, url, channel, activityChannel, mentionChannel, subscriptionToken, viewer };
 }
 
 /** Call only after the database mutation or send authorization has committed. */
@@ -149,12 +155,14 @@ export async function publishChatEvent(event: ChatEvent | ChatStampPublication, 
     const activity = event.type === "message.created" ? { type: event.type,
       cursor: { createdAt: event.message.createdAt, id: event.message.id }, userId: event.message.author.userId }
       : event.type === "message.deleted" ? { type: event.type, messageId } : null;
+    const recipients = event.type === "message.created" ? [...new Set((event.message.mentions ?? []).map(m => m.userId))].filter(id => id !== event.message.author.userId) : [];
     const results = await Promise.allSettled([{ channel: chatChannel(roomId), data: event, skip_history: event.type === "stamp.sent" },
-      ...(activity ? [{ channel: chatActivityChannel(roomId), data: activity, skip_history: false }] : [])].map(async (publication) => {
+      ...(activity ? [{ channel: chatActivityChannel(roomId), data: activity, skip_history: false }] : []),
+      ...recipients.map(id => ({ channel: chatMentionChannel(id), data: { type: "mentions.changed" }, skip_history: false }))].map(async (publication) => {
       const response = await fetch(url, {
         method: "POST", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(2000),
         headers: { "Content-Type": "application/json", "X-API-Key": key },
-        body: JSON.stringify({ ...publication, idempotency_key: `${event.type}:${messageId}` }),
+        body: JSON.stringify({ ...publication, idempotency_key: `${event.type}:${messageId}${event.type === "message.reactions" ? `:${event.version}` : ""}` }),
       });
       if (!response.ok) throw new Error("Chat publish HTTP error");
       const result = await response.json();
@@ -166,4 +174,16 @@ export async function publishChatEvent(event: ChatEvent | ChatStampPublication, 
     console.warn(event.type === "stamp.sent" ? "[chat] Ephemeral stamp publication failed; not retried."
       : "[chat] Realtime publication failed; database change remains saved.", { type: event.type, messageId });
   }
+}
+
+export async function publishMentionAcknowledgement(userId: string): Promise<void> {
+  try {
+    const url = process.env.CHAT_PUBLISH_URL, key = process.env.CHAT_PUBLISH_API_KEY;
+    if (!url || !key) throw new Error("Missing publisher");
+    const response = await fetch(url, { method: "POST", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(2000),
+      headers: { "Content-Type": "application/json", "X-API-Key": key },
+      body: JSON.stringify({ channel: chatMentionChannel(userId), data: { type: "mentions.changed" } }) });
+    const result = await response.json();
+    if (!response.ok || result?.error || !result?.result) throw new Error("Publication failed");
+  } catch { console.warn("[chat] Mention acknowledgement publication failed; saved state will reload on reconnect."); }
 }

@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { Smile } from "lucide-react";
+import { SmilePlus } from "lucide-react";
 import { getCommentEmojiSrc } from "@/lib/comments/emoji";
 
 export type CommentReactionEmojiProps = {
@@ -13,7 +13,7 @@ export function CommentReactionEmoji({
 }: CommentReactionEmojiProps) {
   const src = getCommentEmojiSrc(emojiKey);
   if (!src) {
-    return <Smile size={Math.min(size, 18)} aria-hidden="true" />;
+    return <SmilePlus size={Math.min(size, 18)} aria-hidden="true" />;
   }
 
   return (

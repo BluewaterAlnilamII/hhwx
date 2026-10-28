@@ -1,7 +1,10 @@
 import { CHAT_RETENTION_MS, compareChatMessages, parseChatEvent, parseChatActivityEvent,
   type ChatConnection, type ChatCursor, type ChatEvent, type ChatMessage, type ChatPage,
-  type ChatActivity, type ChatActivityEvent, type ChatSendResult, type ChatViewer } from "./chat-contract";
+  type ChatActivity, type ChatActivityEvent, type ChatSendResult, type ChatViewer, type ChatReply, type ChatReactionEvent, type ChatMention, type ChatMentionInbox, type ChatMentionUser } from "./chat-contract";
+import { editChatMentions } from "./chat-mentions";
+import type { CommentReactionParticipantListResponse } from "../comments/comment-contract";
 import { truncateCommentContent } from "../comments/comment-contract";
+import { COMMENT_EMOJI_NAME_SET } from "../comments/emoji";
 import { CHAT_IMAGE_MAX_ATTACHMENTS, type ChatImageUpload, type PreparedChatImage } from "./chat-image-contract";
 import { parseChatStampPublication, type ChatStampPublication, type ChatStampReference, type ChatStampSendResult } from "./chat-stamp-contract";
 
@@ -16,6 +19,8 @@ type TransportHandlers = {
   unsubscribed(): void;
   activityPublication(data: unknown): void;
   activitySubscribed(context: { recovered: boolean }): void;
+  mentionChanged(): void;
+  mentionSubscribed(): void;
   connecting(): void;
   disconnected(): void;
 };
@@ -23,38 +28,54 @@ export type ChatSessionDependencies = {
   request<T>(path: string, init?: RequestInit): Promise<T>;
   readCursor?(): ChatCursor | null | undefined;
   saveReadCursor?(cursor: ChatCursor | null): void;
+  readQuickReactions?(): unknown;
+  saveQuickReactions?(keys: readonly string[]): void;
   uploadImage?(upload: ChatImageUpload, blob: Blob, signal: AbortSignal): Promise<void>;
   transport(connection: ChatConnection, refresh: () => Promise<ChatConnection>, handlers: TransportHandlers): Transport;
 };
 type PendingMessage = { clientRequestId: string; content: string; startedAt: number; status: "queued" | "uploading" | "sending" | "failed"; error: string | null;
+  mentions?: ChatMention[];
   batchId?: string;
+  reply?: ChatReply | null;
   image?: { url: string; width: number; height: number; contentType: PreparedChatImage["contentType"] } };
 export type ChatSnapshot = {
+  draftMentions: ChatMention[];
+  mentions: ChatMentionInbox;
+  mentionError: boolean;
+  mentionTarget: string | null;
   messages: ChatMessage[];
   nextCursor: ChatCursor | null;
   viewer: ChatViewer | null;
   status: "paused" | "connecting" | "syncing" | "live" | "error";
   error: string | null;
   draft: string;
+  reply: ChatReply | null;
+  context: ChatPage | null;
   pending: PendingMessage[];
   loadingOlder: boolean;
   following: boolean;
   newMessages: number;
   unread: boolean;
   nextStampAt: string | null;
+  quickReactions: string[];
 };
+
+const DEFAULT_QUICK_REACTIONS = ["Tae", "KokoroYay", "LisaMelt"];
 
 /** One signed-in account; the dialog only controls the full-message subscription. */
 export class ChatSession {
   private snapshot: ChatSnapshot = {
+    draftMentions: [], mentions: { items: [], total: 0 }, mentionError: false, mentionTarget: null,
     messages: [], nextCursor: null, viewer: null, status: "paused", error: null,
-    draft: "", pending: [], loadingOlder: false, following: true, newMessages: 0, unread: false, nextStampAt: null,
+    draft: "", reply: null, context: null, pending: [], loadingOlder: false, following: true, newMessages: 0, unread: false, nextStampAt: null,
+    quickReactions: [...DEFAULT_QUICK_REACTIONS],
   };
   private listeners = new Set<() => void>();
   private stampListeners = new Set<(event: ChatStampPublication) => void>();
   private ownStamps = new Set<string>();
   private stampAbort = new AbortController();
   private socket: Transport | null = null;
+  private mentionsEnabled = false;
   private opening = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempt = 0;
@@ -84,6 +105,15 @@ export class ChatSession {
   private sendingImages = false;
   private imageJobs = new Map<string, { image: PreparedChatImage; previewUrl: string; upload?: ChatImageUpload; uploaded: boolean; abort: AbortController }>();
   private imagePreviews = new Map<string, string>();
+  private reactionRequests = new Set<string>();
+  private reactionUpdates = new Map<string, { latest: ChatReactionEvent; own?: ChatReactionEvent }>();
+  private contextAbort: AbortController | null = null;
+  private contextEvents: ChatEvent[] = [];
+  private mentionsAbort: AbortController | null = null;
+  private mentionsDirty = false;
+  private mentionsVersion = 0;
+  private mentionAcks = new Set<string>();
+  private readMentions = new Set<string>();
   scrollAnchors: { id: string; top: number }[] = [];
   setScrollAnchors = (anchors: { id: string; top: number }[]) => { this.scrollAnchors = anchors; };
 
@@ -91,6 +121,7 @@ export class ChatSession {
   mount = () => {
     const generation = ++this.mountGeneration;
     this.restoreReadCursor(this.deps.readCursor?.());
+    this.restoreQuickReactions(this.deps.readQuickReactions?.());
     void this.activate();
     return () => {
       this.pause();
@@ -135,7 +166,7 @@ export class ChatSession {
     const other = this.activity.latestOther;
     const unread = this.readCursor !== undefined && !!other && Date.parse(other.createdAt) > Date.now() - CHAT_RETENTION_MS
       && (!this.readCursor || compareChatMessages(other, this.readCursor) > 0);
-    this.snapshot = { ...this.snapshot, ...patch, following: this.following, unread };
+    this.snapshot = { ...this.snapshot, ...patch, following: this.following, unread: unread || (patch.mentions ?? this.snapshot.mentions).total > 0 };
     if ((patch.messages || patch.status === "live") && !this.synchronizing) {
       const retained = new Set(this.snapshot.messages.map(message => message.id));
       for (const [id, url] of this.imagePreviews) if (!retained.has(id)) {
@@ -149,11 +180,15 @@ export class ChatSession {
     this.readCursor = cursor;
     this.update({});
   };
+  restoreQuickReactions = (value: unknown) => {
+    const keys = Array.isArray(value) ? value.filter((key): key is string => typeof key === "string" && COMMENT_EMOJI_NAME_SET.has(key)) : [];
+    this.update({ quickReactions: [...new Set([...keys, ...DEFAULT_QUICK_REACTIONS])].slice(0, 3) });
+  };
   setReadingAllowed = (allowed: boolean) => {
     this.readingAllowed = allowed;
   };
   markRead = () => {
-    if (this.closed || !this.readingAllowed || !this.following || !this.baselineReady || !this.subscribed) return;
+    if (this.closed || this.snapshot.context || !this.readingAllowed || !this.following || !this.baselineReady || !this.subscribed) return;
     const cursor = this.latestSeen;
     if (cursor && (this.readCursor === undefined || !this.readCursor || compareChatMessages(cursor, this.readCursor) > 0)) {
       this.readCursor = cursor;
@@ -180,6 +215,7 @@ export class ChatSession {
       this.update({});
     } else {
       this.deleted.add(event.messageId);
+      this.removeDeletedMention(event.messageId);
       if (this.activity.latest?.id === event.messageId || this.activity.latestOther?.id === event.messageId) {
         // Only a deletion of a summary marker needs a new summary, not every room event.
         this.scheduleActivityRead();
@@ -228,6 +264,7 @@ export class ChatSession {
     } finally { if (this.activityAbort === abort) this.activityAbort = null; }
   };
   private cancelReads() {
+    this.contextAbort?.abort(); this.contextAbort = null; this.contextEvents = [];
     this.readGeneration++;
     this.readAbort.abort(); this.readAbort = new AbortController();
     if (this.synchronizing) this.baselineReady = false;
@@ -246,8 +283,59 @@ export class ChatSession {
       if (connection) void this.activate(); else void this.syncLatest();
     }, delay);
   }
-  setDraft = (draft: string) => this.update({ draft: truncateCommentContent(draft) });
+  setDraft = (draft: string, mentions?: ChatMention[]) => {
+    const text = truncateCommentContent(draft);
+    this.update({ draft: text, draftMentions: mentions
+      ? mentions.filter(m => m.end <= [...text].length)
+      : editChatMentions(this.snapshot.draft, text, this.snapshot.draftMentions) });
+  };
+  searchMentionUsers = (query: string, signal: AbortSignal) => this.deps.request<ChatMentionUser[]>(`/api/chat/mentions/users?q=${encodeURIComponent(query)}`, { signal });
+  requestMentionLocation = (id: string | null) => this.update({ mentionTarget: id });
+  private removeDeletedMention(id: string) {
+    if (!this.snapshot.mentions.items.some(m => m.id === id)) return;
+    this.update({ mentions: { items: this.snapshot.mentions.items.filter(m => m.id !== id), total: Math.max(0, this.snapshot.mentions.total - 1) } });
+    void this.refreshMentions();
+  }
+  refreshMentions = async () => {
+    if (!this.active || this.disposed) return;
+    this.mentionsVersion++;
+    if (this.mentionsAbort) { this.mentionsDirty = true; return; }
+    do {
+      this.mentionsDirty = false;
+      const version = this.mentionsVersion, abort = new AbortController(); this.mentionsAbort = abort;
+      try {
+        const mentions = await this.deps.request<ChatMentionInbox>("/api/chat/mentions", { signal: abort.signal });
+        if (!abort.signal.aborted && !this.disposed && version === this.mentionsVersion) this.update({ mentions, mentionError: false });
+      } catch {
+        if (!abort.signal.aborted && !this.disposed) this.update({ mentionError: true });
+      } finally { if (this.mentionsAbort === abort) this.mentionsAbort = null; }
+      if (abort.signal.aborted) return;
+    } while (this.mentionsDirty && this.active && !this.disposed);
+  };
+  acknowledgeMentions = async (ids: string[], visible = false) => {
+    if (this.disposed || (visible && (this.closed || !this.readingAllowed))) return;
+    const shown = this.snapshot.context?.messages ?? this.snapshot.messages;
+    const pending = [...new Set(ids)].filter(id => !this.mentionAcks.has(id) && !this.readMentions.has(id)
+      && (this.snapshot.mentions.items.some(m => m.id === id)
+        || (visible && shown.some(m => m.id === id && m.author.userId !== this.userId && m.mentions?.some(mention => mention.userId === this.userId))))).slice(0, 50);
+    if (!pending.length) return;
+    pending.forEach(id => this.mentionAcks.add(id));
+    try {
+      await this.deps.request("/api/chat/mentions", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messageIds: pending }) });
+      if (this.disposed) return;
+      pending.forEach(id => this.readMentions.add(id));
+      const items = this.snapshot.mentions.items.filter(m => !pending.includes(m.id));
+      this.update({ mentions: { items, total: Math.max(0, this.snapshot.mentions.total - (this.snapshot.mentions.items.length - items.length)) }, mentionError: false });
+      await this.refreshMentions();
+    } catch { if (!this.disposed) this.update({ mentionError: true }); }
+    finally { pending.forEach(id => this.mentionAcks.delete(id)); }
+  };
+  setReply = (message: ChatMessage | null) => this.update({ reply: message ? {
+    id: message.id, deleted: false, username: message.author.username, content: [...message.content].slice(0, 160).join(""),
+    image: !!message.image, createdAt: message.createdAt,
+  } : null });
   setFollowing = (following: boolean) => {
+    if (this.snapshot.context) following = false;
     if (this.following === following && (!following || !this.snapshot.newMessages)) return;
     this.following = following;
     this.update(following ? { newMessages: 0 } : {});
@@ -256,8 +344,46 @@ export class ChatSession {
     return !this.deleted.has(message.id) && Date.parse(message.createdAt) > Date.now() - CHAT_RETENTION_MS;
   }
   private merge(messages: ChatMessage[], nextCursor = this.snapshot.nextCursor): ChatPage {
-    const unique = new Map(messages.filter(message => this.live(message)).map(message => [message.id, message]));
+    const unique = new Map<string, ChatMessage>();
+    for (const message of messages) if (this.live(message)) {
+      let merged = this.mergeMessage(unique.get(message.id), message);
+      const updates = this.reactionUpdates.get(message.id);
+      if (updates) {
+        merged = this.updateInteraction(merged, updates.latest);
+        if (updates.own && updates.own !== updates.latest) merged = this.updateInteraction(merged, updates.own);
+      }
+      unique.set(message.id, merged);
+    }
     return { messages: [...unique.values()].sort(compareChatMessages), nextCursor };
+  }
+  private mergeMessage(previous: ChatMessage | undefined, incoming: ChatMessage): ChatMessage {
+    const reply = incoming.reply;
+    if (reply && (this.deleted.has(reply.id) || (!reply.deleted && Date.parse(reply.createdAt) <= Date.now() - CHAT_RETENTION_MS))) {
+      incoming = { ...incoming, reply: { id: reply.id, deleted: true } };
+    }
+    if (!previous?.reactions && !incoming.reactions) return incoming;
+    const version = incoming.reactionsVersion ?? 0;
+    const ownVersion = incoming.viewerReactionsVersion ?? (incoming.reactionsViewerId === this.userId ? version : -1);
+    const own = (previous?.viewerReactionsVersion ?? -1) > ownVersion ? previous! : incoming;
+    const counts = (previous?.reactionsVersion ?? 0) > version ? previous! : incoming;
+    const selected = new Set(own.reactions?.filter(r => r.reactedByViewer && (own.reactionsViewerId === this.userId || own.viewerReactionsVersion !== undefined)).map(r => r.emojiKey));
+    return { ...incoming,
+      reactions: counts.reactions?.map(r => ({ ...r, reactedByViewer: selected.has(r.emojiKey) })),
+      reactionsVersion: counts.reactionsVersion, reactionsViewerId: this.userId,
+      viewerReactionsVersion: Math.max(ownVersion, previous?.viewerReactionsVersion ?? -1) };
+  }
+  private updateInteraction(message: ChatMessage, event: ChatEvent): ChatMessage {
+    if (event.type === "message.deleted") return message.reply?.id === event.messageId ? { ...message, reply: { id: event.messageId, deleted: true } } : message;
+    if (event.type !== "message.reactions" || event.messageId !== message.id) return message;
+    const own = event.userId === this.userId && event.version >= (message.viewerReactionsVersion ?? -1);
+    const selected = new Set(own ? event.ownEmojiKeys : message.reactions?.filter(r => r.reactedByViewer).map(r => r.emojiKey));
+    const counts = event.version >= (message.reactionsVersion ?? 0) ? event.reactions : message.reactions ?? [];
+    return { ...message, reactionsVersion: Math.max(event.version, message.reactionsVersion ?? 0),
+      viewerReactionsVersion: own ? event.version : message.viewerReactionsVersion,
+      reactions: counts.map(r => ({ ...r, reactedByViewer: selected.has(r.emojiKey) })) };
+  }
+  private applyToPage(page: ChatPage, event: ChatEvent): ChatPage {
+    return { ...page, messages: page.messages.filter(m => event.type !== "message.deleted" || m.id !== event.messageId).map(m => this.updateInteraction(m, event)) };
   }
   private confirm(messages: ChatMessage[]) {
     const confirmed = new Set<string>();
@@ -275,12 +401,38 @@ export class ChatSession {
     return confirmed.size ? this.snapshot.pending.filter((p) => !confirmed.has(p.clientRequestId)) : this.snapshot.pending;
   }
   private apply(event: ChatEvent) {
+    if (event.type === "message.reactions") {
+      if (this.deleted.has(event.messageId)) return;
+      const previous = this.reactionUpdates.get(event.messageId);
+      // Counts and the viewer's selection can arrive separately, before the message itself.
+      this.reactionUpdates.set(event.messageId, {
+        latest: previous && previous.latest.version > event.version ? previous.latest : event,
+        own: event.userId === this.userId && event.version >= (previous?.own?.version ?? -1) ? event : previous?.own,
+      });
+      if (this.reactionUpdates.size > 1000) {
+        this.reactionUpdates.clear(); this.cancelReads(); this.baselineReady = false;
+        this.recover(new ChatRequestError("CHAT_SYNC_OVERFLOW")); return;
+      }
+    }
+    if (this.contextAbort) {
+      this.contextEvents.push(event);
+      if (this.contextEvents.length > 1000) { this.contextAbort.abort(); this.contextEvents = []; }
+    }
+    if (this.snapshot.context) this.update({ context: this.applyToPage(this.snapshot.context, event) });
+    if (event.type === "message.reactions") {
+      this.update({ messages: this.snapshot.messages.map(m => this.updateInteraction(m, event)) });
+      return;
+    }
     if (this.activityReady) this.applyActivity(event.type === "message.created"
       ? { type: event.type, cursor: { id: event.message.id, createdAt: event.message.createdAt }, userId: event.message.author.userId }
       : { type: event.type, messageId: event.messageId });
     if (event.type === "message.deleted") {
       this.deleted.add(event.messageId);
-      this.update({ messages: this.snapshot.messages.filter(message => message.id !== event.messageId) });
+      this.reactionUpdates.delete(event.messageId);
+      this.removeDeletedMention(event.messageId);
+      this.update({ messages: this.snapshot.messages.filter(message => message.id !== event.messageId).map(m => this.updateInteraction(m, event)),
+        reply: this.snapshot.reply?.id === event.messageId ? { id: event.messageId, deleted: true } : this.snapshot.reply,
+        pending: this.snapshot.pending.map(p => p.reply?.id === event.messageId ? { ...p, reply: { id: event.messageId, deleted: true } } : p) });
       return;
     }
     const message = event.message;
@@ -313,6 +465,7 @@ export class ChatSession {
     const version = this.sendStateVersion;
     const result = await this.deps.request<ChatConnection>("/api/chat/connection?activity=1", { method: "POST" });
     if (this.disposed || result.viewer.userId !== this.userId) throw new ChatRequestError("AUTHENTICATION_FAILED");
+    this.mentionsEnabled = !!result.mentionChannel;
     this.setViewer(result.viewer, version);
     return result;
   };
@@ -330,6 +483,8 @@ export class ChatSession {
       this.socket = this.deps.transport(result, this.refresh, {
         publication: this.receive,
         activityPublication: this.receiveActivity,
+        mentionChanged: () => { void this.refreshMentions(); },
+        mentionSubscribed: () => { void this.refreshMentions(); },
         activitySubscribed: context => {
           if (!this.active) return;
           this.activityConnected = true;
@@ -379,7 +534,8 @@ export class ChatSession {
     if (this.closed === !open) return;
     this.closed = !open;
     if (open) {
-      this.update({ messages: this.snapshot.messages.filter(message => this.live(message)) });
+      this.update(this.merge(this.snapshot.messages));
+      if (this.mentionsEnabled) void this.refreshMentions();
       this.socket?.subscribeMessages();
     } else {
       this.subscribed = false;
@@ -393,6 +549,7 @@ export class ChatSession {
     }
   };
   pause = () => {
+    this.mentionsAbort?.abort(); this.mentionsAbort = null; this.mentionsDirty = false; this.mentionsVersion++;
     this.active = false; this.subscribed = false; this.activityConnected = false;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     if (this.activityTimer) clearTimeout(this.activityTimer);
@@ -406,13 +563,15 @@ export class ChatSession {
     this.setOpen(false); this.pause();
     for (const id of this.imageJobs.keys()) this.releaseImage(id);
     this.activity = { latest: null, latestOther: null }; this.readCursor = undefined;
-    this.update({ messages: [], draft: "", pending: [], viewer: null });
+    this.readMentions.clear(); this.reactionUpdates.clear();
+    this.update({ messages: [], draft: "", draftMentions: [], mentions: { items: [], total: 0 }, mentionTarget: null, reply: null, context: null, pending: [], viewer: null, quickReactions: [...DEFAULT_QUICK_REACTIONS] });
     this.disposed = true;
     this.listeners.clear(); this.stampListeners.clear(); this.ownStamps.clear();
   };
   syncLatest = async () => {
     if (!this.active || this.closed || !this.subscribed || this.synchronizing) return;
     this.cancelReads();
+    this.reactionUpdates.clear();
     this.activityAbort?.abort(); this.activityAbort = null;
     if (this.activityTimer) clearTimeout(this.activityTimer);
     this.activityTimer = null;
@@ -427,7 +586,7 @@ export class ChatSession {
       for (const event of events) if (event.type === "message.deleted") this.deleted.add(event.messageId);
       this.latestSeen = page.messages.at(-1) ?? null;
       this.following = true; this.scrollAnchors = [];
-      this.update({ ...this.merge(page.messages, page.nextCursor), pending: this.confirm(page.messages), newMessages: 0 });
+      this.update({ ...this.merge(page.messages, page.nextCursor), context: null, pending: this.confirm(page.messages), newMessages: 0 });
       this.baselineReady = true;
       for (const event of events) this.apply(event);
       if (page.activity) this.acceptActivity(page.activity);
@@ -442,7 +601,8 @@ export class ChatSession {
     }
   };
   loadOlder = async () => {
-    const cursor = this.snapshot.nextCursor;
+    const context = this.snapshot.context;
+    const cursor = (context ?? this.snapshot).nextCursor;
     if (!cursor || this.closed || !this.baselineReady || this.snapshot.loadingOlder) return;
     const generation = this.readGeneration;
     this.following = false; this.update({ loadingOlder: true, error: null });
@@ -450,15 +610,69 @@ export class ChatSession {
       const before = encodeURIComponent(`${cursor.createdAt}|${cursor.id}`);
       const page = await this.deps.request<ChatPage>(`/api/chat/messages?before=${before}`, { signal: this.readAbort.signal });
       if (generation !== this.readGeneration || this.disposed) return;
-      this.update(this.merge([...page.messages, ...this.snapshot.messages], page.nextCursor));
+      if (context && this.snapshot.context) this.update({ context: this.merge([...page.messages, ...this.snapshot.context.messages], page.nextCursor) });
+      else this.update(this.merge([...page.messages, ...this.snapshot.messages], page.nextCursor));
     } catch (error) {
       if (generation !== this.readGeneration || this.disposed) return;
       this.update({ error: error instanceof ChatRequestError ? error.code : "CHAT_UNAVAILABLE" });
     } finally { if (generation === this.readGeneration) this.update({ loadingOlder: false }); }
   };
   jumpLatest = async () => {
+    if (!this.synchronizing) this.cancelReads();
     this.following = true;
-    this.update({ newMessages: 0 });
+    this.update({ context: null, newMessages: 0 });
+  };
+  locate = async (id: string) => {
+    if (!this.baselineReady || this.closed || this.disposed) return false;
+    const shown = this.snapshot.context ?? this.snapshot;
+    const inMain = this.snapshot.messages.some(m => m.id === id);
+    const destination = shown.messages.some(m => m.id === id) ? shown : inMain ? this.snapshot : null;
+    const showMain = destination === this.snapshot;
+    this.cancelReads();
+    const abort = new AbortController(); this.contextAbort = abort; this.contextEvents = [];
+    try {
+      let page = destination ?? await this.deps.request<ChatPage>(`/api/chat/messages/${id}/context`, { signal: abort.signal });
+      if (abort.signal.aborted || this.disposed) return false;
+      page = this.merge(page.messages, page.nextCursor);
+      for (const event of this.contextEvents) {
+        page = this.applyToPage(page, event);
+      }
+      if (!page.messages.some(m => m.id === id)) throw new ChatRequestError("CHAT_NOT_FOUND");
+      this.following = false;
+      this.update({ context: showMain ? null : page });
+      return true;
+    } catch (error) {
+      if (abort.signal.aborted || this.disposed) return false;
+      if (error instanceof ChatRequestError && error.code === "CHAT_NOT_FOUND") {
+        this.apply({ type: "message.deleted", messageId: id, deletedAt: new Date().toISOString() });
+        return false;
+      }
+      throw error;
+    } finally {
+      if (this.contextAbort === abort) { this.contextAbort = null; this.contextEvents = []; }
+    }
+  };
+  react = async (messageId: string, emojiKey: string, active: boolean, options: { remember?: boolean } = {}) => {
+    if (this.reactionRequests.has(messageId)) return;
+    this.reactionRequests.add(messageId);
+    try {
+      const event = await this.deps.request<ChatReactionEvent>(`/api/chat/messages/${messageId}/reactions`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ emojiKey, active }),
+      });
+      if (!this.disposed) {
+        this.apply(event);
+        if (this.synchronizing) this.buffered.push(event);
+        if (active && options.remember) {
+          this.restoreQuickReactions([emojiKey, ...this.snapshot.quickReactions]);
+          this.deps.saveQuickReactions?.(this.snapshot.quickReactions);
+        }
+      }
+    } finally { this.reactionRequests.delete(messageId); }
+  };
+  loadReactionParticipants = async ({ commentId, emojiKey, cursor, signal }: { commentId: string; emojiKey: string; cursor?: string | null; signal?: AbortSignal }): Promise<CommentReactionParticipantListResponse> => {
+    const query = new URLSearchParams({ emojiKey, ...(cursor ? { after: cursor } : {}) });
+    const result = await this.deps.request<Omit<CommentReactionParticipantListResponse, "commentId">>(`/api/chat/messages/${commentId}/reactions?${query}`, { signal });
+    return { ...result, commentId };
   };
 
   private setViewer(viewer: ChatViewer, version: number) {
@@ -484,7 +698,13 @@ export class ChatSession {
   send = (images: PreparedChatImage[] = []): Promise<void> | null => {
     if (this.disposed || this.sendRestriction() || images.length > CHAT_IMAGE_MAX_ATTACHMENTS) return null;
     const content = this.snapshot.draft.trim();
+    const leading = [...this.snapshot.draft].length - [...this.snapshot.draft.trimStart()].length;
+    const mentions = this.snapshot.draftMentions.map(m => ({ ...m, start: m.start - leading, end: m.end - leading }));
     if (!content && !images.length) return null;
+    const reply = this.snapshot.reply;
+    if (reply && (reply.deleted || this.deleted.has(reply.id) || Date.parse(reply.createdAt) <= Date.now() - CHAT_RETENTION_MS)) {
+      this.update({ reply: { id: reply.id, deleted: true } }); return null;
+    }
     const batchId = images.length ? crypto.randomUUID() : undefined;
     const pending: PendingMessage[] = images.map((image) => {
       const id = crypto.randomUUID(), previewUrl = URL.createObjectURL(image.blob);
@@ -492,8 +712,9 @@ export class ChatSession {
       return { clientRequestId: id, batchId, content: "", startedAt: Date.now(), status: "queued", error: null,
         image: { url: previewUrl, width: image.width, height: image.height, contentType: image.contentType } };
     });
-    if (content) pending.push({ clientRequestId: crypto.randomUUID(), batchId, content, startedAt: Date.now(), status: "queued", error: null });
-    this.update({ draft: "", pending: [...this.snapshot.pending, ...pending] });
+    if (content) pending.push({ clientRequestId: crypto.randomUUID(), batchId, content, mentions, startedAt: Date.now(), status: "queued", error: null });
+    pending[0].reply = reply;
+    this.update({ draft: "", draftMentions: [], reply: null, pending: [...this.snapshot.pending, ...pending] });
     return Promise.all([this.drainImages(), this.drainSends()]).then(() => undefined);
   };
   retry = async (id: string) => {
@@ -503,6 +724,12 @@ export class ChatSession {
       batchId: undefined, status: "queued", error: null,
     }) });
     await Promise.all([this.drainSends(), this.drainImages()]);
+  };
+  retryWithoutReply = async (id: string) => {
+    if (!this.snapshot.pending.some(p => p.clientRequestId === id && p.status === "failed" && p.error === "CHAT_REPLY_DELETED")) return;
+    // This rejection guarantees that the original request did not save a message.
+    this.update({ pending: this.snapshot.pending.map(p => p.clientRequestId === id ? { ...p, reply: null } : p) });
+    await this.retry(id);
   };
   private releaseImage(id: string) {
     const job = this.imageJobs.get(id);
@@ -553,7 +780,7 @@ export class ChatSession {
           if (this.disposed) break;
           this.update({ pending: this.snapshot.pending.map((p) => p.clientRequestId === id ? { ...p, status: "sending" } : p) });
           const result = await this.deps.request<ChatSendResult>("/api/chat/images", { method: "POST",
-            headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientRequestId: id, receipt: job.upload!.receipt }) });
+            headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientRequestId: id, receipt: job.upload!.receipt, ...(pending.reply ? { replyToId: pending.reply.id } : {}) }) });
           if (!this.disposed) this.acceptSend(result, id);
         } catch (error) {
           if (this.disposed) break;
@@ -589,7 +816,7 @@ export class ChatSession {
         this.update({ pending: this.snapshot.pending.map((p) => p === pending ? { ...p, status: "sending" } : p) });
         try {
           const result = await this.deps.request<ChatSendResult>("/api/chat/messages", {
-            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content, clientRequestId }),
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content, clientRequestId, ...(pending.mentions?.length ? { mentions: pending.mentions } : {}), ...(pending.reply ? { replyToId: pending.reply.id } : {}) }),
           });
           if (this.disposed) break;
           this.acceptSend(result, clientRequestId);

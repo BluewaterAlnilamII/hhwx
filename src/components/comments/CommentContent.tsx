@@ -1,10 +1,12 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { memo, useMemo } from "react";
+import { memo, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import dynamic from "next/dynamic";
 import { getCommentEmojiSrc } from "@/lib/comments/emoji";
+import LoadingImage from "@/components/LoadingImage";
+import { ImageOff } from "lucide-react";
 import {
   isCommentStampRegion,
   type CommentStamp,
@@ -111,26 +113,37 @@ function isJumboEmojiContent(tokens: readonly CommentContentToken[]): boolean {
   return hasEmoji;
 }
 
-function renderCommentEmojiToken(token: CommentContentEmojiToken, variant: "inline" | "jumbo") {
+function CommentContentEmoji({ token, variant }: { token: CommentContentEmojiToken; variant: "inline" | "jumbo" }) {
+  const common = useTranslations("common");
+  const [failed, setFailed] = useState(false);
   const isJumbo = variant === "jumbo";
+  const size = isJumbo ? 48 : 24;
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      key={`${token.name}-${token.index}`}
-      src={token.src}
-      alt={token.raw}
+    <span
       title={token.raw}
-      width={isJumbo ? 64 : 32}
-      height={isJumbo ? 64 : 32}
-      loading="lazy"
-      decoding="async"
+      style={{ width: size, height: size }}
       className={cn(
-        "inline-block h-auto w-auto object-contain",
-        isJumbo ? "max-h-12 max-w-12 align-middle" : "mx-0.5 max-h-6 max-w-6 align-[-0.25em]",
+        "relative inline-block shrink-0 overflow-hidden",
+        isJumbo ? "align-middle" : "mx-0.5 align-[-0.25em]",
       )}
-    />
+    >
+      {failed ? (
+        <span role="img" aria-label={`${token.raw} ${common("states.imageUnavailable")}`}
+          className="absolute inset-0 flex items-center justify-center bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)]">
+          <ImageOff size={isJumbo ? 20 : 12} aria-hidden="true" />
+        </span>
+      ) : (
+        <LoadingImage src={token.src} alt={token.raw} loadingLabel={common("states.loading")}
+          width={size} height={size} loading="lazy" decoding="async"
+          className="absolute inset-0 h-full w-full object-contain" onError={() => setFailed(true)} />
+      )}
+    </span>
   );
+}
+
+function renderCommentEmojiToken(token: CommentContentEmojiToken, variant: "inline" | "jumbo") {
+  return <CommentContentEmoji key={`${token.src}-${token.index}`} token={token} variant={variant} />;
 }
 
 function renderCommentStampToken(token: CommentContentStampToken) {
@@ -179,11 +192,13 @@ export const CommentContent = memo(function CommentContent({
   isDeleted,
   stampLookup = NO_STAMPS,
   className,
+  inline = false,
 }: {
   content: string;
   isDeleted: boolean;
   stampLookup?: CommentStampLookup;
   className?: string;
+  inline?: boolean;
 }) {
   const t = useTranslations("comments");
   const contentClassName = isDeleted ? "text-[var(--theme-color-text-muted)] opacity-70" : "text-[var(--theme-color-text-default)]";
@@ -199,6 +214,8 @@ export const CommentContent = memo(function CommentContent({
       </p>
     );
   }
+
+  if (inline) return <span className={className}>{renderCommentContentTokens(tokens)}</span>;
 
   if (isJumboEmojiContent(tokens)) {
     return (

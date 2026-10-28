@@ -59,7 +59,10 @@
     "CHAT_IMAGES_UNAVAILABLE": "Image uploads are unavailable",
     "CHAT_UPLOAD_COOLDOWN": "Too many image uploads; try again shortly",
     "CHAT_STAMP_COOLDOWN": "Stamp limit reached, try again shortly",
-    "CHAT_INVALID_STAMP": "This stamp is unavailable"
+    "CHAT_INVALID_STAMP": "This stamp is unavailable",
+    "CHAT_REPLY_DELETED": "Message deleted; remove the quote in the message menu before retrying",
+    "CHAT_INVALID_REACTION": "This reaction is unavailable",
+    "CHAT_INVALID_MENTION": "This mention has changed; select the user again"
   },
   "queued": "Queued",
   "rateLimit": "20 messages sent in this window · Retry in {seconds}s",
@@ -72,5 +75,24 @@
   "removeImage": "Remove image",
   "preparingImage": "Preparing image…",
   "uploadingImage": "Uploading…",
-  "stamp": "Stamp"
+  "stamp": "Stamp",
+  "addReaction": "Add reaction",
+  "reply": "Quote",
+  "reactWith": "React with {emoji}",
+  "viewReactions": "View reactions",
+  "reactionFailed": "Could not update reaction, please retry",
+  "messageDeleted": "Message deleted",
+  "viewOriginal": "View original message",
+  "cancelReply": "Remove quote",
+  "replyUnavailable": "Remove this quote or choose another message before sending",
+  "locateFailed": "Could not load the original message, please retry",
+  "retryWithoutReply": "Remove quote and resend",
+  "mentionedYou": "Someone mentioned you",
+  "mentionBy": "<name>{username}</name> mentioned you",
+  "moreMentions": "{count} more",
+  "dismissMention": "Dismiss this mention",
+  "mentionUsers": "Choose a user to mention",
+  "mentionNoResults": "No users found",
+  "mentionSearchFailed": "Unable to search users; try typing again",
+  "mentionSyncFailed": "Mentions could not sync; click to retry"
 }

@@ -75,6 +75,9 @@
 | 弱强调破坏性操作 | 既有 `action-destructive-*` 角色；弱背景与实色危险反馈的职责分开 |
 | 菜单、帮助、提示或对话框浮层 | `hhwx-floating-surface`；专用几何结构使用对应浮层角色 |
 | 聊天消息区域与自己的气泡 | `chat-background` 及配套 `chat-own-background` / `chat-own-foreground`；他人使用控件底色和默认文字。Smile Patrol 为自己的气泡在控件底色中混入天蓝，随当前浅深主题角色变化。 |
+| 留言板的明确提及 | `chat-mention-background` / `chat-mention-foreground` 为草稿和已发送文字提供相同的蓝色标识。`chat-mentioned-background` / `chat-mentioned-accent` 标识他人明确 @ 当前账号的整条消息，与已读状态无关。Smile Patrol 使用柔和黄色，深色模式配暖色深底；这是提及关注标识，不是警告状态。 |
+| 留言板提及提醒 | 紧凑卡片从对话框标题栏下方露出，复用浮层底色。只有用户名使用 `chat-mention-foreground`，后缀保持普通文字颜色，时间使用弱化文字色。`--theme-shadow-chat-mention-card` 提供下边缘和轻微层次。展开与收回遵循减少动态效果设置，连续提醒保持卡片位置稳定。 |
+| 留言板消息反馈 | `chat-row-hover` 标识精确指针悬浮以及已打开的消息菜单/回应面板对应行；`chat-row-locate` 短暂强调跳转目标，不增加描边。提及行使用 `chat-mentioned-hover` / `chat-mentioned-locate` 保持暖黄色。普通背景向内容上下各延伸 3 px，提及行保持原范围和间隙。同一行也是消息右键/长按的触发范围，独立控件优先处理自身手势。独立淡出层露出下方当前的悬浮、菜单或基础状态。按钮按压缩放仅作用于留言板，减少动态效果时禁用；键盘焦点提示继续保留。 |
 | 选中、焦点 | 各自的角色；即使颜色相同，也保持职责独立 |
 | 活动完成度等只读进度 | `progress-*` 信息角色 |
 | 可拖动播放进度与音量 | 填充或 accent 调用 `action-accent-background`，与播放按钮一致；自定义滑轨调用 `range-track-background` |

@@ -10,7 +10,7 @@ export function getChatMessageLayout(messages: readonly ChatMessage[]) {
     const date = new Date(message.createdAt);
     const previousDate = previous ? new Date(previous.createdAt) : null;
     const showTime = !previousDate || !sameDay(date, previousDate) || date.getTime() - previousDate.getTime() >= 5 * 60_000;
-    return { message, showTime, showAuthor: showTime || previous?.author.userId !== message.author.userId };
+    return { message, showTime, showAuthor: !!message.reply || showTime || previous?.author.userId !== message.author.userId };
   });
 }
 

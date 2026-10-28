@@ -10,6 +10,7 @@ import { useGameStore } from "@/store/useGameStore";
 
 export function useChatSession(userId: string, open: boolean) {
   const storageKey = `hhwx:chat-read:v1:${userId}:main`;
+  const reactionsKey = `hhwx:chat-quick-reactions:v1:${userId}`;
   const session = useMemo(() => new ChatSession(userId, {
     readCursor() {
       try {
@@ -23,6 +24,14 @@ export function useChatSession(userId: string, open: boolean) {
         if (isChatCursor(stored) && (!cursor || compareChatMessages(stored, cursor) >= 0)) return;
         localStorage.setItem(storageKey, JSON.stringify({ cursor }));
       } catch { /* Reading works without storage. */ }
+    },
+    readQuickReactions() {
+      try { return JSON.parse(localStorage.getItem(reactionsKey) ?? "null"); }
+      catch { return undefined; }
+    },
+    saveQuickReactions(keys) {
+      try { localStorage.setItem(reactionsKey, JSON.stringify(keys)); }
+      catch { /* Reactions still work when local preferences cannot be saved. */ }
     },
     async uploadImage(upload, blob, signal) {
       const response = await fetch(upload.url, { method: "PUT", headers: upload.headers, body: blob,
@@ -64,14 +73,20 @@ export function useChatSession(userId: string, open: boolean) {
       messages.on("subscribed", handlers.subscribed);
       messages.on("subscribing", handlers.subscribing);
       messages.on("unsubscribed", handlers.unsubscribed);
-      client.on("publication", ctx => { if (ctx.channel === connection.activityChannel) handlers.activityPublication(ctx.data); });
-      client.on("subscribed", ctx => { if (ctx.channel === connection.activityChannel) handlers.activitySubscribed(ctx); });
+      client.on("publication", ctx => {
+        if (ctx.channel === connection.activityChannel) handlers.activityPublication(ctx.data);
+        if (ctx.channel === connection.mentionChannel && ctx.data?.type === "mentions.changed") handlers.mentionChanged();
+      });
+      client.on("subscribed", ctx => {
+        if (ctx.channel === connection.activityChannel) handlers.activitySubscribed(ctx);
+        if (ctx.channel === connection.mentionChannel) handlers.mentionSubscribed();
+      });
       client.on("connecting", handlers.connecting);
       client.on("disconnected", handlers.disconnected);
       return { connect: () => client.connect(), disconnect: () => client.disconnect(),
         subscribeMessages: () => messages.subscribe(), unsubscribeMessages: () => messages.unsubscribe() };
     },
-  }), [userId, storageKey]);
+  }), [userId, storageKey, reactionsKey]);
   useEffect(() => session.mount(), [session]);
   useEffect(() => {
     session.setOpen(open);
@@ -88,6 +103,11 @@ export function useChatSession(userId: string, open: boolean) {
   }, [session, open]);
   useEffect(() => {
     const update = (event: StorageEvent) => {
+      if (event.key === reactionsKey || event.key === null) {
+        try { session.restoreQuickReactions(JSON.parse(event.newValue ?? "null")); }
+        catch { /* Ignore incomplete or obsolete local records. */ }
+        return;
+      }
       if (event.key !== storageKey || !event.newValue) return;
       try {
         const value = JSON.parse(event.newValue);
@@ -96,6 +116,6 @@ export function useChatSession(userId: string, open: boolean) {
     };
     window.addEventListener("storage", update);
     return () => window.removeEventListener("storage", update);
-  }, [session, storageKey]);
+  }, [session, storageKey, reactionsKey]);
   return { session, state: useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot) };
 }

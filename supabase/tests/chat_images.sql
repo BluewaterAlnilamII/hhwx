@@ -24,7 +24,7 @@ do $$
 declare a uuid:='c0000000-0000-4000-8000-000000000001'; r uuid:=gen_random_uuid();
  img jsonb; saved jsonb; again jsonb; cnt integer;
 begin
- assert not has_function_privilege('anon','public.send_chat_image(uuid,uuid,jsonb,text)','EXECUTE');
+ assert not has_function_privilege('anon','public.send_chat_image(uuid,uuid,jsonb,text,uuid)','EXECUTE');
  assert not has_function_privilege('authenticated','public.authorize_chat_image_upload(uuid)','EXECUTE');
  img:=jsonb_build_object('key','user/images/temporary/'||a||'/'||r||'/'||repeat('a',64)||'.gif',
  'width',4096,'height',200,'bytes',20971520,'contentType','image/gif','hash',repeat('a',64));
