@@ -207,4 +207,3 @@ revoke all on function public.read_chat_mentions(uuid,text) from public,anon,aut
 grant execute on function public.read_chat_mentions(uuid,text) to service_role;
 revoke all on function public.acknowledge_chat_mentions(uuid,uuid[],text) from public,anon,authenticated;
 grant execute on function public.acknowledge_chat_mentions(uuid,uuid[],text) to service_role;
-
