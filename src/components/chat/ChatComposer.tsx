@@ -12,7 +12,7 @@ import dynamic from "next/dynamic";
 import { ArrowUp, ImagePlus, Plus, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { EmojiPickerButton } from "@/components/comments/EmojiPickerButton";
-import { COMMENT_STAMP_DEFAULT_REGION, type CommentStamp, type CommentStampRegion } from "@/lib/comments/stamps";
+import type { CommentStamp } from "@/lib/comments/stamps";
 import { preloadSoundEffect } from "@/lib/sound-effect-audio";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import { buildEmojiShortcode, insertCommentShortcode } from "@/lib/comments/comment-content";
@@ -114,7 +114,6 @@ export function ChatComposer({ draft, draftMentions, directory = null, onlineUse
   const plus = useRef<HTMLButtonElement>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [stampOpen, setStampOpen] = useState(false);
-  const [stampRegion, setStampRegion] = useState<CommentStampRegion>(COMMENT_STAMP_DEFAULT_REGION);
   const [extrasOpen, setExtrasOpen] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [mentionRange, setMentionRange] = useState<ReturnType<typeof chatMentionQuery>>(null);
@@ -344,7 +343,7 @@ export function ChatComposer({ draft, draftMentions, directory = null, onlineUse
           <EmojiPickerButton variant="composer" open={emojiOpen}
             onOpenChange={(value) => { setEmojiOpen(value); if (value) { setExtrasOpen(false); setStampOpen(false); } }} onSelect={insertEmoji} />
           <StampPickerButton variant="composer" open={stampOpen} label={t("stamp")} disabled={stampDisabled}
-            selectedRegion={stampRegion} onRegionChange={setStampRegion} onPreview={preloadStampVoice}
+            onPreview={preloadStampVoice}
             onOpenChange={(value) => { setStampOpen(value); if (value) { setExtrasOpen(false); setEmojiOpen(false); } }}
             onSelect={(stamp) => { if (!stampDisabled) onStamp(stamp); setStampOpen(false); }} />
         </div>

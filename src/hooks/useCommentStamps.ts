@@ -59,9 +59,10 @@ export function useCommentStampsForRegion(
   enabled = true,
 ): { stamps: readonly CommentStamp[]; loading: boolean; error: Error | null; refresh: () => void } {
   const { catalog, loading, error, refresh } = useCommentStampCatalog(enabled);
+  const stamps = useMemo(() => getBandoriStampCatalogItemsForRegion(catalog, region), [catalog, region]);
 
   return {
-    stamps: catalog ? getBandoriStampCatalogItemsForRegion(catalog, region) : [],
+    stamps,
     loading: loading && catalog === null,
     error,
     refresh,

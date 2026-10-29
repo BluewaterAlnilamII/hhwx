@@ -43,7 +43,15 @@
   "pickers": {
     "emoji": "Select emoji",
     "stamp": "Select stamp",
-    "stampEmpty": "No stamps available for this server"
+    "stampEmpty": "No stamps available for this server",
+    "stampCategories": "Stamp categories",
+    "stampAll": "All",
+    "stampFavorites": "Favorites",
+    "stampOther": "Other",
+    "stampCategoryEmpty": "No stamps in this category",
+    "stampFavoritesEmpty": "No favorites yet",
+    "stampAddFavorite": "Favorite {stamp}",
+    "stampRemoveFavorite": "Remove {stamp} from favorites"
   },
   "reactions": {
     "authenticationRequired": "Sign in and verify your email to react",

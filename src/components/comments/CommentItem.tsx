@@ -30,11 +30,7 @@ import {
   type CommentListResponse,
   type CommentNode,
 } from "@/lib/comments/comment-contract";
-import {
-  COMMENT_STAMP_DEFAULT_REGION,
-  type CommentStamp,
-  type CommentStampRegion,
-} from "@/lib/comments/stamps";
+import type { CommentStamp } from "@/lib/comments/stamps";
 import { cn } from "@/lib/utils";
 import {
   buildEmojiShortcode,
@@ -113,7 +109,6 @@ export const CommentItem = memo(function CommentItem({
   const [editValue, setEditValue] = useState(comment.content ?? "");
   const [editEmojiOpen, setEditEmojiOpen] = useState(false);
   const [editStampOpen, setEditStampOpen] = useState(false);
-  const [editStampRegion, setEditStampRegion] = useState<CommentStampRegion>(COMMENT_STAMP_DEFAULT_REGION);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
   const [reactionDialogEmojiKey, setReactionDialogEmojiKey] = useState<string | null>(null);
   const [reactingEmojiKey, setReactingEmojiKey] = useState<string | null>(null);
@@ -363,12 +358,10 @@ export const CommentItem = memo(function CommentItem({
                     />
                     <StampPickerButton
                       open={editStampOpen}
-                      selectedRegion={editStampRegion}
                       onOpenChange={(open) => {
                         setEditStampOpen(open);
                         if (open) setEditEmojiOpen(false);
                       }}
-                      onRegionChange={setEditStampRegion}
                       onSelect={insertEditStamp}
                     />
                   </div>

@@ -5,11 +5,7 @@ import { Check, X } from "lucide-react";
 import { LoadingSpinner } from "@/components/LoadingIndicator";
 import { useTranslations } from "next-intl";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
-import {
-  COMMENT_STAMP_DEFAULT_REGION,
-  type CommentStamp,
-  type CommentStampRegion,
-} from "@/lib/comments/stamps";
+import type { CommentStamp } from "@/lib/comments/stamps";
 import {
   COMMENT_LENGTH_WARNING_THRESHOLD,
   MAX_COMMENT_LENGTH,
@@ -50,7 +46,6 @@ export const CommentComposer = memo(function CommentComposer({
   const [content, setContent] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [stampOpen, setStampOpen] = useState(false);
-  const [stampRegion, setStampRegion] = useState<CommentStampRegion>(COMMENT_STAMP_DEFAULT_REGION);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const textareaRef = useAutoResizeTextarea(content);
@@ -141,12 +136,10 @@ export const CommentComposer = memo(function CommentComposer({
           />
           <StampPickerButton
             open={stampOpen}
-            selectedRegion={stampRegion}
             onOpenChange={(open) => {
               setStampOpen(open);
               if (open) setEmojiOpen(false);
             }}
-            onRegionChange={setStampRegion}
             onSelect={insertStamp}
           />
         </div>

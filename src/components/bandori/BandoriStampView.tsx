@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { Volume2 } from "lucide-react";
 import { BandoriAtlasAnimationCanvas } from "@/components/bandori/BandoriAtlasAnimationCanvas";
 import { useCommentStampAnimation } from "@/hooks/useCommentStamps";
 import type { BandoriStampCatalogItem } from "@/lib/bandori-stamp-assets";
 import { playSoundEffect } from "@/lib/sound-effect-audio";
 import { cn } from "@/lib/utils";
+import { buildBandoriChatStampResources } from "@/lib/bandori-builtin-resources";
+
+const { voiceBadge } = buildBandoriChatStampResources();
 
 export { BandoriAtlasAnimationCanvas as BandoriStampAnimationCanvas };
 
@@ -83,9 +85,10 @@ export default function BandoriStampView({
       title={`Play ${label}`}
     >
       {image}
-      <span className="absolute bottom-1 right-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white shadow-xs ring-2 ring-white dark:ring-[var(--theme-color-control-background)]">
-        <Volume2 size={12} aria-hidden="true" />
-      </span>
+      {voiceBadge ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={voiceBadge} alt="" className="pointer-events-none absolute right-0 top-0 w-[24%]" />
+      ) : null}
     </button>
   );
 }
