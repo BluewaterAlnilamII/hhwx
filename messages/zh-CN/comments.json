@@ -43,7 +43,15 @@
   "pickers": {
     "emoji": "选择表情",
     "stamp": "选择贴纸",
-    "stampEmpty": "该服务器暂无贴纸"
+    "stampEmpty": "该服务器暂无贴纸",
+    "stampCategories": "贴纸分类",
+    "stampAll": "全部",
+    "stampFavorites": "收藏",
+    "stampOther": "其他",
+    "stampCategoryEmpty": "该分类暂无贴纸",
+    "stampFavoritesEmpty": "暂无收藏",
+    "stampAddFavorite": "收藏 {stamp}",
+    "stampRemoveFavorite": "取消收藏 {stamp}"
   },
   "reactions": {
     "authenticationRequired": "登录并完成邮箱验证后可以回应",

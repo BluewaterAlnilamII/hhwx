@@ -1,8 +1,8 @@
 "use client";
 
-import type { CSSProperties } from "react";
-import { memo, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { Sticker, Volume2 } from "lucide-react";
+import type { CSSProperties, ReactNode } from "react";
+import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Grid2X2, MoreHorizontal, Star, Sticker } from "lucide-react";
 import LoadingIndicator from "@/components/LoadingIndicator";
 import { useTranslations } from "next-intl";
 import { BandoriStampAnimationCanvas } from "@/components/bandori/BandoriStampView";
@@ -14,17 +14,19 @@ import {
   COMMENT_STAMP_REGION_LABELS,
   COMMENT_STAMP_REGIONS,
   type CommentStamp,
-  type CommentStampRegion,
 } from "@/lib/comments/stamps";
 import { cn } from "@/lib/utils";
 import { buildStampShortcode } from "@/lib/comments/comment-content";
 import { getCommentPopoverHorizontalPosition } from "@/lib/comments/comment-popover-position";
+import { buildBandoriCardBandIconUrl, buildBandoriChatStampResources } from "@/lib/bandori-builtin-resources";
+import { BANDORI_CHARACTER_GROUPS } from "@/lib/bandori-character-groups";
+import { selectStampPickerItems, STAMP_FAVORITES_STORAGE_KEY, useStampPickerStore } from "@/store/useStampPickerStore";
+
+const { voiceBadge } = buildBandoriChatStampResources();
 
 type StampPickerButtonProps = {
   open: boolean;
-  selectedRegion: CommentStampRegion;
   onOpenChange: (open: boolean) => void;
-  onRegionChange: (region: CommentStampRegion) => void;
   onSelect: (stamp: CommentStamp) => void;
   onPreview?: (stamp: CommentStamp) => void;
   variant?: "default" | "composer";
@@ -36,11 +38,16 @@ const StampPickerOption = memo(function StampPickerOption({
   stamp,
   onSelect,
   onPreview,
+  favorite,
+  onFavorite,
 }: {
   stamp: CommentStamp;
   onSelect: (stamp: CommentStamp) => void;
   onPreview?: (stamp: CommentStamp) => void;
+  favorite: boolean;
+  onFavorite: (stamp: CommentStamp) => void;
 }) {
+  const t = useTranslations("comments");
   const shortcode = buildStampShortcode(stamp);
   const hasVoice = Boolean(stamp.voiceUrl);
   const [previewActive, setPreviewActive] = useState(false);
@@ -58,53 +65,70 @@ const StampPickerOption = memo(function StampPickerOption({
   }, []);
 
   return (
-    <button
-      type="button"
-      onClick={() => {
-        setPreviewActive(false);
-        onSelect(stamp);
-      }}
-      onPointerEnter={(event) => { if (event.pointerType === "mouse") { setPreviewActive(true); onPreview?.(stamp); } }}
-      onPointerLeave={() => setPreviewActive(false)}
-      onFocus={(event) => { if (event.currentTarget.matches(":focus-visible")) { setPreviewActive(true); onPreview?.(stamp); } }}
-      onBlur={() => setPreviewActive(false)}
-      className="relative flex h-20 w-full min-w-0 items-center justify-center rounded-lg p-1 transition hover:bg-[var(--theme-color-control-background-hover)] focus-visible:bg-[var(--theme-color-control-background-hover)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]"
-      aria-label={shortcode}
-      title={shortcode}
-    >
-      {animation ? (
-        <BandoriStampAnimationCanvas
-          animation={animation}
-          label={shortcode}
-          active={previewActive}
-          onError={handleAnimationError}
-          className="h-full max-h-18 w-full object-contain"
-        />
-      ) : (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={stamp.imageUrl}
-          alt={shortcode}
-          loading="lazy"
-          decoding="async"
-          referrerPolicy="strict-origin-when-cross-origin"
-          className="h-full max-h-18 w-full object-contain"
-        />
-      )}
-      {hasVoice ? (
-        <span className="absolute bottom-1 right-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-white shadow-xs ring-2 ring-white dark:ring-[var(--theme-color-control-background)]">
-          <Volume2 size={10} aria-hidden="true" />
+    <div data-stamp-key={shortcode} className="group relative h-20 min-w-0">
+      <button
+        type="button"
+        onClick={() => {
+          setPreviewActive(false);
+          onSelect(stamp);
+        }}
+        onPointerEnter={(event) => { if (event.pointerType === "mouse") { setPreviewActive(true); onPreview?.(stamp); } }}
+        onPointerLeave={() => setPreviewActive(false)}
+        onFocus={(event) => { if (event.currentTarget.matches(":focus-visible")) { setPreviewActive(true); onPreview?.(stamp); } }}
+        onBlur={() => setPreviewActive(false)}
+        className="relative flex h-20 w-full min-w-0 items-center justify-center rounded-lg p-1 transition hover:bg-[var(--theme-color-control-background-hover)] focus-visible:bg-[var(--theme-color-control-background-hover)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]"
+        aria-label={shortcode}
+        title={shortcode}
+      >
+        {animation ? (
+          <BandoriStampAnimationCanvas
+            animation={animation}
+            label={shortcode}
+            active={previewActive}
+            onError={handleAnimationError}
+            className="h-full max-h-18 w-full object-contain"
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={stamp.imageUrl}
+            alt={shortcode}
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="strict-origin-when-cross-origin"
+            className="h-full max-h-18 w-full object-contain"
+          />
+        )}
+        {hasVoice && voiceBadge ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={voiceBadge} alt="" className="pointer-events-none absolute right-0 top-0 w-[24%]" />
+        ) : null}
+      </button>
+      <button
+        type="button"
+        data-stamp-favorite
+        aria-pressed={favorite}
+        aria-label={t(favorite ? "pickers.stampRemoveFavorite" : "pickers.stampAddFavorite", { stamp: shortcode })}
+        title={t(favorite ? "pickers.stampRemoveFavorite" : "pickers.stampAddFavorite", { stamp: shortcode })}
+        onClick={() => onFavorite(stamp)}
+        className={cn(
+          "group/favorite absolute bottom-0 right-0 inline-flex size-8 items-center justify-center rounded-full transition focus-visible:outline-2 focus-visible:outline-[var(--theme-color-focus-ring)] sm:size-7",
+          favorite
+            ? "text-[var(--theme-color-stamp-favorite)]"
+            : "text-[var(--theme-color-text-muted)] sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 [@media(pointer:coarse)]:opacity-100",
+        )}
+      >
+        <span className="inline-flex size-5 items-center justify-center rounded-full bg-[var(--theme-color-floating-background)] shadow-xs transition group-hover/favorite:bg-[var(--theme-color-control-background-hover)]">
+          <Star size={14} fill={favorite ? "currentColor" : "none"} aria-hidden="true" />
         </span>
-      ) : null}
-    </button>
+      </button>
+    </div>
   );
 });
 
 export const StampPickerButton = memo(function StampPickerButton({
   open,
-  selectedRegion,
   onOpenChange,
-  onRegionChange,
   onSelect,
   onPreview,
   variant = "default",
@@ -117,8 +141,40 @@ export const StampPickerButton = memo(function StampPickerButton({
   const popoverId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const categoriesRef = useRef<HTMLDivElement>(null);
+  const restoredViewRef = useRef<string | null>(null);
+  const selectedRegion = useStampPickerStore((state) => state.region);
+  const category = useStampPickerStore((state) => state.category);
+  const favorites = useStampPickerStore((state) => state.favorites);
+  const hydrated = useStampPickerStore((state) => state.hydrated);
   const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({});
   const { stamps, loading, error, refresh } = useCommentStampsForRegion(selectedRegion, open);
+  const visibleStamps = useMemo(() => selectStampPickerItems(stamps, category, favorites), [stamps, category, favorites]);
+  const favoriteKeys = useMemo(() => new Set(favorites), [favorites]);
+  const viewKey = `${selectedRegion}:${category}`;
+
+  const rememberPosition = useCallback(() => {
+    const grid = gridRef.current;
+    if (!grid || restoredViewRef.current !== viewKey) return;
+    const items = grid.querySelectorAll<HTMLElement>("[data-stamp-key]");
+    if (!items.length) return;
+    const rowHeight = items[4] ? items[4].offsetTop - items[0].offsetTop : items[0].offsetHeight;
+    const first = items[Math.min(items.length - 1, Math.max(0, Math.floor((grid.scrollTop - items[0].offsetTop) / rowHeight)) * 4)];
+    useStampPickerStore.getState().rememberPosition(viewKey, {
+      stampKey: first.dataset.stampKey!, offset: Math.max(0, grid.scrollTop - first.offsetTop), scrollTop: grid.scrollTop,
+    });
+  }, [viewKey]);
+
+  const toggleFavorite = useCallback((stamp: CommentStamp) => {
+    const index = visibleStamps.indexOf(stamp);
+    useStampPickerStore.getState().toggleFavorite(stamp);
+    if (category === "favorites") window.requestAnimationFrame(() => {
+      const items = gridRef.current?.querySelectorAll<HTMLElement>("[data-stamp-key]");
+      const next = items?.[Math.min(index, items.length - 1)]?.querySelector<HTMLButtonElement>("[data-stamp-favorite]");
+      (next ?? containerRef.current?.querySelector<HTMLButtonElement>('[data-stamp-category="favorites"]'))?.focus({ preventScroll: true });
+    });
+  }, [category, visibleStamps]);
 
   const updatePopoverPosition = useCallback(() => {
     if (!open || !buttonRef.current || !containerRef.current) return;
@@ -132,14 +188,15 @@ export const StampPickerButton = memo(function StampPickerButton({
     const right = Math.min((viewport?.offsetLeft ?? 0) + (viewport?.width ?? window.innerWidth), panel?.right ?? window.innerWidth);
     const top = Math.max(viewport?.offsetTop ?? 0, panelElement?.querySelector("header")?.getBoundingClientRect().bottom ?? panel?.top ?? 0);
     const inputTop = containerRef.current.closest("[data-chat-input]")?.getBoundingClientRect().top ?? rect.top;
-    const gridHeight = Math.max(0, Math.min(320, inputTop - top - 8 - 16 - 53));
+    const desktop = window.matchMedia("(min-width: 640px)").matches;
+    const bodyHeight = Math.max(0, Math.min(desktop ? 320 : 372, inputTop - top - 8 - 16 - 36));
     setPopoverStyle({ ...getCommentPopoverHorizontalPosition({
       anchorRect: rect,
       containerLeft: containerRect.left,
       preferredWidth: 456,
       viewportLeft: left,
       viewportWidth: right - left,
-    }), ...(panel ? { bottom: containerRect.bottom - inputTop + 8, "--stamp-picker-max-height": `${gridHeight}px` } : {}) } as CSSProperties);
+    }), "--stamp-picker-max-height": `${bodyHeight}px`, ...(panel ? { bottom: containerRect.bottom - inputTop + 8 } : {}) } as CSSProperties);
   }, [open, variant]);
 
   useEffect(() => {
@@ -186,6 +243,77 @@ export const StampPickerButton = memo(function StampPickerButton({
     };
   }, [open, updatePopoverPosition, variant]);
 
+  useLayoutEffect(() => {
+    if (open) useStampPickerStore.getState().hydrate();
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const persist = () => useStampPickerStore.getState().persistSession();
+    const unsubscribe = useStampPickerStore.subscribe(() => {
+      clearTimeout(timer);
+      timer = setTimeout(persist, 150);
+    });
+    const syncFavorites = (event: StorageEvent) => {
+      if (event.key === STAMP_FAVORITES_STORAGE_KEY || event.key === null) useStampPickerStore.getState().syncFavorites();
+    };
+    window.addEventListener("pagehide", persist);
+    window.addEventListener("storage", syncFavorites);
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+      persist();
+      window.removeEventListener("pagehide", persist);
+      window.removeEventListener("storage", syncFavorites);
+    };
+  }, [open]);
+
+  useLayoutEffect(() => {
+    const grid = gridRef.current;
+    restoredViewRef.current = null;
+    if (!open || !hydrated || loading || !grid) return;
+    const restore = () => {
+      const position = useStampPickerStore.getState().positions[viewKey];
+      const anchor = position && Array.from(grid.querySelectorAll<HTMLElement>("[data-stamp-key]")).find((item) => item.dataset.stampKey === position.stampKey);
+      grid.scrollTop = position ? anchor ? anchor.offsetTop + position.offset : position.scrollTop : 0;
+      restoredViewRef.current = viewKey;
+    };
+    restore();
+    const observer = new ResizeObserver(restore);
+    observer.observe(grid);
+    return () => { observer.disconnect(); restoredViewRef.current = null; };
+  }, [open, hydrated, loading, viewKey, visibleStamps]);
+
+  useLayoutEffect(() => {
+    const navigation = categoriesRef.current;
+    if (!open || !hydrated || !navigation) return;
+    const restore = () => {
+      const desktop = window.matchMedia("(min-width: 640px)").matches;
+      const position = useStampPickerStore.getState().categoryScroll;
+      navigation.scrollLeft = desktop ? 0 : position.horizontal;
+      navigation.scrollTop = desktop ? position.vertical : 0;
+      const active = navigation.querySelector<HTMLElement>('[aria-pressed="true"]');
+      if (!active) return;
+      const item = active.getBoundingClientRect(), bounds = navigation.getBoundingClientRect();
+      if (desktop) navigation.scrollTop += item.top < bounds.top ? item.top - bounds.top : item.bottom > bounds.bottom ? item.bottom - bounds.bottom : 0;
+      else navigation.scrollLeft += item.left < bounds.left ? item.left - bounds.left : item.right > bounds.right ? item.right - bounds.right : 0;
+    };
+    restore();
+    const observer = new ResizeObserver(restore);
+    observer.observe(navigation);
+    return () => observer.disconnect();
+  }, [open, hydrated, category]);
+
+  const categoryButton = (key: string, label: string, icon: ReactNode) => (
+    <button key={key} type="button" data-stamp-category={key} aria-label={label} title={label} aria-pressed={category === key}
+      onClick={() => useStampPickerStore.getState().setCategory(key)}
+      className={cn("flex size-10 shrink-0 items-center justify-center rounded-xl border-2 transition focus-visible:outline-2 focus-visible:outline-[var(--theme-color-focus-ring)]",
+        category === key
+          ? "border-[var(--theme-color-selection-subtle-ring)] bg-[var(--theme-color-selection-subtle-background)] text-[var(--theme-color-selection-subtle-foreground)]"
+          : "border-transparent text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)]")}>{icon}</button>
+  );
+
   return (
     <div ref={containerRef} className="relative flex items-center">
       <button
@@ -221,7 +349,8 @@ export const StampPickerButton = memo(function StampPickerButton({
               <button
                 key={region}
                 type="button"
-                onClick={() => onRegionChange(region)}
+                onClick={() => useStampPickerStore.getState().setRegion(region)}
+                aria-pressed={selectedRegion === region}
                 className={cn(
                   "h-7 rounded-full text-xs font-bold transition focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]",
                   selectedRegion === region
@@ -233,24 +362,46 @@ export const StampPickerButton = memo(function StampPickerButton({
               </button>
             ))}
           </div>
-          <div className="grid max-h-[var(--stamp-picker-max-height,20rem)] grid-cols-4 gap-1 overflow-x-hidden overflow-y-auto pr-1 [scrollbar-color:var(--theme-color-shell-scrollbar-thumb)_var(--theme-color-shell-scrollbar-track)] scrollbar-thin [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--theme-color-shell-scrollbar-thumb)] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-[var(--theme-color-shell-scrollbar-track)]">
-            {loading ? <LoadingIndicator label={t("states.loading")} className="col-span-4 min-h-40" /> : null}
+          <div className="flex h-[var(--stamp-picker-max-height,20rem)] min-h-0 flex-col-reverse gap-2 sm:flex-row">
+            <div role="group" aria-label={t("pickers.stampCategories")} className="flex min-h-0 shrink-0 sm:w-11 sm:flex-col">
+              <div className="flex shrink-0 sm:flex-col">
+                {categoryButton("all", t("pickers.stampAll"), <Grid2X2 size={20} aria-hidden="true" />)}
+                {categoryButton("favorites", t("pickers.stampFavorites"), <Star size={20} fill="currentColor" className="text-[var(--theme-color-stamp-favorite)]" aria-hidden="true" />)}
+              </div>
+              <div aria-hidden="true" className="mx-1 my-1.5 w-0.5 shrink-0 rounded-full bg-[var(--theme-color-border-subtle)] sm:mx-0.5 sm:my-1 sm:h-0.5 sm:w-auto" />
+              <div ref={categoriesRef} className="flex min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-contain touch-pan-x [scrollbar-width:none] sm:flex-col sm:overflow-x-hidden sm:overflow-y-auto sm:touch-pan-y [&::-webkit-scrollbar]:hidden"
+                onScroll={(event) => {
+                  const desktop = window.matchMedia("(min-width: 640px)").matches;
+                  useStampPickerStore.getState().rememberCategoryScroll(desktop ? "vertical" : "horizontal", desktop ? event.currentTarget.scrollTop : event.currentTarget.scrollLeft);
+                }}>
+                {BANDORI_CHARACTER_GROUPS.map((band) => categoryButton(band.key, band.label,
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={buildBandoriCardBandIconUrl(band.bandId) ?? undefined} alt="" className="size-6 object-contain" />,
+                ))}
+                {categoryButton("other", t("pickers.stampOther"), <MoreHorizontal size={20} aria-hidden="true" />)}
+              </div>
+            </div>
+          <div ref={gridRef} onScroll={rememberPosition} className="relative grid min-h-0 min-w-0 flex-1 grid-cols-4 content-start gap-1 overflow-x-hidden overflow-y-auto overscroll-contain pr-1 [scrollbar-color:var(--theme-color-shell-scrollbar-thumb)_var(--theme-color-shell-scrollbar-track)] scrollbar-thin [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--theme-color-shell-scrollbar-thumb)] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-[var(--theme-color-shell-scrollbar-track)]">
+            {loading || !hydrated ? <LoadingIndicator label={t("states.loading")} className="col-span-4 min-h-40" /> : null}
             {error ? (
               <div role="alert" className="col-span-4 flex min-h-20 items-center justify-center gap-2 text-sm text-[var(--theme-color-text-muted)]">
                 {commonT("states.loadFailed")}
                 <button type="button" className="hhwx-text-link" onClick={refresh}>{commonT("actions.retry")}</button>
               </div>
-            ) : !loading && stamps.length === 0 ? (
-              <p className="col-span-4 py-10 text-center text-sm text-[var(--theme-color-text-muted)]">{t("pickers.stampEmpty")}</p>
+            ) : !loading && hydrated && visibleStamps.length === 0 ? (
+              <p className="col-span-4 py-10 text-center text-sm text-[var(--theme-color-text-muted)]">{t(category === "favorites" ? "pickers.stampFavoritesEmpty" : category === "all" ? "pickers.stampEmpty" : "pickers.stampCategoryEmpty")}</p>
             ) : null}
-            {stamps.map((stamp) => (
+            {hydrated && visibleStamps.map((stamp) => (
               <StampPickerOption
                 key={`${stamp.region}-${stamp.id}-${stamp.kind}`}
                 stamp={stamp}
                 onSelect={onSelect}
                 onPreview={onPreview}
+                favorite={favoriteKeys.has(buildStampShortcode(stamp))}
+                onFavorite={toggleFavorite}
               />
             ))}
+          </div>
           </div>
         </div>
       ) : null}

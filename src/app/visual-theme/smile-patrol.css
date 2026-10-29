@@ -32,6 +32,7 @@
   --theme-seed-semantic-success: #008348;
   --theme-seed-semantic-warning: #b14700;
   --theme-color-chat-mentioned-accent: var(--smile-patrol-palette-yellow-f9e065);
+  --theme-color-stamp-favorite: color-mix(in srgb, var(--smile-patrol-palette-yellow-ffee22) 80%, var(--smile-patrol-palette-orange-ff9922));
   --theme-seed-semantic-danger: #e0002f;
   --theme-seed-brand-primary: var(--smile-patrol-palette-orange-ff9922);
   --theme-seed-brand-emphasis: var(--smile-patrol-palette-red-ef392b);
