@@ -34,23 +34,28 @@ const mediaContents=['文字加载失败 :ArisaAngery: 后面的文字',':ArisaA
 if(mediaMode){for(let i=0;i<mediaContents.length;i++)rows[53+i].content=mediaContents[i];rows[52].image={...rows[57].image,width:400,height:30};rows[56].author={...rows[56].author,userId:actor,username:'Me'};delete rows[57].image;}
 let mentionInbox={items:[],total:0};
 const mentionUsers=Array.from({length:12},(_,i)=>({...rows[0].author,userId:uuid(200+i),username:'User'+(i+1),publicUid:10001+i}));
-const session=new ChatSession(actor,{transport(_c,_r,h){handlers=h;return{connect(){queueMicrotask(()=>h.subscribed());},disconnect(){},subscribeMessages(){},unsubscribeMessages(){}};},async request(path,init={}){
+window.presenceFailure=false;window.onlineFixture=[...mentionUsers,{...rows[0].author,userId:actor,username:'Me',publicUid:1},rows[0].author];
+const session=new ChatSession(actor,{transport(_c,_r,h){handlers=h;return{connect(){queueMicrotask(()=>{h.subscribed();h.activitySubscribed({recovered:false});});},disconnect(){},subscribeMessages(){},unsubscribeMessages(){}};},async request(path,init={}){
  window.calls.push({path,method:init.method,body:init.body});
  if(path.includes('/connection'))return{token:'fixture',url:'ws://fixture',viewer:{userId:actor,canModerate:false,mutedUntil:null,nextSendAt:null}};
- if(path.startsWith('/api/chat/mentions/users')){const q=new URL(path,location.origin).searchParams.get('q');if(q==='slow')await new Promise(r=>setTimeout(r,350));return mentionUsers.filter(u=>!q||u.username.toLowerCase().includes(q.toLowerCase())||String(u.publicUid)===q);}
+ if(path==='/api/chat/users')return [...mentionUsers,{...rows[0].author,userId:actor,username:'Me',publicUid:1},rows[0].author];
+ if(path==='/api/chat/presence?connections=1'){if(window.presenceFailure)throw new ChatRequestError('CHAT_UNAVAILABLE');return structuredClone(window.onlineFixture.map(user=>({clientId:user.userId,user})));}
+ if(path==='/api/chat/activity')return {latest:null,latestOther:null};
+ if(path.startsWith('/api/chat/mentions/users')){const q=new URL(path,location.origin).searchParams.get('q');if(!q)return mentionUsers.slice(0,8).map((u,i)=>({...u,lastMessageAt:new Date(start-i).toISOString().replace('Z','000Z')}));if(q==='slow')await new Promise(r=>setTimeout(r,350));return mentionUsers.filter(u=>u.username.toLowerCase().includes(q.toLowerCase())||String(u.publicUid)===q);}
  if(path==='/api/chat/mentions'){if(init.method==='PUT'){const {messageIds}=JSON.parse(init.body);mentionInbox.items=mentionInbox.items.filter(m=>!messageIds.includes(m.id));mentionInbox.total=mentionInbox.items.length;}return structuredClone(mentionInbox);}
  if(path.endsWith('/context')){if(window.failLocate){window.failLocate=false;throw new ChatRequestError('CHAT_UNAVAILABLE');}return{messages:rows.slice(0,15),nextCursor:null};}
  if(path.includes('/reactions')){
   const id=path.split('/')[4],m=rows.find(m=>m.id===id);
   if(init.method==='PUT'){const b=JSON.parse(init.body),previous=m.reactions.find(r=>r.emojiKey===b.emojiKey),count=(previous?.count??0)+(b.active?1:0)-(previous?.reactedByViewer?1:0);m.reactions=m.reactions.filter(r=>r.emojiKey!==b.emojiKey);if(count>0)m.reactions.push({emojiKey:b.emojiKey,count,reactedByViewer:b.active});m.reactionsVersion++;return{type:'message.reactions',messageId:id,version:m.reactionsVersion,reactions:m.reactions.map(({emojiKey,count})=>({emojiKey,count})),userId:actor,ownEmojiKeys:m.reactions.filter(r=>r.reactedByViewer).map(r=>r.emojiKey)};}
+  if(window.participantGate)await window.participantGate;
   return{emojiKey:new URL(path,location.origin).searchParams.get('emojiKey'),messageId:id,users:[{userId:actor,username:'Participant',publicUid:1,avatar:{cardId:1,entityServer:null,trainType:'normal'},reactedAt:new Date().toISOString()}],hasMore:false,nextCursor:null};
  }
  if(init.method==='POST'){const b=JSON.parse(init.body),m={...rows[0],id:b.clientRequestId,clientRequestId:b.clientRequestId,content:b.content,mentions:b.mentions,reply:b.replyToId?summary(rows.find(r=>r.id===b.replyToId)):null,author:{...rows[0].author,userId:actor,username:'Me'},createdAt:new Date().toISOString().replace('Z','000Z')};rows.push(m);return{message:m,messageId:m.id,deleted:false,nextSendAt:null};}
  return{messages:rows.slice(-20),nextCursor:null};
-}});window.session=session;window.seedMentions=(username,indices=[5,10,15])=>{mentionInbox={items:indices.map(i=>({id:rows[i].id,createdAt:rows[i].createdAt,username:username??rows[i].author.username})),total:indices.length};return session.refreshMentions();};window.removeOriginal=()=>handlers.publication({type:'message.deleted',messageId:rows[1].id,deletedAt:new Date().toISOString()});
+}});window.session=session;window.presenceChanged=event=>handlers.presenceChanged(event);window.seedMentions=(username,indices=[5,10,15])=>{mentionInbox={items:indices.map(i=>({id:rows[i].id,createdAt:rows[i].createdAt,username:username??rows[i].author.username})),total:indices.length};return session.refreshMentions();};window.removeOriginal=()=>handlers.publication({type:'message.deleted',messageId:rows[1].id,deletedAt:new Date().toISOString()});
 const locale=new URLSearchParams(location.search).get('locale')||'en';
 function App(){const [open,setOpen]=useState(false),trigger=useRef(null),state=useSyncExternalStore(session.subscribe,session.getSnapshot,session.getSnapshot);
- useEffect(()=>{session.setOpen(open);session.setReadingAllowed(open);if(open)void session.activate();},[open]);return <NextIntlClientProvider locale={locale} messages={${JSON.stringify(locales)}[locale]}>{mediaMode==='comments'?<main className="mx-auto max-w-xl p-4">{mediaContents.map((content,i)=><div key={i} data-media-case={i} className="mb-4"><CommentContent content={content} isDeleted={false}/></div>)}</main>:<><button ref={trigger} onClick={()=>setOpen(true)}>Open fixture</button><ChatDialog open={open} onOpenChange={setOpen} trigger={trigger} userId={actor} session={session} state={state}/></>}</NextIntlClientProvider>;}
+ useEffect(()=>{session.setOpen(open);session.setReadingAllowed(open);session.setMembersVisible(open);if(open)void session.activate();},[open]);return <NextIntlClientProvider locale={locale} messages={${JSON.stringify(locales)}[locale]}>{mediaMode==='comments'?<main className="mx-auto max-w-xl p-4">{mediaContents.map((content,i)=><div key={i} data-media-case={i} className="mb-4"><CommentContent content={content} isDeleted={false}/></div>)}</main>:<><button ref={trigger} onClick={()=>setOpen(true)}>Open fixture</button><ChatDialog open={open} onOpenChange={setOpen} trigger={trigger} userId={actor} session={session} state={state}/></>}</NextIntlClientProvider>;}
 createRoot(document.getElementById('root')).render(<App/>);`},plugins:[{name:'fixture',setup(b){b.onResolve({filter:/.*/},({path})=>Object.hasOwn(mocks,path)?{path,namespace:'fixture'}:undefined);b.onLoad({filter:/.*/,namespace:'fixture'},({path})=>({contents:mocks[path],resolveDir:root}));}}]});
 const css=(await postcss([tailwind()]).process(await readFile('src/app/globals.css','utf8'),{from:resolve('src/app/globals.css')})).css;
 const server=createServer(async(req,res)=>{if(req.url==='/app.js'){res.setHeader('Content-Type','text/javascript');res.end(bundle.outputFiles[0].text);}else if(req.url==='/app.css'){res.setHeader('Content-Type','text/css');res.end(css);}else if(req.url.startsWith('/res/emoji/')){try{res.setHeader('Content-Type',req.url.endsWith('.webp')?'image/webp':'image/png');res.end(await readFile(resolve('public'+req.url)));}catch{res.writeHead(404);res.end();}}else{res.setHeader('Content-Type','text/html');res.end('<!doctype html><html data-visual-theme="smile-patrol"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chat interactions</title><link rel="stylesheet" href="/app.css"><div id="root"></div><script type="module" src="/app.js"></script></html>');}});
@@ -193,6 +198,30 @@ try{
   await page.goto('http://localhost:'+server.address().port+'/?locale='+locale);assert.equal(await page.title(),'Chat interactions');await page.getByText('Open fixture',{exact:true}).click();await page.locator('[data-chat-bubble]').last().waitFor();
   const t=locales[locale].chat,row=page.locator('[data-message-id]').last(),bubble=row.locator('[data-chat-bubble]');
   const scroll=page.getByLabel(t.messages,{exact:true});
+  await page.waitForFunction(()=>window.session.getSnapshot().onlineUsers?.length===14);
+  await page.locator('#chat-draft').fill('preserve draft');
+  const oldScroll=await scroll.evaluate(e=>e.scrollTop);
+  const header=page.locator('[data-chat-panel] header'),titleBounds=await header.getByRole('heading').boundingBox(),presenceBounds=await page.locator('[data-chat-presence-trigger]').boundingBox();
+  assert.ok(presenceBounds.x-titleBounds.x-titleBounds.width<20,'Online count sits beside the left title');
+  const presenceReads=await page.evaluate(()=>window.calls.filter(c=>c.path.startsWith('/api/chat/presence')).length);
+  await page.locator('[data-chat-presence-trigger]').click();
+  const members=page.locator('[data-chat-members]');await members.waitFor();
+  assert.equal(await members.getAttribute('aria-describedby'),null,'Member list has no unnecessary description');
+  assert.equal(await page.evaluate(()=>window.calls.filter(c=>c.path.startsWith('/api/chat/presence')).length),presenceReads,'Opening the member dialog never reloads presence');
+  assert.equal(await members.locator('li').count(),14,'Member list is not capped at eight');
+  assert.equal(await members.evaluate(e=>e.scrollWidth<=e.clientWidth),true);
+  if(output)await page.screenshot({path:resolve(output,`presence-members-${locale}-${width}.png`)});
+  await page.keyboard.press('Escape');await members.waitFor({state:'detached'});
+  assert.equal(await page.locator('[data-chat-panel]').isVisible(),true);
+  assert.equal(await page.locator('#chat-draft').inputValue(),'preserve draft');
+  assert.equal(await scroll.evaluate(e=>e.scrollTop),oldScroll);
+  await page.evaluate(async()=>{window.presenceFailure=true;await window.session.refreshPresence();});
+  assert.equal(await page.locator('[data-chat-presence-trigger]').innerText(),t.onlineUnknown);
+  assert.equal(await row.getByRole('img',{name:t.offline,exact:true}).count(),0,'Unavailable presence is not offline');
+  await page.evaluate(async()=>{window.presenceFailure=false;await window.session.refreshPresence();});
+  await page.locator('#chat-draft').fill('@Me');await page.getByRole('option').first().waitFor();
+  await page.locator('#chat-draft').press('Tab');assert.equal(await page.locator('#chat-draft').inputValue(),'@Me ');
+  await page.locator('#chat-draft').fill('');
   assert.equal(await row.getByRole('button',{name:t.reply,exact:true}).count(),0);assert.equal(await row.getByRole('button',{name:t.addReaction,exact:true}).count(),0);
   await bubble.scrollIntoViewIfNeeded();
   const messageRow=row.locator('[data-chat-message-row]');await page.mouse.move(0,0);await page.waitForTimeout(160);
@@ -242,6 +271,7 @@ try{
   const target=page.locator('[data-message-id="00000000-0000-4000-8000-000000000159"]');
   await target.locator('[data-chat-bubble]').click({button:'right'});await page.getByRole('menuitem',{name:t.reactWith.replace('{emoji}','KokoroYay'),exact:true}).click();
   const chip=target.getByRole('button',{name:':KokoroYay: 1',exact:true});await chip.waitFor();assert.equal(await chip.getAttribute('aria-pressed'),'true');
+  await page.evaluate(()=>{window.participantGate=new Promise(resolve=>{window.releaseParticipants=resolve;});});
   await holdTouch(page,chip);await target.locator('[popover="manual"][role="dialog"]').waitFor();
   assert.equal(await page.getByRole('menu').count(),0,'Reaction long press must not open the row menu');assert.equal(await chip.getAttribute('aria-pressed'),'true');
   await chip.click({button:'right'});assert.equal(await page.getByRole('menu').count(),0);await page.keyboard.press('Escape');
@@ -249,8 +279,22 @@ try{
   await target.locator('[data-chat-bubble]').focus();await page.keyboard.press('Shift+F10');
   assert.deepEqual(await page.getByRole('menu').locator('img').evaluateAll(images=>images.map(image=>image.alt)),[':KokoroYay:',':Tae:',':LisaMelt:']);
   await page.getByRole('menuitem',{name:t.viewReactions,exact:true}).click();
-  await page.getByTestId('comment-reactions-dialog').waitFor();await page.getByText('Participant',{exact:true}).waitFor();
+  const participantsDialog=page.getByTestId('comment-reactions-dialog');await participantsDialog.waitFor();
+  const participantReads=()=>page.evaluate(()=>window.calls.filter(c=>c.path.includes('000000000159/reactions?')&&!c.method).length);
+  assert.equal(await participantReads(),1,'Preview and dialog share the pending first page');
+  await page.evaluate(()=>{window.releaseParticipants();window.participantGate=null;});await page.getByText('Participant',{exact:true}).waitFor();
+  assert.equal(await participantReads(),1);
   await page.getByTestId('comment-reactions-dialog').getByRole('button',{name:locales[locale].comments.actions.close,exact:true}).click();await page.getByTestId('comment-reactions-dialog').waitFor({state:'detached'});
+  await target.locator('[data-chat-bubble]').click({button:'right'});await page.getByRole('menuitem',{name:t.viewReactions,exact:true}).click();
+  await participantsDialog.getByText('Participant',{exact:true}).waitFor();assert.equal(await participantReads(),1,'Reopening the same version uses the completed first page');
+  const participantSnapshot=await participantsDialog.innerText();
+  await page.evaluate(()=>window.session.receive({type:'message.reactions',messageId:'00000000-0000-4000-8000-000000000159',version:2,userId:'00000000-0000-4000-8000-000000000002',ownEmojiKeys:['KokoroYay'],reactions:[{emojiKey:'KokoroYay',count:2}]}));
+  await target.getByRole('button',{name:':KokoroYay: 2',exact:true,includeHidden:true}).waitFor();
+  assert.equal(await participantsDialog.innerText(),participantSnapshot,'An open list remains a reading snapshot');assert.equal(await participantReads(),1);
+  await participantsDialog.getByRole('button',{name:locales[locale].comments.actions.close,exact:true}).click();
+  await target.locator('[data-chat-bubble]').click({button:'right'});await page.getByRole('menuitem',{name:t.viewReactions,exact:true}).click();
+  await participantsDialog.getByText('Participant',{exact:true}).waitFor();assert.equal(await participantReads(),2,'Reopening after a version change reads the new page once');
+  await participantsDialog.getByRole('button',{name:locales[locale].comments.actions.close,exact:true}).click();
   await target.getByRole('button',{name:t.addReaction,exact:true}).click();
   const inlinePicker=page.getByRole('dialog',{name:t.addReaction,exact:true});await inlinePicker.waitFor();
   await inlinePicker.getByRole('button').first().click({button:'right'});assert.equal(await page.getByRole('menu').count(),0,'Popover content must not open its owning row menu');
@@ -314,7 +358,24 @@ try{
   assert.equal(await page.locator('[data-chat-mention-picker]').evaluate(e=>e.scrollHeight<=e.clientHeight+1),true,'All eight candidates fit when the viewport has space');
   await checkScrollLock(page,scroll,width<500,page.locator('[data-chat-mention-picker]'));
   if(output)await page.screenshot({path:resolve(output,`mentions-picker-${locale}-${width}.png`)});
-  await draft.press('ArrowDown');await draft.press('Tab');assert.equal(await draft.inputValue(),'@User2 ');assert.equal(await draft.evaluate(e=>e===document.activeElement),true);
+  await draft.press('ArrowDown');
+  const emptyOrder=await options.allTextContents();
+  await page.evaluate(()=>{window.departed=window.onlineFixture.find(u=>u.username==='User2');window.presenceChanged({type:'leave',clientId:window.departed.userId});});
+  assert.ok((await options.filter({'has':page.locator('[aria-label="'+t.offline+'"]')}).innerText()).includes('User2'));
+  assert.deepEqual(await options.allTextContents(),emptyOrder,'Presence changes only the status dot, never the row order');
+  await page.evaluate(()=>{const user=window.onlineFixture.find(u=>u.username==='User12');window.session.receiveActivity({type:'message.created',cursor:{id:'00000000-0000-4000-8000-000000000990',createdAt:new Date().toISOString()},userId:user.userId});window.session.receiveActivity({type:'message.deleted',messageId:'00000000-0000-4000-8000-000000000990'});});
+  assert.deepEqual(await options.allTextContents(),emptyOrder,'New and deleted messages do not move a completed empty query');
+  await draft.dispatchEvent('click');assert.deepEqual(await options.allTextContents(),emptyOrder,'Clicking the unchanged active query preserves its snapshot');
+  assert.ok((await page.locator('[data-chat-mention-picker] [aria-selected=true]').innerText()).includes('User2'),'The selected account stays in its original row');
+  await draft.press('Tab');assert.equal(await draft.inputValue(),'@User2 ');assert.equal(await draft.evaluate(e=>e===document.activeElement),true);
+  await page.evaluate(()=>window.presenceChanged({type:'join',connection:{clientId:window.departed.userId,user:window.departed}}));
+  await draft.fill('@User');await options.first().waitFor();const keywordOrder=await options.allTextContents();
+  await draft.press('ArrowDown');
+  await page.evaluate(()=>{const user=window.onlineFixture.find(u=>u.username==='User1');window.presenceChanged({type:'leave',clientId:user.userId});window.session.receiveActivity({type:'message.created',cursor:{id:'00000000-0000-4000-8000-000000000991',createdAt:new Date().toISOString()},userId:window.departed.userId});});
+  assert.deepEqual(await options.allTextContents(),keywordOrder,'Keyword results ignore presence and recent activity');
+  assert.ok((await options.nth(1).getAttribute('aria-selected'))==='true');
+  await draft.press('Tab');assert.equal(await draft.inputValue(),'@User2 ');
+  await page.evaluate(()=>{const user=window.onlineFixture.find(u=>u.username==='User1');window.presenceChanged({type:'join',connection:{clientId:user.userId,user}});});
   const draftHighlight=page.locator('[data-chat-draft-highlight]');assert.equal(await draftHighlight.getAttribute('aria-hidden'),'true');
   assert.equal(await draftHighlight.locator('[data-chat-mention]').innerText(),'@User2');
   assert.equal(await draftHighlight.locator('[data-chat-mention]').evaluate(e=>getComputedStyle(e).color!==getComputedStyle(e.parentElement).color&&getComputedStyle(e).backgroundColor!=='rgba(0, 0, 0, 0)'),true);
@@ -324,6 +385,7 @@ try{
     const a=luminance(style.color),b=luminance(style.backgroundColor);return(Math.max(a,b)+0.05)/(Math.min(a,b)+0.05);
   });assert.ok(mentionContrast>=4.5,'Blue mention text retains readable contrast in both themes');
   const searches=await page.evaluate(()=>window.calls.filter(c=>c.path.startsWith('/api/chat/mentions/users')).length);
+  assert.equal(searches,1,'Only the first empty @ loads recent suggestions; keyword searches use the profile-only directory');
   for(const text of ['0',' 你好',' 😀']){
     await draft.pressSequentially(text);assert.equal(await page.locator('[data-chat-mention-picker]').count(),0);
   }
@@ -416,7 +478,7 @@ try{
   await earlyReaction.waitFor();assert.equal(await earlyReaction.getAttribute('aria-pressed'),'false');await earlyReaction.scrollIntoViewIfNeeded();
   if(output)await page.screenshot({path:resolve(output,`early-reaction-${locale}-${width}.png`)});
   assert.deepEqual(errors,[]);
-  cases.push({width,locale,reply:true,continuation:true,ownAvatar:true,ownNameAndUidHidden:true,reactions:true,earlyReaction:true,recentReactions:true,mentions:true,participants:true,context:true,deletion:true,inlinePicker:true,fixedPickerHeight:true,backgroundScrollLocked:true,internalGridScroll:true,scrollRestoredOnClose:true,errors});await context.close();
+  cases.push({width,locale,presence:true,presenceFailure:true,fullMemberList:true,localDirectory:true,stableMentionSelection:true,stableEmptyAndKeywordResults:true,participantFirstPageReuse:true,stableOpenParticipantDialog:true,reply:true,continuation:true,ownAvatar:true,ownNameAndUidHidden:true,reactions:true,earlyReaction:true,recentReactions:true,mentions:true,participants:true,context:true,deletion:true,inlinePicker:true,fixedPickerHeight:true,backgroundScrollLocked:true,internalGridScroll:true,scrollRestoredOnClose:true,errors});await context.close();
  }
  console.log(JSON.stringify({passed:true,cases},null,2));
 }finally{await browser.close();server.close();}

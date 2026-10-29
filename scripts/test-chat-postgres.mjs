@@ -64,10 +64,10 @@ const server=await compile("../src/lib/chat/chat-server.ts",{
     auth:{getUser:async()=>({data:{user:{id:actor,is_anonymous:false}},error:null}),
       getClaims:async()=>({data:{claims:{sub:actor,iss:"https://local.example/auth/v1",aud:"authenticated",role:"authenticated",exp:Math.floor(Date.now()/1000)+7200}},error:null})},
     rpc:async(name,args)=>{
-      assert.ok(["send_chat_message","delete_chat_message","read_chat_messages","read_chat_viewer","read_newer_chat_messages","read_chat_activity","read_chat_snapshot"].includes(name));
+      assert.ok(["send_chat_message","delete_chat_message","read_chat_messages","read_chat_viewer","read_newer_chat_messages","read_chat_activity","read_chat_snapshot","read_chat_online_users","read_chat_mentions"].includes(name));
       if(["read_chat_messages","read_newer_chat_messages","read_chat_activity","read_chat_snapshot"].includes(name))rpcReads++;
       const parameters=Object.entries(args).map(([k,v])=>{
-        assert.match(k,/^p_[a-z_]+$/);return `${k} => ${v==null?"null":"'"+(Array.isArray(v)?"{"+v.join(",")+"}":String(v)).replaceAll("'","''")+"'"}`;
+        assert.match(k,/^p_[a-z_]+$/);return `${k} => ${v==null?"null":"'"+(k==="p_mentions"?JSON.stringify(v):Array.isArray(v)?"{"+v.join(",")+"}":String(v)).replaceAll("'","''")+"'"}`;
       }).join(",");
       try{return{data:JSON.parse(await sql(`set role service_role; select public.${name}(${parameters});`)),error:null};}
       catch(error){return{data:null,error:{message:error.message.match(/ERROR:\s+(CHAT_[A-Z_]+)/)?.[1]??"database failure"}};}
@@ -84,9 +84,13 @@ const finishPublications = () => Promise.all([...scheduled]);
 const messages=await compile("../src/app/api/chat/messages/route.ts",dependencies);
 const deletion=await compile("../src/app/api/chat/messages/[messageId]/route.ts",dependencies);
 const connection=await compile("../src/app/api/chat/connection/route.ts",dependencies);
+const mentions=await compile("../src/app/api/chat/mentions/route.ts",dependencies);
+const presence=await compile("../src/app/api/chat/presence/route.ts",dependencies);
 const api=async(path,init={})=>{
   const request=new Request(`http://localhost${path}`,{...init,headers:{...init.headers,authorization:"Bearer fixture"}});
   if(path.startsWith("/api/chat/connection"))return connection.POST(request);
+  if(path==="/api/chat/mentions")return mentions.GET(request);
+  if(path.startsWith("/api/chat/presence"))return presence.GET(request);
   if(init.method==="DELETE")return deletion.DELETE(request,{params:Promise.resolve({messageId:path.split("/").at(-1)})});
   return init.method==="POST"?messages.POST(request):messages.GET(request);
 };
@@ -122,11 +126,28 @@ try{
       sub.on("subscribed",ctx=>{subscriptions++;lastRecovered=ctx.recovered;handlers.subscribed(ctx);});
       client.on("publication",ctx=>{if(ctx.channel===auth.activityChannel)handlers.activityPublication(ctx.data);});
       client.on("subscribed",ctx=>{if(ctx.channel===auth.activityChannel)handlers.activitySubscribed(ctx);});
+      client.on("join",ctx=>{if(ctx.channel===auth.activityChannel&&chatContract.isChatMentionUser(ctx.info.chanInfo))handlers.presenceChanged({type:'join',connection:{clientId:ctx.info.client,user:ctx.info.chanInfo}});});
+      client.on("leave",ctx=>{if(ctx.channel===auth.activityChannel)handlers.presenceChanged({type:'leave',clientId:ctx.info.client});});
       client.on("connecting",handlers.connecting);client.on("disconnected",handlers.disconnected);
       return {connect:()=>client.connect(),disconnect:()=>client.disconnect(),subscribeMessages:()=>sub.subscribe(),unsubscribeMessages:()=>sub.unsubscribe()};
     },
   });
   session.setOpen(true);await session.activate();await until(()=>session.getSnapshot().status==="live");
+  const presenceConnection=await server.issueChatConnection({userId:actor,expiresAt:Math.floor(Date.now()/1000)+3600});
+  otherClient=new Centrifuge(presenceConnection.url,{token:presenceConnection.token,websocket:WebSocket});
+  let duplicateSubscribed=false;otherClient.on('subscribed',ctx=>{if(ctx.channel===presenceConnection.activityChannel)duplicateSubscribed=true;});
+  otherClient.connect();await until(()=>duplicateSubscribed);
+  assert.equal((await server.readChatPresence(actor,'main')).length,1,'two tabs count as one account');
+  await assert.rejects(otherClient.presence(presenceConnection.activityChannel),e=>e.code===103,'raw presence must be private');
+  await assert.rejects(otherClient.presenceStats(presenceConnection.activityChannel),e=>e.code===103,'raw counts must not expose invisible connections');
+  await sql(`set role service_role; select public.set_chat_presence_visibility('${actor}',false);`);
+  assert.equal((await server.readChatPresence(actor,'main')).length,0,'already-connected hidden sessions disappear from the public list');
+  await sql(`set role service_role; select public.set_chat_presence_visibility('${actor}',true);`);
+  otherClient.disconnect();
+  session.setOpen(false);
+  assert.equal((await server.readChatPresence(actor,'main')).length,1,'closing the panel keeps the account online');
+  session.setOpen(true);await until(()=>session.getSnapshot().status==='live');
+  report.presenceDeduplicationAndPrivacy=true;
   const otherConnection=await server.issueChatConnection({userId:actor,expiresAt:Math.floor(Date.now()/1000)+3600},"other");
   const otherPublications=[];let otherSubscribed=false;
   otherClient=new Centrifuge(otherConnection.url,{token:otherConnection.token,websocket:WebSocket});

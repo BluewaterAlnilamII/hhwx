@@ -1,4 +1,24 @@
-import type { ChatMention } from "./chat-contract";
+import { CHAT_RETENTION_MS, type ChatMention, type ChatMentionUser, type ChatRecentMentionUser } from "./chat-contract";
+
+/** Search the whole directory before applying the eight-row presentation limit. */
+export function searchChatUsers(users: readonly ChatMentionUser[], query: string): ChatMentionUser[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const rank = (user: ChatMentionUser) => String(user.publicUid) === q || user.username.toLowerCase() === q ? 0
+    : user.username.toLowerCase().startsWith(q) ? 1 : 2;
+  return users.filter(user => user.username.toLowerCase().includes(q) || String(user.publicUid) === q)
+    .sort((a, b) => rank(a) - rank(b) || a.publicUid - b.publicUid).slice(0, 8);
+}
+
+export function recentChatUsers(users: readonly ChatRecentMentionUser[]): ChatRecentMentionUser[] {
+  const recent = new Map<string, ChatRecentMentionUser>();
+  for (const user of users) {
+    if (Date.parse(user.lastMessageAt) <= Date.now() - CHAT_RETENTION_MS) continue;
+    const previous = recent.get(user.userId);
+    if (!previous || user.lastMessageAt > previous.lastMessageAt) recent.set(user.userId, user);
+  }
+  return [...recent.values()].sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt) || a.publicUid - b.publicUid).slice(0, 8);
+}
 
 // Mention offsets count Unicode code points, matching PostgreSQL text positions.
 export function editChatMentions(before: string, after: string, mentions: readonly ChatMention[]): ChatMention[] {

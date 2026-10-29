@@ -4,7 +4,7 @@ import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { Centrifuge, UnauthorizedError } from "centrifuge";
 import { getSafeSession } from "@/lib/supabase";
 import { getApiErrorCode, parseApiSuccessData } from "@/lib/api-contracts";
-import { compareChatMessages, isChatCursor } from "@/lib/chat/chat-contract";
+import { compareChatMessages, isChatCursor, isChatMentionUser } from "@/lib/chat/chat-contract";
 import { ChatRequestError, ChatSession } from "@/lib/chat/chat-session";
 import { useGameStore } from "@/store/useGameStore";
 
@@ -75,13 +75,28 @@ export function useChatSession(userId: string, open: boolean) {
       messages.on("unsubscribed", handlers.unsubscribed);
       client.on("publication", ctx => {
         if (ctx.channel === connection.activityChannel) handlers.activityPublication(ctx.data);
-        if (ctx.channel === connection.mentionChannel && ctx.data?.type === "mentions.changed") handlers.mentionChanged();
+        if (ctx.channel === connection.mentionChannel && ctx.data?.type === "mentions.changed") handlers.mentionChanged(ctx.data);
       });
       client.on("subscribed", ctx => {
         if (ctx.channel === connection.activityChannel) handlers.activitySubscribed(ctx);
         if (ctx.channel === connection.mentionChannel) handlers.mentionSubscribed();
       });
-      client.on("connecting", handlers.connecting);
+      client.on("join", ctx => {
+        if (ctx.channel === connection.activityChannel && isChatMentionUser(ctx.info.chanInfo)
+          && ctx.info.user === ctx.info.chanInfo.userId) {
+          handlers.presenceChanged({ type: "join", connection: { clientId: ctx.info.client, user: ctx.info.chanInfo } });
+        }
+      });
+      client.on("leave", ctx => {
+        if (ctx.channel === connection.activityChannel) handlers.presenceChanged({ type: "leave", clientId: ctx.info.client });
+      });
+      let connectedOnce = false;
+      client.on("connected", () => { connectedOnce = true; });
+      client.on("connecting", () => {
+        // Recheck visibility before reconnecting with server-side presence subscriptions.
+        if (connectedOnce) client.setToken("");
+        handlers.connecting();
+      });
       client.on("disconnected", handlers.disconnected);
       return { connect: () => client.connect(), disconnect: () => client.disconnect(),
         subscribeMessages: () => messages.subscribe(), unsubscribeMessages: () => messages.unsubscribe() };
@@ -91,7 +106,10 @@ export function useChatSession(userId: string, open: boolean) {
   useEffect(() => {
     session.setOpen(open);
     if (open) void session.activate();
-    const update = () => session.setReadingAllowed(open && document.visibilityState === "visible" && document.hasFocus());
+    const update = () => {
+      session.setReadingAllowed(open && document.visibilityState === "visible" && document.hasFocus());
+      session.setMembersVisible(open && document.visibilityState === "visible");
+    };
     update();
     document.addEventListener("visibilitychange", update);
     window.addEventListener("focus", update); window.addEventListener("blur", update);
@@ -99,6 +117,7 @@ export function useChatSession(userId: string, open: boolean) {
       document.removeEventListener("visibilitychange", update);
       window.removeEventListener("focus", update); window.removeEventListener("blur", update);
       session.setReadingAllowed(false);
+      session.setMembersVisible(false);
     };
   }, [session, open]);
   useEffect(() => {

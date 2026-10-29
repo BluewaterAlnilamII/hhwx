@@ -29,7 +29,8 @@ begin
  saved:=public.send_chat_message(b,rid,'answer','main',original);
  assert saved->'message'->'reply'=jsonb_build_object('id',original,'deleted',true);
  delete from chat_private.messages where id=original;
- assert public.read_chat_context(b,target)->'messages'->0->'reply'=jsonb_build_object('id',original,'deleted',true);
+ assert (select m->'reply' from jsonb_array_elements(public.read_chat_context(b,target)->'messages') m
+   where m->>'id'=target::text)=jsonb_build_object('id',original,'deleted',true);
 end $$;
 reset role;
 select 'ok 1 - replies bind one target, retry idempotently, isolate rooms and hide deleted content';

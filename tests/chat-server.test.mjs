@@ -37,7 +37,7 @@ function harness() {
         getClaims: async () => { calls.push("claims"); return { data: { claims }, error: null }; },
         getUser: async (token) => { assert.equal(token,"test"); calls.push("user"); return { data: { user: { id: userId, is_anonymous: anonymous } }, error: authError }; },
       },
-      rpc: async (name,args) => { calls.push({ name,args }); return { data: rpcData, error: rpcError }; },
+      rpc: async (name,args) => { calls.push({ name,args }); return { data: typeof rpcData === 'function' ? rpcData(name) : rpcData, error: rpcError }; },
     }) },
   }, { process: { env }, console: { warn: (...args) => warnings.push(args) },
     fetch: async (url, init) => { publications.push({url,...init}); return publish(url,init); } });
@@ -46,6 +46,45 @@ function harness() {
 }
 const request = (method="GET", body) => new Request("http://localhost/api/chat/messages", {
   method, headers: { authorization: "Bearer test" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+
+test('presence reads only the private broker API, deduplicates accounts and returns only the database-filtered public list',async()=>{
+  const h=harness(),other='10000000-0000-4000-8000-000000000002';
+  h.setPublish(async()=>Response.json({result:{presence:{a:{user:userId,info:{secret:'private'}},b:{user:userId},c:{user:other}}}}));
+  h.setData([{userId:other,username:'visible'}]);
+  const dependencies={'@/lib/api-contracts':contracts,'@/lib/api-response':responses,'@/lib/chat/chat-server':h.server};
+  const route=compile('../src/app/api/chat/presence/route.ts',dependencies);
+  const response=await route.GET(request());assert.equal(response.status,200);
+  assert.match(response.headers.get('cache-control'),/no-store/);
+  assert.deepEqual((await response.json()).data,[{userId:other,username:'visible'}]);
+  assert.equal(new URL(h.publications[0].url).pathname,'/api/presence');
+  assert.equal(JSON.parse(h.publications[0].body).channel,'chat_activity:main');
+  assert.deepEqual(JSON.parse(JSON.stringify(h.calls.at(-1))),{name:'read_chat_online_users',args:{p_actor:userId,p_user_ids:[userId,other]}});
+  const calls=h.publications.length;
+  assert.equal((await route.GET(new Request('http://localhost/api/chat/presence'))).status,401);
+  assert.equal((await route.GET(new Request('http://localhost/api/chat/presence?roomId=other',{headers:{authorization:'Bearer test'}}))).status,404);
+  assert.equal(h.publications.length,calls);
+  const connections=await route.GET(new Request('http://localhost/api/chat/presence?connections=1',{headers:{authorization:'Bearer test'}}));
+  assert.deepEqual((await connections.json()).data,[{clientId:'c',user:{userId:other,username:'visible'}}],'hidden accounts and private broker metadata never escape');
+  h.setPublish(async()=>Response.json({error:{message:'private broker failure'}}));
+  const bad=await route.GET(request());assert.equal(bad.status,503);assert.doesNotMatch(JSON.stringify(await bad.json()),/private broker failure/);
+});
+
+test('directory is authenticated and unbounded; visibility writes are strictly typed and bound to the verified actor',async()=>{
+  const h=harness(),dependencies={'@/lib/api-contracts':contracts,'@/lib/api-response':responses,'@/lib/chat/chat-server':h.server};
+  const directory=compile('../src/app/api/chat/users/route.ts',dependencies),presence=compile('../src/app/api/chat/presence/route.ts',dependencies);
+  h.setData(Array.from({length:1200},(_,i)=>({userId:String(i)})));
+  const all=await directory.GET(request());assert.equal((await all.json()).data.length,1200);
+  assert.equal(h.calls.at(-1).name,'read_chat_user_directory');
+  assert.equal((await directory.GET(new Request('http://localhost/api/chat/users'))).status,401);
+  for(const visible of [null,'false',0,{}])assert.equal((await presence.PATCH(request('PATCH',{visible}))).status,400);
+  h.calls.length=0;h.setData(null);
+  assert.equal((await presence.PATCH(request('PATCH',{visible:false,userId:'someone-else'}))).status,200);
+  assert.deepEqual(JSON.parse(JSON.stringify(h.calls)),['user',{name:'set_chat_presence_visibility',args:{p_actor:userId,p_visible:false}}]);
+  assert.equal(new URL(h.publications.at(-1).url).pathname,'/api/disconnect');
+  assert.deepEqual(JSON.parse(h.publications.at(-1).body),{user:userId,disconnect:{code:3001,reason:'presence changed'}});
+  h.setPublish(async()=>Response.json({error:{message:'private failure'}}));
+  assert.equal((await presence.PATCH(request('PATCH',{visible:false}))).status,503,'a failed visibility reconnect is not reported as success');
+});
 
 test("only main is public; unknown rooms stop before RPC, upload and broadcast", async () => {
   const h = harness();
@@ -73,7 +112,7 @@ test("trusted room context scopes connection tokens and all event publications",
   for (const roomId of ["main", "other"]) {
     const connection = await h.server.issueChatConnection({ userId, expiresAt: Math.floor(Date.now()/1000)+60 }, roomId);
     const { payload } = await jose.jwtVerify(connection.token, new TextEncoder().encode(h.env.CHAT_TOKEN_SECRET));
-    assert.deepEqual(payload.channels, [`chat_activity:${roomId}`,`chat_mentions:${userId}`]);
+    assert.deepEqual(Object.keys(payload.subs), [`chat_activity:${roomId}`,`chat_mentions:${userId}`]);
     assert.equal(connection.channel, `chat:${roomId}`);
     for (const event of [{ type: "message.created", message: { id: userId, createdAt: "2026-10-26T00:00:00.000000Z", author: { userId } } },
       { type: "message.deleted", messageId: userId }, { type: "stamp.sent", id: userId }]) {
@@ -125,21 +164,27 @@ test("registered claims only; sends check the authenticated Auth user once witho
 
 test("JWT has fixed room and never outlives the authorizing session; no private fields returned", async () => {
   const h = harness(); const expiresAt = Math.floor(Date.now()/1000)+60;
+  const profile={userId,username:'visible',publicUid:1,avatarCardId:1,avatarCardServer:null,avatarCardTrainType:'normal'};
+  h.setData(name=>name==='read_chat_online_users'?[profile]:{userId,canModerate:false,mutedUntil:null,nextSendAt:null});
   const connection = await h.server.issueChatConnection({ userId,expiresAt });
   const { payload } = await jose.jwtVerify(connection.token,new TextEncoder().encode(h.env.CHAT_TOKEN_SECRET),{ issuer:"hhwx-chat",audience:"hhwx-chat" });
   assert.equal(payload.sub,userId); assert.equal(payload.exp,expiresAt);
-  assert.deepEqual(payload.channels,["chat_activity:main",`chat_mentions:${userId}`]);
+  assert.deepEqual(Object.keys(payload.subs),["chat_activity:main",`chat_mentions:${userId}`]);
+  assert.deepEqual(payload.subs['chat_activity:main'],{info:profile,override:{presence:{value:true},join_leave:{value:true}}});
   assert.deepEqual(Object.keys(connection).sort(),["activityChannel","channel","mentionChannel","subscriptionToken","token","url","viewer"]);
   assert.equal(connection.channel,"chat:main");
   const subscription = (await jose.jwtVerify(connection.subscriptionToken,new TextEncoder().encode(h.env.CHAT_TOKEN_SECRET),
     {issuer:"hhwx-chat",audience:"hhwx-chat"})).payload;
   assert.equal(subscription.sub,userId);assert.equal(subscription.channel,"chat:main");assert.equal(subscription.exp,expiresAt);
   const legacy = await h.server.issueChatConnection({userId,expiresAt},"main",false);
-  assert.deepEqual(jose.decodeJwt(legacy.token).channels,["chat:main",`chat_mentions:${userId}`]);
-  assert.equal(h.calls.length,2, "each independently issued credential reads its viewer once");
+  assert.deepEqual(Object.keys(jose.decodeJwt(legacy.token).subs),["chat:main",`chat_mentions:${userId}`]);
+  assert.equal(h.calls.length,3, "activity credentials also check current presence visibility");
   const long = await h.server.issueChatConnection({ userId, expiresAt: Math.floor(Date.now()/1000)+7200 });
   const longPayload = jose.decodeJwt(long.token);
   assert.equal(longPayload.exp - longPayload.iat,3600);
+  h.setData(name=>name==='read_chat_online_users'?[]:{userId,canModerate:false,mutedUntil:null,nextSendAt:null});
+  const hidden=await h.server.issueChatConnection({userId,expiresAt});
+  assert.deepEqual(jose.decodeJwt(hidden.token).subs['chat_activity:main'],{override:{presence:{value:false},join_leave:{value:false}}},'invisible users do not enter the public presence store or emit join/leave');
 });
 
 test("connection and history use the public JWT issuer even with an internal Supabase URL", async () => {
@@ -302,7 +347,8 @@ test('mention routes enforce identity, scope and payload bounds and target only 
  assert.equal((await inbox.PUT(request('PUT',{messageIds:['bad']}))).status,400);
  assert.equal((await inbox.PUT(request('PUT',{messageIds:[userId,userId],userId:'someone-else'}))).status,200);
  assert.equal(h.calls.at(-1).args.p_actor,userId);assert.deepEqual(Array.from(h.calls.at(-1).args.p_message_ids),[userId]);
- await inbox.runAfter();assert.equal(JSON.parse(h.publications.at(-1).body).channel,`chat_mentions:${userId}`);
+ await inbox.runAfter();const confirmation=JSON.parse(h.publications.at(-1).body);assert.equal(confirmation.channel,`chat_mentions:${userId}`);
+ assert.deepEqual(confirmation.data,{type:'mentions.changed',roomId:'main',acknowledgedMessageIds:[userId]});
  h.setData([]);assert.equal((await users.GET(new Request('http://localhost/?q=小明',{headers:{authorization:'Bearer test'}}))).status,200);
  assert.equal(h.calls.at(-1).args.p_query,'小明');
  assert.equal((await users.GET(new Request('http://localhost/?q='+ 'x'.repeat(97),{headers:{authorization:'Bearer test'}}))).status,400);

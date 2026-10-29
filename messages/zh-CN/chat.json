@@ -94,5 +94,13 @@
   "mentionUsers": "选择要提及的用户",
   "mentionNoResults": "未找到用户",
   "mentionSearchFailed": "暂时无法搜索用户，请重新输入",
-  "mentionSyncFailed": "提及提醒同步失败，点击重试"
+  "mentionSyncFailed": "提及提醒同步失败，点击重试",
+  "online": "站内在线",
+  "offline": "离线",
+  "onlineCount": "在线 {count}",
+  "onlineUnknown": "在线 —",
+  "onlineMembers": "在线成员",
+  "closeMembers": "关闭在线成员",
+  "onlineEmpty": "暂无在线成员",
+  "presenceFailed": "在线状态暂不可用，点击重试"
 }

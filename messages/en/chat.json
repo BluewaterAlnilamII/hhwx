@@ -94,5 +94,13 @@
   "mentionUsers": "Choose a user to mention",
   "mentionNoResults": "No users found",
   "mentionSearchFailed": "Unable to search users; try typing again",
-  "mentionSyncFailed": "Mentions could not sync; click to retry"
+  "mentionSyncFailed": "Mentions could not sync; click to retry",
+  "online": "Online on this site",
+  "offline": "Offline",
+  "onlineCount": "{count} online",
+  "onlineUnknown": "Online —",
+  "onlineMembers": "Online members",
+  "closeMembers": "Close online members",
+  "onlineEmpty": "No members online",
+  "presenceFailed": "Online status unavailable, click to retry"
 }

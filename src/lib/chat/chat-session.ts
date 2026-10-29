@@ -1,7 +1,7 @@
-import { CHAT_RETENTION_MS, compareChatMessages, parseChatEvent, parseChatActivityEvent,
+import { CHAT_RETENTION_MS, CHAT_DEFAULT_ROOM_ID, compareChatMessages, parseChatEvent, parseChatActivityEvent, parseChatMentionAcknowledgement,
   type ChatConnection, type ChatCursor, type ChatEvent, type ChatMessage, type ChatPage,
-  type ChatActivity, type ChatActivityEvent, type ChatSendResult, type ChatViewer, type ChatReply, type ChatReactionEvent, type ChatMention, type ChatMentionInbox, type ChatMentionUser } from "./chat-contract";
-import { editChatMentions } from "./chat-mentions";
+  type ChatActivity, type ChatActivityEvent, type ChatSendResult, type ChatViewer, type ChatReply, type ChatReactionEvent, type ChatMention, type ChatMentionInbox, type ChatMentionUser, type ChatRecentMentionUser, type ChatPresenceConnection, type ChatPresenceEvent } from "./chat-contract";
+import { editChatMentions, recentChatUsers } from "./chat-mentions";
 import type { CommentReactionParticipantListResponse } from "../comments/comment-contract";
 import { truncateCommentContent } from "../comments/comment-contract";
 import { COMMENT_EMOJI_NAME_SET } from "../comments/emoji";
@@ -19,7 +19,8 @@ type TransportHandlers = {
   unsubscribed(): void;
   activityPublication(data: unknown): void;
   activitySubscribed(context: { recovered: boolean }): void;
-  mentionChanged(): void;
+  presenceChanged(event: ChatPresenceEvent): void;
+  mentionChanged(data?: unknown): void;
   mentionSubscribed(): void;
   connecting(): void;
   disconnected(): void;
@@ -39,6 +40,11 @@ type PendingMessage = { clientRequestId: string; content: string; startedAt: num
   reply?: ChatReply | null;
   image?: { url: string; width: number; height: number; contentType: PreparedChatImage["contentType"] } };
 export type ChatSnapshot = {
+  directory: ChatMentionUser[] | null;
+  recentMentionUsers: ChatRecentMentionUser[] | null;
+  mentionSuggestionsVersion: number;
+  onlineUsers: ChatMentionUser[] | null;
+  presenceError: boolean;
   draftMentions: ChatMention[];
   mentions: ChatMentionInbox;
   mentionError: boolean;
@@ -65,6 +71,7 @@ const DEFAULT_QUICK_REACTIONS = ["Tae", "KokoroYay", "LisaMelt"];
 /** One signed-in account; the dialog only controls the full-message subscription. */
 export class ChatSession {
   private snapshot: ChatSnapshot = {
+    directory: null, recentMentionUsers: null, mentionSuggestionsVersion: 0, onlineUsers: null, presenceError: false,
     draftMentions: [], mentions: { items: [], total: 0 }, mentionError: false, mentionTarget: null,
     messages: [], nextCursor: null, viewer: null, status: "paused", error: null,
     draft: "", reply: null, context: null, pending: [], loadingOlder: false, following: true, newMessages: 0, unread: false, nextStampAt: null,
@@ -76,6 +83,15 @@ export class ChatSession {
   private stampAbort = new AbortController();
   private socket: Transport | null = null;
   private mentionsEnabled = false;
+  private membersVisible = false;
+  private directoryLoadedAt = 0;
+  private directoryAbort: AbortController | null = null;
+  private suggestionsAbort: AbortController | null = null;
+  private suggestionsRequest: Promise<void> | null = null;
+  private suggestionsBuffer: ChatRecentMentionUser[] = [];
+  private presenceAbort: AbortController | null = null;
+  private presenceConnections = new Map<string, ChatMentionUser>();
+  private presenceBuffer = new Map<string, ChatMentionUser | null>();
   private opening = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempt = 0;
@@ -108,10 +124,10 @@ export class ChatSession {
   private reactionRequests = new Set<string>();
   private reactionUpdates = new Map<string, { latest: ChatReactionEvent; own?: ChatReactionEvent }>();
   private contextAbort: AbortController | null = null;
-  private contextEvents: ChatEvent[] = [];
   private mentionsAbort: AbortController | null = null;
   private mentionsDirty = false;
   private mentionsVersion = 0;
+  private mentionsLoaded = false;
   private mentionAcks = new Set<string>();
   private readMentions = new Set<string>();
   scrollAnchors: { id: string; top: number }[] = [];
@@ -234,6 +250,7 @@ export class ChatSession {
     if (!this.active) return;
     const event = parseChatActivityEvent(value);
     if (!event) return;
+    this.updateMentionSuggestions(event);
     if (!this.activityReady || this.activityAbort || this.synchronizing) {
       this.activityBuffer.push(event);
       if (this.activityBuffer.length > 1000) {
@@ -264,7 +281,7 @@ export class ChatSession {
     } finally { if (this.activityAbort === abort) this.activityAbort = null; }
   };
   private cancelReads() {
-    this.contextAbort?.abort(); this.contextAbort = null; this.contextEvents = [];
+    this.contextAbort?.abort(); this.contextAbort = null;
     this.readGeneration++;
     this.readAbort.abort(); this.readAbort = new AbortController();
     if (this.synchronizing) this.baselineReady = false;
@@ -289,12 +306,127 @@ export class ChatSession {
       ? mentions.filter(m => m.end <= [...text].length)
       : editChatMentions(this.snapshot.draft, text, this.snapshot.draftMentions) });
   };
-  searchMentionUsers = (query: string, signal: AbortSignal) => this.deps.request<ChatMentionUser[]>(`/api/chat/mentions/users?q=${encodeURIComponent(query)}`, { signal });
+  searchMentionUsers = async (query: string, signal: AbortSignal) => {
+    const users = await this.deps.request<ChatMentionUser[]>(`/api/chat/mentions/users?q=${encodeURIComponent(query)}`, { signal });
+    if (users.length && !signal.aborted && !this.disposed && this.snapshot.directory) {
+      const directory = new Map(this.snapshot.directory.map(user => [user.userId, user]));
+      for (const user of users) directory.set(user.userId, user);
+      this.update({ directory: [...directory.values()] });
+    }
+    return users;
+  };
+
+  private invalidateMentionSuggestions() {
+    if (this.snapshot.recentMentionUsers === null && !this.suggestionsAbort) return;
+    this.suggestionsAbort?.abort(); this.suggestionsAbort = null; this.suggestionsRequest = null; this.suggestionsBuffer = [];
+    this.update({ recentMentionUsers: null, mentionSuggestionsVersion: this.snapshot.mentionSuggestionsVersion + 1 });
+  }
+
+  private updateMentionSuggestions(event: ChatActivityEvent, author?: ChatMentionUser) {
+    if (this.snapshot.recentMentionUsers === null && !this.suggestionsAbort) return;
+    if (event.type === "message.deleted") return;
+    if (this.deleted.has(event.cursor.id)) return;
+    const user = author ?? this.snapshot.directory?.find(user => user.userId === event.userId)
+      ?? this.snapshot.recentMentionUsers?.find(user => user.userId === event.userId)
+      ?? this.snapshot.onlineUsers?.find(user => user.userId === event.userId);
+    if (!user) { this.invalidateMentionSuggestions(); return; }
+    const recent = { ...user, lastMessageAt: event.cursor.createdAt };
+    if (this.suggestionsAbort) this.suggestionsBuffer = recentChatUsers([...this.suggestionsBuffer, recent]);
+    if (this.snapshot.recentMentionUsers !== null) {
+      this.update({ recentMentionUsers: recentChatUsers([...this.snapshot.recentMentionUsers, recent]) });
+    }
+  }
+
+  refreshMentionSuggestions = (): Promise<void> => {
+    if (this.disposed || this.snapshot.recentMentionUsers !== null) return Promise.resolve();
+    if (this.suggestionsRequest) return this.suggestionsRequest;
+    const abort = new AbortController(); this.suggestionsAbort = abort; this.suggestionsBuffer = [];
+    this.suggestionsRequest = (async () => {
+      try {
+        const users = await this.deps.request<ChatRecentMentionUser[]>("/api/chat/mentions/users?q=", { signal: abort.signal });
+        if (!abort.signal.aborted && !this.disposed) {
+          this.update({ recentMentionUsers: recentChatUsers([...users, ...this.suggestionsBuffer]) });
+        }
+      } finally {
+        if (this.suggestionsAbort === abort) { this.suggestionsAbort = null; this.suggestionsRequest = null; this.suggestionsBuffer = []; }
+      }
+    })();
+    return this.suggestionsRequest;
+  };
+
+  refreshDirectory = async () => {
+    if (this.disposed || this.directoryAbort || Date.now() - this.directoryLoadedAt < 300_000) return;
+    const abort = new AbortController(); this.directoryAbort = abort;
+    try {
+      const directory = await this.deps.request<ChatMentionUser[]>("/api/chat/users", { signal: abort.signal });
+      if (!abort.signal.aborted && !this.disposed) {
+        this.directoryLoadedAt = Date.now(); this.update({ directory });
+      }
+    } catch { /* Remote mention search remains available; retry the directory on the next open/focus. */ }
+    finally { if (this.directoryAbort === abort) this.directoryAbort = null; }
+  };
+
+  private cancelPresence() {
+    this.presenceAbort?.abort(); this.presenceAbort = null;
+    this.presenceConnections.clear(); this.presenceBuffer.clear();
+    this.update({ onlineUsers: null });
+  }
+
+  private showPresence() {
+    const users = new Map([...this.presenceConnections.values()].map(user => [user.userId, user]));
+    this.update({ onlineUsers: [...users.values()].sort((a, b) => a.username.localeCompare(b.username) || a.publicUid - b.publicUid), presenceError: false });
+  }
+
+  private receivePresence = (event: ChatPresenceEvent) => {
+    if (!this.active || !this.activityConnected) return;
+    const clientId = event.type === "join" ? event.connection.clientId : event.clientId;
+    const user = event.type === "join" ? event.connection.user : null;
+    if (this.presenceAbort) {
+      // Keep the last change per connection until the initial snapshot is ready.
+      this.presenceBuffer.set(clientId, user);
+    } else if (this.snapshot.onlineUsers !== null) {
+      if (user) this.presenceConnections.set(clientId, user);
+      else this.presenceConnections.delete(clientId);
+      this.showPresence();
+    }
+  };
+
+  refreshPresence = async () => {
+    if (this.disposed || !this.active || !this.activityConnected || this.presenceAbort) return;
+    this.presenceBuffer.clear();
+    const abort = new AbortController(); this.presenceAbort = abort;
+    try {
+      const connections = await this.deps.request<ChatPresenceConnection[]>("/api/chat/presence?connections=1", { signal: abort.signal });
+      if (abort.signal.aborted || this.disposed) return;
+      this.presenceConnections = new Map(connections.map(connection => [connection.clientId, connection.user]));
+      for (const [clientId, user] of this.presenceBuffer) {
+        if (user) this.presenceConnections.set(clientId, user);
+        else this.presenceConnections.delete(clientId);
+      }
+      this.showPresence();
+    } catch {
+      if (!abort.signal.aborted && !this.disposed) this.update({ onlineUsers: null, presenceError: true });
+    } finally {
+      if (this.presenceAbort === abort) {
+        this.presenceAbort = null;
+        this.presenceBuffer.clear();
+      }
+    }
+  };
+
+  setMembersVisible = (visible: boolean) => {
+    if (this.membersVisible === visible) return;
+    this.membersVisible = visible;
+    if (visible) {
+      void this.refreshDirectory();
+    }
+  };
   requestMentionLocation = (id: string | null) => this.update({ mentionTarget: id });
   private removeDeletedMention(id: string) {
     if (!this.snapshot.mentions.items.some(m => m.id === id)) return;
+    const complete = this.completeMentionInbox();
     this.update({ mentions: { items: this.snapshot.mentions.items.filter(m => m.id !== id), total: Math.max(0, this.snapshot.mentions.total - 1) } });
-    void this.refreshMentions();
+    if (!complete) void this.refreshMentions();
   }
   refreshMentions = async () => {
     if (!this.active || this.disposed) return;
@@ -305,28 +437,42 @@ export class ChatSession {
       const version = this.mentionsVersion, abort = new AbortController(); this.mentionsAbort = abort;
       try {
         const mentions = await this.deps.request<ChatMentionInbox>("/api/chat/mentions", { signal: abort.signal });
-        if (!abort.signal.aborted && !this.disposed && version === this.mentionsVersion) this.update({ mentions, mentionError: false });
+        if (!abort.signal.aborted && !this.disposed && version === this.mentionsVersion) {
+          this.mentionsLoaded = true;
+          this.update({ mentions, mentionError: false });
+        }
       } catch {
         if (!abort.signal.aborted && !this.disposed) this.update({ mentionError: true });
       } finally { if (this.mentionsAbort === abort) this.mentionsAbort = null; }
       if (abort.signal.aborted) return;
     } while (this.mentionsDirty && this.active && !this.disposed);
   };
+  private completeMentionInbox() {
+    return this.mentionsLoaded && !this.mentionsAbort && !this.mentionsDirty && !this.snapshot.mentionError
+      && this.snapshot.mentions.total === this.snapshot.mentions.items.length;
+  }
+  private confirmMentionReads = async (ids: string[]) => {
+    const confirmed = new Set(ids.filter(id => !this.readMentions.has(id)));
+    if (this.disposed || !confirmed.size) return;
+    const complete = this.completeMentionInbox();
+    confirmed.forEach(id => this.readMentions.add(id));
+    const previous = this.snapshot.mentions, items = previous.items.filter(m => !confirmed.has(m.id));
+    this.update({ mentions: { items, total: Math.max(0, previous.total - (previous.items.length - items.length)) }, mentionError: false });
+    // Incomplete totals and pre-acknowledgement reads need one reconciled refill.
+    if (!complete) await this.refreshMentions();
+  };
   acknowledgeMentions = async (ids: string[], visible = false) => {
     if (this.disposed || (visible && (this.closed || !this.readingAllowed))) return;
     const shown = this.snapshot.context?.messages ?? this.snapshot.messages;
     const pending = [...new Set(ids)].filter(id => !this.mentionAcks.has(id) && !this.readMentions.has(id)
       && (this.snapshot.mentions.items.some(m => m.id === id)
-        || (visible && shown.some(m => m.id === id && m.author.userId !== this.userId && m.mentions?.some(mention => mention.userId === this.userId))))).slice(0, 50);
+        || (visible && !this.completeMentionInbox() && shown.some(m => m.id === id && m.author.userId !== this.userId && m.mentions?.some(mention => mention.userId === this.userId))))).slice(0, 50);
     if (!pending.length) return;
     pending.forEach(id => this.mentionAcks.add(id));
     try {
       await this.deps.request("/api/chat/mentions", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messageIds: pending }) });
       if (this.disposed) return;
-      pending.forEach(id => this.readMentions.add(id));
-      const items = this.snapshot.mentions.items.filter(m => !pending.includes(m.id));
-      this.update({ mentions: { items, total: Math.max(0, this.snapshot.mentions.total - (this.snapshot.mentions.items.length - items.length)) }, mentionError: false });
-      await this.refreshMentions();
+      await this.confirmMentionReads(pending);
     } catch { if (!this.disposed) this.update({ mentionError: true }); }
     finally { pending.forEach(id => this.mentionAcks.delete(id)); }
   };
@@ -344,13 +490,18 @@ export class ChatSession {
     return !this.deleted.has(message.id) && Date.parse(message.createdAt) > Date.now() - CHAT_RETENTION_MS;
   }
   private merge(messages: ChatMessage[], nextCursor = this.snapshot.nextCursor): ChatPage {
+    const known = new Map<string, ChatMessage>();
+    for (const message of [...this.snapshot.messages, ...(this.snapshot.context?.messages ?? [])]) {
+      known.set(message.id, this.mergeMessage(known.get(message.id), message));
+    }
     const unique = new Map<string, ChatMessage>();
     for (const message of messages) if (this.live(message)) {
-      let merged = this.mergeMessage(unique.get(message.id), message);
+      let merged = this.mergeMessage(unique.get(message.id) ?? known.get(message.id), message);
       const updates = this.reactionUpdates.get(message.id);
       if (updates) {
         merged = this.updateInteraction(merged, updates.latest);
         if (updates.own && updates.own !== updates.latest) merged = this.updateInteraction(merged, updates.own);
+        this.reactionUpdates.delete(message.id);
       }
       unique.set(message.id, merged);
     }
@@ -401,22 +552,20 @@ export class ChatSession {
     return confirmed.size ? this.snapshot.pending.filter((p) => !confirmed.has(p.clientRequestId)) : this.snapshot.pending;
   }
   private apply(event: ChatEvent) {
+    if (event.type !== "message.reactions") this.updateMentionSuggestions(event.type === "message.created"
+      ? { type: event.type, cursor: { id: event.message.id, createdAt: event.message.createdAt }, userId: event.message.author.userId }
+      : event, event.type === "message.created" ? event.message.author : undefined);
     if (event.type === "message.reactions") {
       if (this.deleted.has(event.messageId)) return;
-      const previous = this.reactionUpdates.get(event.messageId);
-      // Counts and the viewer's selection can arrive separately, before the message itself.
-      this.reactionUpdates.set(event.messageId, {
-        latest: previous && previous.latest.version > event.version ? previous.latest : event,
-        own: event.userId === this.userId && event.version >= (previous?.own?.version ?? -1) ? event : previous?.own,
-      });
-      if (this.reactionUpdates.size > 1000) {
-        this.reactionUpdates.clear(); this.cancelReads(); this.baselineReady = false;
-        this.recover(new ChatRequestError("CHAT_SYNC_OVERFLOW")); return;
+      if (!this.snapshot.messages.some(m => m.id === event.messageId)
+        && !this.snapshot.context?.messages.some(m => m.id === event.messageId)) {
+        const previous = this.reactionUpdates.get(event.messageId);
+        // Loaded messages own their versions; only unseen messages need an event overlay.
+        this.reactionUpdates.set(event.messageId, {
+          latest: previous && previous.latest.version > event.version ? previous.latest : event,
+          own: event.userId === this.userId && event.version >= (previous?.own?.version ?? -1) ? event : previous?.own,
+        });
       }
-    }
-    if (this.contextAbort) {
-      this.contextEvents.push(event);
-      if (this.contextEvents.length > 1000) { this.contextAbort.abort(); this.contextEvents = []; }
     }
     if (this.snapshot.context) this.update({ context: this.applyToPage(this.snapshot.context, event) });
     if (event.type === "message.reactions") {
@@ -483,12 +632,19 @@ export class ChatSession {
       this.socket = this.deps.transport(result, this.refresh, {
         publication: this.receive,
         activityPublication: this.receiveActivity,
-        mentionChanged: () => { void this.refreshMentions(); },
+        presenceChanged: this.receivePresence,
+        mentionChanged: data => {
+          const acknowledged = parseChatMentionAcknowledgement(data);
+          if (acknowledged) {
+            if (acknowledged.roomId === CHAT_DEFAULT_ROOM_ID) void this.confirmMentionReads(acknowledged.acknowledgedMessageIds);
+          } else void this.refreshMentions();
+        },
         mentionSubscribed: () => { void this.refreshMentions(); },
         activitySubscribed: context => {
           if (!this.active) return;
           this.activityConnected = true;
-          if (!context.recovered) this.activityReady = false;
+          void this.refreshPresence();
+          if (!context.recovered) { this.activityReady = false; this.invalidateMentionSuggestions(); }
           if (!this.activityReady) this.scheduleActivityRead();
           else this.replayActivity();
         },
@@ -513,6 +669,7 @@ export class ChatSession {
         connecting: () => {
           if (!this.active) return;
           this.subscribed = false; this.activityConnected = false;
+          this.cancelPresence();
           this.cancelReads();
           if (this.activityAbort) this.activityReady = false;
           this.activityAbort?.abort(); this.activityAbort = null;
@@ -538,6 +695,7 @@ export class ChatSession {
       if (this.mentionsEnabled) void this.refreshMentions();
       this.socket?.subscribeMessages();
     } else {
+      this.setMembersVisible(false);
       this.subscribed = false;
       this.cancelReads();
       this.socket?.unsubscribeMessages();
@@ -549,6 +707,9 @@ export class ChatSession {
     }
   };
   pause = () => {
+    this.mentionsLoaded = false;
+    this.invalidateMentionSuggestions();
+    this.cancelPresence();
     this.mentionsAbort?.abort(); this.mentionsAbort = null; this.mentionsDirty = false; this.mentionsVersion++;
     this.active = false; this.subscribed = false; this.activityConnected = false;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
@@ -560,11 +721,12 @@ export class ChatSession {
     this.update({ status: "paused" });
   };
   dispose = () => {
+    this.directoryAbort?.abort(); this.directoryAbort = null;
     this.setOpen(false); this.pause();
     for (const id of this.imageJobs.keys()) this.releaseImage(id);
     this.activity = { latest: null, latestOther: null }; this.readCursor = undefined;
     this.readMentions.clear(); this.reactionUpdates.clear();
-    this.update({ messages: [], draft: "", draftMentions: [], mentions: { items: [], total: 0 }, mentionTarget: null, reply: null, context: null, pending: [], viewer: null, quickReactions: [...DEFAULT_QUICK_REACTIONS] });
+    this.update({ directory: null, recentMentionUsers: null, onlineUsers: null, messages: [], draft: "", draftMentions: [], mentions: { items: [], total: 0 }, mentionTarget: null, reply: null, context: null, pending: [], viewer: null, quickReactions: [...DEFAULT_QUICK_REACTIONS] });
     this.disposed = true;
     this.listeners.clear(); this.stampListeners.clear(); this.ownStamps.clear();
   };
@@ -629,14 +791,11 @@ export class ChatSession {
     const destination = shown.messages.some(m => m.id === id) ? shown : inMain ? this.snapshot : null;
     const showMain = destination === this.snapshot;
     this.cancelReads();
-    const abort = new AbortController(); this.contextAbort = abort; this.contextEvents = [];
+    const abort = new AbortController(); this.contextAbort = abort;
     try {
       let page = destination ?? await this.deps.request<ChatPage>(`/api/chat/messages/${id}/context`, { signal: abort.signal });
       if (abort.signal.aborted || this.disposed) return false;
       page = this.merge(page.messages, page.nextCursor);
-      for (const event of this.contextEvents) {
-        page = this.applyToPage(page, event);
-      }
       if (!page.messages.some(m => m.id === id)) throw new ChatRequestError("CHAT_NOT_FOUND");
       this.following = false;
       this.update({ context: showMain ? null : page });
@@ -649,7 +808,7 @@ export class ChatSession {
       }
       throw error;
     } finally {
-      if (this.contextAbort === abort) { this.contextAbort = null; this.contextEvents = []; }
+      if (this.contextAbort === abort) this.contextAbort = null;
     }
   };
   react = async (messageId: string, emojiKey: string, active: boolean, options: { remember?: boolean } = {}) => {

@@ -1,7 +1,7 @@
 "use client";
 
 import * as ContextMenu from "@radix-ui/react-context-menu";
-import { useRef, useState, type SyntheticEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from "react";
 import { ChevronRight, MessageSquareQuote, SmilePlus, Trash2, VolumeX, Users } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { ChatMessageText } from "./ChatMessageText";
@@ -14,10 +14,13 @@ import { ChatSaveImageMenuItem } from "./ChatSaveImageMenuItem";
 import { EmojiPickerButton } from "@/components/comments/EmojiPickerButton";
 import { CommentReactionEmoji } from "@/components/comments/CommentReactionEmoji";
 import { CommentReactionsDialog } from "@/components/comments/CommentReactionsDialog";
+import type { CommentReactionParticipantPageLoader } from "@/hooks/useCommentReactionParticipants";
+import type { CommentReactionParticipantListResponse } from "@/lib/comments/comment-contract";
 import { ChatReactions } from "./ChatReactions";
 import { ChatReplyPreview } from "./ChatReplyPreview";
 import type { ChatSession } from "@/lib/chat/chat-session";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
+import { ChatPresenceIndicator } from "./ChatPresence";
 import { CommentPublicUid } from "@/components/comments/CommentPublicUid";
 import { resolveStoredAccountAvatarCardIdentity } from "@/lib/account-avatar-card";
 
@@ -35,8 +38,9 @@ function stopIndependentAction(event: SyntheticEvent) {
   if (hasIndependentAction(event.target)) event.stopPropagation();
 }
 
-export function ChatMessageRow({ message, quickReactions, own, mentioned, showAuthor, showTime, highlightSequence, canModerate, busy, onDelete, onMute, onOpenImage, imageSource, muted, session, onReply, onLocate }: {
+export function ChatMessageRow({ message, online = null, quickReactions, own, mentioned, showAuthor, showTime, highlightSequence, canModerate, busy, onDelete, onMute, onOpenImage, imageSource, muted, session, onReply, onLocate }: {
   message: ChatMessage;
+  online?: boolean | null;
   quickReactions: string[];
   own: boolean;
   mentioned: boolean;
@@ -60,7 +64,28 @@ export function ChatMessageRow({ message, quickReactions, own, mentioned, showAu
   const [menuOpen, setMenuOpen] = useState(false);
   const [muteFailed, setMuteFailed] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [participants, setParticipants] = useState<string | null>(null);
+  const [participants, setParticipants] = useState<{ emojiKey: string; load: CommentReactionParticipantPageLoader; reactions: ChatMessage["reactions"] } | null>(null);
+  const participantRequests = useRef(new Set<AbortController>());
+  const firstPages = useRef(new Map<string, Promise<CommentReactionParticipantListResponse>>());
+  useEffect(() => { firstPages.current.clear(); }, [message.id, message.reactionsVersion, session]);
+  useEffect(() => {
+    const pending = participantRequests.current;
+    return () => { for (const request of pending) request.abort(); pending.clear(); };
+  }, []);
+  const loadParticipants = useCallback<CommentReactionParticipantPageLoader>(options => {
+      if (options.cursor) return session.loadReactionParticipants(options);
+      const key = `${message.id}:${message.reactionsVersion ?? 0}:${options.emojiKey}`;
+      let request = firstPages.current.get(key);
+      if (!request) {
+        // The row owns shared requests; dismissing one consumer must not cancel another.
+        const abort = new AbortController(); participantRequests.current.add(abort);
+        request = session.loadReactionParticipants({ ...options, signal: abort.signal })
+          .catch(error => { firstPages.current.delete(key); throw error; })
+          .finally(() => participantRequests.current.delete(abort));
+        firstPages.current.set(key, request);
+      }
+      return request;
+  }, [message.id, message.reactionsVersion, session]);
   const [reacting, setReacting] = useState(false);
   const [reactionFailed, setReactionFailed] = useState(false);
   const [locateFailed, setLocateFailed] = useState(false);
@@ -75,7 +100,7 @@ export function ChatMessageRow({ message, quickReactions, own, mentioned, showAu
   };
   const reply = () => { focusInput.current = menuOpen; setMenuOpen(false); onReply(message); };
   const showPicker = () => { setMenuOpen(false); setPickerOpen(true); };
-  const showParticipants = (key: string) => { setMenuOpen(false); setParticipants(key); };
+  const showParticipants = (key: string) => { setMenuOpen(false); setParticipants({ emojiKey: key, load: loadParticipants, reactions: message.reactions }); };
   const source = message.image ? imageSource ?? chatImageUrl(message.image) : undefined;
   const author = message.author;
   const avatar = resolveStoredAccountAvatarCardIdentity(author.avatarCardId, author.avatarCardServer);
@@ -102,7 +127,7 @@ export function ChatMessageRow({ message, quickReactions, own, mentioned, showAu
         }}>
         {highlightSequence !== undefined && <span key={highlightSequence} data-chat-locate-feedback aria-hidden="true" className="chat-message-locate-feedback" />}
         <div className="w-9 shrink-0 pt-0.5 sm:w-10" onPointerDown={stopIndependentAction} onContextMenu={stopIndependentAction}>
-          {showAuthor && <AccountCardAvatar username={author.username} cardId={avatar.cardId} entityServer={avatar.entityServer} trainType={author.avatarCardTrainType} size="comment" className="size-9! sm:size-10!" />}
+          {showAuthor && <span className="relative block"><AccountCardAvatar username={author.username} cardId={avatar.cardId} entityServer={avatar.entityServer} trainType={author.avatarCardTrainType} size="comment" className="size-9! sm:size-10!" /><ChatPresenceIndicator online={online} size="md" /></span>}
         </div>
         <div className={cn("flex min-w-0 max-w-[82%] flex-col sm:max-w-[78%]", own ? "items-end" : "items-start")}
           onPointerDown={stopIndependentAction} onContextMenu={stopIndependentAction}>
@@ -130,7 +155,7 @@ export function ChatMessageRow({ message, quickReactions, own, mentioned, showAu
                 : <ChatMessageText content={message.content} mentions={message.mentions} />}
             </div>
             <div data-chat-reactions-row className={cn("flex max-w-full flex-wrap items-center gap-1", !!message.reactions?.length && "mt-1")}>
-              {!!message.reactions?.length && <ChatReactions message={message} busy={reacting} muted={muted} onToggle={toggle} onViewAll={showParticipants} loadParticipants={session.loadReactionParticipants} />}
+              {!!message.reactions?.length && <ChatReactions message={message} busy={reacting} muted={muted} onToggle={toggle} onViewAll={showParticipants} loadParticipants={loadParticipants} />}
               <EmojiPickerButton compact variant="message" open={pickerOpen} onOpenChange={setPickerOpen}
                 hideTrigger={!message.reactions?.length} anchorRef={trigger} disabled={muted || reacting} label={t("addReaction")}
                 onSelect={key => { void toggle(key, selected(key), { remember: true }); requestAnimationFrame(() => trigger.current?.focus({ preventScroll: true })); }} />
@@ -183,9 +208,9 @@ export function ChatMessageRow({ message, quickReactions, own, mentioned, showAu
         </ContextMenu.Sub>}
       </ContextMenu.Content>
     </ContextMenu.Portal>
-    {participants && <CommentReactionsDialog commentId={message.id} initialEmojiKey={participants}
-      reactions={(message.reactions ?? []).map(r => ({ ...r, users: [], remainingUserCount: r.count }))}
-      loadParticipants={session.loadReactionParticipants} onClose={() => { setParticipants(null); trigger.current?.focus({ preventScroll: true }); }}
+    {participants && <CommentReactionsDialog commentId={message.id} initialEmojiKey={participants.emojiKey}
+      reactions={(participants.reactions ?? []).map(r => ({ ...r, users: [], remainingUserCount: r.count }))}
+      loadParticipants={participants.load} onClose={() => { setParticipants(null); trigger.current?.focus({ preventScroll: true }); }}
       overlayClassName="z-1020" className="z-1021" />}
   </ContextMenu.Root>;
 }

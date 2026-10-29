@@ -48,7 +48,18 @@ export type ChatViewer = { userId: string; canModerate: boolean; mutedUntil: str
 export type ChatMention = { userId: string; start: number; end: number };
 export type ChatMentionNotice = ChatCursor & { username: string };
 export type ChatMentionInbox = { items: ChatMentionNotice[]; total: number };
+export type ChatMentionAcknowledgement = { type: "mentions.changed"; roomId: string; acknowledgedMessageIds: string[] };
+export function parseChatMentionAcknowledgement(value: unknown): ChatMentionAcknowledgement | null {
+  if (!value || typeof value !== "object") return null;
+  const event = value as ChatMentionAcknowledgement;
+  return event.type === "mentions.changed" && typeof event.roomId === "string"
+    && Array.isArray(event.acknowledgedMessageIds) && event.acknowledgedMessageIds.length > 0 && event.acknowledgedMessageIds.length <= 50
+    && event.acknowledgedMessageIds.every(id => typeof id === "string" && CHAT_UUID.test(id)) ? event : null;
+}
 export type ChatMentionUser = ChatMessage["author"];
+export type ChatRecentMentionUser = ChatMentionUser & { lastMessageAt: string };
+export type ChatPresenceConnection = { clientId: string; user: ChatMentionUser };
+export type ChatPresenceEvent = { type: "join"; connection: ChatPresenceConnection } | { type: "leave"; clientId: string };
 export type ChatConnection = { token: string; url: string; channel: string; activityChannel: string; mentionChannel?: string; subscriptionToken: string; viewer: ChatViewer };
 export type ChatActivityEvent = { type: "message.created"; cursor: ChatCursor; userId: string }
   | { type: "message.deleted"; messageId: string };
@@ -60,7 +71,6 @@ export type ChatSendResult = { messageId: string; clientRequestId: string; messa
 export function isChatMessage(value: unknown): value is ChatMessage {
   if (!value || typeof value !== "object") return false;
   const m = value as ChatMessage;
-  const a = m.author;
   return typeof m.id === "string" && CHAT_UUID.test(m.id)
     && typeof m.clientRequestId === "string" && CHAT_UUID.test(m.clientRequestId)
     && typeof m.content === "string" && [...m.content].length <= CHAT_MAX_LENGTH
@@ -71,7 +81,13 @@ export function isChatMessage(value: unknown): value is ChatMessage {
     && (m.reactionsVersion === undefined || (Number.isSafeInteger(m.reactionsVersion) && m.reactionsVersion >= 0))
     && (m.reactionsViewerId == null || (typeof m.reactionsViewerId === "string" && CHAT_UUID.test(m.reactionsViewerId)))
     && (m.reactions === undefined || (Array.isArray(m.reactions) && m.reactions.every(r => isReactionCount(r) && typeof r.reactedByViewer === "boolean")))
-    && !!a && typeof a.userId === "string" && CHAT_UUID.test(a.userId)
+    && isChatMentionUser(m.author);
+}
+
+export function isChatMentionUser(value: unknown): value is ChatMentionUser {
+  if (!value || typeof value !== "object") return false;
+  const a = value as ChatMentionUser;
+  return typeof a.userId === "string" && CHAT_UUID.test(a.userId)
     && typeof a.username === "string" && a.username.length <= 96
     && Number.isSafeInteger(a.publicUid) && a.publicUid > 0
     && Number.isInteger(a.avatarCardId) && a.avatarCardId > 0
