@@ -11,7 +11,7 @@
   "channel": {
     "namespaces": [
       { "name": "chat", "history_size": 256, "history_ttl": "300s", "force_recovery": true },
-      { "name": "chat_activity", "history_size": 256, "history_ttl": "300s", "force_recovery": true },
+      { "name": "chat_activity", "presence": true, "force_push_join_leave": true, "history_size": 256, "history_ttl": "300s", "force_recovery": true },
       { "name": "chat_mentions", "history_size": 256, "history_ttl": "300s", "force_recovery": true }
     ]
   },

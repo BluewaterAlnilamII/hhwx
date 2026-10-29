@@ -13,6 +13,100 @@ const created = (m) => ({ type: "message.created", message: m });
 const deleted = (m) => ({ type: "message.deleted", messageId: m.id, deletedAt: new Date().toISOString() });
 const tick = () => new Promise(setImmediate);
 const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
+
+const recentUser = m => ({...m.author,lastMessageAt:m.createdAt});
+test('empty mention suggestions load on demand, stay cached and follow existing message events',async()=>{
+  const h=harness(),first=message(1),second={...message(2),author:{...message(2).author,userId:uuid(2),publicUid:2,username:'second'}};
+  h.setRead(async path=>path==='/api/chat/users'?[first.author,second.author]:path==='/api/chat/mentions/users?q='?[recentUser(first)]:{messages:[],nextCursor:null});
+  await h.start();await h.session.refreshDirectory();
+  const reads=()=>h.calls.filter(c=>c.path==='/api/chat/mentions/users?q=').length;
+  assert.equal(reads(),0);
+  await Promise.all([h.session.refreshMentionSuggestions(),h.session.refreshMentionSuggestions()]);assert.equal(reads(),1);
+  h.session.setOpen(false);
+  h.handlers.activityPublication({type:'message.created',cursor:{id:second.id,createdAt:second.createdAt},userId:second.author.userId});
+  assert.deepEqual(h.session.getSnapshot().recentMentionUsers.map(u=>u.userId),[uuid(2),userId]);
+  h.session.setOpen(true);await h.session.refreshMentionSuggestions();assert.equal(reads(),1);
+  h.handlers.activityPublication({type:'message.deleted',messageId:uuid(900)});assert.notEqual(h.session.getSnapshot().recentMentionUsers,null);
+  h.handlers.activityPublication({type:'message.deleted',messageId:second.id});assert.equal(h.session.getSnapshot().recentMentionUsers.length,2);
+  await h.session.refreshMentionSuggestions();assert.equal(reads(),1,'deletion never reloads account recommendations');
+  h.handlers.activitySubscribed({recovered:true});assert.notEqual(h.session.getSnapshot().recentMentionUsers,null);
+  h.handlers.activitySubscribed({recovered:false});assert.equal(h.session.getSnapshot().recentMentionUsers,null);assert.equal(reads(),1);
+  h.session.dispose();
+});
+
+test('empty suggestion baseline merges activity, survives deletions and ignores disposed reads',async()=>{
+  const h=harness(),first=message(1),newer=message(5);let gate=deferred();
+  h.setRead(async path=>path==='/api/chat/users'?[first.author]:path==='/api/chat/mentions/users?q='?gate.promise:{messages:[],nextCursor:null});
+  await h.start();await h.session.refreshDirectory();
+  let loading=h.session.refreshMentionSuggestions();
+  h.handlers.publication(created(newer));
+  h.handlers.activityPublication({type:'message.created',cursor:{id:first.id,createdAt:first.createdAt},userId});
+  h.handlers.activityPublication({type:'message.deleted',messageId:newer.id});
+  assert.equal(h.calls.find(c=>c.path==='/api/chat/mentions/users?q=').signal.aborted,false);
+  h.handlers.activityPublication({type:'message.deleted',messageId:first.id});gate.resolve([recentUser(first)]);await loading;
+  assert.equal(h.session.getSnapshot().recentMentionUsers[0].lastMessageAt,newer.createdAt,'deleted messages do not remove account suggestions');
+  h.handlers.activitySubscribed({recovered:false});
+  gate=deferred();loading=h.session.refreshMentionSuggestions();h.session.dispose();gate.resolve([recentUser(first)]);await loading;
+  assert.equal(h.session.getSnapshot().recentMentionUsers,null);
+});
+
+test('presence uses connection deltas, survives panel/focus changes and only rebaselines on reconnect',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const h=harness(),directory=[message(1).author];let reads=0;
+  h.setRead(async path=>path==='/api/chat/users'?directory:path==='/api/chat/presence?connections=1'?(reads++,[{clientId:'self',user:message(1).author}]):{messages:[],nextCursor:null,latest:null,latestOther:null});
+  await h.start();h.session.setMembersVisible(true);h.handlers.activitySubscribed({recovered:false});
+  await tick();
+  assert.equal(h.session.getSnapshot().directory.length,1);assert.equal(reads,1);
+  h.session.setMembersVisible(false);assert.equal(h.session.getSnapshot().onlineUsers.length,1);
+  h.session.setMembersVisible(true);await tick();assert.equal(reads,1);
+  assert.equal(h.calls.filter(c=>c.path==='/api/chat/users').length,1);
+  const friend={...message(1).author,userId:uuid(2),username:'friend',publicUid:2};
+  const join=clientId=>h.handlers.presenceChanged({type:'join',connection:{clientId,user:friend}});
+  const leave=clientId=>h.handlers.presenceChanged({type:'leave',clientId});
+  join('friend-a');join('friend-a');join('friend-b');
+  assert.equal(h.session.getSnapshot().onlineUsers.length,2,'duplicate events and tabs count once');
+  leave('friend-a');leave('friend-a');assert.equal(h.session.getSnapshot().onlineUsers.length,2);
+  h.session.setOpen(false);leave('friend-b');assert.equal(h.session.getSnapshot().onlineUsers.length,1);
+  h.session.setOpen(true);h.session.setMembersVisible(true);
+  t.mock.timers.tick(300_000);await tick();assert.equal(reads,1,'five healthy minutes produce no polling');
+  h.handlers.connecting();assert.equal(h.session.getSnapshot().onlineUsers,null);
+  h.handlers.activitySubscribed({recovered:true});await tick();assert.equal(reads,2,'join/leave events are not history-recovered');
+  assert.equal(h.session.getSnapshot().directory.length,1);
+  h.session.dispose();assert.equal(h.session.getSnapshot().directory,null);
+});
+
+test('unavailable and cancelled presence stays unknown, while directory failures leave remote search usable',async()=>{
+  const h=harness(),gate=deferred();let fail=true;
+  h.setRead(async path=>{
+    if(path==='/api/chat/users')throw new Error('directory offline');
+    if(path==='/api/chat/presence?connections=1'){if(fail)throw new Error('broker offline');return gate.promise;}
+    if(path.startsWith('/api/chat/mentions/users'))return [message(1).author];
+    return {messages:[],nextCursor:null,latest:null,latestOther:null};
+  });
+  await h.start();h.session.setMembersVisible(true);h.handlers.activitySubscribed({recovered:false});await tick();
+  assert.equal(h.session.getSnapshot().onlineUsers,null);assert.equal(h.session.getSnapshot().presenceError,true);
+  assert.equal((await h.session.searchMentionUsers('tester',new AbortController().signal)).length,1);
+  fail=false;void h.session.refreshPresence();h.handlers.connecting();
+  gate.resolve([{clientId:'self',user:message(1).author}]);await tick();assert.equal(h.session.getSnapshot().onlineUsers,null);
+  h.session.dispose();
+});
+
+test('presence buffers joins and leaves over an in-flight snapshot without resurrecting departed clients',async()=>{
+  const h=harness(),gate=deferred(),self=message(1).author,friend={...self,userId:uuid(2),publicUid:2};
+  h.setRead(async path=>path.startsWith('/api/chat/presence')?gate.promise:{messages:[],nextCursor:null});
+  await h.start();h.handlers.activitySubscribed({recovered:false});
+  h.handlers.presenceChanged({type:'leave',clientId:'departed'});
+  h.handlers.presenceChanged({type:'join',connection:{clientId:'new',user:friend}});
+  h.handlers.presenceChanged({type:'join',connection:{clientId:'brief',user:friend}});
+  h.handlers.presenceChanged({type:'leave',clientId:'brief'});
+  await h.session.refreshPresence(); // An in-flight baseline is deduplicated.
+  gate.resolve([{clientId:'self',user:self},{clientId:'departed',user:{...self,userId:uuid(3),publicUid:3}}]);await tick();
+  assert.deepEqual(new Set(h.session.getSnapshot().onlineUsers.map(u=>u.userId)),new Set([self.userId,friend.userId]));
+  h.handlers.presenceChanged({type:'leave',clientId:'new'});
+  assert.deepEqual(h.session.getSnapshot().onlineUsers,[self]);
+  assert.equal(h.calls.filter(c=>c.path.startsWith('/api/chat/presence')).length,1);
+  h.session.dispose();
+});
 function harness(extraDeps = {}) {
   let handlers, refresh;
   let read = async () => ({ messages: [], nextCursor: null });
@@ -37,6 +131,14 @@ function harness(extraDeps = {}) {
     setRead(fn) { read = fn; }, setWrite(fn) { write = fn; }, setConnection(fn) { connect = fn; },
     async start() { session.setOpen(true); session.setReadingAllowed(true); await session.activate(); handlers.subscribed(); await tick(); } };
 }
+
+test('empty keyword responses do not replace the search directory or notify consumers again',async()=>{
+ const h=harness();await h.start();h.setRead(async path=>path==='/api/chat/users'?[message(1).author]:[]);
+ await h.session.refreshDirectory();const directory=h.session.getSnapshot().directory;let notifications=0;
+ const unsubscribe=h.session.subscribe(()=>notifications++);
+ assert.deepEqual(await h.session.searchMentionUsers('not found',new AbortController().signal),[]);
+ assert.equal(h.session.getSnapshot().directory,directory);assert.equal(notifications,0);unsubscribe();h.session.dispose();
+});
 
 test('stamps are ephemeral during sync, suppress own echoes, preserve drafts and have an independent quota', async () => {
   const h=harness(),seen=[],gate=deferred();h.setRead(()=>gate.promise);
@@ -157,7 +259,7 @@ test("closed activity subscription initializes silently, excludes self, syncs lo
   h.handlers.activityPublication({type:'message.created',cursor:cursor(b),userId:other});
   assert.equal(h.session.getSnapshot().unread,true);
   const count=h.calls.length;h.handlers.connecting();h.handlers.activitySubscribed({recovered:true});
-  await tick();assert.equal(h.calls.length,count);
+  await tick();assert.deepEqual(h.calls.slice(count).map(c=>c.path),['/api/chat/presence?connections=1'],'only ephemeral presence needs a reconnect baseline');
   h.session.restoreReadCursor(cursor(b));assert.equal(h.session.getSnapshot().unread,false);
   h.session.restoreReadCursor(cursor(a));assert.equal(h.session.getSnapshot().unread,false);
   assert.equal(h.calls.filter(c=>c.path.includes('/messages')).length,0);h.session.dispose();
@@ -218,7 +320,7 @@ test("a permanent activity authorization failure does not retry in the backgroun
   const h=harness();h.setRead(async()=>{throw new ChatRequestError('CHAT_ACCOUNT_REQUIRED');});
   await h.session.activate();h.handlers.activitySubscribed({recovered:false});t.mock.timers.tick(1);await tick();
   const count=h.calls.length;t.mock.timers.tick(120000);await tick();
-  assert.equal(h.calls.length,count);assert.equal(count,2);h.session.dispose();
+  assert.equal(h.calls.length,count);assert.deepEqual(h.calls.map(c=>c.path),['/api/chat/connection?activity=1','/api/chat/presence?connections=1','/api/chat/activity']);h.session.dispose();
 });
 
 test("a full subscription rejection preserves activity and cached reading but cannot acknowledge unseen messages", async () => {
@@ -588,18 +690,26 @@ test('reactions can arrive before message creation, survive reopening and yield 
   assert.equal(h.session.getSnapshot().messages.length,0);h.session.dispose();
 });
 
-test('excess deferred reaction updates cancel stale pagination and recover from a fresh snapshot', async () => {
+test('many deferred reaction updates preserve pagination without a full reset', async () => {
   const h=harness(),latest=message(2000),old=message(1);
   h.setRead(async()=>({messages:[latest],nextCursor:latest}));await h.start();
   const gate=deferred();h.setRead(()=>gate.promise);const loading=h.session.loadOlder();
   for(let i=0;i<1001;i++)h.handlers.publication({type:'message.reactions',messageId:message(i).id,version:1,userId:uuid(2),ownEmojiKeys:['Tae'],reactions:[{emojiKey:'Tae',count:1}]});
-  assert.equal(h.session.getSnapshot().error,'CHAT_SYNC_OVERFLOW');
+  assert.equal(h.session.getSnapshot().error,null);
   gate.resolve({messages:[old],nextCursor:null});await loading;
-  assert.deepEqual(h.session.getSnapshot().messages.map(m=>m.id),[latest.id]);
-  const fresh={...old,reactionsVersion:1,reactionsViewerId:userId,reactions:[{emojiKey:'Tae',count:1,reactedByViewer:false}]};
-  h.setRead(async()=>({messages:[fresh],nextCursor:null}));await h.session.syncLatest();
-  assert.equal(h.session.getSnapshot().status,'live');assert.deepEqual(h.session.getSnapshot().messages[0].reactions,fresh.reactions);
+  assert.deepEqual(h.session.getSnapshot().messages.map(m=>m.id),[old.id,latest.id]);
+  assert.deepEqual(h.session.getSnapshot().messages[0].reactions,[{emojiKey:'Tae',count:1,reactedByViewer:false}]);
+  assert.equal(h.calls.filter(c=>c.path==='/api/chat/messages?activity=1').length,1,'only the initial snapshot');
   h.session.dispose();
+});
+
+test('many loaded reaction updates preserve retained history and reading position',async()=>{
+ const h=harness(),rows=Array.from({length:1001},(_,i)=>message(i));
+ h.setRead(async()=>({messages:rows,nextCursor:null}));await h.start();h.session.setFollowing(false);
+ const before=h.calls.length;
+ for(const m of rows)h.handlers.publication({type:'message.reactions',messageId:m.id,version:1,userId:uuid(2),ownEmojiKeys:[],reactions:[{emojiKey:'Tae',count:1}]});
+ assert.equal(h.session.getSnapshot().messages.length,1001);assert.equal(h.session.getSnapshot().following,false);
+ assert.equal(h.calls.length,before);assert.ok(h.session.getSnapshot().messages.every(m=>m.reactionsVersion===1));h.session.dispose();
 });
 
 test('quick reactions restore valid distinct names and fill defaults in order', () => {
@@ -699,6 +809,92 @@ test('a mention change during an inbox read triggers a fresh read and cannot res
  const loading=h.session.refreshMentions();h.handlers.mentionChanged();gate.resolve({items:[],total:0});await loading;
  assert.equal(reads,2);assert.equal(h.session.getSnapshot().mentions.items[0].id,item.id);
  const late=deferred();h.setRead(()=>late.promise);const loadingLate=h.session.refreshMentions();h.session.dispose();late.resolve({items:[item],total:1});await loadingLate;assert.equal(h.session.getSnapshot().mentions.total,0);
+});
+
+test('a complete mention inbox acknowledges locally and ignores its socket echo in either order',async()=>{
+ for(const socketFirst of [false,true]){
+  const h=harness();await h.start();
+  const items=[1,2].map(n=>({id:message(n).id,createdAt:message(n).createdAt,username:'A'}));
+  let reads=0,writes=0;h.setRead(async()=>{reads++;return{items,total:2};});await h.session.refreshMentions();
+  const echo={type:'mentions.changed',roomId:'main',acknowledgedMessageIds:[items[0].id]};
+  h.setWrite(async()=>{writes++;if(socketFirst)h.handlers.mentionChanged(echo);return{acknowledged:true};});
+  await h.session.acknowledgeMentions([items[0].id]);h.handlers.mentionChanged(echo);await tick();
+  assert.equal(writes,1);assert.equal(reads,1,'known confirmations and duplicate echoes do not read the inbox');
+  assert.deepEqual(h.session.getSnapshot().mentions,{items:[items[1]],total:1});
+  h.handlers.mentionChanged({...echo,roomId:'another-room',acknowledgedMessageIds:[items[1].id]});await tick();
+  assert.equal(h.session.getSnapshot().mentions.total,1);assert.equal(reads,1);
+  h.handlers.mentionChanged({...echo,acknowledgedMessageIds:[items[1].id]});await tick();
+  assert.equal(h.session.getSnapshot().mentions.total,0);assert.equal(reads,1,'another device can confirm a known item without a fetch');h.session.dispose();
+ }
+});
+
+test('deleting a known mention from a complete inbox needs no readback in either channel',async()=>{
+ for(const activity of [false,true]){
+  const h=harness();
+  h.setRead(async()=>({messages:[],nextCursor:null,activity:{latest:null,latestOther:null}}));await h.start();
+  const item={id:uuid(42),createdAt:message(1).createdAt,username:'A'};
+  h.setRead(async()=>({items:[item],total:1}));await h.session.refreshMentions();
+  const reads=h.calls.filter(c=>c.path==='/api/chat/mentions').length;
+  h.setRead(async()=>({items:[],total:0}));
+  const event={type:'message.deleted',messageId:item.id,deletedAt:new Date().toISOString()};
+  if(activity)h.handlers.activityPublication(event);else h.handlers.publication(event);
+  await tick();
+  assert.deepEqual(h.session.getSnapshot().mentions,{items:[],total:0});
+  assert.equal(h.calls.filter(c=>c.path==='/api/chat/mentions').length,reads);
+  h.session.dispose();
+ }
+});
+
+test('deleting a known mention still refills an incomplete inbox',async()=>{
+ const h=harness();await h.start();
+ const items=Array.from({length:50},(_,i)=>({id:uuid(i+500),createdAt:message(i).createdAt,username:'A'}));
+ h.setRead(async()=>({items,total:51}));await h.session.refreshMentions();
+ const remaining=[...items.slice(1),{id:uuid(999),createdAt:message(51).createdAt,username:'B'}];let reads=0;
+ h.setRead(async()=>{reads++;return{items:remaining,total:50};});
+ h.handlers.publication({type:'message.deleted',messageId:items[0].id,deletedAt:new Date().toISOString()});await tick();
+ assert.equal(reads,1);assert.deepEqual(h.session.getSnapshot().mentions,{items:remaining,total:50});h.session.dispose();
+});
+
+test('a deletion during an inbox read cannot restore the deleted reminder',async()=>{
+ const h=harness();await h.start();
+ const item={id:uuid(42),createdAt:message(1).createdAt,username:'A'};
+ h.setRead(async()=>({items:[item],total:1}));await h.session.refreshMentions();
+ const gate=deferred();let reads=0;
+ h.setRead(async()=>++reads===1?gate.promise:{items:[],total:0});
+ const loading=h.session.refreshMentions();
+ h.handlers.publication({type:'message.deleted',messageId:item.id,deletedAt:new Date().toISOString()});
+ gate.resolve({items:[item],total:1});await loading;
+ assert.equal(reads,2);assert.deepEqual(h.session.getSnapshot().mentions,{items:[],total:0});h.session.dispose();
+});
+
+test('visible historical mentions do not write when a complete inbox already excludes them',async()=>{
+ const h=harness(),old={...message(1),author:{...message(1).author,userId:uuid(2)},mentions:[{userId,start:0,end:1}]};
+ h.setRead(async()=>({messages:[old],nextCursor:null}));await h.start();
+ h.setRead(async()=>({items:[],total:0}));await h.session.refreshMentions();
+ await h.session.acknowledgeMentions([old.id],true);
+ assert.equal(h.calls.filter(c=>c.method==='PUT').length,0);h.session.dispose();
+});
+
+test('acknowledgement during an inbox fetch discards its stale response and coalesces the echo',async()=>{
+ const h=harness();await h.start();const item={id:message(1).id,createdAt:message(1).createdAt,username:'A'};
+ h.setRead(async()=>({items:[item],total:1}));await h.session.refreshMentions();
+ const gate=deferred();let reads=0;h.setRead(async()=>++reads===1?gate.promise:{items:[],total:0});
+ const loading=h.session.refreshMentions();h.setWrite(async()=>({acknowledged:true}));await h.session.acknowledgeMentions([item.id]);
+ h.handlers.mentionChanged({type:'mentions.changed',roomId:'main',acknowledgedMessageIds:[item.id]});
+ gate.resolve({items:[item],total:1});await loading;
+ assert.equal(reads,2,'one pre-acknowledgement read and one replacement, with no extra echo fetch');
+ assert.deepEqual(h.session.getSnapshot().mentions,{items:[],total:0});h.session.dispose();
+});
+
+test('an incomplete inbox refills once after acknowledgement and shares that refill with its echo',async()=>{
+ const h=harness();await h.start();const items=Array.from({length:50},(_,i)=>({id:message(i).id,createdAt:message(i).createdAt,username:'A'}));
+ h.setRead(async()=>({items,total:51}));await h.session.refreshMentions();
+ const gate=deferred();let reads=0;h.setRead(async()=>{reads++;return gate.promise;});h.setWrite(async()=>({acknowledged:true}));
+ const confirming=h.session.acknowledgeMentions([items[0].id]);await tick();
+ h.handlers.mentionChanged({type:'mentions.changed',roomId:'main',acknowledgedMessageIds:[items[0].id]});
+ const remaining=[...items.slice(1),{id:uuid(999),createdAt:message(51).createdAt,username:'B'}];
+ gate.resolve({items:remaining,total:50});await confirming;await tick();
+ assert.equal(reads,1);assert.deepEqual(h.session.getSnapshot().mentions,{items:remaining,total:50});h.session.dispose();
 });
 
 test('reopening refreshes durable mentions and a missing target drops only its alert',async()=>{

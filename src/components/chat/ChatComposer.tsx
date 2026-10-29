@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { RemoveScroll } from "react-remove-scroll";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
 import { CommentPublicUid } from "@/components/comments/CommentPublicUid";
 import { resolveStoredAccountAvatarCardIdentity } from "@/lib/account-avatar-card";
-import { chatMentionQuery, editChatMentions, insertChatMention } from "@/lib/chat/chat-mentions";
-import type { ChatMention, ChatMentionUser } from "@/lib/chat/chat-contract";
+import { chatMentionQuery, editChatMentions, insertChatMention, searchChatUsers, recentChatUsers } from "@/lib/chat/chat-mentions";
+import type { ChatMention, ChatMentionUser, ChatRecentMentionUser } from "@/lib/chat/chat-contract";
+import { ChatPresenceIndicator } from "./ChatPresence";
 import dynamic from "next/dynamic";
 import { ArrowUp, ImagePlus, Plus, X } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -86,9 +87,14 @@ export function useChatAttachments() {
   return { attachments, addFiles, removeImage, clear };
 }
 
-export function ChatComposer({ draft, draftMentions, searchMentionUsers, reply, onCancelReply, blocked, images, onChange, onSend, onStamp, stampDisabled = false }: {
+export function ChatComposer({ draft, draftMentions, directory = null, onlineUsers = null, recentMentionUsers, mentionSuggestionsVersion, refreshMentionSuggestions, searchMentionUsers, reply, onCancelReply, blocked, images, onChange, onSend, onStamp, stampDisabled = false }: {
   draft: string;
   draftMentions: ChatMention[];
+  directory?: ChatMentionUser[] | null;
+  onlineUsers?: ChatMentionUser[] | null;
+  recentMentionUsers: ChatRecentMentionUser[] | null;
+  mentionSuggestionsVersion: number;
+  refreshMentionSuggestions(): Promise<void>;
   searchMentionUsers(query: string, signal: AbortSignal): Promise<ChatMentionUser[]>;
   reply: ChatReply | null;
   onCancelReply(): void;
@@ -112,11 +118,20 @@ export function ChatComposer({ draft, draftMentions, searchMentionUsers, reply, 
   const [extrasOpen, setExtrasOpen] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [mentionRange, setMentionRange] = useState<ReturnType<typeof chatMentionQuery>>(null);
-  const [mentionResults, setMentionResults] = useState<{ query: string; users: ChatMentionUser[]; failed: boolean } | null>(null);
-  const [mentionIndex, setMentionIndex] = useState(0);
+  const [mentionResults, setMentionResults] = useState<{ range: NonNullable<ReturnType<typeof chatMentionQuery>>; users: ChatMentionUser[]; failed: boolean } | null>(null);
+  const [selectedMention, setSelectedMention] = useState<string | null>(null);
   const mentionPanel = useRef<HTMLDivElement>(null);
-  const mentionQuery = mentionRange?.query;
-  const mentionUsers = mentionResults && mentionResults.query === mentionQuery ? mentionResults.users : [];
+  // Capture the first available cached result once per query, before rendering its rows.
+  if (mentionRange && mentionResults?.range !== mentionRange) {
+    const keyword = !!mentionRange.query.trim();
+    const cached = keyword ? searchChatUsers(directory ?? [], mentionRange.query)
+      : recentMentionUsers === null ? null : recentChatUsers(recentMentionUsers);
+    if (cached && (!keyword || cached.length)) setMentionResults({ range: mentionRange, users: cached, failed: false });
+  }
+  const online = useMemo(() => new Set(onlineUsers?.map(user => user.userId)), [onlineUsers]);
+  const currentResults = mentionResults?.range === mentionRange ? mentionResults : null;
+  const mentionUsers = currentResults?.users ?? [];
+  const mentionIndex = Math.max(0, mentionUsers.findIndex(user => user.userId === selectedMention));
   useLayoutEffect(() => {
     const field = textarea.current, highlight = draftHighlight.current;
     if (!field || !highlight) return;
@@ -132,7 +147,8 @@ export function ChatComposer({ draft, draftMentions, searchMentionUsers, reply, 
   }, [draft, textarea]);
   const updateMentionQuery = (value: string, cursor: number, selected = draftMentions) => {
     const range = chatMentionQuery(value, cursor, selected);
-    setMentionRange(range); setMentionIndex(0);
+    if (range && mentionRange && range.start === mentionRange.start && range.end === mentionRange.end && range.query === mentionRange.query) return;
+    setMentionRange(range); setSelectedMention(null);
     if (range) { setEmojiOpen(false); setStampOpen(false); setExtrasOpen(false); }
   };
   const selectMention = (user: ChatMentionUser) => {
@@ -143,15 +159,25 @@ export function ChatComposer({ draft, draftMentions, searchMentionUsers, reply, 
     requestAnimationFrame(() => { textarea.current?.focus({ preventScroll: true }); textarea.current?.setSelectionRange(inserted.cursor, inserted.cursor); });
   };
   useEffect(() => {
-    if (mentionQuery === undefined) return;
+    // Background cache changes feed the next query, never a completed selection list.
+    if (!mentionRange || mentionRange.query.trim() || mentionResults?.range === mentionRange) return;
     const abort = new AbortController();
+    void refreshMentionSuggestions().catch(() => {
+      if (!abort.signal.aborted) setMentionResults({ range: mentionRange, users: [], failed: true });
+    });
+    return () => abort.abort();
+  }, [mentionRange, mentionResults, mentionSuggestionsVersion, refreshMentionSuggestions]);
+  useEffect(() => {
+    if (!mentionRange?.query.trim() || mentionResults?.range === mentionRange) return;
+    const abort = new AbortController();
+    const complete = (users: ChatMentionUser[], failed = false) => {
+      if (!abort.signal.aborted) setMentionResults({ range: mentionRange, users: users.slice(0, 8), failed });
+    };
     const timer = setTimeout(() => {
-      void searchMentionUsers(mentionQuery, abort.signal).then(users => {
-        if (!abort.signal.aborted) setMentionResults({ query: mentionQuery, users: users.slice(0, 8), failed: false });
-      }).catch(() => { if (!abort.signal.aborted) setMentionResults({ query: mentionQuery, users: [], failed: true }); });
-    }, mentionQuery ? 150 : 0);
+      void searchMentionUsers(mentionRange.query, abort.signal).then(users => complete(users)).catch(() => complete([], true));
+    }, 150);
     return () => { clearTimeout(timer); abort.abort(); };
-  }, [mentionQuery, searchMentionUsers]);
+  }, [mentionRange, mentionResults, searchMentionUsers]);
   useEffect(() => {
     if (!mentionRange) return;
     const dismiss = (event: PointerEvent) => {
@@ -254,15 +280,15 @@ export function ChatComposer({ draft, draftMentions, searchMentionUsers, reply, 
               const avatar = resolveStoredAccountAvatarCardIdentity(user.avatarCardId, user.avatarCardServer);
               return <div key={user.userId} id={`chat-mention-${user.userId}`} role="option" aria-selected={mentionIndex === index}
                 onPointerDown={event => event.preventDefault()} onClick={() => selectMention(user)}
-                onPointerMove={() => setMentionIndex(index)}
+                onPointerMove={() => setSelectedMention(user.userId)}
                 className={`flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 ${index === mentionIndex ? "bg-[var(--theme-color-control-background-hover)]" : ""}`}>
-                <AccountCardAvatar username={user.username} cardId={avatar.cardId} entityServer={avatar.entityServer} trainType={user.avatarCardTrainType} size="toolbar" />
+                <span className="relative shrink-0"><AccountCardAvatar username={user.username} cardId={avatar.cardId} entityServer={avatar.entityServer} trainType={user.avatarCardTrainType} size="toolbar" /><ChatPresenceIndicator online={onlineUsers ? online.has(user.userId) : null} /></span>
                 <span className="min-w-0 truncate text-xs font-semibold text-[var(--theme-color-text-default)]">{user.username}</span>
                 <CommentPublicUid publicUid={user.publicUid} />
               </div>;
             })}
             {!mentionUsers.length && <div role="status" className="px-2 py-3 text-xs text-[var(--theme-color-text-muted)]">
-              {!mentionResults || mentionResults.query !== mentionQuery ? t("loading") : mentionResults.failed ? t("mentionSearchFailed") : t("mentionNoResults")}
+              {t(!currentResults ? "loading" : currentResults.failed ? "mentionSearchFailed" : "mentionNoResults")}
             </div>}
           </div>
         </RemoveScroll>}
@@ -302,7 +328,7 @@ export function ChatComposer({ draft, draftMentions, searchMentionUsers, reply, 
               if (event.key === "ArrowDown" || event.key === "ArrowUp") {
                 event.preventDefault();
                 const index = (mentionIndex + (event.key === "ArrowDown" ? 1 : -1) + mentionUsers.length) % (mentionUsers.length || 1);
-                setMentionIndex(index); mentionPanel.current?.querySelectorAll('[role="option"]')[index]?.scrollIntoView({ block: "nearest" }); return;
+                setSelectedMention(mentionUsers[index]?.userId ?? null); mentionPanel.current?.querySelectorAll('[role="option"]')[index]?.scrollIntoView({ block: "nearest" }); return;
               }
               if (!event.shiftKey && (event.key === "Enter" || event.key === "Tab") && mentionUsers[mentionIndex]) {
                 event.preventDefault(); selectMention(mentionUsers[mentionIndex]); return;

@@ -31,7 +31,7 @@ jobs:
         run: npx --no-install supabase db start
 
       - name: Test account and chat database permissions and behavior
-        run: npx --no-install supabase test db supabase/tests/auth_registration.sql supabase/tests/account_email_change.sql supabase/tests/auto_game_profile_ownership.sql supabase/tests/realtime_message_board.sql supabase/tests/chat_images.sql supabase/tests/chat_stamps.sql supabase/tests/chat_rooms.sql supabase/tests/chat_reading.sql supabase/tests/chat_activity.sql supabase/tests/chat_interactions.sql supabase/tests/chat_mentions.sql
+        run: npx --no-install supabase test db supabase/tests/auth_registration.sql supabase/tests/account_email_change.sql supabase/tests/auto_game_profile_ownership.sql supabase/tests/realtime_message_board.sql supabase/tests/chat_images.sql supabase/tests/chat_stamps.sql supabase/tests/chat_rooms.sql supabase/tests/chat_reading.sql supabase/tests/chat_activity.sql supabase/tests/chat_interactions.sql supabase/tests/chat_mentions.sql supabase/tests/chat_presence.sql supabase/tests/chat_mention_search.sql
 
       - name: Stop disposable database
         if: always()

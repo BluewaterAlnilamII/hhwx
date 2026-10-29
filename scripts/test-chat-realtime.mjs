@@ -87,10 +87,45 @@ try {
   await assert.rejects(denied.ready(1000),(error)=>error.code===7);
   assert.equal(denialCode,103,"server must reject the subscription with permission denied");
   permissionProbe.removeSubscription(denied); permissionProbe.disconnect();
+  const presenceActor=randomUUID(),joins=[],leaves=[];
+  one.on('join',ctx=>{if(ctx.info.user===presenceActor)joins.push(ctx.info.client);});
+  one.on('leave',ctx=>{if(ctx.info.user===presenceActor)leaves.push(ctx.info.client);});
+  const presenceClient=async(visible)=>{
+    const token=await new SignJWT({subs:{'chat_activity:main':{
+      ...(visible?{info:{userId:presenceActor,username:'presence_test',publicUid:1,avatarCardId:1,avatarCardServer:null,avatarCardTrainType:'normal'}}:{}),
+      override:{presence:{value:visible},join_leave:{value:visible}},
+    }}}).setProtectedHeader({alg:'HS256'}).setSubject(presenceActor).setIssuer('hhwx-chat').setAudience('hhwx-chat').setExpirationTime('10m').sign(new TextEncoder().encode(secret));
+    const client=new Centrifuge(`ws://127.0.0.1:${port}/connection/websocket`,{token,websocket:WebSocket});clients.push(client);client.connect();await client.ready(2000);return client;
+  };
+  const visibleA=await presenceClient(true),visibleB=await presenceClient(true);
+  await until(()=>joins.length===2);assert.equal(new Set(joins).size,2,'same account keeps distinct connection IDs');
+  visibleA.disconnect();await until(()=>leaves.length===1);
+  const invisible=await presenceClient(false);
+  const presenceResponse=await fetch(`http://127.0.0.1:${internal}/api/presence`,{method:'POST',headers:{'Content-Type':'application/json','X-API-Key':key},body:JSON.stringify({channel:'chat_activity:main'})});
+  const presence=(await presenceResponse.json()).result.presence;
+  assert.equal(Object.values(presence).filter(c=>c.user===presenceActor).length,1,'hidden connection is absent from broker presence itself');
+  await assert.rejects(invisible.presence('chat_activity:main'),e=>e.code===103);
+  visibleB.disconnect();await until(()=>leaves.length===2);
+  invisible.disconnect();await delay(150);
+  assert.equal(joins.length,2);assert.equal(leaves.length,2,'hidden connections emit neither join nor leave');
+  const recipient=randomUUID(),otherRecipient=randomUUID(),inboxes=[[],[],[]];
+  for(const [index,userId] of [recipient,recipient,otherRecipient].entries()){
+    const channel='chat_mentions:'+userId;
+    const inboxToken=await new SignJWT({subs:{[channel]:{}}}).setProtectedHeader({alg:'HS256'}).setSubject(userId)
+      .setIssuer('hhwx-chat').setAudience('hhwx-chat').setExpirationTime('10m').sign(new TextEncoder().encode(secret));
+    const client=new Centrifuge(`ws://127.0.0.1:${port}/connection/websocket`,{token:inboxToken,websocket:WebSocket});
+    client.on('publication',ctx=>inboxes[index].push(ctx.data));clients.push(client);client.connect();await client.ready(2000);
+  }
+  const confirmation={type:'mentions.changed',roomId:'main',acknowledgedMessageIds:[randomUUID()]};
+  await publish(confirmation,randomUUID(),false,'chat_mentions:'+recipient);
+  await until(()=>inboxes[0].length===1&&inboxes[1].length===1);await delay(100);
+  assert.deepEqual(inboxes,[[confirmation],[confirmation],[]],'Acknowledged IDs reach both owner devices and no other account');
+  const foreignInbox=clients.at(-1).newSubscription('chat_mentions:'+recipient);foreignInbox.subscribe();
+  await assert.rejects(foreignInbox.ready(1000),error=>error.code===7);clients.at(-1).removeSubscription(foreignInbox);
   durations.sort((a,b)=>a-b);
   console.log(JSON.stringify({server:"6.9.7",sdk:"5.7.4",clients:200,fanoutPublications:102,fanoutDeliveries,
     sampleEventBytes:Buffer.byteLength(JSON.stringify(sample)),p95LocalMs:Math.round(durations[Math.floor(durations.length*.95)]),
-    idempotency:true,nativeRecovery:true,reopenRecovery:true,closedActivity:true,stampsNotReplayed:true,maxLengthLiveFanout:true,clientPublishDenied:true,databaseIntegration:"not exercised",compression:false,tls:false},null,2));
+    idempotency:true,nativeRecovery:true,reopenRecovery:true,closedActivity:true,stampsNotReplayed:true,maxLengthLiveFanout:true,clientPublishDenied:true,presenceJoinLeave:true,invisiblePresenceAndEventsSuppressed:true,mentionConfirmationDelivery:true,mentionAccountIsolation:true,databaseIntegration:"not exercised",compression:false,tls:false},null,2));
 } finally {
   clients.forEach((c)=>c.disconnect()); child.kill();
   await new Promise((resolve)=>{if(child.exitCode!==null)resolve();else child.once("exit",resolve);});

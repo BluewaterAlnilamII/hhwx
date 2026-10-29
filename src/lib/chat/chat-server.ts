@@ -3,10 +3,58 @@ import { SignJWT } from "jose";
 import { ApiRouteError } from "@/lib/api-contracts";
 import { NO_STORE_HTTP_CACHE_POLICY, withHttpCachePolicy } from "@/lib/api-cache";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
-import { CHAT_DEFAULT_ROOM_ID, chatChannel, chatActivityChannel, chatMentionChannel, isChatMentions, CHAT_MAX_LENGTH, CHAT_UUID, type ChatConnection, type ChatCursor, type ChatEvent, type ChatViewer } from "./chat-contract";
+import { CHAT_DEFAULT_ROOM_ID, chatChannel, chatActivityChannel, chatMentionChannel, isChatMentions, CHAT_MAX_LENGTH, CHAT_UUID, type ChatConnection, type ChatCursor, type ChatEvent, type ChatViewer, type ChatMentionUser, type ChatPresenceConnection } from "./chat-contract";
 import type { ChatStampPublication } from "./chat-stamp-contract";
 
 export const chatHeaders = () => withHttpCachePolicy(NO_STORE_HTTP_CACHE_POLICY);
+
+async function presenceBrokerRequest(method: "presence" | "disconnect", body: Record<string, unknown>) {
+  const publishUrl = process.env.CHAT_PUBLISH_URL, key = process.env.CHAT_PUBLISH_API_KEY;
+  if (!publishUrl || !key) throw new ApiRouteError(503, "CHAT_UNAVAILABLE", "在线状态暂不可用");
+  const response = await fetch(new URL(method, publishUrl), {
+    method: "POST", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(2000),
+    headers: { "Content-Type": "application/json", "X-API-Key": key },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json();
+  if (!response.ok || payload?.error || !payload?.result) {
+    throw new ApiRouteError(503, "CHAT_UNAVAILABLE", "在线状态暂不可用");
+  }
+  return payload.result;
+}
+
+export async function readChatPresenceConnections(userId: string, roomId: string): Promise<ChatPresenceConnection[]> {
+  const { presence } = await presenceBrokerRequest("presence", { channel: chatActivityChannel(roomId) });
+  if (!presence || typeof presence !== "object" || Array.isArray(presence)) {
+    throw new ApiRouteError(503, "CHAT_UNAVAILABLE", "在线状态暂不可用");
+  }
+  const users = new Set<string>();
+  const connections: { clientId: string; userId: string }[] = [];
+  for (const [clientId, entry] of Object.entries(presence) as [string, { user?: unknown }][]) {
+    if (!entry || typeof entry.user !== "string" || !CHAT_UUID.test(entry.user)) {
+      throw new ApiRouteError(503, "CHAT_UNAVAILABLE", "在线状态暂不可用");
+    }
+    users.add(entry.user.toLowerCase());
+    connections.push({ clientId, userId: entry.user.toLowerCase() });
+  }
+  // Filter current account visibility on the server, including already-connected devices.
+  const visible = await chatRpc<ChatMentionUser[]>("read_chat_online_users", { p_actor: userId, p_user_ids: [...users] });
+  const profiles = new Map(visible.map(user => [user.userId, user]));
+  return connections.flatMap(({ clientId, userId }) => {
+    const user = profiles.get(userId);
+    return user ? [{ clientId, user }] : [];
+  });
+}
+
+export async function readChatPresence(userId: string, roomId: string): Promise<ChatMentionUser[]> {
+  const connections = await readChatPresenceConnections(userId, roomId);
+  return [...new Map(connections.map(({ user }) => [user.userId, user])).values()];
+}
+
+export async function reconnectChatPresence(userId: string): Promise<void> {
+  // All tabs/devices must replace their signed visibility before rejoining.
+  await presenceBrokerRequest("disconnect", { user: userId, disconnect: { code: 3001, reason: "presence changed" } });
+}
 
 export function requireChatRoom(request: Request): string {
   const roomId = new URL(request.url).searchParams.get("roomId") ?? CHAT_DEFAULT_ROOM_ID;
@@ -133,7 +181,15 @@ export async function issueChatConnection(identity: { userId: string; expiresAt:
   const activityChannel = chatActivityChannel(roomId);
   const mentionChannel = chatMentionChannel(identity.userId);
   const expiresAt = Math.min(identity.expiresAt, Math.floor(Date.now() / 1000) + 3600);
-  const token = await new SignJWT({ channels: [activity ? activityChannel : channel, mentionChannel] })
+  const visible = activity ? await chatRpc<ChatMentionUser[]>("read_chat_online_users", { p_actor: identity.userId, p_user_ids: [identity.userId] }) : [];
+  const profile = visible[0];
+  const token = await new SignJWT({ subs: {
+    [activity ? activityChannel : channel]: activity ? {
+      ...(profile ? { info: profile } : {}),
+      override: { presence: { value: !!profile }, join_leave: { value: !!profile } },
+    } : {},
+    [mentionChannel]: {},
+  } })
     .setProtectedHeader({ alg: "HS256" }).setSubject(identity.userId)
     .setIssuer("hhwx-chat").setAudience("hhwx-chat")
     .setIssuedAt().setExpirationTime(expiresAt)
@@ -176,13 +232,13 @@ export async function publishChatEvent(event: ChatEvent | ChatStampPublication, 
   }
 }
 
-export async function publishMentionAcknowledgement(userId: string): Promise<void> {
+export async function publishMentionAcknowledgement(userId: string, messageIds: string[], roomId = CHAT_DEFAULT_ROOM_ID): Promise<void> {
   try {
     const url = process.env.CHAT_PUBLISH_URL, key = process.env.CHAT_PUBLISH_API_KEY;
     if (!url || !key) throw new Error("Missing publisher");
     const response = await fetch(url, { method: "POST", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(2000),
       headers: { "Content-Type": "application/json", "X-API-Key": key },
-      body: JSON.stringify({ channel: chatMentionChannel(userId), data: { type: "mentions.changed" } }) });
+      body: JSON.stringify({ channel: chatMentionChannel(userId), data: { type: "mentions.changed", roomId, acknowledgedMessageIds: messageIds } }) });
     const result = await response.json();
     if (!response.ok || result?.error || !result?.result) throw new Error("Publication failed");
   } catch { console.warn("[chat] Mention acknowledgement publication failed; saved state will reload on reconnect."); }

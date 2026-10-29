@@ -14,6 +14,7 @@ import { formatChatTime, getChatMessageLayout } from "@/lib/chat/chat-presentati
 import type { ChatMessage } from "@/lib/chat/chat-contract";
 import { ChatComposer, useChatAttachments } from "./ChatComposer";
 import { ChatMessageRow } from "./ChatMessageRow";
+import { ChatPresence } from "./ChatPresence";
 import { ChatPendingMessage } from "./ChatPendingMessage";
 import ImageViewer from "@/components/ImageViewer";
 import { chatImageUrl } from "@/lib/chat/chat-image-contract";
@@ -21,7 +22,8 @@ import { chatImageUrl } from "@/lib/chat/chat-image-contract";
 type Props = { open: boolean; onOpenChange(open: boolean): void; trigger: RefObject<HTMLButtonElement | null>; userId: string } & ReturnType<typeof useChatSession>;
 const ChatStampLayer = dynamic(() => import("./ChatStampLayer").then((module) => module.ChatStampLayer), { ssr: false });
 
-const ChatMessages = memo(function ChatMessages({ messages, quickReactions, userId, canModerate, busy, onDelete, onMute, onOpenImage, getImagePreview, session, muted, onReply, onLocate, highlighted }: {
+const ChatMessages = memo(function ChatMessages({ messages, onlineUsers, quickReactions, userId, canModerate, busy, onDelete, onMute, onOpenImage, getImagePreview, session, muted, onReply, onLocate, highlighted }: {
+  onlineUsers: Props["state"]["onlineUsers"];
   session: Props["session"];
   muted: boolean;
   onReply(message: ChatMessage): void;
@@ -40,6 +42,7 @@ const ChatMessages = memo(function ChatMessages({ messages, quickReactions, user
   const t = useTranslations("chat");
   const locale = useLocale();
   const rows = useMemo(() => getChatMessageLayout(messages), [messages]);
+  const online = useMemo(() => onlineUsers ? new Set(onlineUsers.map(user => user.userId)) : null, [onlineUsers]);
   return <>{rows.map(({ message, showTime, showAuthor }) => {
     const own = message.author.userId === userId;
     const mentioned = !own && message.mentions?.some(mention => mention.userId === userId);
@@ -50,7 +53,7 @@ const ChatMessages = memo(function ChatMessages({ messages, quickReactions, user
         className="rounded-full px-2.5 text-[11px] text-[var(--theme-color-text-muted)]">
         {formatChatTime(message.createdAt, locale, t("yesterday"))}
       </time></div>}
-      <ChatMessageRow message={message} quickReactions={quickReactions} own={own} mentioned={!!mentioned} canModerate={canModerate}
+      <ChatMessageRow message={message} online={online ? online.has(message.author.userId) : null} quickReactions={quickReactions} own={own} mentioned={!!mentioned} canModerate={canModerate}
         showAuthor={showAuthor} showTime={showTime} highlightSequence={highlighted?.id === message.id ? highlighted.sequence : undefined}
         imageSource={imageSource} onOpenImage={() => { if (imageSource) onOpenImage(imageSource); }}
         session={session} muted={muted} onReply={onReply} onLocate={onLocate} busy={busy} onDelete={onDelete} onMute={onMute} />
@@ -299,7 +302,7 @@ function Conversation({ userId, open, images, session, state }: {
         </button></div>}
         {state.status === "live" && !state.messages.length && !state.pending.length && <p className="flex min-h-40 items-center justify-center py-12 text-sm text-[var(--theme-color-text-muted)]">{t("empty")}</p>}
         <ol ref={list} className="flex flex-col">
-          <ChatMessages messages={shown.messages} quickReactions={state.quickReactions} session={session} muted={muted} onReply={reply} onLocate={locate} highlighted={highlighted} userId={userId} canModerate={state.viewer?.canModerate ?? false}
+          <ChatMessages messages={shown.messages} onlineUsers={state.onlineUsers} quickReactions={state.quickReactions} session={session} muted={muted} onReply={reply} onLocate={locate} highlighted={highlighted} userId={userId} canModerate={state.viewer?.canModerate ?? false}
             busy={busy} onDelete={confirmDelete} onMute={mute} onOpenImage={setViewingImage} getImagePreview={session.getImagePreview} />
           {!state.context && state.pending.map((pending) => <ChatPendingMessage key={pending.clientRequestId} pending={pending} blocked={blocked}
             onRetry={() => void session.retry(pending.clientRequestId)} onRetryWithoutReply={() => void session.retryWithoutReply(pending.clientRequestId)} onDiscard={() => session.discard(pending.clientRequestId)} />)}
@@ -315,7 +318,7 @@ function Conversation({ userId, open, images, session, state }: {
     <div className="shrink-0 border-t border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)]">
       {muted && <p role="status" className="px-4 pt-2 text-xs text-[var(--theme-color-text-muted)]">{t("mutedUntil", { time: new Date(state.viewer!.mutedUntil!).toLocaleString(locale) })}</p>}
       {blocked && !muted && <p role="status" className="px-4 pt-2 text-xs text-[var(--theme-color-text-muted)]">{t("rateLimit", { seconds: remaining })}</p>}
-      <ChatComposer reply={state.reply} onCancelReply={() => session.setReply(null)} draft={state.draft} draftMentions={state.draftMentions} searchMentionUsers={session.searchMentionUsers} blocked={blocked} images={images} onChange={session.setDraft}
+      <ChatComposer directory={state.directory} onlineUsers={state.onlineUsers} recentMentionUsers={state.recentMentionUsers} mentionSuggestionsVersion={state.mentionSuggestionsVersion} refreshMentionSuggestions={session.refreshMentionSuggestions} reply={state.reply} onCancelReply={() => session.setReply(null)} draft={state.draft} draftMentions={state.draftMentions} searchMentionUsers={session.searchMentionUsers} blocked={blocked} images={images} onChange={session.setDraft}
         stampDisabled={muted || !profile || stampDeadline > now} onStamp={(stamp) => {
           if (muted || !profile) return;
           void resumeSoundEffectAudio().catch(() => {});
@@ -388,10 +391,11 @@ export default function ChatDialog({ open, onOpenChange, trigger, userId, sessio
         className="hhwx-floating-surface fixed left-1/2 top-0 z-1000 h-dvh w-full max-w-2xl -translate-x-1/2 overflow-hidden text-[var(--theme-color-text-default)] focus:outline-hidden data-[state=closed]:hidden sm:top-[calc(var(--chat-viewport-top,0px)+var(--chat-viewport-height,100dvh)/2)] sm:h-[min(48rem,calc(var(--chat-viewport-height,100dvh)-2rem))] sm:w-[calc(100%-2rem)] sm:-translate-y-1/2 sm:rounded-2xl">
         {/* Keep the mobile surface behind browser keyboard controls; only its contents shrink. */}
         <div data-chat-viewport className="flex h-[var(--chat-viewport-height,100dvh)] translate-y-[var(--chat-viewport-top,0px)] flex-col sm:h-full sm:translate-y-0">
-        <header className="relative z-20 flex shrink-0 items-center justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-2 sm:px-5">
+        <header className="relative z-20 flex shrink-0 items-center gap-3 border-b border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-2 sm:px-5">
           <Dialog.Title title={t("title")} className="min-w-0 truncate text-base font-semibold">{t("title")}</Dialog.Title>
+          <ChatPresence users={state.onlineUsers} failed={state.presenceError || state.status === "error" || state.status === "paused"} onRefresh={() => void session.refreshPresence()} />
           {chat.state.newMessages > 0 && <span role="status" className="shrink-0 whitespace-nowrap text-xs text-[var(--theme-color-semantic-info-foreground)]">{t("newMessages")}</span>}
-          <Dialog.Close className="chat-icon-button" aria-label={t("close")}><X size={22} aria-hidden="true" /></Dialog.Close>
+          <Dialog.Close className="chat-icon-button ml-auto" aria-label={t("close")}><X size={22} aria-hidden="true" /></Dialog.Close>
         </header>
         {userId && <Conversation userId={userId} open={open} images={images} {...chat} />}
         </div>
