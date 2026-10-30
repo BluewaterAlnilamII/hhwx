@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type Ref } from "react";
-import { BandoriStampAnimationCanvas } from "@/components/bandori/BandoriStampView";
+import { BandoriStampArtwork } from "@/components/bandori/BandoriStampArtwork";
 import { useCommentStampAnimation, useCommentStampCatalog } from "@/hooks/useCommentStamps";
 import { buildCommentStampLookup, resolveCommentStamp, type CommentStampLookup } from "@/lib/comments/comment-content";
 import { buildBandoriChatStampResources } from "@/lib/bandori-builtin-resources";
@@ -93,13 +93,11 @@ const ChatStampVisual = memo(function ChatStampVisual({ effect, area, stamp }: {
     className="absolute w-max origin-top-left" style={{ left: position.left, top: position.top, transform: `scale(${position.scale})` }}>
     <div ref={visual} className="chat-stamp-visual invisible flex flex-col items-center">
       <div className="relative h-20 w-[120px] sm:h-24 sm:w-36">
-        {oneShot && !animationFailed ? <BandoriStampAnimationCanvas animation={oneShot} label="" onError={failAnimation} pauseWhenHidden={false} />
-          : stamp && (!stamp.animation || animationFailed) ?
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={stamp.imageUrl} alt="" decoding="async" className="h-full w-full object-contain" /> : null}
-        {voiceBadge && stamp?.kind === "normal" && stamp.voiceUrl &&
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={voiceBadge} alt="" className="absolute right-0 top-0 w-[24%]" />}
+        {stamp && (oneShot || !stamp.animation || animationFailed) ? (
+          <BandoriStampArtwork imageUrl={stamp.imageUrl} label="" animation={!animationFailed ? oneShot : null}
+            showVoice={stamp.kind === "normal" && Boolean(stamp.voiceUrl)} loading="eager"
+            pauseWhenHidden={false} onAnimationError={failAnimation} />
+        ) : null}
       </div>
       <div className="chat-stamp-name"><span ref={name}>{effect.username}</span></div>
     </div>

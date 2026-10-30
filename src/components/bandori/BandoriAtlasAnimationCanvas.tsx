@@ -108,6 +108,7 @@ export type BandoriAtlasAnimationCanvasProps = {
   animation: BandoriAtlasAnimation;
   label: string;
   onError: () => void;
+  onFrameSizeChange?: (width: number, height: number) => void;
   active?: boolean;
   pauseWhenHidden?: boolean;
   className?: string;
@@ -117,6 +118,7 @@ export function BandoriAtlasAnimationCanvas({
   animation,
   label,
   onError,
+  onFrameSizeChange,
   active = true,
   pauseWhenHidden = true,
   className = "h-full w-full object-contain",
@@ -126,6 +128,7 @@ export function BandoriAtlasAnimationCanvas({
   const lastFrameTimeRef = useRef<number | null>(null);
   const drawnFrameIndexRef = useRef(-1);
   const onErrorRef = useRef(onError);
+  const onFrameSizeChangeRef = useRef(onFrameSizeChange);
   const [isIntersecting, setIsIntersecting] = useState(true);
   const isPageVisible = useSyncExternalStore(
     subscribePageVisibility,
@@ -141,7 +144,8 @@ export function BandoriAtlasAnimationCanvas({
 
   useEffect(() => {
     onErrorRef.current = onError;
-  }, [onError]);
+    onFrameSizeChangeRef.current = onFrameSizeChange;
+  }, [onError, onFrameSizeChange]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -182,7 +186,9 @@ export function BandoriAtlasAnimationCanvas({
         const drawFrameAtIndex = (frameIndex: number) => {
           if (drawnFrameIndexRef.current === frameIndex) return true;
           const frame = frames[frameIndex];
+          const sizeChanged = frame && (canvas.width !== frame.rect.width || canvas.height !== frame.rect.height);
           if (!frame || !drawAtlasFrame(canvas, atlasImage, frame)) return false;
+          if (sizeChanged) onFrameSizeChangeRef.current?.(frame.rect.width, frame.rect.height);
           drawnFrameIndexRef.current = frameIndex;
           return true;
         };
