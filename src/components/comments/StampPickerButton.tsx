@@ -5,7 +5,7 @@ import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, 
 import { Grid2X2, MoreHorizontal, Star, Sticker } from "lucide-react";
 import LoadingIndicator from "@/components/LoadingIndicator";
 import { useTranslations } from "next-intl";
-import { BandoriStampAnimationCanvas } from "@/components/bandori/BandoriStampView";
+import { BandoriStampArtwork } from "@/components/bandori/BandoriStampArtwork";
 import {
   useCommentStampAnimation,
   useCommentStampsForRegion,
@@ -18,11 +18,9 @@ import {
 import { cn } from "@/lib/utils";
 import { buildStampShortcode } from "@/lib/comments/comment-content";
 import { getCommentPopoverHorizontalPosition } from "@/lib/comments/comment-popover-position";
-import { buildBandoriCardBandIconUrl, buildBandoriChatStampResources } from "@/lib/bandori-builtin-resources";
+import { buildBandoriCardBandIconUrl } from "@/lib/bandori-builtin-resources";
 import { BANDORI_CHARACTER_GROUPS } from "@/lib/bandori-character-groups";
 import { selectStampPickerItems, STAMP_FAVORITES_STORAGE_KEY, useStampPickerStore } from "@/store/useStampPickerStore";
-
-const { voiceBadge } = buildBandoriChatStampResources();
 
 type StampPickerButtonProps = {
   open: boolean;
@@ -80,29 +78,8 @@ const StampPickerOption = memo(function StampPickerOption({
         aria-label={shortcode}
         title={shortcode}
       >
-        {animation ? (
-          <BandoriStampAnimationCanvas
-            animation={animation}
-            label={shortcode}
-            active={previewActive}
-            onError={handleAnimationError}
-            className="h-full max-h-18 w-full object-contain"
-          />
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={stamp.imageUrl}
-            alt={shortcode}
-            loading="lazy"
-            decoding="async"
-            referrerPolicy="strict-origin-when-cross-origin"
-            className="h-full max-h-18 w-full object-contain"
-          />
-        )}
-        {hasVoice && voiceBadge ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={voiceBadge} alt="" className="pointer-events-none absolute right-0 top-0 w-[24%]" />
-        ) : null}
+        <BandoriStampArtwork imageUrl={stamp.imageUrl} label={shortcode} animation={animation}
+          active={previewActive} showVoice={hasVoice} onAnimationError={handleAnimationError} />
       </button>
       <button
         type="button"
@@ -112,7 +89,7 @@ const StampPickerOption = memo(function StampPickerOption({
         title={t(favorite ? "pickers.stampRemoveFavorite" : "pickers.stampAddFavorite", { stamp: shortcode })}
         onClick={() => onFavorite(stamp)}
         className={cn(
-          "group/favorite absolute bottom-0 right-0 inline-flex size-8 items-center justify-center rounded-full transition focus-visible:outline-2 focus-visible:outline-[var(--theme-color-focus-ring)] sm:size-7",
+          "group/favorite absolute right-0 top-0 inline-flex size-8 items-center justify-center rounded-full transition focus-visible:outline-2 focus-visible:outline-[var(--theme-color-focus-ring)] sm:size-7",
           favorite
             ? "text-[var(--theme-color-stamp-favorite)]"
             : "text-[var(--theme-color-text-muted)] sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 [@media(pointer:coarse)]:opacity-100",

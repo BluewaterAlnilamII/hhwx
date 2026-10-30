@@ -1,16 +1,13 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { BandoriAtlasAnimationCanvas } from "@/components/bandori/BandoriAtlasAnimationCanvas";
+import { BandoriStampArtwork } from "@/components/bandori/BandoriStampArtwork";
 import { useCommentStampAnimation } from "@/hooks/useCommentStamps";
 import type { BandoriStampCatalogItem } from "@/lib/bandori-stamp-assets";
 import { playSoundEffect } from "@/lib/sound-effect-audio";
 import { cn } from "@/lib/utils";
-import { buildBandoriChatStampResources } from "@/lib/bandori-builtin-resources";
 
-const { voiceBadge } = buildBandoriChatStampResources();
-
-export { BandoriAtlasAnimationCanvas as BandoriStampAnimationCanvas };
+export { BandoriAtlasAnimationCanvas as BandoriStampAnimationCanvas } from "@/components/bandori/BandoriAtlasAnimationCanvas";
 
 export const COMMENT_STAMP_SIZE = "h-16 w-24 sm:h-[76px] sm:w-[114px]";
 
@@ -32,36 +29,14 @@ export default function BandoriStampView({
     animationSummary,
     Boolean(animationSummary) && !animationFailed,
   );
-  const mediaClassName = cn(
-    "h-full w-full object-contain",
-    variant === "reward"
-      ? "max-h-[74px] max-w-[111px] sm:max-h-[76px] sm:max-w-[114px]"
-      : "max-h-16 max-w-24 sm:max-h-[76px] sm:max-w-[114px]",
-  );
   const handleAnimationError = useCallback(() => setAnimationFailed(true), []);
+  const handleImageError = useCallback(() => setImageFailed(true), []);
 
   if (imageFailed) return <span>{label}</span>;
 
-  const image = animation && !animationFailed ? (
-    <BandoriAtlasAnimationCanvas
-      animation={animation}
-      label={label}
-      onError={handleAnimationError}
-      className={mediaClassName}
-    />
-  ) : (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={stamp.imageUrl}
-      alt={label}
-      title={label}
-      loading="lazy"
-      decoding="async"
-      referrerPolicy="strict-origin-when-cross-origin"
-      onError={() => setImageFailed(true)}
-      className={mediaClassName}
-    />
-  );
+  const image = <BandoriStampArtwork imageUrl={stamp.imageUrl} label={label}
+    animation={!animationFailed ? animation : null} showVoice={Boolean(stamp.voiceUrl)}
+    onAnimationError={handleAnimationError} onImageError={handleImageError} />;
 
   const className = cn(
     "relative mx-0.5 inline-flex shrink-0 items-center justify-center align-[-1.35em]",
@@ -85,10 +60,6 @@ export default function BandoriStampView({
       title={`Play ${label}`}
     >
       {image}
-      {voiceBadge ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={voiceBadge} alt="" className="pointer-events-none absolute right-0 top-0 w-[24%]" />
-      ) : null}
     </button>
   );
 }
