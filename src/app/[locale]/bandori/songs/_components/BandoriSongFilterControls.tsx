@@ -29,8 +29,8 @@ function ToggleAllButton({ isSelected, label, onClick }: { isSelected: boolean; 
   return <SharedToggleAllButton isSelected={isSelected} allLabel={t("actions.all")}
     selectAllLabel={t("actions.selectAll", { group: label })} clearAllLabel={t("actions.clearAll", { group: label })} onClick={onClick} />;
 }
-export default function BandoriSongFilterControls({ filter, resultCountLabel, onFilterChange, onClearFilter }: {
-  filter: BandoriSongsPageFilter; resultCountLabel: string;
+export default function BandoriSongFilterControls({ filter, resultCountLabel, showSort = true, onFilterChange, onClearFilter }: {
+  filter: BandoriSongsPageFilter; resultCountLabel: string; showSort?: boolean;
   onFilterChange: (patch: Partial<BandoriSongsPageFilter>) => void; onClearFilter: () => void;
 }) {
   const t = useTranslations("bandori.songs.filters");
@@ -39,7 +39,7 @@ export default function BandoriSongFilterControls({ filter, resultCountLabel, on
   const typeLabel = t("rows.type");
   const serverLabel = t("rows.serverAvailability");
   return <SongFilterControls filter={filter} resultCountLabel={resultCountLabel} onFilterChange={onFilterChange} onClearFilter={onClearFilter}
-    help={<BandoriSearchHelp kind="songs" />} sortOptions={BANDORI_SONG_SORTS.map((value) => ({ value, label: t(`sort.${value}`) }))}
+    help={<BandoriSearchHelp kind="songs" />} sortOptions={showSort ? BANDORI_SONG_SORTS.map((value) => ({ value, label: t(`sort.${value}`) })) : []}
     labels={{ searchPlaceholder: t("searchPlaceholder"), search: searchT("search"), clear: t("actions.clear"),
       level: t("rows.level"), min: t("levelMin"), max: t("levelMax"), sort: t("rows.sort"), asc: t("sortDirection.asc"), desc: t("sortDirection.desc"),
       directionTitle: t(`sortDirection.${filter.sortDirection}Title`), directionAria: t(`sortDirection.${filter.sortDirection}Aria`) }}>

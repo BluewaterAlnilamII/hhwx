@@ -192,6 +192,28 @@
     box-shadow: var(--theme-shadow-panel);
   }
 
+  .hhwx-meta-table > thead {
+    background-color: var(--theme-color-table-header-background);
+  }
+
+  .hhwx-meta-table > tbody > tr {
+    border-color: var(--theme-color-table-row-border);
+  }
+
+  .hhwx-meta-table > tbody > tr:nth-child(even) {
+    background-color: var(--theme-color-table-row-alternate-background);
+  }
+
+  .hhwx-meta-table > tbody > tr:has(:focus-visible) {
+    background-color: var(--theme-color-table-row-active-background);
+  }
+
+  @media (hover: hover) {
+    .hhwx-meta-table > tbody > tr:hover {
+      background-color: var(--theme-color-table-row-active-background);
+    }
+  }
+
   .hhwx-control {
     border-color: var(--theme-color-border-subtle);
     background-color: var(--theme-color-control-background);

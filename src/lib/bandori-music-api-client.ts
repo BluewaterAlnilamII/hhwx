@@ -13,6 +13,9 @@ export type BandoriMusicMasterRecord = Record<string, unknown> & {
   musicTitle?: Array<string | null>;
   publishedAt?: Array<string | number | null>;
   tag?: string;
+  length?: number;
+  notes?: Record<string, number>;
+  bpm?: Record<string, { bpm: number; start: number; end: number }[]>;
 };
 
 export type BandoriMusicMasterMap = Record<

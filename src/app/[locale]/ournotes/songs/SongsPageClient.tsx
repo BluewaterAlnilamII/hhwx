@@ -27,6 +27,7 @@ export default function SongsPageClient() {
     <h1 className="sr-only">{t("page.title")}</h1>
     <Tabs.Root value={view} onValueChange={(value) => {
       const query = new URLSearchParams(window.location.search);
+      if ((query.get("view") === "meta" ? "meta" : "info") === value) return;
       if (value === "meta") query.set("view", value); else query.delete("view");
       window.history.pushState(null, "", window.location.pathname + (query.size ? `?${query}` : "") + window.location.hash);
     }}>

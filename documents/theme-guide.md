@@ -68,6 +68,7 @@ The legacy `--theme-seed-surface: #FFFEF4` still supplies light chart-axis and o
 | Purpose | Use |
 | --- | --- |
 | Page panel | `hhwx-panel`; nested content uses the panel background with its own geometry |
+| Song Meta table | `hhwx-meta-table` uses `table-*` roles for a quiet header, alternating visible rows, subtle separators, and row feedback on hover-capable input or visible keyboard focus. Light mode darkens these fills; dark mode lightens them. Numeric cells and their headers stay centered. |
 | Neutral button/input | `hhwx-control`, including selected and disabled states where applicable |
 | Solid blue operation | `hhwx-action-accent`, or the matching `action-accent-background` / `foreground` pair in custom controls |
 | Quiet operation, link or reply/expand button | `action-secondary-*`; neutral or lightly tinted surface, operation text and border |

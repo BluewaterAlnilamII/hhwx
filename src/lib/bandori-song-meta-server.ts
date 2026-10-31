@@ -12,6 +12,8 @@ import {
 export const BANDORI_SONG_META_KEY = BANDORI_MUSIC_META_INDEX_KEY;
 export const BANDORI_SONG_META_SCHEMA_VERSION = 3;
 const MAX_BANDORI_SONG_META_BYTES = 8 * 1024 * 1024;
+// The 4.55 MB aggregate took 25 seconds over a measured local R2 connection.
+const BANDORI_SONG_META_TIMEOUT_MS = 60_000;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 
 type ScoreCoefficientPair = [number, number];
@@ -131,6 +133,7 @@ async function fetchBandoriSongMeta(): Promise<BandoriSongMetaDataset> {
     await fetchBandoriPublicAssetIndexJson(
       BANDORI_SONG_META_KEY,
       MAX_BANDORI_SONG_META_BYTES,
+      BANDORI_SONG_META_TIMEOUT_MS,
     ),
   );
   await fetchBandoriPublicAssetJson(
