@@ -8,7 +8,7 @@ import {
 } from "../src/lib/bandori-song-meta-server.ts";
 
 const validArtifact = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   updatedAt: "2026-09-04T00:00:00Z",
   musicIndexSha256: "a".repeat(64),
   durations: [5, 5.5],
@@ -39,6 +39,17 @@ test("song meta parser requires the exact music index identity", () => {
   invalid.musicIndexSha256 = "not-a-sha256";
   assert.throws(
     () => parseBandoriSongMetaArtifact(invalid),
+    /artifact is invalid/u,
+  );
+});
+
+test("song meta parser retains schema 2 compatibility during the window upgrade", () => {
+  assert.deepEqual(
+    parseBandoriSongMetaArtifact({ ...validArtifact, schemaVersion: 2 }),
+    parseBandoriSongMetaArtifact(validArtifact),
+  );
+  assert.throws(
+    () => parseBandoriSongMetaArtifact({ ...validArtifact, schemaVersion: 4 }),
     /artifact is invalid/u,
   );
 });

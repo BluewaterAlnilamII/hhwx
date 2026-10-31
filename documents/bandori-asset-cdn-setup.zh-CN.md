@@ -63,7 +63,7 @@ HHWX 应用响应使用 `Cache-Control` 控制浏览器及下游缓存 TTL，并
 
 Cloudflare Cache Rule 可以只把目标公开 `GET`/`HEAD` 路径标记为符合缓存条件，同时继续接受源站响应头。由 R2 或资源 CDN 直接提供的对象（包括 Cards、Degrees、Events、Music 和 Stamps 的 `index.json`）不会经过 Next.js policy；其对象 metadata 使用 snapshot 浏览器档位。若需要仅把 Cloudflare 副本延长到 snapshot 边缘档位，应使用 Cache Response Rule 配置 `cloudflare_only` 的 `max-age=1800` 和 `stale-while-revalidate=86400`；Cache Response Rule 的结果优先于源站 `Cloudflare-CDN-Cache-Control`。
 
-谱面 API 始终通过带签名的 R2 请求，从 `BANDORI_PUBLIC_R2_BUCKET` 读取 `bandori/music/index.json` 及其内容寻址谱面对象；Music 计分 meta API 使用同一签名 reader 读取 `bandori/music/meta.json`，再校验 `musicIndexSha256` 指定的精确 `bandori/music/index.json` bytes。这些数据源和对象根路径属于固定应用契约；缺失、不可读或 hash 不匹配时会失败关闭，绝不会回退 Bestdori。浏览器侧 Music 资源使用 `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL`，不再提供单独的 Music CDN 配置。
+谱面 API 始终通过带签名的 R2 请求，从 `BANDORI_PUBLIC_R2_BUCKET` 读取 `bandori/music/index.json` 及其内容寻址谱面对象；Music 计分 meta API 使用同一签名 reader 读取 `bandori/music/meta.json`，再校验 `musicIndexSha256` 指定的精确 `bandori/music/index.json` bytes。Meta 聚合文件使用 60 秒读取时限和 8 MiB 大小上限：本地实测下载 4.55 MB 文件需要 25 秒。其他公开资源读取仍使用 15 秒时限。这些数据源和对象根路径属于固定应用契约；缺失、不可读或 hash 不匹配时会失败关闭，绝不会回退 Bestdori。浏览器侧 Music 资源使用 `NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL`，不再提供单独的 Music CDN 配置。
 
 Events、Cards、Degrees、Music 与 Stamps master API 会通过 `BANDORI_PRIVATE_R2_BUCKET` 配置的私有桶，直接读取各自的内容寻址 snapshot。其余 master 数据集始终从 `BANDORI_PUBLIC_R2_BUCKET` 的 `bandori/master` 路径合并固定 JP、EN、TW、CN 四服 artifact。pointer、manifest、dataset 或 pack 缺失、无权限、格式错误、损坏或超限时都会失败关闭，且不会回退到 Bestdori、公开 asset index、公开 CDN 读取或 Supabase pointer。`BANDORI_EVENT_API_LOCAL_STORE_ROOT`、`BANDORI_CARDS_API_LOCAL_STORE_ROOT`、`BANDORI_DEGREES_API_LOCAL_STORE_ROOT`、`BANDORI_MUSIC_API_LOCAL_STORE_ROOT` 与 `BANDORI_STAMPS_API_LOCAL_STORE_ROOT` 可在本地开发时指向 tracker 生成的 content store，生产环境会拒绝这些设置。
 
@@ -233,22 +233,17 @@ bandori/music/charts/{sha256}.json
 
 歌曲 ID 与难度 index 都使用按数值升序排列的数字字符串 key。难度 index `"0"` 到 `"4"` 依次表示 `easy`、`normal`、`hard`、`expert`、`special`。每个文件值都是完整的小写 SHA-256；客户端按上面的内容寻址路径推导对象 key，也可以校验收到的内容，不再需要查询参数版本。`notes`、`bpm` 与 `files.charts` 必须覆盖完全相同的难度。刻意不含音频的本地构建可以省略 `audio`，但生产就绪校验要求它存在。`bandori/music/manifests` 下的单曲提取 manifest 保留来源服务器及 bundle 溯源信息供 builder 使用，但不属于公开 index 契约。
 
-`bandori/music/meta.json` 是独立的 schema 2 可变 root，包含 `schemaVersion`、`updatedAt`、`musicIndexSha256`、排序后的 `durations` 与 `songs`。其歌曲/难度覆盖必须与 `music/index.json` 一致；每个难度包含一组全谱面的 `[普通,FEVER]` total，以及完整覆盖所有已发布时长的 `[普通,FEVER]` covered 系数。每个公开值都使用 binary64 未舍入 note 权重，按谱面顺序独立逐项累加，再按 `floor(value * 10000 + 0.5) / 10000` 舍入。
+`bandori/music/meta.json` 是独立的 schema 3 可变 root，包含 `schemaVersion`、`updatedAt`、`musicIndexSha256`、排序后的 `durations` 与 `songs`。其歌曲/难度覆盖必须与 `music/index.json` 一致；每个难度包含一组全谱面的 `[普通,FEVER]` total，以及完整覆盖所有已发布时长的 `[普通,FEVER]` covered 系数。每个公开值都使用 binary64 未舍入 note 权重，按谱面顺序独立逐项累加，再按 `floor(value * 10000 + 0.5) / 10000` 舍入。
 
-技能覆盖同时要求 `noteIndex > triggerIndex` 与 `noteTime <= triggerTime + duration`，不添加时间 epsilon。触发 note 不受自身新技能加成；同时刻的其他 note 在规范化序列中排在触发 note 后，因此受到覆盖。谱面时间、note 顺序和技能窗口边界以当前组曲计算器为准。系数仍使用普通单曲 combo 与可选 FEVER 权重，重叠窗口只计一次；它们是排名输入，不是完整的组曲计分结果。
+六次发动使用同一选定时长。第一次从触发时间开始，后续（包括第六次）按 `start=max(triggerTime,previousEnd+0.75)` 排队。覆盖同时要求 `noteIndex > triggerIndex` 与 `start <= noteTime <= start + duration`，不添加 epsilon。原触发 note 排除，其后同刻 note 及实际起止边界包含。这里沿用单曲的连续时间队列模型，不模拟原生逐帧更新；单曲 combo、可选 FEVER 权重及系数舍入不变。
 
-Music 发布先提交 `index.json`，再写入并回读绑定其精确 bytes 的 `meta.json`。签名 R2 读取的上限分别为 **Meta 8 MiB**、**配对 Music index 使用共享默认 4 MiB**。API 拒绝 hash 不匹配，并只投影 `{durations,songs}`。全量 Music 同步负责从 schema 1 迁移到 schema 2，局部 root 更新不能执行迁移。两个 root 写入之间的新读取会失败关闭，直到发布重试补齐 `meta.json`；已缓存的成功响应仍可能按 snapshot 策略继续提供。
+Music 发布先提交 `index.json`，再写入并回读绑定其精确 bytes 的 `meta.json`。签名 R2 读取的上限分别为 **Meta 8 MiB**、**配对 Music index 使用共享默认 4 MiB**。API 拒绝 hash 不匹配，并只投影 `{durations,songs}`。全量 Music 同步负责从 schema 1/2 迁移到 schema 3，局部 root 更新不能执行迁移。两个 root 写入之间的新读取会失败关闭，直到发布重试补齐 `meta.json`；已缓存的成功响应仍可能按 snapshot 策略继续提供。
 
 ### Music Meta schema 切换
 
-旧 reader 只接受 schema 1，当前 reader 只接受 schema 2。任何单纯的部署先后顺序都不能保证连续可用；不提供旧格式转换或 Bestdori fallback。不引入兼容 reader 的切换需要明确批准的维护窗口；窗口、写入者控制和配对回滚准备完成前不得发布。
+reader 兼容结构相同的 schema 2/3：2 表示固定窗口，3 表示排队窗口；仍拒绝 schema 1 和未知版本。
 
-1. 修改 builder 代码或 root 前，暂停自动 Music 写入者并等待在途工作完成。保留旧 `index.json`、`meta.json` 的精确 bytes、hash 和匹配的 Web/builder 版本，保留 runtime checkpoint 与恢复状态。
-2. 在已批准的窗口内，阻止流量进入不匹配的 reader/root 组合。部署 builder，从冻结输入执行一次受控的全量 Music 重建，验证 schema 2、配对 index hash 和完整歌曲/难度覆盖。重新提交已成功的 frozen job 不等于重建。
-3. 恢复流量前部署 schema 2 Web reader。逐个应用实例验证签名存储读取，清除受影响的边缘缓存，并全量核对公开 API 与已验证 artifact。新的服务端 cache key 隔离 schema 2，但不会清除旧边缘或浏览器响应；持有旧响应的客户端必须刷新，所需浏览器缓存到期时间也须纳入窗口。
-4. 验收后再恢复自动写入。切换失败时保持流量隔离与写入暂停，恢复匹配的代码版本和**两个旧 root 的精确 bytes**；确认 hash 配对、刷新受影响缓存后再开放。禁止只回滚 Web 或 Meta、覆盖不可变资源，或重置 job ledger 强迫重试。
-
-私有操作命令和窗口时长记录在部署专属 runbook。以上是协调维护切换要求，不是零停机保证。
+先部署兼容 Web reader。暂停并排空 Music 写入，保存配对旧 roots 的精确 bytes/hash 和 runtime 恢复状态；再部署版本配套的 builder/backend，以新 target 指纹完整重建 Music。局部同步不能迁移 root。确认 schema 3、配对 index hash、完整谱面覆盖及 API 结果后恢复调度，并刷新服务端、边缘及浏览器缓存。重复提交已成功旧 job 不会重建。回滚恢复兼容代码和两个配对 roots，不能重置 ledger。生产发布需要单独的操作授权，本地验证不代表线上已经切换。
 
 谱面模拟器演出资源：
 

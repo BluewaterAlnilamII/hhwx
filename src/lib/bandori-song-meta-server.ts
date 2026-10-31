@@ -10,7 +10,7 @@ import {
 } from "@/lib/bandori-public-asset-index-server";
 
 export const BANDORI_SONG_META_KEY = BANDORI_MUSIC_META_INDEX_KEY;
-export const BANDORI_SONG_META_SCHEMA_VERSION = 2;
+export const BANDORI_SONG_META_SCHEMA_VERSION = 3;
 const MAX_BANDORI_SONG_META_BYTES = 8 * 1024 * 1024;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 
@@ -64,7 +64,8 @@ export function parseBandoriSongMetaArtifact(raw: unknown): BandoriSongMetaArtif
       "durations",
       "songs",
     ])
-    || raw.schemaVersion !== BANDORI_SONG_META_SCHEMA_VERSION
+    // Schema 2 has the same shape; retain it during the queued-window rollout.
+    || (raw.schemaVersion !== 2 && raw.schemaVersion !== BANDORI_SONG_META_SCHEMA_VERSION)
     || typeof raw.updatedAt !== "string"
     || typeof raw.musicIndexSha256 !== "string"
     || !SHA256_PATTERN.test(raw.musicIndexSha256)
@@ -141,6 +142,6 @@ async function fetchBandoriSongMeta(): Promise<BandoriSongMetaDataset> {
 
 export const readBandoriSongMetaDataset = unstable_cache(
   fetchBandoriSongMeta,
-  ["bandori-public-song-meta:v3"],
+  ["bandori-public-song-meta:v4"],
   { revalidate: SNAPSHOT_HTTP_CACHE_POLICY.nextRevalidateSeconds ?? 1800 },
 );
