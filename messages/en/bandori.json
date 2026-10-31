@@ -868,6 +868,49 @@
         "mirrorOn": "Mirror on",
         "mirrorOff": "Mirror off"
       }
+    },
+    "view": {
+      "label": "Song page view",
+      "info": "Songs",
+      "meta": "Chart Meta"
+    },
+    "meta": {
+      "parameters": "Parameters",
+      "liveSkill": "Member skill",
+      "skillLevel": "{skill} level",
+      "level": "Level {level}",
+      "perfect": "Perfect rate",
+      "downtime": "Live interval",
+      "seconds": "seconds",
+      "loading": "Loading song Meta",
+      "resultCount": "{count} charts",
+      "empty": "No charts match the current filters",
+      "unsupported": "Meta data is unavailable for this skill level",
+      "tableLabel": "Song Meta ranking",
+      "rank": "Rank",
+      "helpLabel": "{column} explanation",
+      "help": {
+        "score": "Score relative to total power",
+        "efficiency": "Average score per minute relative to total power",
+        "bpm": "Beats per minute",
+        "notes": "Total notes in the chart",
+        "nps": "Average notes per second",
+        "sr": "Skill coverage"
+      },
+      "columns": {
+        "title": "Song",
+        "level": "Difficulty",
+        "length": "Time",
+        "score": "Score",
+        "efficiency": "Efficiency",
+        "bpm": "BPM",
+        "notes": "N",
+        "nps": "NPS",
+        "sr": "SR"
+      },
+      "fever": "Fever",
+      "enabled": "On",
+      "disabled": "Off"
     }
   },
   "teamBuilder": {

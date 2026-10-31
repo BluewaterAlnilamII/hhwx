@@ -1,3 +1,5 @@
+import { rankSongMetaRows, SONG_META_SORTS, type SongMetaSort } from "@/lib/song-meta";
+export { formatSongMetaTime as formatOurNotesMetaTime } from "@/lib/song-meta";
 import type { OurNotesSkill, OurNotesSkillCondition, OurNotesSkillConditionAtLevel, OurNotesSkillEffect, OurNotesSkillEffectAtLevel, OurNotesSkillEffectByLevel } from "../skills-contract";
 import type { OurNotesBand } from "../catalogs-contract";
 import type { OurNotesServer } from "../master-contract";
@@ -117,14 +119,9 @@ export function ourNotesMetaBpm(events: { t: number; bpm: number }[], length: nu
   return selected;
 }
 
-export const OURNOTES_META_SORTS = ["score", "efficiency", "title", "level", "length", "bpm", "notes", "nps", "sr"] as const;
+export const OURNOTES_META_SORTS = SONG_META_SORTS;
 export const OURNOTES_META_DEFAULT_SKILLS = { live: "5", support: "11" } as const;
-export type OurNotesMetaSort = typeof OURNOTES_META_SORTS[number];
-
-export function formatOurNotesMetaTime(seconds: number): string {
-  const milliseconds = Math.round(seconds * 1000);
-  return `${Math.floor(milliseconds / 60000)}:${String(Math.floor(milliseconds / 1000) % 60).padStart(2, "0")}.${String(milliseconds % 1000).padStart(3, "0")}`;
-}
+export type OurNotesMetaSort = SongMetaSort;
 
 export function buildOurNotesMetaRows(music: Record<string, OurNotesMusicSummary>, meta: OurNotesSongMeta,
   bands: Record<string, OurNotesBand>, server: OurNotesServer, filter: OurNotesSongFilter,
@@ -144,14 +141,5 @@ export function buildOurNotesMetaRows(music: Record<string, OurNotesMusicSummary
       length: song.length, notes: chart.combo, nps: chart.combo === null ? null : chart.combo / song.length,
       bpm: ourNotesMetaBpm(events, song.length), bpmValues: [...new Set(events.map((event) => event.bpm))], ...calculated }];
   });
-  const topCount = Math.ceil(rows.length * 0.05);
-  const threshold = (key: "score" | "efficiency") => rows.map((row) => row[key]).sort((a, b) => b - a)[topCount - 1] ?? Infinity;
-  const scoreThreshold = threshold("score"), efficiencyThreshold = threshold("efficiency");
-  return rows.flatMap(({ entry, ...row }) => visibleCharts.has(entry)
-    ? [{ ...row, topScore: row.score >= scoreThreshold, topEfficiency: row.efficiency >= efficiencyThreshold }] : []).sort((a, b) => {
-    const left = sort === "level" ? a.sortLevel : a[sort], right = sort === "level" ? b.sortLevel : b[sort];
-    if (left === null || right === null) return left === right ? a.songId - b.songId : left === null ? 1 : -1;
-    const difference = typeof left === "string" && typeof right === "string" ? left.localeCompare(right) : Number(left) - Number(right);
-    return difference * (direction === "asc" ? 1 : -1) || a.songId - b.songId || OURNOTES_SONG_DIFFICULTIES.indexOf(a.difficulty) - OURNOTES_SONG_DIFFICULTIES.indexOf(b.difficulty);
-  });
+  return rankSongMetaRows(rows, sort, direction).filter((row) => visibleCharts.has(row.entry));
 }

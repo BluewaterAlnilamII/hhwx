@@ -10,6 +10,58 @@ import * as utils from "../src/lib/utils.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
+for (const game of ["bandori", "ournotes"]) {
+  test(`${game} song tabs add one history entry per switch and retain filters and hash`, async () => {
+    const source = await read(`src/app/[locale]/${game}/songs/SongsPageClient.tsx`);
+    const { outputText } = ts.transpileModule(source, {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+    });
+    for (const initialView of ["", "&view=info", "&view=unknown", "&view=meta"]) {
+      const initialUrl = `http://localhost:3000/${game}/songs?q=%23306&perfect=95${initialView}#results`;
+      const entries = [initialUrl];
+      const window = {
+        location: new URL(initialUrl),
+        history: {
+          pushState: (_state, _title, url) => {
+            window.location = new URL(url, window.location);
+            entries.push(window.location.href);
+          },
+        },
+      };
+      const jsx = (type, props) => ({ type, props });
+      const dependencies = {
+        "react/jsx-runtime": { jsx, jsxs: jsx },
+        "next-intl": { useTranslations: () => (key) => key },
+        "next/navigation": { useSearchParams: () => window.location.searchParams },
+        "@radix-ui/react-tabs": { Root: "tabs" },
+      };
+      const exports = {};
+      runInNewContext(outputText, {
+        exports, window, URLSearchParams,
+        require: (id) => dependencies[id] ?? {},
+      });
+      const tabs = () => exports.default().props.children.find((child) => child.type === "tabs").props;
+      const originalView = tabs().value;
+      const nextView = originalView === "info" ? "meta" : "info";
+      const onValueChange = tabs().onValueChange;
+      onValueChange(originalView);
+      assert.equal(entries.length, 1);
+      // Radix can invoke focus and mouse-down callbacks before React renders again.
+      onValueChange(nextView);
+      onValueChange(nextView);
+      assert.equal(entries.length, 2);
+      assert.equal(tabs().value, nextView);
+      assert.equal(window.location.pathname, `/${game}/songs`);
+      assert.equal(window.location.searchParams.get("q"), "#306");
+      assert.equal(window.location.searchParams.get("perfect"), "95");
+      assert.equal(window.location.hash, "#results");
+      entries.pop();
+      window.location = new URL(entries.at(-1));
+      assert.equal(tabs().value, originalView);
+    }
+  });
+}
+
 test("clearing song filters discards uncommitted level drafts before they can be submitted again", async () => {
   const effects = [];
   const jsx = (type, props) => ({ type, props });
@@ -78,12 +130,13 @@ test("clearing song filters discards uncommitted level drafts before they can be
 });
 
 test("Songs home reuses the Music and public-asset contracts without a new API", async () => {
-  const [page, client, controls, row, navigation] = await Promise.all([
+  const [page, client, controls, row, navigation, catalog] = await Promise.all([
     read("src/app/[locale]/bandori/songs/page.tsx"),
     read("src/app/[locale]/bandori/songs/SongsPageClient.tsx"),
     read("src/app/[locale]/bandori/songs/_components/BandoriSongFilterControls.tsx"),
     read("src/app/[locale]/bandori/songs/_components/BandoriSongDetailedRow.tsx"),
     read("src/lib/section-navigation.ts"),
+    read("src/lib/bandori/songs/catalog.ts"),
   ]);
 
   assert.match(page, /<Suspense fallback=\{<SongsPageFallback \/>\}>/u);
@@ -94,10 +147,10 @@ test("Songs home reuses the Music and public-asset contracts without a new API",
   assert.match(client, /buildBandoriSongCatalog/u);
   assert.match(client, /filterBandoriSongCatalog/u);
   assert.match(client, /INITIAL_VISIBLE_COUNT = 40/u);
-  assert.match(client, /setListParam\(params, "difficulty", nextFilter\.difficulties, BANDORI_SONG_DIFFICULTY_FILTERS\)/u);
-  assert.match(client, /nextFilter\.sortBy === "id"/u);
+  assert.match(catalog, /setListParam\(params, "difficulty", nextFilter\.difficulties, BANDORI_SONG_DIFFICULTY_FILTERS\)/u);
+  assert.match(catalog, /nextFilter\.sortBy === "id"/u);
   assert.match(client, /params\.delete\("server"\)/u);
-  assert.match(client, /"available"/u);
+  assert.match(catalog, /"available"/u);
   assert.doesNotMatch(client, /BandoriCardServerSwitcher|selectedServer|displayServer/u);
   assert.doesNotMatch(controls, /allDifficulties/u);
   assert.match(controls, /serverAvailability/u);

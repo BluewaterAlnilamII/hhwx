@@ -18,6 +18,7 @@ import type {
 import {
   BANDORI_SERVERS,
   getBandoriServerFromCode,
+  getBandoriServerCode,
   pickBandoriRegionalText,
   readBandoriRegionalNumberAt,
   type BandoriServer,
@@ -416,4 +417,44 @@ export function parseBandoriSongsPageFilter(
     sortBy,
     sortDirection: searchParams.get("direction") === "asc" ? "asc" : "desc",
   };
+}
+
+function selectionsEqual<T>(left: readonly T[], right: readonly T[]): boolean {
+  return left.length === right.length && right.every((value) => left.includes(value));
+}
+
+function setListParam<T extends string | number>(
+  params: URLSearchParams,
+  key: string,
+  values: readonly T[],
+  defaults: readonly T[],
+): void {
+  if (selectionsEqual(values, defaults)) params.delete(key);
+  else params.set(key, values.join(","));
+}
+
+export function updateBandoriSongsQuery(query: string, patch: Partial<BandoriSongsPageFilter>): string {
+  const params = new URLSearchParams(query);
+  const nextFilter = { ...parseBandoriSongsPageFilter(params), ...patch };
+  params.delete("server");
+  if (nextFilter.query.trim()) params.set("q", nextFilter.query.trim());
+  else params.delete("q");
+  setListParam(
+    params,
+    "available",
+    nextFilter.servers.map(getBandoriServerCode),
+    BANDORI_SERVERS.map(getBandoriServerCode),
+  );
+  setListParam(params, "bands", nextFilter.bands, BANDORI_SONG_BAND_FILTERS);
+  setListParam(params, "types", nextFilter.types, BANDORI_SONG_TYPES);
+  setListParam(params, "difficulty", nextFilter.difficulties, BANDORI_SONG_DIFFICULTY_FILTERS);
+  if (nextFilter.minLevel === null) params.delete("minLevel");
+  else params.set("minLevel", String(nextFilter.minLevel));
+  if (nextFilter.maxLevel === null) params.delete("maxLevel");
+  else params.set("maxLevel", String(nextFilter.maxLevel));
+  if (nextFilter.sortBy === "id") params.delete("sort");
+  else params.set("sort", nextFilter.sortBy);
+  if (nextFilter.sortDirection === "desc") params.delete("direction");
+  else params.set("direction", nextFilter.sortDirection);
+  return params.toString();
 }

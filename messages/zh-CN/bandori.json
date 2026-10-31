@@ -868,6 +868,49 @@
         "mirrorOn": "镜像开启",
         "mirrorOff": "镜像关闭"
       }
+    },
+    "view": {
+      "label": "歌曲页面视图",
+      "info": "歌曲",
+      "meta": "谱面 Meta"
+    },
+    "meta": {
+      "parameters": "参数设置",
+      "liveSkill": "成员技能",
+      "skillLevel": "{skill}等级",
+      "level": "等级 {level}",
+      "perfect": "Perfect 率",
+      "downtime": "演出间隔",
+      "seconds": "秒",
+      "loading": "正在读取歌曲 Meta",
+      "resultCount": "{count} 张谱面",
+      "empty": "没有符合当前条件的谱面",
+      "unsupported": "当前技能等级暂无可用的 Meta 数据",
+      "tableLabel": "歌曲 Meta 排名",
+      "rank": "排名",
+      "helpLabel": "{column}说明",
+      "help": {
+        "score": "出分相对于综合力的比率",
+        "efficiency": "每分钟平均出分相对于综合力的比率",
+        "bpm": "每分钟节拍数",
+        "notes": "谱面音符总数",
+        "nps": "每秒平均音符数",
+        "sr": "技能覆盖率"
+      },
+      "columns": {
+        "title": "歌曲",
+        "level": "难度",
+        "length": "时长",
+        "score": "分数",
+        "efficiency": "效率",
+        "bpm": "BPM",
+        "notes": "N",
+        "nps": "NPS",
+        "sr": "SR"
+      },
+      "fever": "Fever",
+      "enabled": "开启",
+      "disabled": "关闭"
     }
   },
   "teamBuilder": {

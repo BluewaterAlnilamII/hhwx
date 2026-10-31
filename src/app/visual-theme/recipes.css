@@ -24,6 +24,10 @@
   --theme-color-overlay-background: color-mix(in srgb, var(--theme-seed-text-primary) 55%, transparent);
   /* Page panels and nested content containers share a fill, independent of chart ink and controls. */
   --theme-color-panel-background: var(--theme-color-surface-background);
+  --theme-color-table-header-background: color-mix(in srgb, var(--theme-color-text-muted) 8%, var(--theme-color-panel-background));
+  --theme-color-table-row-alternate-background: color-mix(in srgb, var(--theme-color-text-muted) 5%, var(--theme-color-panel-background));
+  --theme-color-table-row-active-background: color-mix(in srgb, var(--theme-color-text-muted) 10%, var(--theme-color-panel-background));
+  --theme-color-table-row-border: color-mix(in srgb, var(--theme-color-border-subtle) 65%, var(--theme-color-panel-background));
   --theme-color-comment-reaction-background: var(--theme-color-surface-background);
   --theme-color-chat-background: color-mix(in srgb, var(--theme-color-action-secondary-foreground) 4%, var(--theme-color-control-background));
   --theme-color-chat-own-background: color-mix(in srgb, var(--theme-color-action-secondary-foreground) 14%, var(--theme-color-control-background));

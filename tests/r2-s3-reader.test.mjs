@@ -90,11 +90,12 @@ test("R2 reader enforces a wall-clock budget even while bytes keep arriving", as
   });
 });
 
-test("Bandori public asset index reader uses its explicit public bucket configuration", async () => {
+test("Bandori public asset index reader uses its public bucket and enforces caller read budgets", async () => {
   await withServer((request, response) => {
     assert.equal(request.url, "/test-bucket/bandori/music/index.json");
     response.setHeader("content-type", "application/json");
-    response.end(JSON.stringify({ schemaVersion: 2 }));
+    const timer = setTimeout(() => response.end(JSON.stringify({ schemaVersion: 2 })), 100);
+    response.on("close", () => clearTimeout(timer));
   }, async (config) => {
     const names = [
       "BANDORI_R2_ENDPOINT",
@@ -114,6 +115,18 @@ test("Bandori public asset index reader uses its explicit public bucket configur
       assert.deepEqual(
         await fetchBandoriPublicAssetIndexJson("bandori/music/index.json"),
         { schemaVersion: 2 },
+      );
+      await assert.rejects(
+        fetchBandoriPublicAssetIndexJson("bandori/music/index.json", 128, 25),
+        /timed out/u,
+      );
+      assert.deepEqual(
+        await fetchBandoriPublicAssetIndexJson("bandori/music/index.json", 128, 1000),
+        { schemaVersion: 2 },
+      );
+      await assert.rejects(
+        fetchBandoriPublicAssetIndexJson("bandori/music/index.json", 1, 1000),
+        /byte limit/u,
       );
     } finally {
       for (const name of names) {
