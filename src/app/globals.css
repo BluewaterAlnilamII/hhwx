@@ -163,10 +163,6 @@
     overflow-wrap: break-word;
   }
 
-  .chat-draft-input::selection {
-    color: var(--theme-color-text-default);
-  }
-
   .chat-icon-button {
     display: inline-flex;
     width: 2.75rem;

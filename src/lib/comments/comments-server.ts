@@ -16,6 +16,7 @@ import {
 import {
   COMMENT_PAGE_SIZE,
   COMMENT_PREVIEW_REPLY_LIMIT,
+  COMMENT_REACTION_PARTICIPANT_LIMIT,
   COMMENT_REACTION_PARTICIPANT_PAGE_SIZE,
   buildCommentReactionParticipantCursor,
   parseCommentReactionKey,
@@ -30,7 +31,6 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { COMMENT_REACTIONS_TABLE } from "@/lib/supabase-table-names";
 
 const COMMENTS_TABLE = "comments";
-const COMMENT_REACTION_PARTICIPANT_LIMIT = 8;
 
 type CommentProfile = {
   username: string | null;

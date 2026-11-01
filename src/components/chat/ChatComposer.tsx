@@ -300,7 +300,7 @@ export function ChatComposer({ draft, draftMentions, directory = null, onlineUse
         <textarea ref={textarea} id="chat-draft" value={draft} placeholder={t("placeholder")} rows={1} autoComplete="off"
           aria-autocomplete="list" aria-controls={mentionRange ? "chat-mention-options" : undefined}
           aria-activedescendant={mentionRange && mentionUsers[mentionIndex] ? `chat-mention-${mentionUsers[mentionIndex].userId}` : undefined}
-          className={`chat-draft-input relative block max-h-40 min-h-12 w-full resize-none border-0 bg-transparent py-3 pr-1 text-base leading-6 outline-hidden placeholder:text-[var(--theme-color-text-muted)] sm:text-sm ${hasMentions ? "text-transparent caret-[var(--theme-color-text-default)]" : ""}`}
+          className={`chat-draft-input relative block max-h-40 min-h-12 w-full resize-none border-0 bg-transparent py-3 pr-1 text-base leading-6 outline-hidden placeholder:text-[var(--theme-color-text-muted)] selection:bg-[var(--theme-color-selection-strong-background)] selection:text-[var(--theme-color-selection-strong-foreground)] sm:text-sm ${hasMentions ? "text-transparent caret-[var(--theme-color-text-default)]" : ""}`}
           onChange={(event) => {
             const value = event.target.value, mentions = editChatMentions(draft, value, draftMentions);
             onChange(value, mentions);

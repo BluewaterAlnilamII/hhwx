@@ -26,6 +26,7 @@ const rows=Array.from({length:60},(_,i)=>({id:uuid(i+100),clientRequestId:uuid(i
 const summary=m=>({id:m.id,deleted:false,username:m.author.username,content:m.content,image:false,createdAt:m.createdAt});
 rows[59].reply=summary(rows[1]);window.calls=[];let handlers;
 rows[58].reactions=[{emojiKey:'LisaMelt',count:1,reactedByViewer:false}];
+rows[55].content="https://example.test/【Don't_Look_Up】（现场版）?x=1&y=2";
 rows[57].image={key:'user/images/temporary/fixture.png',width:64,height:64,contentType:'image/png',bytes:100,hash:'a'.repeat(64)};
 for(const i of [5,10,15]){rows[i].content='@Me Mention '+i;rows[i].mentions=[{userId:actor,start:0,end:3}];}
 rows[11].content='@Me plain text';rows[12].content='@User1 someone else';rows[12].mentions=[{userId:uuid(200),start:0,end:6}];
@@ -48,7 +49,7 @@ const session=new ChatSession(actor,{transport(_c,_r,h){handlers=h;return{connec
   const id=path.split('/')[4],m=rows.find(m=>m.id===id);
   if(init.method==='PUT'){const b=JSON.parse(init.body),previous=m.reactions.find(r=>r.emojiKey===b.emojiKey),count=(previous?.count??0)+(b.active?1:0)-(previous?.reactedByViewer?1:0);m.reactions=m.reactions.filter(r=>r.emojiKey!==b.emojiKey);if(count>0)m.reactions.push({emojiKey:b.emojiKey,count,reactedByViewer:b.active});m.reactionsVersion++;return{type:'message.reactions',messageId:id,version:m.reactionsVersion,reactions:m.reactions.map(({emojiKey,count})=>({emojiKey,count})),userId:actor,ownEmojiKeys:m.reactions.filter(r=>r.reactedByViewer).map(r=>r.emojiKey)};}
   if(window.participantGate)await window.participantGate;
-  return{emojiKey:new URL(path,location.origin).searchParams.get('emojiKey'),messageId:id,users:[{userId:actor,username:'Participant',publicUid:1,avatar:{cardId:1,entityServer:null,trainType:'normal'},reactedAt:new Date().toISOString()}],hasMore:false,nextCursor:null};
+  return{emojiKey:new URL(path,location.origin).searchParams.get('emojiKey'),messageId:id,users:Array.from({length:id===uuid(158)?window.previewCount??1:1},(_,i)=>({userId:i?uuid(300+i):actor,username:i?'Participant '+(i+1):'Participant',publicUid:i?300+i:1,avatar:{cardId:1,entityServer:null,trainType:'normal'},reactedAt:new Date().toISOString()})),hasMore:false,nextCursor:null};
  }
  if(init.method==='POST'){const b=JSON.parse(init.body),m={...rows[0],id:b.clientRequestId,clientRequestId:b.clientRequestId,content:b.content,mentions:b.mentions,reply:b.replyToId?summary(rows.find(r=>r.id===b.replyToId)):null,author:{...rows[0].author,userId:actor,username:'Me'},createdAt:new Date().toISOString().replace('Z','000Z')};rows.push(m);return{message:m,messageId:m.id,deleted:false,nextSendAt:null};}
  return{messages:rows.slice(-20),nextCursor:null};
@@ -99,6 +100,51 @@ async function holdTouch(page, locator, {move=false,cancel=false,position}={}) {
  if(move)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:y-8}]});
  await page.waitForTimeout(800);
  await cdp.send('Input.dispatchTouchEvent',{type:cancel?'touchCancel':'touchEnd',touchPoints:[]});await cdp.detach();
+}
+async function checkReactionPreview(page, locale, touch) {
+ const target=page.locator('[data-message-id="00000000-0000-4000-8000-000000000158"]'),preview=target.locator('[popover="manual"][role="dialog"]');
+ const viewAll=()=>preview.getByRole('button',{name:locales[locale].comments.reactions.viewAll,exact:true});
+ // A parked synthetic mouse must not dismiss a touch preview when its loaded list changes size.
+ const open=async()=>{const chip=target.getByRole('button',{name:/^:LisaMelt:/});if(touch){await page.mouse.move(0,0);await holdTouch(page,chip);}else await chip.hover();await preview.waitFor();};
+ const close=async()=>{await page.locator('#chat-draft').click();await preview.waitFor({state:'detached'});};
+ for(const [version,count] of [[1,2],[2,8],[3,9]]){
+  await page.evaluate(({version,count})=>{window.previewCount=count;window.participantGate=new Promise(resolve=>{window.releaseParticipants=resolve;});window.session.receive({type:'message.reactions',messageId:'00000000-0000-4000-8000-000000000158',version,userId:'00000000-0000-4000-8000-000000000002',ownEmojiKeys:[],reactions:[{emojiKey:'LisaMelt',count}]});},{version,count});
+  await target.getByRole('button',{name:':LisaMelt: '+count,exact:true}).waitFor();
+  await open();assert.equal(await viewAll().count(),0,'An unloaded preview has no View all button');
+  assert.equal(await preview.getByRole('status').count(),0,'Preview adds no loading indicator');
+  await page.evaluate(()=>{window.releaseParticipants();window.participantGate=null;});await preview.getByText('Participant',{exact:true}).waitFor();
+  assert.equal(await preview.getByText(/^Participant(?: \d+)?$/).count(),Math.min(count,8),'Preview matches the comment limit of eight');
+  assert.equal(await viewAll().count(),count>8?1:0);
+  if(output&&count===8)await preview.screenshot({path:resolve(output,`reaction-preview-eight-${locale}.png`)});
+  await close();
+ }
+ await page.evaluate(()=>{window.participantGate=new Promise((_,reject)=>{window.rejectParticipants=reject;});window.session.receive({type:'message.reactions',messageId:'00000000-0000-4000-8000-000000000158',version:4,userId:'00000000-0000-4000-8000-000000000002',ownEmojiKeys:[],reactions:[{emojiKey:'LisaMelt',count:9}]});});
+ await open();await page.evaluate(()=>window.rejectParticipants(new Error('fixture unavailable')));await page.waitForTimeout(100);
+ assert.equal(await preview.getByRole('button').count(),0,'Failed preview adds neither View all nor a retry button');
+ await close();
+ await page.evaluate(()=>{window.participantGate=null;});await open();await preview.getByText('Participant',{exact:true}).waitFor();assert.equal(await viewAll().count(),1,'Reopening retries through the existing request path');
+ await close();
+ const update=(version,count)=>page.evaluate(({version,count})=>{window.previewCount=count;window.session.receive({type:'message.reactions',messageId:'00000000-0000-4000-8000-000000000158',version,userId:'00000000-0000-4000-8000-000000000002',ownEmojiKeys:[],reactions:[{emojiKey:'LisaMelt',count}]});},{version,count});
+ const reads=()=>page.evaluate(()=>window.calls.filter(c=>c.path.includes('000000000158/reactions?')).length);
+ await update(5,9);await open();await preview.getByText('Participant',{exact:true}).waitFor();
+ const snapshot=await preview.innerText(),before=await reads();
+ await update(6,10);await target.getByRole('button',{name:':LisaMelt: 10',exact:true}).waitFor();
+ await viewAll().focus();assert.equal(await preview.innerText(),snapshot,'An open preview keeps its count, users and View all snapshot');
+ assert.equal(await reads(),before,'Realtime changes and focus within an open preview never reload it');
+ await close();await open();await preview.getByText('Participant',{exact:true}).waitFor();
+ assert.equal(await preview.getAttribute('aria-label'),locales[locale].comments.reactions.previewLabel.replace('{emoji}','LisaMelt').replace('{count}','10'));
+ assert.equal(await reads(),before+1,'Reopening reads the current version');await close();
+ await open();await preview.getByText('Participant',{exact:true}).waitFor();assert.equal(await reads(),before+1,'Reopening the same version reuses the row cache');await close();
+ await page.evaluate(()=>{window.participantGate=new Promise(resolve=>{window.releaseParticipants=resolve;});});
+ await update(7,11);await open();const pendingLabel=await preview.getAttribute('aria-label'),pendingReads=await reads();
+ await update(8,12);await page.evaluate(()=>{window.releaseParticipants();window.participantGate=null;});await preview.getByText('Participant',{exact:true}).waitFor();
+ assert.equal(await preview.getAttribute('aria-label'),pendingLabel,'The first response completes the opening snapshot even after a realtime update');
+ assert.equal(await reads(),pendingReads,'Finishing the first response does not refresh an open preview');await close();
+ await page.evaluate(()=>{window.participantGate=new Promise(resolve=>{window.releaseParticipants=resolve;});});
+ await update(9,13);await open();await close();
+ await update(10,14);await page.evaluate(()=>{window.participantGate=null;});await open();await preview.getByText('Participant',{exact:true}).waitFor();
+ const reopened=await preview.innerText();await page.evaluate(()=>window.releaseParticipants());await page.waitForTimeout(50);
+ assert.equal(await preview.innerText(),reopened,'A late response from a closed preview cannot overwrite a newer opening');await close();
 }
 async function checkRowHitArea(page, row, t, touch, own=false) {
  await row.scrollIntoViewIfNeeded();const b=await row.boundingBox(),x=own?b.x+10:b.x+b.width-10;
@@ -193,12 +239,17 @@ try{
  for(const [width,locale] of [[1280,'en'],[390,'zh-CN']]){
   const context=await browser.newContext({viewport:{width,height:900},isMobile:width<500,hasTouch:width<500,colorScheme:locale==='zh-CN'?'dark':'light'}),page=await context.newPage(),errors=[];
   page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
-  await page.route('**/fixture-avatar.png',async route=>route.fulfill({contentType:'image/png',body:await readFile('public/res/emoji/Tae.png')}));
-  await page.route('https://cdn.hhwx.org/user/images/temporary/fixture.png?cors=1',async route=>route.fulfill({contentType:'image/png',headers:{'access-control-allow-origin':'*'},body:await readFile('public/res/emoji/Tae.png')}));
+  await context.route('**/fixture-avatar.png',async route=>route.fulfill({contentType:'image/png',body:await readFile('public/res/emoji/Tae.png')}));
+  await context.route('https://cdn.hhwx.org/user/images/temporary/fixture.png?cors=1',async route=>route.fulfill({contentType:'image/png',headers:{'access-control-allow-origin':'*'},body:await readFile('public/res/emoji/Tae.png')}));
   await page.goto('http://localhost:'+server.address().port+'/?locale='+locale);assert.equal(await page.title(),'Chat interactions');await page.getByText('Open fixture',{exact:true}).click();await page.locator('[data-chat-bubble]').last().waitFor();
   const t=locales[locale].chat,row=page.locator('[data-message-id]').last(),bubble=row.locator('[data-chat-bubble]');
   const scroll=page.getByLabel(t.messages,{exact:true});
   await page.waitForFunction(()=>window.session.getSnapshot().onlineUsers?.length===14);
+  const link=page.locator('[data-message-id="00000000-0000-4000-8000-000000000155"] a');
+  await link.click({button:'right'});assert.equal(await page.getByRole('menu').count(),0,'Links retain their native context menu');
+  await link.focus();await link.press('Shift+F10');assert.equal(await page.getByRole('menu').count(),0,'Link keyboard context menus do not open message actions');
+  await context.route('https://example.test/**',route=>route.fulfill({contentType:'text/html',body:'<title>Link target</title>'}));
+  const opened=context.waitForEvent('page');await link.click();const destination=await opened;await destination.waitForLoadState();assert.equal(destination.url(),new URL("https://example.test/【Don't_Look_Up】（现场版）?x=1&y=2").href);assert.equal(await destination.evaluate(()=>window.opener),null);await destination.close();
   await page.locator('#chat-draft').fill('preserve draft');
   const oldScroll=await scroll.evaluate(e=>e.scrollTop);
   const header=page.locator('[data-chat-panel] header'),titleBounds=await header.getByRole('heading').boundingBox(),presenceBounds=await page.locator('[data-chat-presence-trigger]').boundingBox();
@@ -477,6 +528,11 @@ try{
   const earlyReaction=page.locator(`[data-message-id="${earlyReactionId}"]`).getByRole('button',{name:':Tae: 1',exact:true});
   await earlyReaction.waitFor();assert.equal(await earlyReaction.getAttribute('aria-pressed'),'false');await earlyReaction.scrollIntoViewIfNeeded();
   if(output)await page.screenshot({path:resolve(output,`early-reaction-${locale}-${width}.png`)});
+  const previewPage=await context.newPage();previewPage.on('pageerror',e=>errors.push(e.message));
+  previewPage.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
+  await previewPage.goto(page.url());await previewPage.getByText('Open fixture',{exact:true}).click();
+  await previewPage.waitForFunction(()=>window.session.getSnapshot().onlineUsers?.length===14);
+  await checkReactionPreview(previewPage,locale,width<500);
   assert.deepEqual(errors,[]);
   cases.push({width,locale,presence:true,presenceFailure:true,fullMemberList:true,localDirectory:true,stableMentionSelection:true,stableEmptyAndKeywordResults:true,participantFirstPageReuse:true,stableOpenParticipantDialog:true,reply:true,continuation:true,ownAvatar:true,ownNameAndUidHidden:true,reactions:true,earlyReaction:true,recentReactions:true,mentions:true,participants:true,context:true,deletion:true,inlinePicker:true,fixedPickerHeight:true,backgroundScrollLocked:true,internalGridScroll:true,scrollRestoredOnClose:true,errors});await context.close();
  }

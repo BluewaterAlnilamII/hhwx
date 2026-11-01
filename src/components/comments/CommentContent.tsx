@@ -7,6 +7,7 @@ import dynamic from "next/dynamic";
 import { getCommentEmojiSrc } from "@/lib/comments/emoji";
 import LoadingImage from "@/components/LoadingImage";
 import { ImageOff } from "lucide-react";
+import { LinkifyIt, REBuilder } from "linkify-it";
 import {
   isCommentStampRegion,
   type CommentStamp,
@@ -23,6 +24,13 @@ const NO_STAMPS: CommentStampLookup = new Map();
 type CommentContentTextToken = {
   type: "text";
   value: string;
+};
+
+type CommentContentLinkToken = {
+  type: "link";
+  value: string;
+  href: string;
+  index: number;
 };
 
 type CommentContentEmojiToken = {
@@ -42,12 +50,48 @@ type CommentContentStampToken = {
 
 type CommentContentToken =
   | CommentContentTextToken
+  | CommentContentLinkToken
   | CommentContentEmojiToken
   | CommentContentStampToken;
+
+// Use linkify-it's paired-scope extension for CJK titles inside URL paths.
+class CommentLinkREBuilder extends REBuilder {
+  override get_path_extra(): RegExp {
+    return this.cache.commentBrackets ??= new RegExp(
+      ["（）", "［］", "｛｝", "｟｠", "｢｣", "〈〉", "《》", "「」", "『』", "【】", "〔〕", "〖〗", "〘〙", "〚〛"]
+        .map(([open, close]) => this.nestedPairRE(open, close)).join("|") + "|",
+    );
+  }
+}
+
+const commentLinks = new LinkifyIt({
+  fuzzyLink: false,
+  fuzzyEmail: false,
+  rebuilder: new CommentLinkREBuilder(),
+}).add("ftp:", null).add("mailto:", null).add("//", null);
 
 const COMMENT_CONTENT_TOKEN_PATTERN = /:stamp-([a-z]{2})-(\d+)(?:-(changed))?:|:([A-Za-z0-9_+-]+):/g;
 
 function parseCommentContent(content: string, stampLookup: CommentStampLookup): CommentContentToken[] {
+  const tokens: CommentContentToken[] = [];
+  let cursor = 0;
+  for (const match of commentLinks.match(content) ?? []) {
+    // A path apostrophe can make the library include the surrounding closing quote.
+    const quote = content[match.index - 1];
+    const value = (quote === "'" || quote === '"') && match.raw.endsWith(quote)
+      ? match.raw.slice(0, -1) : match.raw;
+    let url: URL;
+    try { url = new URL(value); } catch { continue; }
+    if (url.protocol !== "http:" && url.protocol !== "https:") continue;
+    tokens.push(...parseCommentText(content.slice(cursor, match.index), stampLookup, cursor));
+    tokens.push({ type: "link", value, href: url.href, index: match.index });
+    cursor = match.index + value.length;
+  }
+  tokens.push(...parseCommentText(content.slice(cursor), stampLookup, cursor));
+  return tokens;
+}
+
+function parseCommentText(content: string, stampLookup: CommentStampLookup, offset: number): CommentContentToken[] {
   const tokens: CommentContentToken[] = [];
   let cursor = 0;
   let match: RegExpExecArray | null;
@@ -68,11 +112,11 @@ function parseCommentContent(content: string, stampLookup: CommentStampLookup): 
             changedMarker ? "changed" : "normal",
           )
           : null;
-        token = stamp ? { type: "stamp", raw, stamp, index: match.index } : null;
+        token = stamp ? { type: "stamp", raw, stamp, index: offset + match.index } : null;
       }
     } else if (emojiName) {
       const src = getCommentEmojiSrc(emojiName);
-      token = src ? { type: "emoji", raw, name: emojiName, src, index: match.index } : null;
+      token = src ? { type: "emoji", raw, name: emojiName, src, index: offset + match.index } : null;
     }
 
     if (!token) continue;
@@ -153,6 +197,9 @@ function renderCommentStampToken(token: CommentContentStampToken) {
 function renderCommentContentTokens(tokens: readonly CommentContentToken[]) {
   return tokens.map((token) => {
     if (token.type === "text") return token.value;
+    if (token.type === "link") return <a key={`link-${token.index}`} href={token.href} target="_blank" rel="noopener noreferrer"
+      className="hhwx-text-link underline" onPointerDown={event => event.stopPropagation()} onContextMenu={event => event.stopPropagation()}
+      onKeyDown={event => { if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) event.stopPropagation(); }}>{token.value}</a>;
 
     if (token.type === "stamp") {
       return renderCommentStampToken(token);
