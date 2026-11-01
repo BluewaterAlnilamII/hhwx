@@ -16,7 +16,7 @@ export type ReactionChipProps = {
   disabled: boolean;
   onToggle: (emojiKey: string, reactedByViewer: boolean) => Promise<void>;
   onViewAll: (emojiKey: string) => void;
-  onPreview?: (emojiKey: string) => void;
+  onPreview?: (emojiKey: string) => Promise<CommentReactionSummary>;
 };
 
 export function ReactionChip({ reaction, disabled, onToggle, onViewAll, onPreview }: ReactionChipProps) {
@@ -25,7 +25,8 @@ export function ReactionChip({ reaction, disabled, onToggle, onViewAll, onPrevie
   const tooltipRef = useRef<HTMLDivElement>(null);
   const longPressTimerRef = useRef<number | null>(null);
   const suppressClickRef = useRef(false);
-  const [tooltipOpen, setTooltipOpen] = useState(false);
+  const [tooltipReaction, setTooltipReaction] = useState<CommentReactionSummary | null>(null);
+  const tooltipOpen = tooltipReaction !== null;
   const [tooltipStyle, setTooltipStyle] = useState<CSSProperties | null>(null);
 
   const clearLongPressTimer = useCallback(() => {
@@ -42,7 +43,7 @@ export function ReactionChip({ reaction, disabled, onToggle, onViewAll, onPrevie
 
     const handlePointerDown = (event: PointerEvent) => {
       if (containerRef.current?.contains(event.target as Node)) return;
-      setTooltipOpen(false);
+      setTooltipReaction(null);
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -51,7 +52,7 @@ export function ReactionChip({ reaction, disabled, onToggle, onViewAll, onPrevie
       if (tooltipRef.current?.contains(document.activeElement)) {
         containerRef.current?.querySelector("button")?.focus({ preventScroll: true });
       }
-      setTooltipOpen(false);
+      setTooltipReaction(null);
     };
 
     document.addEventListener("pointerdown", handlePointerDown);
@@ -87,10 +88,16 @@ export function ReactionChip({ reaction, disabled, onToggle, onViewAll, onPrevie
   }, []);
 
   const showTooltip = useCallback(() => {
+    if (tooltipReaction) return;
     updateTooltipPosition();
-    onPreview?.(reaction.emojiKey);
-    setTooltipOpen(true);
-  }, [updateTooltipPosition, onPreview, reaction.emojiKey]);
+    const snapshot = { ...reaction };
+    setTooltipReaction(snapshot);
+    if (onPreview) {
+      void onPreview(reaction.emojiKey).then(loaded => {
+        setTooltipReaction(current => current === snapshot ? loaded : current);
+      }).catch(() => { /* Reopening retries through the existing participant loader. */ });
+    }
+  }, [updateTooltipPosition, onPreview, reaction, tooltipReaction]);
 
   useLayoutEffect(() => {
     if (!tooltipOpen) return;
@@ -154,14 +161,14 @@ export function ReactionChip({ reaction, disabled, onToggle, onViewAll, onPrevie
         if (event.pointerType === "mouse") showTooltip();
       }}
       onPointerLeave={(event) => {
-        if (event.pointerType === "mouse") setTooltipOpen(false);
+        if (event.pointerType === "mouse") setTooltipReaction(null);
       }}
       onFocus={(event) => {
         if (event.target.matches(":focus-visible")) showTooltip();
       }}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-          setTooltipOpen(false);
+          setTooltipReaction(null);
         }
       }}
     >
@@ -188,14 +195,14 @@ export function ReactionChip({ reaction, disabled, onToggle, onViewAll, onPrevie
         <CommentReactionEmoji emojiKey={reaction.emojiKey} size={18} />
         {reaction.count}
       </button>
-      {tooltipOpen ? (
+      {tooltipReaction ? (
         <div
           ref={tooltipRef}
           popover="manual"
           role="dialog"
           aria-label={t("reactions.previewLabel", {
-            emoji: reaction.emojiKey,
-            count: reaction.count,
+            emoji: tooltipReaction.emojiKey,
+            count: tooltipReaction.count,
           })}
           style={tooltipStyle ?? undefined}
           className={cn(
@@ -204,12 +211,12 @@ export function ReactionChip({ reaction, disabled, onToggle, onViewAll, onPrevie
           )}
         >
           <div className="mb-2 flex items-center gap-1.5 font-semibold text-[var(--theme-color-text-default)]">
-            <CommentReactionEmoji emojiKey={reaction.emojiKey} size={20} />
-            <span>{t("reactions.count", { count: reaction.count })}</span>
+            <CommentReactionEmoji emojiKey={tooltipReaction.emojiKey} size={20} />
+            <span>{t("reactions.count", { count: tooltipReaction.count })}</span>
           </div>
           <div className="space-y-1.5">
-            {reaction.users.map((user) => (
-              <div key={`${reaction.emojiKey}-${user.userId}`} className="flex items-center gap-2">
+            {tooltipReaction.users.map((user) => (
+              <div key={`${tooltipReaction.emojiKey}-${user.userId}`} className="flex items-center gap-2">
                 <AccountCardAvatar
                   username={user.username}
                   cardId={user.avatar.cardId}
@@ -227,12 +234,12 @@ export function ReactionChip({ reaction, disabled, onToggle, onViewAll, onPrevie
               </div>
             ))}
           </div>
-          {reaction.remainingUserCount > 0 ? (
+          {tooltipReaction.remainingUserCount > 0 ? (
             <button
               type="button"
               onClick={() => {
-                setTooltipOpen(false);
-                onViewAll(reaction.emojiKey);
+                setTooltipReaction(null);
+                onViewAll(tooltipReaction.emojiKey);
               }}
               className="mt-2 flex w-full items-center justify-between border-t border-[var(--theme-color-border-subtle)] pt-2 font-semibold text-[var(--theme-color-action-secondary-foreground)] transition hover:text-[var(--theme-color-text-default)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]"
             >

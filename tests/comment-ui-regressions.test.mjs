@@ -1,8 +1,106 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { createRequire } from "node:module";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { CommentContent } from "../src/components/comments/CommentContent.tsx";
+import { ChatMessageText } from "../src/components/chat/ChatMessageText.tsx";
 
 import { getCommentPopoverHorizontalPosition, getCommentPopoverVerticalPosition } from "../src/lib/comments/comment-popover-position.ts";
+
+const require = createRequire(import.meta.url);
+const { NextIntlClientProvider } = require("next-intl");
+const messages = { comments: require("../messages/en/comments.json"), common: require("../messages/en/common.json") };
+const renderContent = (component, props) => renderToStaticMarkup(createElement(NextIntlClientProvider,
+  { locale: "en", timeZone: "UTC", messages }, createElement(component, props)));
+
+test("comment links preserve URL contents and leave surrounding punctuation outside", () => {
+  for (const [content, href, label, suffix] of [
+    ["详情：https://example.com/path?q=a&lang=zh#section。", "https://example.com/path?q=a&amp;lang=zh#section", "https://example.com/path?q=a&amp;lang=zh#section", "。"],
+    ["(https://example.com/a_(b)).", "https://example.com/a_(b)", "https://example.com/a_(b)", ")."],
+    ["https://[::1]/page]", "https://[::1]/page", "https://[::1]/page", "]"],
+    ["HTTPS://EXAMPLE.COM/", "https://example.com/", "HTTPS://EXAMPLE.COM/", ""],
+    ["https://example.com/:Tae:", "https://example.com/:Tae:", "https://example.com/:Tae:", ""],
+    ["https://en.wikipedia.org/wiki/Don't_Look_Up", "https://en.wikipedia.org/wiki/Don&#x27;t_Look_Up", "https://en.wikipedia.org/wiki/Don&#x27;t_Look_Up", ""],
+    ["'https://example.com/Don't_Look_Up'.", "https://example.com/Don&#x27;t_Look_Up", "https://example.com/Don&#x27;t_Look_Up", "&#x27;."],
+    ['"https://example.com/Don\'t_Look_Up"', "https://example.com/Don&#x27;t_Look_Up", "https://example.com/Don&#x27;t_Look_Up", "&quot;"],
+  ]) {
+    const html = renderContent(CommentContent, { content, isDeleted: false });
+    assert.ok(html.includes(`href="${href}"`), html);
+    assert.ok(html.includes(`>${label}</a>${suffix}`), html);
+    assert.match(html, /target="_blank" rel="noopener noreferrer"/u);
+  }
+});
+
+test("comment links keep user markup inert and preserve emoji rendering", () => {
+  const html = renderContent(CommentContent, {
+    content: '<script>alert(1)</script> javascript:alert(1) data:text/html,test https:// :Tae: https://example.com/:Tae:', isDeleted: false,
+  });
+  assert.doesNotMatch(html, /<script\b/u);
+  assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/u);
+  assert.equal([...html.matchAll(/<a\b/g)].length, 1);
+  assert.equal([...html.matchAll(/alt=":Tae:"/g)].length, 1);
+  assert.doesNotMatch(renderContent(CommentContent, { content: "https://example.com", isDeleted: true }), /<a\b/u);
+});
+
+test("comments and chat share Unicode URL boundaries without changing visible text", () => {
+  const cases = [
+    ["https://ja.wikipedia.org/wiki/【推しの子】", "https://ja.wikipedia.org/wiki/【推しの子】"],
+    ["https://example.com/歌曲（现场版）?lang=zh", "https://example.com/歌曲（现场版）?lang=zh"],
+    ["https://例子.中国/页面?q=你好", "https://例子.中国/页面?q=你好"],
+    ["https://example.com/a_(b_(c))", "https://example.com/a_(b_(c))"],
+    ["访问 https://example.com/path，然后继续。", "https://example.com/path"],
+    ["'https://example.com/Don't_Look_Up'.", "https://example.com/Don't_Look_Up"],
+    ["HTTPS://EXAMPLE.COM/", "HTTPS://EXAMPLE.COM/"],
+    ["http://localhost:3000/path", "http://localhost:3000/path"],
+    ["https://127.0.0.1:8080/path", "https://127.0.0.1:8080/path"],
+    ["https://[::1]/page]", "https://[::1]/page"],
+    ["https://example.com/?q=a%20b&url=https%3A%2F%2Fx.test%2F#section", "https://example.com/?q=a%20b&url=https%3A%2F%2Fx.test%2F#section"],
+  ];
+  for (const [open, close] of ["（）", "［］", "｛｝", "｟｠", "｢｣", "〈〉", "《》", "「」", "『』", "【】", "〔〕", "〖〗", "〘〙", "〚〛"]) {
+    const url = `https://example.com/${open}作品${close}?lang=zh`;
+    cases.push([url, url], [`${open}https://example.com/path${close}`, "https://example.com/path"]);
+  }
+  for (const [content, expected] of cases) {
+    const href = renderToStaticMarkup(createElement("a", { href: new URL(expected).href }, expected)).match(/href="([^"]+)"/u)[1];
+    const visibleText = renderToStaticMarkup(createElement("span", null, content)).slice(6, -7);
+    for (const [component, props] of [[CommentContent, { isDeleted: false }], [CommentContent, { isDeleted: false, inline: true }], [ChatMessageText, {}]]) {
+      const html = renderContent(component, { ...props, content });
+      assert.deepEqual([...html.matchAll(/href="([^"]+)"/gu)].map(match => match[1]), [href], content);
+      assert.equal(html.replace(/<[^>]+>/gu, ""), visibleText, content);
+    }
+  }
+});
+
+test("URL spans take precedence over shortcodes while adjacent emoji remain intact", () => {
+  const url = "https://example.com/:Tae:/:stamp-jp-1:?x=1#part";
+  for (const [component, props] of [[CommentContent, { isDeleted: false }], [ChatMessageText, {}]]) {
+    const html = renderContent(component, { ...props, content: `:Tae: ${url} :Tae: https://example.com/path :Tae:` });
+    assert.equal([...html.matchAll(/<a\b/gu)].length, 2);
+    assert.equal([...html.matchAll(/alt=":Tae:"/gu)].length, 3);
+    assert.ok(html.includes(`>${url}</a>`), html);
+  }
+});
+
+test("automatic links require explicit HTTP(S) and browser-valid addresses", () => {
+  for (const content of ["www.example.com a@example.com ftp://example.com //example.com", "javascript:alert(1) data:text/html,test file:///tmp/test", "https:// http://99999999999/", "https://example.com/"]) {
+    const html = renderContent(CommentContent, { content, isDeleted: false });
+    assert.equal([...html.matchAll(/<a\b/gu)].length, content === "https://example.com/" ? 1 : 0, content);
+  }
+});
+
+test("chat mentions share comment links while draft text stays editable plain text", () => {
+  const url = "https://example.com/【Don't_Look_Up】（现场版）";
+  const props = { content: `@Alice ${url} :Tae:`, mentions: [{ userId: "alice", start: 0, end: 6 }] };
+  const html = renderContent(ChatMessageText, props);
+  assert.match(html, /data-chat-mention[^>]*>@Alice<\/span>/u);
+  assert.ok(html.includes(`href="${new URL(url).href.replaceAll("'", "&#x27;")}"`), html);
+  assert.match(html, /alt=":Tae:"/u);
+  const draft = renderContent(ChatMessageText, { ...props, draft: true });
+  assert.doesNotMatch(draft, /<a\b|<img\b/u);
+  assert.ok(draft.includes(url.replaceAll("'", "&#x27;") + " :Tae:"));
+});
 
 const threadSource = readFileSync(
   new URL("../src/components/comments/CommentThread.tsx", import.meta.url),

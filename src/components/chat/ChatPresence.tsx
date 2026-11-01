@@ -14,11 +14,11 @@ import { cn } from "@/lib/utils";
 export function ChatPresenceIndicator({ online, size = "sm" }: { online: boolean | null; size?: "sm" | "md" }) {
   const t = useTranslations("chat");
   if (online === null) return null;
-  // Align the colored dot with the avatar's outer ring, accounting for both 2px borders.
+  // Align the status mark with the avatar's outer ring, accounting for both 2px borders.
   return <span role="img" title={t(online ? "online" : "offline")} aria-label={t(online ? "online" : "offline")}
     className={cn("absolute -bottom-1 -right-1 rounded-full border-2 border-[var(--theme-color-panel-background)]",
       size === "md" ? "size-3.5" : "size-3",
-      online ? "bg-[var(--theme-color-semantic-success-foreground)]" : "bg-[var(--theme-color-text-muted)]")} />;
+      online ? "bg-[var(--theme-color-semantic-success-foreground)]" : "bg-[var(--theme-color-panel-background)] shadow-[inset_0_0_0_2px_var(--theme-color-text-muted)]")} />;
 }
 
 export function ChatPresence({ users, failed, onRefresh }: { users: ChatMentionUser[] | null; failed: boolean; onRefresh(): void }) {

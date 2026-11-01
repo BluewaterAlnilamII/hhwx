@@ -6,6 +6,7 @@ import { COMMENT_EMOJI_NAME_SET } from "@/lib/comments/emoji";
 
 export const COMMENT_PAGE_SIZE = 10;
 export const COMMENT_PREVIEW_REPLY_LIMIT = 3;
+export const COMMENT_REACTION_PARTICIPANT_LIMIT = 8;
 export const COMMENT_REACTION_PARTICIPANT_PAGE_SIZE = 50;
 export const MAX_COMMENT_LENGTH = 1_000;
 export const COMMENT_LENGTH_WARNING_THRESHOLD = 920;
