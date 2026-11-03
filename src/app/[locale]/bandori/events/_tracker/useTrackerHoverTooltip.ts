@@ -28,7 +28,6 @@ export type ActiveChartMarker = {
 type UseTrackerHoverTooltipArgs = {
   buildHoverTooltip: (state: TrackerMouseState) => HoverTooltipState | null;
   chartViewportRef: RefObject<HTMLDivElement | null>;
-  isChartRendered: boolean;
   onHoverFrame: (state: TrackerMouseState | null) => void;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
   tooltipRef: RefObject<HTMLDivElement | null>;
@@ -126,7 +125,6 @@ export function buildActiveChartMarkers(hoverTooltip: HoverTooltipState | null):
 export function useTrackerHoverTooltip({
   buildHoverTooltip,
   chartViewportRef,
-  isChartRendered,
   onHoverFrame,
   scrollContainerRef,
   tooltipRef,
@@ -195,8 +193,6 @@ export function useTrackerHoverTooltip({
   }, [updateTooltipPosition]);
 
   useLayoutEffect(() => {
-    // The chart DOM mounts only after data arrives, so isChartRendered must retrigger observer setup.
-    // Without it, the first empty render leaves every cached dimension at zero and pins the tooltip at the origin.
     const container = chartViewportRef.current;
     const viewport = scrollContainerRef.current;
     const tooltip = tooltipRef.current;
@@ -225,7 +221,7 @@ export function useTrackerHoverTooltip({
     observer.observe(viewport);
     observer.observe(tooltip);
     return () => observer.disconnect();
-  }, [chartViewportRef, isChartRendered, scheduleTooltipPositionUpdate, scrollContainerRef, tooltipRef]);
+  }, [chartViewportRef, scheduleTooltipPositionUpdate, scrollContainerRef, tooltipRef]);
 
   const flushTooltipPositionUpdate = useCallback(() => {
     if (tooltipAnimationFrameRef.current !== null) {

@@ -1,5 +1,47 @@
 # Historical design and QA records
 
+## Event planner release audit, 2026-11-03
+
+final result: passed
+
+The current planner includes the later-approved time limit: it calculates the maximum score within the remaining event time, ignoring flame supply while retaining CP acquisition and the selected consumption tiers. Earlier entries below describe the behavior at their recorded checkpoints.
+
+The release audit corrected exact-duration rounding by calculating song slots in integer milliseconds, restored mobile chart sizing when returning from event information, and added the planner and empty-chart regressions to the existing tracker CI command. The tracker suite passes all 112 tests. Typecheck, ESLint, locale parity and diff checks pass; the production Webpack build passes. Browser checks covered desktop and 390 x 700 mobile navigation with retained planner inputs and a fully visible chart. Physical phones, Safari and Firefox were not tested.
+
+## Tracker empty-chart background, 2026-11-03
+
+final result: passed
+
+The shared tracker canvas now stays mounted without score records. A finite empty Y domain supplies the horizontal grid, while only the zero label is shown until score or planning content exists. Event dates and nonworking-day bands retain their existing sources. The existing centered empty-state icon and text overlay the background without intercepting pointer input. No synthetic score records, new copy, dependencies, or API changes were introduced.
+
+Browser verification on CN events 328 and 327 covered an empty future event, planning input and clearing, adding a historical comparison and removing the last comparison, switching to TOP10 and back, and returning to a real score line. Empty charts had six horizontal grid lines, seven date dividers, two weekend bands and no score paths. Comparison tooltips appeared after loading and cleared when the last line was removed. A resize-observer dependency fix keeps the fixed Y axis aligned after switching chart modes and viewport sizes.
+
+Desktop and 390 x 844 mobile views preserve the existing empty-state styling. The mobile sheet leaves the full chart visible; no horizontal overflow was observed. Evidence: `C:/Users/bluew/.codex/visualizations/2026/11/02/01a19a77-c9e5-7572-8bca-619183de0a11/tracker-empty-grid-desktop.png` and `tracker-empty-grid-mobile.png` in the same directory.
+
+Validation: 23 focused tests passed, including the new empty-domain regression; TypeScript, scoped ESLint and the production Webpack build passed. A development hot-reload warning cleared after reload; transient Recharts zero-size warnings were observed during initial layout, with stable rendering verified afterward. Physical phones and Safari/Firefox were not tested. Unknown-date fallback was inspected in source, not forced through a browser fixture.
+
+## Event PT calculator, 2026-11-02
+
+final result: passed
+
+Scope: the selected side-by-side calculator direction, updated by the user's subsequent field, output and calculation decisions. Desktop docks a 360 px panel next to the ranking chart; mobile uses a nonmodal bottom sheet with an explicit expand/collapse control. The chart is 360 px high on wider screens and 270 px on phones. Mobile rank selection uses the same options in a native select. Existing theme tokens, Lucide icons and Radix Dialog are reused; no dependency, API or database changes.
+
+Reference: the selected `exec-30199b19-cd12-41a3-9262-b324cbabbbc5.png` and revised `exec-e548a3f4-8fe7-47aa-98ea-31f482909eed.png` in this chat's generated-image folder, with later user decisions taking precedence over the mocks. The implementation removes mock helper copy, efficiency and combined refill fields; adds separate boost/drink stocks; and prioritizes target cost/remaining resources over maximum-PT comparison cards. Obsolete mock results and automatic tail-tier reduction are not carried forward.
+
+Verified flow in the local in-app browser:
+
+1. Open the calculator on CN event 327: event metadata and recovery load automatically, CP fields stay hidden, and the calculation timestamp freezes. Updating time is an icon action.
+2. Switch to verified challenge event 325: personal state does not leak across events, both CP selectors include 1600, and inventory immediately shows its equivalent boosts.
+3. With 200,000 PT, 3,400 CP, 9,000 PT per 3 boosts, 48,000 PT per 1600 CP and 96 boosts available, the 1,000,000 target requires 32 normal plus 11 challenge lives, uses 96 boosts, and leaves 200 CP. Reducing inventory to 86 boosts shows a shortage of 10. A 270,000 target uses two challenge lives and no boosts. Removing the target with 86 boosts gives 932,000 PT from 28 normal plus 10 challenge lives.
+4. Inputs update the personal chart overlay and target line independently of ranking history. TOP10 retains the calculator and its overlay. Close/reopen retains the draft; close returns focus to the trigger. Blank required input clears stale results.
+5. Desktop 1440 x 1000 and phone 390 x 844 were inspected, including mobile expansion, internal scrolling, pinned results, English copy, dark theme and horizontal-overflow checks. The desktop panel height was corrected after visual verification so results remain within the viewport. Phone sheet bottom and footer were measured at 844 px and 843 px respectively.
+
+Evidence directory: `C:/Users/bluew/.codex/visualizations/2026/11/02/01a19a77-c9e5-7572-8bca-619183de0a11/`; screenshots: `pt-calculator-desktop.png`, `pt-calculator-mobile.png`, `pt-calculator-mobile-dark.png`, `pt-calculator-mobile-en.png`. Screenshots contain test inputs, not the user's game inventory. Historical challenge-event verification intentionally retains zero remaining time; time-feasibility behavior was explicitly deferred by the user.
+
+Validation: 21 focused tests pass, including 400 independent CP-first simulations, all supported tiers, per-live floor(PT / 20), fixed-tier leftovers, target overshoots, draft validation and large goals. Typecheck, ESLint, locale parity and diff checks pass. The final production Webpack build passes. Default Turbopack builds failed on this machine while connecting to a PostCSS child process, in both sandboxed and ordinary local runs; project build configuration was not changed.
+
+Limits: physical phone keyboards, Safari and Firefox were not tested. Transient Recharts zero-size warnings were observed while navigating events; stable chart dimensions and overlays were checked and no page errors were recorded. No deployment was performed. Resource estimates intentionally do not reject plans based on insufficient remaining play time.
+
 ## Chat message feedback, 2026-10-28
 
 final result: passed

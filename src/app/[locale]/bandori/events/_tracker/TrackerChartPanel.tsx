@@ -16,6 +16,7 @@ import {
   Line,
   LineChart,
   ReferenceArea,
+  ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
   XAxis,
@@ -47,6 +48,8 @@ import {
 } from "./useTrackerHoverTooltip";
 import type { ComparisonLine, TrackerMouseState, TrackingMode } from "./types";
 import type { NonWorkingDayBand } from "./tracker-model";
+import type { EventPtProjection } from "./event-pt-calculator";
+import { generateYTicks } from "./useChartData";
 
 const FIXED_Y_AXIS_WIDTH = 38;
 const CHART_MARGIN = { top: 20, right: 5, left: 0, bottom: 20 } as const;
@@ -124,6 +127,8 @@ export type TrackerChartLineSeries = {
 };
 
 export type TrackerChartPanelProps = {
+  chartAnchorRef: RefObject<HTMLDivElement | null>;
+  calculatorProjection?: EventPtProjection;
   bestdoriPredictionPointCount: number;
   buildHoverTooltip: (state: TrackerMouseState) => HoverTooltipState | null;
   chartContainerKey: string;
@@ -160,6 +165,7 @@ export type TrackerChartPanelProps = {
 type TrackerChartCanvasProps = Pick<
   TrackerChartPanelProps,
   | "bestdoriPredictionPointCount"
+  | "calculatorProjection"
   | "chartContainerKey"
   | "comparisonLines"
   | "displayedChartData"
@@ -177,6 +183,7 @@ type TrackerChartCanvasProps = Pick<
 >;
 
 const TrackerChartCanvas = memo(function TrackerChartCanvas({
+  calculatorProjection,
   bestdoriPredictionPointCount,
   chartContainerKey,
   comparisonLines,
@@ -194,11 +201,15 @@ const TrackerChartCanvas = memo(function TrackerChartCanvas({
   yTicks,
 }: TrackerChartCanvasProps) {
   const locale = useLocale();
+  const calculatorT = useTranslations("bandori.events.calculator");
+  const compactNumber = new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: 1 });
   const dateFormatter = useMemo(() => new Intl.DateTimeFormat(locale, {
     timeZone: getBandoriServerTimeZone(server),
     month: "2-digit",
     day: "2-digit",
   }), [locale, server]);
+  const hasTimeDomain = typeof domainStart === "number" && typeof domainEnd === "number" && domainEnd > domainStart;
+  const hasTimeValues = hasTimeDomain || displayedChartData.length > 0;
 
   return (
     <ResponsiveContainer key={chartContainerKey} width="100%" height="100%">
@@ -224,6 +235,7 @@ const TrackerChartCanvas = memo(function TrackerChartCanvas({
           ticks={yTicks}
           type="number"
           domain={yDomainInfo}
+          allowDataOverflow={displayedChartData.length === 0}
         />
 
         <CartesianGrid vertical={false} stroke="var(--theme-color-border-subtle)" opacity={0.55} />
@@ -234,11 +246,13 @@ const TrackerChartCanvas = memo(function TrackerChartCanvas({
 
         <XAxis
           dataKey="time"
-          domain={[domainStart, domainEnd]}
+          domain={hasTimeValues ? [domainStart, domainEnd] : [0, 1]}
           type="number"
+          allowDataOverflow={displayedChartData.length === 0}
           ticks={midnights}
           height={X_AXIS_HEIGHT}
           tickFormatter={(unixTime) => dateFormatter.format(unixTime)}
+          tick={hasTimeValues}
           stroke="var(--theme-color-text-muted)"
           fontSize={12}
           tickLine={false}
@@ -340,12 +354,30 @@ const TrackerChartCanvas = memo(function TrackerChartCanvas({
             />
           ))
         )}
+        {calculatorProjection ? <>
+          <ReferenceLine x={calculatorProjection.baselineAt} stroke="var(--theme-color-action-secondary-foreground)" strokeDasharray="3 4" />
+          {calculatorProjection.targetPt !== null ? <ReferenceLine y={calculatorProjection.targetPt}
+            stroke="var(--theme-color-text-muted)" strokeDasharray="6 4"
+            label={{ value: `${calculatorT("targetLine")} ${compactNumber.format(calculatorProjection.targetPt)}`, position: "insideTopLeft", dy: -18, fill: "var(--theme-color-text-muted)", fontSize: 11 }} /> : null}
+          {calculatorProjection.limitPt !== null ? <ReferenceLine y={calculatorProjection.limitPt}
+            stroke="var(--theme-color-semantic-danger-foreground)" strokeDasharray="6 4"
+            label={{ value: `${calculatorT("limitLine")} ${compactNumber.format(calculatorProjection.limitPt)}`, position: "insideTopLeft", fill: "var(--theme-color-semantic-danger-foreground)", fontSize: 11 }} /> : null}
+          <ReferenceLine segment={[{ x: calculatorProjection.baselineAt, y: calculatorProjection.currentPt }, { x: calculatorProjection.endAt, y: calculatorProjection.finalPt }]}
+            stroke="var(--theme-color-semantic-success-foreground)" strokeWidth={2} strokeDasharray="4 4" />
+          <ReferenceDot x={calculatorProjection.baselineAt} y={calculatorProjection.currentPt} r={5}
+            fill="var(--theme-color-semantic-success-foreground)" stroke="var(--theme-color-chart-background)" />
+          <ReferenceDot x={calculatorProjection.endAt} y={calculatorProjection.finalPt} r={5}
+            fill="var(--theme-color-semantic-success-foreground)" stroke="var(--theme-color-chart-background)"
+            label={{ value: `${calculatorT("reachablePoint")} ${compactNumber.format(calculatorProjection.finalPt)}`, position: "insideTopRight", dx: -8, dy: -12, fill: "var(--theme-color-semantic-success-foreground)", fontSize: 11 }} />
+        </> : null}
       </LineChart>
     </ResponsiveContainer>
   );
 });
 
 export const TrackerChartPanel = memo(function TrackerChartPanel({
+  chartAnchorRef,
+  calculatorProjection,
   bestdoriPredictionPointCount,
   buildHoverTooltip,
   chartContainerKey,
@@ -371,21 +403,30 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
   tooltipRef,
   trackingMode,
   renderTooltip,
-  yDomainInfo,
-  yTicks,
+  yDomainInfo: providedYDomain,
+  yTicks: providedYTicks,
   zoomEnabled = true,
   zoomIndex,
   zoomWidthMultiplier,
   maxZoomIndex,
 }: TrackerChartPanelProps) {
   const t = useTranslations("bandori.events.tracker.chart");
+  const hasScoreData = hasRenderableChartData && displayedChartData.length > 0;
+  const hasChartContent = hasScoreData || !!calculatorProjection;
+  const { domain: yDomainInfo, ticks: yTicks } = useMemo(() => calculatorProjection
+    ? generateYTicks([{ time: 0, ep: Math.max(
+      hasScoreData && typeof providedYDomain[1] === "number" ? providedYDomain[1] : 0,
+      calculatorProjection.currentPt, calculatorProjection.finalPt, calculatorProjection.targetPt ?? 0, calculatorProjection.limitPt ?? 0,
+    ) }])
+    : hasScoreData ? { domain: providedYDomain, ticks: providedYTicks } : generateYTicks([]),
+  [calculatorProjection, hasScoreData, providedYDomain, providedYTicks]);
   const effectiveZoomWidthMultiplier = zoomEnabled ? zoomWidthMultiplier : 1;
   const chartTimes = useMemo(
-    () => displayedChartData
+    () => (hasScoreData ? displayedChartData : [])
       .map((point) => point.time)
       .filter((time): time is number => Number.isFinite(time))
       .sort((left, right) => left - right),
-    [displayedChartData],
+    [displayedChartData, hasScoreData],
   );
   const activeMarkerIndex = useMemo(() => {
     const index = new Map<number, ActiveChartMarker[]>();
@@ -431,7 +472,6 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
   } = useTrackerHoverTooltip({
     buildHoverTooltip,
     chartViewportRef,
-    isChartRendered: hasRenderableChartData && displayedChartData.length > 0,
     onHoverFrame: handleHoverFrame,
     scrollContainerRef,
     tooltipRef,
@@ -484,6 +524,9 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
     activePointerRef.current = null;
     clearHoverTooltip();
   }, [clearHoverTooltip]);
+  useLayoutEffect(() => {
+    if (!hasScoreData) clearActiveHover();
+  }, [clearActiveHover, hasScoreData]);
   const handleChartMouseMove = useCallback((event: MouseEvent<HTMLDivElement>) => {
     let { height: chartHeight, width: chartWidth } = chartPointerSizeRef.current;
     if (chartWidth <= 0 || chartHeight <= 0) {
@@ -537,11 +580,10 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
   }, [scheduleTooltipPositionUpdate, scheduleTooltipPositionUpdateRef]);
 
   return (
-    <div className="h-[400px] w-full relative group rounded-xl bg-[var(--theme-color-chart-background)]">
-      {hasRenderableChartData && displayedChartData.length > 0 ? (
+    <div ref={chartAnchorRef} data-testid="tracker-chart" className="h-[270px] max-h-[270px] sm:h-[360px] sm:max-h-[360px] motion-safe:transition-[max-height] motion-safe:duration-240 motion-safe:ease-out w-full relative group rounded-xl bg-[var(--theme-color-chart-background)]">
         <div className="flex h-full w-full overflow-hidden rounded-xl">
           <FixedYAxis
-            ticks={yTicks}
+            ticks={hasChartContent ? yTicks : [0]}
             domain={yDomainInfo}
             chartHeight={chartViewportHeight}
             axisWidth={FIXED_Y_AXIS_WIDTH}
@@ -557,10 +599,11 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
             <div style={{ minWidth: `${effectiveZoomWidthMultiplier * 100}%`, height: "100%", transition: "min-width 0.3s ease-out" }}>
               <div ref={chartViewportRef} className="relative h-full overflow-hidden">
                 <TrackerChartCanvas
+                  calculatorProjection={calculatorProjection}
                   bestdoriPredictionPointCount={bestdoriPredictionPointCount}
                   chartContainerKey={chartContainerKey}
                   comparisonLines={comparisonLines}
-                  displayedChartData={displayedChartData}
+                  displayedChartData={hasScoreData ? displayedChartData : []}
                   domainEnd={domainEnd}
                   domainStart={domainStart}
                   lineSeries={lineSeries}
@@ -626,18 +669,14 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
             </div>
           </div>
         </div>
-      ) : (
-        <div className="h-full flex flex-col items-center justify-center text-[var(--theme-color-text-muted)] opacity-70">
-          {isLoading ? null : (
-            <>
+      {!hasChartContent && !isLoading ? (
+        <div data-testid="tracker-chart-empty" className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center text-[var(--theme-color-text-muted)] opacity-70">
               <svg className="w-16 h-16 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
               <p>{t("noTierData")}</p>
-            </>
-          )}
         </div>
-      )}
+      ) : null}
 
       {zoomEnabled ? (
         <div className="absolute top-[70%] right-4 -translate-y-1/2 flex flex-col gap-2 z-20 transition-opacity opacity-80 hover:opacity-100">

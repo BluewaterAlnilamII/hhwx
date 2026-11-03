@@ -2,10 +2,11 @@
 
 import LoadingIndicator from "@/components/LoadingIndicator";
 
-import { Suspense, startTransition, useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { Suspense, startTransition, useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import * as Tabs from "@radix-ui/react-tabs";
+import { Calculator } from "lucide-react";
 
 import { useRouter } from "@/i18n/navigation";
 import { useBandoriEventsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
@@ -75,6 +76,8 @@ import { mergeBestdoriPredictionData, useBestdoriPrediction } from "./_tracker/u
 import { buildTooltipSignature, type HoverTooltipState } from "./_tracker/useTrackerHoverTooltip";
 import { ComparisonControls } from "./_tracker/ComparisonControls";
 import { TrackerChartPanel } from "./_tracker/TrackerChartPanel";
+import { CALCULATOR_COLLAPSED_RATIO, CALCULATOR_DESKTOP_QUERY, EventPtCalculator } from "./_tracker/EventPtCalculator";
+import { calculateEventPt, DEFAULT_CALCULATOR_DRAFT, getCalculatorBaselineAt, getNaturalFlames, parseCalculatorDraft, type CalculatorDraft, type EventPtProjection } from "./_tracker/event-pt-calculator";
 import { TrackerModeTierControls } from "./_tracker/TrackerModeTierControls";
 import { TrackerStatusSummary } from "./_tracker/TrackerStatusSummary";
 import { Top10Panel } from "./_tracker/Top10Panel";
@@ -181,7 +184,7 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
   );
 
   return (
-    <div className="hhwx-panel border p-6">
+    <div className="hhwx-panel border p-3 sm:p-5">
       <div className="mb-2 flex items-start justify-between gap-3 text-sm font-semibold">
         <span className="shrink-0 whitespace-nowrap font-bold text-[var(--theme-color-progress-foreground)]">{t("title")}</span>
         <span className="min-w-0 flex flex-col items-end gap-0.5 text-right leading-tight">
@@ -233,6 +236,7 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
   const commonT = useTranslations("bandori.events.common");
   const sharedT = useTranslations("common");
   const viewT = useTranslations("bandori.events.view");
+  const calculatorT = useTranslations("bandori.events.calculator");
   const router = useRouter();
   const preferredServer = useBandoriPreferredServer();
   const hasHydratedPreferredServer = useBandoriPreferencesStore((state) => state.hydrated);
@@ -254,12 +258,16 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
   const pendingRecommendedEventHrefRef = useRef<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const chartViewportRef = useRef<HTMLDivElement>(null);
+  const chartAnchorRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const scheduleTooltipPositionUpdateRef = useRef<() => void>(() => {});
   const isUserScrollingRef = useRef(false);
   const isProgrammaticScrollRef = useRef(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [chartViewportHeight, setChartViewportHeight] = useState(400);
+  const calculatorTriggerRef = useRef<HTMLButtonElement>(null);
+  const calculatorAreaRef = useRef<HTMLDivElement>(null);
+  const [calculator, setCalculator] = useState<{ key: string; open: boolean; autoOpened: boolean; baselineAt: number; draft: CalculatorDraft } | null>(null);
   const [hasAppliedInitialUrlState, setHasAppliedInitialUrlState] = useState(false);
   const [routeUrlStateKey, setRouteUrlStateKey] = useState<string | null>(null);
   const monthlyRankingOptions = useMemo(
@@ -303,6 +311,73 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
     selectedServer,
     hasAppliedInitialUrlState && activeView === "tracker" && !isTop10Selected,
   );
+
+  const calculatorKey = `${selectedServer}:${resolvedCurrentEventId}`;
+  useEffect(() => {
+    if (!hasAppliedInitialUrlState || activeView !== "tracker" || trackingMode !== "event"
+      || !eventMeta || startDate === null || endDate === null || calculator?.key === calculatorKey
+      || !window.matchMedia(CALCULATOR_DESKTOP_QUERY).matches) return;
+    const frame = requestAnimationFrame(() => setCalculator(previous => previous?.key === calculatorKey ? previous : {
+      key: calculatorKey, open: true, autoOpened: true, baselineAt: Date.now(), draft: { ...DEFAULT_CALCULATOR_DRAFT },
+    }));
+    return () => cancelAnimationFrame(frame);
+  }, [hasAppliedInitialUrlState, activeView, trackingMode, eventMeta, startDate, endDate, calculator?.key, calculatorKey]);
+  const calculatorOpen = calculator?.key === calculatorKey && calculator.open && trackingMode === "event" && activeView === "tracker";
+  const calculatorInput = useMemo(() => calculator?.key === calculatorKey
+    ? parseCalculatorDraft(calculator.draft, eventMeta?.eventType === "challenge") : null,
+  [calculatorKey, calculator, eventMeta?.eventType]);
+  const calculatorBaselineAt = calculator && startDate !== null && endDate !== null
+    ? getCalculatorBaselineAt(startDate, endDate, calculator.baselineAt) : null;
+  const naturalFlames = calculatorBaselineAt !== null && startDate !== null && endDate !== null
+    ? getNaturalFlames(startDate, endDate, calculatorBaselineAt) : 0;
+  const calculatorResult = useMemo(() => calculatorInput && calculatorBaselineAt !== null && endDate !== null
+    ? calculateEventPt(calculatorInput, naturalFlames, endDate - calculatorBaselineAt) : null,
+  [calculatorInput, naturalFlames, calculatorBaselineAt, endDate]);
+  const calculatorProjection = useMemo<EventPtProjection | undefined>(() => {
+    if (!calculatorOpen || calculatorBaselineAt === null || !calculatorInput || !calculatorResult || endDate === null) return undefined;
+    return {
+      baselineAt: calculatorBaselineAt, endAt: endDate,
+      currentPt: calculatorInput.currentPt, targetPt: calculatorInput.targetPt,
+      finalPt: calculatorResult.budget.finalPt,
+      limitPt: calculatorResult.timeExceeded ? calculatorResult.limitPt : null,
+    };
+  }, [calculatorOpen, calculatorBaselineAt, calculatorInput, calculatorResult, endDate]);
+  const openCalculator = () => {
+    setCalculator(previous => previous?.key === calculatorKey
+      ? { ...previous, open: !previous.open, autoOpened: false }
+      : { key: calculatorKey, open: true, autoOpened: false, baselineAt: Date.now(), draft: { ...DEFAULT_CALCULATOR_DRAFT } });
+  };
+  useLayoutEffect(() => {
+    if (!calculatorOpen) return;
+    const chart = chartAnchorRef.current;
+    if (!chart) return;
+    const desktop = window.matchMedia(CALCULATOR_DESKTOP_QUERY);
+    const chartTop = () => (document.querySelector("header")?.getBoundingClientRect().bottom ?? 0) + 8;
+    const resizeChart = () => {
+      // A software keyboard should resize the sheet, not the background chart.
+      if (document.activeElement?.matches("#event-pt-calculator input")) return;
+      chart.style.maxHeight = desktop.matches ? ""
+        : `${Math.max(1, window.innerHeight * (1 - CALCULATOR_COLLAPSED_RATIO) - chartTop() - 8)}px`;
+    };
+    resizeChart();
+    if (!calculator?.autoOpened) {
+      if (desktop.matches) {
+        calculatorAreaRef.current?.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+      } else {
+        window.scrollTo({
+          top: window.scrollY + chart.getBoundingClientRect().top - chartTop(),
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+        });
+      }
+    }
+    window.addEventListener("resize", resizeChart);
+    return () => {
+      window.removeEventListener("resize", resizeChart);
+      chart.style.removeProperty("max-height");
+    };
+  }, [calculatorOpen, calculator?.autoOpened, isTop10Selected]);
+  const updateCalculator = (field: keyof CalculatorDraft, value: string) => setCalculator(previous => previous
+    ? { ...previous, draft: { ...previous.draft, [field]: value } } : previous);
 
   // ===== 投影偏好持久化 =====
   const [showInstantProjection, setShowInstantProjection] = useProjectionPreference(INSTANT_PROJECTION_STORAGE_KEY, true);
@@ -1048,7 +1123,7 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
         scrollTimeoutRef.current = null;
       }
     };
-  }, [focusViewportNearLatestDataPoint, scheduleTooltipPositionUpdate, syncScrollbarMetrics]);
+  }, [activeView, isTop10Selected, trackingMode, focusViewportNearLatestDataPoint, scheduleTooltipPositionUpdate, syncScrollbarMetrics]);
 
   useEffect(() => {
     if (!isUserScrollingRef.current) {
@@ -1200,6 +1275,13 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
             className="w-full flex flex-col gap-3.5 sm:gap-4"
           >
             <TrackerModeTierControls
+              action={trackingMode === "event" && eventMeta && startDate !== null && endDate !== null ? (
+                <button ref={calculatorTriggerRef} type="button" onClick={openCalculator}
+                  className="hhwx-control flex h-9 w-9 items-center justify-center rounded-lg border outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]"
+                  aria-label={calculatorT("title")} title={calculatorT("title")} aria-expanded={calculatorOpen} aria-controls={calculatorOpen ? "event-pt-calculator" : undefined}>
+                  <Calculator size={19} aria-hidden />
+                </button>
+              ) : null}
               availableChallengeSongIds={availableChallengeSongIds}
               challengeSongGridClassName={challengeSongGridClassName}
               challengeSongTitleMap={challengeSongTitleMap}
@@ -1219,7 +1301,8 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
 
             {/* ========== 图表区域 ========== */}
             <Tabs.Content value={trackingMode} className="outline-hidden focus:outline-hidden w-full animate-in fade-in zoom-in-95 duration-500">
-              <div className="mt-3 relative rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-2 shadow-[var(--theme-shadow-surface-raised)] sm:p-4">
+              <div ref={calculatorAreaRef} data-calculator-open={calculatorOpen} data-calculator-motion={calculator ? !calculator.autoOpened : false} className="event-pt-calculator-layout grid scroll-mt-20 items-start gap-y-4">
+              <div className="relative min-w-0 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-2 shadow-[var(--theme-shadow-surface-raised)] sm:p-4">
 
                 {!isTop10Selected && loading && (
                   <LoadingIndicator label={commonT("loadingLatestData")} className="absolute inset-0 z-30 rounded-2xl bg-[color-mix(in_srgb,var(--theme-color-panel-background)_75%,transparent)]" />
@@ -1227,6 +1310,8 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
 
                 {isTop10Selected ? (
                   <Top10Panel
+                    chartAnchorRef={chartAnchorRef}
+                    calculatorProjection={calculatorProjection}
                     chartContainerKey={chartContainerKey}
                     chartViewportHeight={chartViewportHeight}
                     chartViewportRef={chartViewportRef}
@@ -1261,6 +1346,8 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
                 />
 
                 <TrackerChartPanel
+                  chartAnchorRef={chartAnchorRef}
+                  calculatorProjection={calculatorProjection}
                   bestdoriPredictionPointCount={bestdoriPrediction.predictionPoints.length}
                   buildHoverTooltip={buildHoverTooltip}
                   chartContainerKey={chartContainerKey}
@@ -1320,6 +1407,14 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
                 />
                   </>
                 )}
+              </div>
+              {calculator?.key === calculatorKey && trackingMode === "event" && eventMeta && calculatorBaselineAt !== null && endDate !== null ? <EventPtCalculator
+                key={calculatorKey} open={calculatorOpen} autoFocus={!calculator.autoOpened} draft={calculator.draft} baselineAt={calculatorBaselineAt} endAt={endDate}
+                eventType={eventMeta.eventType} server={selectedServer} naturalFlames={naturalFlames} result={calculatorResult}
+                triggerRef={calculatorTriggerRef} onChange={updateCalculator}
+                onClose={() => setCalculator(previous => previous ? { ...previous, open: false, autoOpened: false } : previous)}
+                onRefresh={() => setCalculator(previous => previous ? { ...previous, baselineAt: Date.now() } : previous)}
+              /> : null}
               </div>
             </Tabs.Content>
           </Tabs.Root>
