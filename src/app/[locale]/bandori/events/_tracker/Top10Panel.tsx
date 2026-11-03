@@ -30,6 +30,8 @@ import type { HoverTooltipState } from "./useTrackerHoverTooltip";
 import { useBandoriTop10Data } from "./useBandoriTop10Data";
 
 type Top10PanelProps = {
+  chartAnchorRef: TrackerChartPanelProps["chartAnchorRef"];
+  calculatorProjection?: TrackerChartPanelProps["calculatorProjection"];
   chartContainerKey: string;
   chartViewportHeight: number;
   chartViewportRef: RefObject<HTMLDivElement | null>;
@@ -59,6 +61,8 @@ const DISABLED_BESTDORI_PREDICTION = {
 };
 
 export function Top10Panel({
+  chartAnchorRef,
+  calculatorProjection,
   chartContainerKey,
   chartViewportHeight,
   chartViewportRef,
@@ -202,6 +206,8 @@ export function Top10Panel({
       )}
 
       <TrackerChartPanel
+        chartAnchorRef={chartAnchorRef}
+        calculatorProjection={calculatorProjection}
         bestdoriPredictionPointCount={0}
         buildHoverTooltip={buildHoverTooltip}
         chartContainerKey={`${chartContainerKey}-top10-${server}-${trackingMode}-${targetId}-${songId}`}

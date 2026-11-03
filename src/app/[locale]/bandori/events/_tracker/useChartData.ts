@@ -288,7 +288,7 @@ export function useFinalDisplayedData(
 
 /** 自定义 Y 轴刻度生成器，使用“友好刻度”算法自动计算更易读的刻度间距。 */
 export function generateYTicks(data: TrackerData[]): { ticks: number[] | undefined; domain: [number | string, number | string] } {
-  if (data.length === 0) return { ticks: undefined, domain: [0, "dataMax"] };
+  if (data.length === 0) return { ticks: [0, 20, 40, 60, 80, 100], domain: [0, 100] };
 
   const minEp = 0;
   let maxEp = minEp;

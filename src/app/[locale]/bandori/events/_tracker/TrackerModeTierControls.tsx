@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import * as Tabs from "@radix-ui/react-tabs";
 
@@ -8,6 +8,7 @@ import type { TrackingMode } from "./types";
 import type { MonthlyRankingOption } from "./useChartData";
 
 type TrackerModeTierControlsProps = {
+  action?: ReactNode;
   availableChallengeSongIds: number[];
   challengeSongGridClassName: string;
   challengeSongTitleMap: Record<string, string> | null | undefined;
@@ -28,6 +29,7 @@ type TrackerModeTierControlsProps = {
 const TRACKING_MODE_OPTIONS = ["event", "song", "monthly"] as const;
 
 export const TrackerModeTierControls = memo(function TrackerModeTierControls({
+  action,
   availableChallengeSongIds,
   challengeSongGridClassName,
   challengeSongTitleMap,
@@ -122,10 +124,17 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
         )}
 
         <div className="overflow-visible rounded-none border border-transparent bg-transparent px-2 pt-1 pb-2 shadow-none sm:px-2.5 sm:pt-1 sm:pb-2.5">
-          <div className="mb-2 px-1 text-xs font-bold tracking-[0.1em] text-[var(--theme-color-semantic-info-foreground)] sm:text-[13px]">
-            {t("selectRanking")}
+          <div className="mb-2 flex items-center justify-between gap-2 px-1 text-xs font-bold tracking-[0.1em] text-[var(--theme-color-semantic-info-foreground)] sm:text-[13px]">
+            <label htmlFor="tracker-mobile-ranking">{t("selectRanking")}</label>
+            {action}
           </div>
-          <div className="flex flex-wrap gap-1.5 sm:gap-2">
+          <select id="tracker-mobile-ranking" className="hhwx-control h-9 w-full rounded-lg border px-3 text-sm sm:hidden"
+            value={isTop10Selected ? "top10" : selectedTier}
+            onChange={event => event.target.value === "top10" ? onTop10Change() : onTierChange(Number(event.target.value))}>
+            <option value="top10">TOP10</option>
+            {tierOptions.map(tier => <option key={tier} value={tier}>T{tier}</option>)}
+          </select>
+          <div className="hidden flex-wrap gap-1.5 sm:flex sm:gap-2">
             {(
               <button
                 type="button"
