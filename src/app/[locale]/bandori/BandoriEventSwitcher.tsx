@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import * as Dialog from "@radix-ui/react-dialog";
 import { History, ImageOff, Search, X } from "lucide-react";
@@ -37,6 +37,8 @@ export type BandoriEventSwitcherEvent = {
 };
 
 type BandoriEventSwitcherProps = {
+  className?: string;
+  pickerClassName?: string;
   title: string;
   events: BandoriEventSwitcherEvent[];
   selectedEventId: string;
@@ -57,6 +59,8 @@ type BandoriEventSwitcherProps = {
 };
 
 export default function BandoriEventSwitcher({
+  className,
+  pickerClassName,
   title,
   events,
   selectedEventId,
@@ -76,6 +80,7 @@ export default function BandoriEventSwitcher({
   onServerChange,
 }: BandoriEventSwitcherProps) {
   const t = useTranslations("bandori.eventSwitcher");
+  const selectId = useId();
   const commonT = useTranslations("common");
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -102,19 +107,19 @@ export default function BandoriEventSwitcher({
   const showSkeleton = loading || (!allowNoEvent && events.length === 0);
 
   return (
-    <div className="hhwx-panel relative z-20 grid grid-cols-1 gap-6 border p-4 sm:p-8 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] xl:items-center xl:gap-10">
+    <div className={cn("hhwx-panel relative z-20 grid grid-cols-1 gap-6 border p-4 sm:p-8 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] xl:items-center xl:gap-10", className)}>
       <div className={cn(
         "flex min-w-0 flex-1 flex-col gap-4",
         server !== undefined && "sm:grid sm:grid-cols-[auto_minmax(280px,1fr)] sm:items-end sm:gap-x-4",
       )}>
         {server !== undefined && onServerChange ? (
           <div className="flex items-center justify-between gap-4 sm:col-start-1 sm:row-start-1 sm:block">
-            <div className="text-sm font-black text-[var(--theme-color-text-default)] sm:mb-2">服务器</div>
-            <div className="inline-grid grid-cols-4 overflow-hidden rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] shadow-xs">
+            <div className="event-switcher-label text-sm font-semibold text-[var(--theme-color-text-muted)] sm:mb-2">{t("serverLabel")}</div>
+            <div className="event-switcher-servers inline-grid grid-cols-4 overflow-hidden rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] shadow-xs">
               {BANDORI_SERVERS.map((option) => {
                 const active = option === server;
                 const serverCode = getBandoriServerCode(option).toUpperCase();
-                const accessibleLabel = `切换到 ${serverCode} 服务器`;
+                const accessibleLabel = t("switchServer", { server: serverCode });
                 return (
                   <button
                     key={option}
@@ -146,11 +151,13 @@ export default function BandoriEventSwitcher({
           </div>
         ) : null}
 
-        <div className={cn("min-h-13", server !== undefined && "sm:col-start-2 sm:row-start-1")}>
-          {server !== undefined ? <div className="mb-2 text-sm font-black text-[var(--theme-color-text-default)]">活动选择</div> : null}
+        <div className={cn("event-switcher-field min-h-13", server !== undefined && "sm:col-start-2 sm:row-start-1")}>
+          {server !== undefined ? <label htmlFor={selectId} className="event-switcher-label mb-2 block text-sm font-semibold text-[var(--theme-color-text-muted)]">{t("eventLabel")}</label> : null}
           {!showSkeleton ? (
-            <div className="grid w-full max-w-[492px] grid-cols-[minmax(0,1fr)_44px_44px] items-center gap-2">
+            <div className="event-switcher-selection grid w-full max-w-[492px] grid-cols-[minmax(0,1fr)_44px_44px] items-center gap-2">
               <select
+                id={selectId}
+                aria-label={t("eventLabel")}
                 className="min-w-0 cursor-pointer truncate rounded-xl border border-[var(--theme-color-control-border-accent)] bg-[var(--theme-color-control-background)] px-4 py-2.5 text-sm font-bold text-[var(--theme-color-text-default)] shadow-xs outline-hidden transition-colors focus:border-[var(--theme-color-focus-ring)] focus:ring-2 focus:ring-[var(--theme-color-focus-ring)]"
                 value={selectedEventId}
                 onChange={(event) => onSelectedEventIdChange(event.target.value)}
@@ -188,12 +195,12 @@ export default function BandoriEventSwitcher({
 
                 <Dialog.Portal>
                   <Dialog.Overlay className="fixed inset-0 z-100 bg-black/50 animate-in fade-in duration-200" />
-                  <Dialog.Content className="fixed left-1/2 top-1/2 z-101 flex max-h-[82vh] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-[var(--theme-color-floating-background)] shadow-[var(--theme-shadow-floating)] animate-in fade-in zoom-in-95 duration-200">
+                  <Dialog.Content className={cn("fixed left-1/2 top-1/2 z-101 flex max-h-[82vh] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-[var(--theme-color-floating-background)] shadow-[var(--theme-shadow-floating)]", pickerClassName)}>
                     <div className="flex items-center justify-between border-b border-[var(--theme-color-border-subtle)] p-5">
                       <Dialog.Title className="text-xl font-bold text-[var(--theme-color-text-default)]">{t("pickerTitle")}</Dialog.Title>
                       <Dialog.Description className="sr-only">{t("searchPlaceholder")}</Dialog.Description>
                       <Dialog.Close asChild>
-                        <button type="button" aria-label={t("closePicker")} className="rounded-full p-1 text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)]">
+                        <button type="button" aria-label={t("closePicker")} className="hhwx-control flex h-10 w-10 items-center justify-center rounded-lg border">
                           <X size={22} />
                         </button>
                       </Dialog.Close>
@@ -205,8 +212,9 @@ export default function BandoriEventSwitcher({
                         <input
                           autoFocus
                           type="text"
+                          aria-label={t("searchPlaceholder")}
                           placeholder={t("searchPlaceholder")}
-                          className="w-full rounded-sm border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-control-background)] px-10 py-1.5 text-sm font-medium text-[var(--theme-color-text-default)] shadow-xs outline-hidden focus:ring-2 focus:ring-[var(--theme-color-focus-ring)]"
+                          className="hhwx-control h-11 w-full rounded-lg border px-10 text-base font-normal"
                           value={searchQuery}
                           onChange={(event) => setSearchQuery(event.target.value)}
                         />
@@ -221,14 +229,10 @@ export default function BandoriEventSwitcher({
                           </button>
                         ) : null}
                       </div>
-                      <Dialog.Close asChild>
-                        <button type="button" aria-label={t("closePicker")} className="rounded-lg border border-[var(--theme-color-action-secondary-border)] px-4 py-2 font-bold text-[var(--theme-color-action-secondary-foreground)] hover:bg-[var(--theme-color-action-secondary-background-hover)]">
-                          <X size={18} />
-                        </button>
-                      </Dialog.Close>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto py-2">
+                    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-2">
+                      {filteredEvents.length === 0 ? <p role="status" className="px-6 py-8 text-center text-sm leading-6 text-[var(--theme-color-text-muted)]">{t("noSearchResults")}</p> : null}
                       {allowNoEvent ? (
                         <button
                           type="button"
@@ -247,7 +251,7 @@ export default function BandoriEventSwitcher({
                           onClick={() => handleSelect(String(event.id))}
                           aria-current={isCurrentEvent ? "true" : undefined}
                           className={cn(
-                            "group flex w-full items-center justify-between gap-3 px-6 py-3.5 text-left transition-colors",
+                            "event-picker-item group flex w-full items-center justify-between gap-3 px-6 py-3.5 text-left transition-colors",
                             isCurrentEvent
                               ? "bg-[var(--theme-color-menu-item-background-current)]"
                               : "hover:bg-[var(--theme-color-control-background-hover)]",
@@ -282,7 +286,7 @@ export default function BandoriEventSwitcher({
               </Dialog.Root>
             </div>
           ) : (
-            <div className="grid w-full max-w-[492px] grid-cols-[minmax(0,1fr)_44px_44px] items-center gap-2" aria-hidden="true">
+            <div className="event-switcher-selection grid w-full max-w-[492px] grid-cols-[minmax(0,1fr)_44px_44px] items-center gap-2" aria-hidden="true">
               <div className="h-11 motion-safe:animate-pulse rounded-xl bg-[var(--theme-color-control-background-muted)]" />
               <div className="h-11 w-11 motion-safe:animate-pulse rounded-xl bg-[var(--theme-color-control-background-pressed)]" />
               <div className="h-11 w-11 motion-safe:animate-pulse rounded-xl bg-[var(--theme-color-control-background-muted)]" />

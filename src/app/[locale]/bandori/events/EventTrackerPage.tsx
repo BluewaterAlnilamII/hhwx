@@ -2,7 +2,7 @@
 
 import LoadingIndicator from "@/components/LoadingIndicator";
 
-import { Suspense, startTransition, useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
+import { Suspense, useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import * as Tabs from "@radix-ui/react-tabs";
@@ -24,7 +24,6 @@ import {
   useBandoriPreferredServer,
   useBandoriPreferencesStore,
 } from "@/store/useBandoriPreferencesStore";
-import { cn } from "@/lib/utils";
 import {
   buildBandoriPublicAssetUrl,
   lookupBandoriEventBanner,
@@ -83,6 +82,9 @@ import { TrackerStatusSummary } from "./_tracker/TrackerStatusSummary";
 import { Top10Panel } from "./_tracker/Top10Panel";
 import BandoriPageShell from "../BandoriPageShell";
 import BandoriEventSwitcher from "../BandoriEventSwitcher";
+import { useEventKeyboardViewport } from "./useEventKeyboardViewport";
+import { EventViewTabs } from "./EventViewTabs";
+import "./events.css";
 import EventComments from "./EventComments";
 import EventDocumentTitle from "./EventDocumentTitle";
 import EventInfoPanel from "./_info/EventInfoPanel";
@@ -111,7 +113,6 @@ import {
   resolveMainTrackerRanking,
   resolveMainTrackerTier,
   resolveTrackingModeForEventType,
-  ZOOM_WIDTH_MULTIPLIERS,
   type ComparisonTargetOption,
 } from "./_tracker/tracker-model";
 
@@ -184,7 +185,7 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
   );
 
   return (
-    <div className="hhwx-panel border p-3 sm:p-5">
+    <div className="event-progress border-b border-[var(--theme-color-border-subtle)] pb-4">
       <div className="mb-2 flex items-start justify-between gap-3 text-sm font-semibold">
         <span className="shrink-0 whitespace-nowrap font-bold text-[var(--theme-color-progress-foreground)]">{t("title")}</span>
         <span className="min-w-0 flex flex-col items-end gap-0.5 text-right leading-tight">
@@ -192,9 +193,9 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
           <span className="inline-flex justify-end">{subSummaryContent}</span>
         </span>
       </div>
-      <div className="h-3 w-full overflow-hidden rounded-full bg-[var(--theme-color-progress-track-background)]">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--theme-color-progress-track-background)]">
         <div
-          className="h-full rounded-full bg-[var(--theme-color-progress-indicator-background)] transition-all duration-1000 ease-out"
+          className="h-full rounded-full bg-[var(--theme-color-progress-indicator-background)] motion-safe:transition-[width] motion-safe:duration-500"
           style={{ width: `${progress}%` }}
         />
       </div>
@@ -232,10 +233,10 @@ function EventTrackerRouteStateSync({
 }
 
 function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
+  useEventKeyboardViewport();
   const locale = useLocale();
   const commonT = useTranslations("bandori.events.common");
   const sharedT = useTranslations("common");
-  const viewT = useTranslations("bandori.events.view");
   const calculatorT = useTranslations("bandori.events.calculator");
   const router = useRouter();
   const preferredServer = useBandoriPreferredServer();
@@ -251,8 +252,9 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
   );
   const [selectedServer, setSelectedServer] = useState<BandoriServer>(DEFAULT_BANDORI_PREFERRED_SERVER);
   const [activeView, setActiveView] = useState<EventTrackerView>("tracker");
+  const [previewView, setPreviewView] = useState<EventTrackerView | null>(null);
+  const trackerVisible = activeView === "tracker" || previewView === "tracker";
   const [chartRenderRevision, setChartRenderRevision] = useState(0);
-  const [zoomIndex, setZoomIndex] = useState(0);
   const appliedRouteUrlStateKeyRef = useRef<string | null>(null);
   const appliedSelectedServerRef = useRef<BandoriServer | null>(null);
   const pendingRecommendedEventHrefRef = useRef<string | null>(null);
@@ -261,12 +263,8 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
   const chartAnchorRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const scheduleTooltipPositionUpdateRef = useRef<() => void>(() => {});
-  const isUserScrollingRef = useRef(false);
-  const isProgrammaticScrollRef = useRef(false);
-  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [chartViewportHeight, setChartViewportHeight] = useState(400);
   const calculatorTriggerRef = useRef<HTMLButtonElement>(null);
-  const calculatorAreaRef = useRef<HTMLDivElement>(null);
   const [calculator, setCalculator] = useState<{ key: string; open: boolean; autoOpened: boolean; baselineAt: number; draft: CalculatorDraft } | null>(null);
   const [hasAppliedInitialUrlState, setHasAppliedInitialUrlState] = useState(false);
   const [routeUrlStateKey, setRouteUrlStateKey] = useState<string | null>(null);
@@ -309,7 +307,7 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
     selectedSongId,
     selectedMonthlyMonthId,
     selectedServer,
-    hasAppliedInitialUrlState && activeView === "tracker" && !isTop10Selected,
+    hasAppliedInitialUrlState && trackerVisible && !isTop10Selected,
   );
 
   const calculatorKey = `${selectedServer}:${resolvedCurrentEventId}`;
@@ -322,7 +320,7 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
     }));
     return () => cancelAnimationFrame(frame);
   }, [hasAppliedInitialUrlState, activeView, trackingMode, eventMeta, startDate, endDate, calculator?.key, calculatorKey]);
-  const calculatorOpen = calculator?.key === calculatorKey && calculator.open && trackingMode === "event" && activeView === "tracker";
+  const calculatorOpen = calculator?.key === calculatorKey && calculator.open && trackingMode === "event";
   const calculatorInput = useMemo(() => calculator?.key === calculatorKey
     ? parseCalculatorDraft(calculator.draft, eventMeta?.eventType === "challenge") : null,
   [calculatorKey, calculator, eventMeta?.eventType]);
@@ -346,36 +344,34 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
     setCalculator(previous => previous?.key === calculatorKey
       ? { ...previous, open: !previous.open, autoOpened: false }
       : { key: calculatorKey, open: true, autoOpened: false, baselineAt: Date.now(), draft: { ...DEFAULT_CALCULATOR_DRAFT } });
+    const chart = chartAnchorRef.current;
+    if (!calculatorOpen && chart && !window.matchMedia(CALCULATOR_DESKTOP_QUERY).matches) {
+      const headerBottom = document.querySelector("header")?.getBoundingClientRect().bottom ?? 0;
+      window.scrollTo({
+        top: window.scrollY + chart.getBoundingClientRect().top - headerBottom - 8,
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+      });
+    }
   };
   useLayoutEffect(() => {
-    if (!calculatorOpen) return;
+    if (!calculatorOpen || !trackerVisible) return;
     const chart = chartAnchorRef.current;
     if (!chart) return;
     const desktop = window.matchMedia(CALCULATOR_DESKTOP_QUERY);
     const chartTop = () => (document.querySelector("header")?.getBoundingClientRect().bottom ?? 0) + 8;
     const resizeChart = () => {
       // A software keyboard should resize the sheet, not the background chart.
-      if (document.activeElement?.matches("#event-pt-calculator input")) return;
+      if (document.documentElement.hasAttribute("data-event-keyboard") || document.activeElement?.matches("#event-pt-calculator input")) return;
       chart.style.maxHeight = desktop.matches ? ""
         : `${Math.max(1, window.innerHeight * (1 - CALCULATOR_COLLAPSED_RATIO) - chartTop() - 8)}px`;
     };
     resizeChart();
-    if (!calculator?.autoOpened) {
-      if (desktop.matches) {
-        calculatorAreaRef.current?.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
-      } else {
-        window.scrollTo({
-          top: window.scrollY + chart.getBoundingClientRect().top - chartTop(),
-          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
-        });
-      }
-    }
     window.addEventListener("resize", resizeChart);
     return () => {
       window.removeEventListener("resize", resizeChart);
       chart.style.removeProperty("max-height");
     };
-  }, [calculatorOpen, calculator?.autoOpened, isTop10Selected]);
+  }, [calculatorOpen, trackerVisible, isTop10Selected]);
   const updateCalculator = (field: keyof CalculatorDraft, value: string) => setCalculator(previous => previous
     ? { ...previous, draft: { ...previous.draft, [field]: value } } : previous);
 
@@ -417,7 +413,6 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
       preferredRanking,
     );
 
-    setZoomIndex(0);
     router.push(
       buildEventTrackerHref(buildBandoriEventsPath(nextEventId), {
         trackingMode: nextTrackingMode,
@@ -450,7 +445,6 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
     setSelectedRanking(nextRanking);
     setSelectedServer(server);
     appliedSelectedServerRef.current = server;
-    setZoomIndex(0);
     replaceEventTrackerUrlQuery({
       server,
       tier: nextRanking,
@@ -487,7 +481,6 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
 
     setTrackingMode(nextMode);
     setSelectedRanking(nextRanking);
-    setZoomIndex(0);
     replaceEventTrackerUrlQuery({
       trackingMode: nextMode,
       tier: nextRanking,
@@ -523,13 +516,11 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
 
     setSelectedRanking(TOP10_RANKING_SELECTION);
     writeTrackerRankingPreference(trackingMode, TOP10_RANKING_SELECTION);
-    setZoomIndex(0);
     replaceEventTrackerUrlQuery({ tier: TOP10_RANKING_SELECTION });
   }, [selectedRanking, trackingMode]);
 
   const handleMonthlyMonthChange = useCallback((monthId: number) => {
     setSelectedMonthlyMonthId(monthId);
-    setZoomIndex(0);
   }, []);
 
   useEffect(() => {
@@ -608,7 +599,6 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
       );
       setTrackingMode("event");
       setSelectedRanking(nextRanking);
-      setZoomIndex(0);
       replaceEventTrackerUrlQuery({
         trackingMode: "event",
         tier: nextRanking,
@@ -891,7 +881,7 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
   ) ?? "";
   const eventDetail = useBandoriEventDetail(
     resolvedCurrentEventId,
-    hasAppliedInitialUrlState && activeView === "info",
+    hasAppliedInitialUrlState && (activeView === "info" || previewView === "info"),
   );
 
   const { domainStart, domainEnd, cutoffEnd, midnights } = useChartDomain(
@@ -912,12 +902,12 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
   );
   const finalDisplayedData = useFinalDisplayedData(fullProcessedData, cutoffEnd, status, showInstantProjection, showDayProjection);
   const bestdoriPrediction = useBestdoriPrediction({
-    enabled: hasAppliedInitialUrlState && selectedServer === 3 && activeView === "tracker" && trackingMode === "event" && !isTop10Selected && status === "ongoing" && showBestdoriPrediction,
+    enabled: hasAppliedInitialUrlState && selectedServer === 3 && trackerVisible && trackingMode === "event" && !isTop10Selected && status === "ongoing" && showBestdoriPrediction,
     eventId: resolvedCurrentEventId,
     tier: selectedTier,
   });
   const { comparisonLines } = useComparisonTrackerData({
-    enabled: hasAppliedInitialUrlState && activeView === "tracker" && !isTop10Selected && (trackingMode === "event" || trackingMode === "monthly"),
+    enabled: hasAppliedInitialUrlState && trackerVisible && !isTop10Selected && (trackingMode === "event" || trackingMode === "monthly"),
     configs: activeComparisonConfigs,
     events: allEvents,
     monthlyOptions: monthlyRankingOptions,
@@ -939,13 +929,6 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
     () => mergeComparisonLines(bestdoriDisplayedData, comparisonLines),
     [bestdoriDisplayedData, comparisonLines],
   );
-  const zoomWidthMultiplier = ZOOM_WIDTH_MULTIPLIERS[zoomIndex];
-  const handleZoomIn = useCallback(() => {
-    startTransition(() => setZoomIndex((previous) => Math.min(ZOOM_WIDTH_MULTIPLIERS.length - 1, previous + 1)));
-  }, []);
-  const handleZoomOut = useCallback(() => {
-    startTransition(() => setZoomIndex((previous) => Math.max(0, previous - 1)));
-  }, []);
   const mainTooltipPointIndex = useMemo(
     () => buildMainTooltipPointIndex(bestdoriDisplayedData),
     [bestdoriDisplayedData],
@@ -1029,109 +1012,24 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
       : [],
     [domainEnd, domainStart, holidayLookup, selectedServer],
   );
-  const latestActualDataTime = useMemo(() => {
-    for (let index = finalDisplayedData.length - 1; index >= 0; index -= 1) {
-      const point = finalDisplayedData[index];
-      if (!point.isProjection) {
-        return point.time;
-      }
-    }
-
-    return null;
-  }, [finalDisplayedData]);
-
-  const focusViewportNearLatestDataPoint = useCallback(() => {
+  const syncChartViewportMetrics = useCallback(() => {
     const viewport = scrollContainerRef.current;
-    if (!viewport) {
-      return;
-    }
-
-    const maxScrollLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
-    if (
-      maxScrollLeft <= 0 ||
-      typeof domainStart !== "number" ||
-      typeof domainEnd !== "number" ||
-      latestActualDataTime === null ||
-      domainEnd <= domainStart
-    ) {
-      viewport.scrollLeft = maxScrollLeft;
-      return;
-    }
-
-    const latestProgress = (latestActualDataTime - domainStart) / (domainEnd - domainStart);
-    const clampedProgress = Math.max(0, Math.min(1, latestProgress));
-    const latestPointX = clampedProgress * viewport.scrollWidth;
-    const desiredViewportAnchor = viewport.clientWidth * 0.76;
-    const desiredScrollLeft = latestPointX - desiredViewportAnchor;
-
-    isProgrammaticScrollRef.current = true;
-    viewport.scrollLeft = Math.max(0, Math.min(desiredScrollLeft, maxScrollLeft));
-    requestAnimationFrame(() => {
-      isProgrammaticScrollRef.current = false;
-    });
-  }, [domainEnd, domainStart, latestActualDataTime]);
-
-  const syncScrollbarMetrics = useCallback(() => {
-    const viewport = scrollContainerRef.current;
-    if (!viewport) {
-      return;
-    }
-
-    const nextChartViewportHeight = viewport.offsetHeight;
-    setChartViewportHeight((prev) => (prev === nextChartViewportHeight ? prev : nextChartViewportHeight));
+    if (!viewport) return;
+    const nextHeight = viewport.offsetHeight;
+    setChartViewportHeight(previous => previous === nextHeight ? previous : nextHeight);
   }, []);
 
-  // Chart container resize and scroll handling.
   useEffect(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-
-    const handleScroll = () => {
-      if (isProgrammaticScrollRef.current) {
-        scheduleTooltipPositionUpdate();
-        return;
-      }
-
-      isUserScrollingRef.current = true;
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
-      scrollTimeoutRef.current = setTimeout(() => {
-        isUserScrollingRef.current = false;
-      }, 200);
+    const viewport = scrollContainerRef.current;
+    if (!viewport) return;
+    const observer = new ResizeObserver(() => {
+      syncChartViewportMetrics();
       scheduleTooltipPositionUpdate();
-    };
-
-    el.addEventListener("scroll", handleScroll);
-
-    const resizeObserver = new ResizeObserver(() => {
-      syncScrollbarMetrics();
-      scheduleTooltipPositionUpdate();
-      if (!isUserScrollingRef.current) {
-        focusViewportNearLatestDataPoint();
-      }
     });
-    if (el.firstElementChild) {
-      resizeObserver.observe(el.firstElementChild);
-    }
-
-    return () => {
-      el.removeEventListener("scroll", handleScroll);
-      resizeObserver.disconnect();
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-        scrollTimeoutRef.current = null;
-      }
-    };
-  }, [activeView, isTop10Selected, trackingMode, focusViewportNearLatestDataPoint, scheduleTooltipPositionUpdate, syncScrollbarMetrics]);
-
-  useEffect(() => {
-    if (!isUserScrollingRef.current) {
-      focusViewportNearLatestDataPoint();
-    }
-    syncScrollbarMetrics();
-    scheduleTooltipPositionUpdate();
-  }, [focusViewportNearLatestDataPoint, zoomWidthMultiplier, resolvedCurrentEventId, trackingMode, selectedTier, scheduleTooltipPositionUpdate, syncScrollbarMetrics]);
+    observer.observe(viewport);
+    syncChartViewportMetrics();
+    return () => observer.disconnect();
+  }, [activeView, previewView, isTop10Selected, trackingMode, scheduleTooltipPositionUpdate, syncChartViewportMetrics]);
 
   useEffect(() => {
     const rebuildChart = () => {
@@ -1142,10 +1040,7 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
       setChartRenderRevision((previous) => previous + 1);
 
       requestAnimationFrame(() => {
-        syncScrollbarMetrics();
-        if (!isUserScrollingRef.current) {
-          focusViewportNearLatestDataPoint();
-        }
+        syncChartViewportMetrics();
         scheduleTooltipPositionUpdate();
       });
     };
@@ -1157,7 +1052,7 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
       document.removeEventListener("visibilitychange", rebuildChart);
       window.removeEventListener("pageshow", rebuildChart);
     };
-  }, [focusViewportNearLatestDataPoint, scheduleTooltipPositionUpdate, syncScrollbarMetrics]);
+  }, [scheduleTooltipPositionUpdate, syncChartViewportMetrics]);
 
   const { ticks: yTicks, domain: yDomainInfo } = useMemo(
     () => generateYTicks(displayedChartData),
@@ -1199,7 +1094,7 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
 
   // ===== 渲染 =====
   return (
-    <BandoriPageShell contentClassName="max-w-6xl">
+    <BandoriPageShell className="event-page" contentClassName="max-w-6xl space-y-5 lg:space-y-6">
         <EventDocumentTitle event={eventMeta} server={selectedServer} />
         <Suspense fallback={null}>
           <EventTrackerRouteStateSync
@@ -1211,6 +1106,8 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
 
         {/* ========== 页头：活动名称、切换器、活动横幅 ========== */}
         <BandoriEventSwitcher
+          className="event-heading"
+          pickerClassName="event-search-dialog"
           title={selectedEventName}
           events={allEvents}
           selectedEventId={resolvedCurrentEventId ? String(resolvedCurrentEventId) : ""}
@@ -1226,32 +1123,9 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
           recommendedEventId={recommendedEventId !== null ? String(recommendedEventId) : null}
         />
 
-        <div role="tablist" aria-label={viewT("label")} className="hhwx-panel grid grid-cols-2 overflow-hidden border">
-          {(["tracker", "info"] as const).map((view) => {
-            const active = view === activeView;
-            return (
-              <button
-                key={view}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => handleViewChange(view)}
-                className={cn(
-                  "relative h-14 text-base font-black outline-hidden transition focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)]",
-                  active
-                    ? "text-[var(--theme-color-tab-foreground-selected)]"
-                    : "text-[var(--theme-color-tab-foreground)] hover:bg-[var(--theme-color-tab-background-hover)] hover:text-[var(--theme-color-tab-foreground-hover)]",
-                  view === "tracker" && "border-r border-[var(--theme-color-border-subtle)]",
-                )}
-              >
-                {viewT(view)}
-                {active ? <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[var(--theme-color-tab-indicator-selected)]" /> : null}
-              </button>
-            );
-          })}
-        </div>
+        <EventViewTabs value={activeView} onChange={handleViewChange} onPreviewChange={setPreviewView} plannerOpen={calculatorOpen && activeView === "tracker"}>
 
-        {activeView === "tracker" ? (
+        {view => view === "tracker" ? (
           <>
             {catalogError || trackerError ? (
               <div role="alert" className="hhwx-panel border p-4 text-sm">
@@ -1262,13 +1136,11 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
                 }}>{sharedT("actions.retry")}</button>
               </div>
             ) : null}
-            {/* ========== 进度条 ========== */}
+            {/* ========== 导航与控制区 ========== */}
+            <div className="event-tracker-surface hhwx-panel space-y-4 border p-4 sm:space-y-5 sm:p-6">
             {eventStatusStartDate !== null && eventStatusEndDate !== null ? (
               <EventProgressBar startDate={eventStatusStartDate} endDate={eventStatusEndDate} />
             ) : null}
-
-            {/* ========== 导航与控制区 ========== */}
-            <div className="hhwx-panel border p-3 sm:p-5">
           <Tabs.Root
             value={trackingMode}
             onValueChange={handleTrackingModeChange}
@@ -1277,9 +1149,11 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
             <TrackerModeTierControls
               action={trackingMode === "event" && eventMeta && startDate !== null && endDate !== null ? (
                 <button ref={calculatorTriggerRef} type="button" onClick={openCalculator}
-                  className="hhwx-control flex h-9 w-9 items-center justify-center rounded-lg border outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]"
+                  className="event-planner-trigger hhwx-control inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-semibold"
+                  aria-pressed={calculatorOpen}
                   aria-label={calculatorT("title")} title={calculatorT("title")} aria-expanded={calculatorOpen} aria-controls={calculatorOpen ? "event-pt-calculator" : undefined}>
                   <Calculator size={19} aria-hidden />
+                  <span>{calculatorT("title")}</span>
                 </button>
               ) : null}
               availableChallengeSongIds={availableChallengeSongIds}
@@ -1300,9 +1174,9 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
             />
 
             {/* ========== 图表区域 ========== */}
-            <Tabs.Content value={trackingMode} className="outline-hidden focus:outline-hidden w-full animate-in fade-in zoom-in-95 duration-500">
-              <div ref={calculatorAreaRef} data-calculator-open={calculatorOpen} data-calculator-motion={calculator ? !calculator.autoOpened : false} className="event-pt-calculator-layout grid scroll-mt-20 items-start gap-y-4">
-              <div className="relative min-w-0 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] p-2 shadow-[var(--theme-shadow-surface-raised)] sm:p-4">
+            <Tabs.Content value={trackingMode} className="event-tracker-content w-full outline-hidden focus:outline-hidden">
+              <div data-calculator-open={calculatorOpen} data-calculator-motion={calculator ? !calculator.autoOpened : false} className="event-pt-calculator-layout grid items-start gap-y-4">
+              <div className="event-chart-surface relative min-w-0">
 
                 {!isTop10Selected && loading && (
                   <LoadingIndicator label={commonT("loadingLatestData")} className="absolute inset-0 z-30 rounded-2xl bg-[color-mix(in_srgb,var(--theme-color-panel-background)_75%,transparent)]" />
@@ -1319,11 +1193,8 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
                     domainEnd={domainEnd}
                     eventId={resolvedCurrentEventId}
                     monthlyRankingId={selectedMonthlyMonthId}
-                    maxZoomIndex={ZOOM_WIDTH_MULTIPLIERS.length - 1}
                     midnights={midnights}
                     nonWorkingDayBands={nonWorkingDayBands}
-                    onZoomIn={handleZoomIn}
-                    onZoomOut={handleZoomOut}
                     scheduleTooltipPositionUpdateRef={scheduleTooltipPositionUpdateRef}
                     scrollContainerRef={scrollContainerRef}
                     server={selectedServer}
@@ -1331,8 +1202,6 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
                     status={status}
                     tooltipRef={tooltipRef}
                     trackingMode={trackingMode}
-                    zoomIndex={zoomIndex}
-                    zoomWidthMultiplier={zoomWidthMultiplier}
                   />
                 ) : (
                   <>
@@ -1361,8 +1230,6 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
                   isLoading={loading}
                   midnights={midnights}
                   nonWorkingDayBands={nonWorkingDayBands}
-                  onZoomIn={handleZoomIn}
-                  onZoomOut={handleZoomOut}
                   scheduleTooltipPositionUpdateRef={scheduleTooltipPositionUpdateRef}
                   scrollContainerRef={scrollContainerRef}
                   server={selectedServer}
@@ -1373,9 +1240,6 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
                   trackingMode={trackingMode}
                   yDomainInfo={yDomainInfo}
                   yTicks={yTicks}
-                  zoomIndex={zoomIndex}
-                  zoomWidthMultiplier={zoomWidthMultiplier}
-                  maxZoomIndex={ZOOM_WIDTH_MULTIPLIERS.length - 1}
                 />
 
                 <ComparisonControls
@@ -1409,7 +1273,7 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
                 )}
               </div>
               {calculator?.key === calculatorKey && trackingMode === "event" && eventMeta && calculatorBaselineAt !== null && endDate !== null ? <EventPtCalculator
-                key={calculatorKey} open={calculatorOpen} autoFocus={!calculator.autoOpened} draft={calculator.draft} baselineAt={calculatorBaselineAt} endAt={endDate}
+                key={calculatorKey} open={calculatorOpen} visible={activeView === "tracker"} autoFocus={!calculator.autoOpened} draft={calculator.draft} baselineAt={calculatorBaselineAt} endAt={endDate}
                 eventType={eventMeta.eventType} server={selectedServer} naturalFlames={naturalFlames} result={calculatorResult}
                 triggerRef={calculatorTriggerRef} onChange={updateCalculator}
                 onClose={() => setCalculator(previous => previous ? { ...previous, open: false, autoOpened: false } : previous)}
@@ -1434,6 +1298,7 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
             onRetryMusic={refreshMusic}
           />
         )}
+        </EventViewTabs>
         <EventComments
           eventId={resolvedCurrentEventId}
           server={selectedServer}

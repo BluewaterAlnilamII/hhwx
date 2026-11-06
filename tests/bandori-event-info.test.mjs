@@ -183,9 +183,10 @@ test("event tracker server selection prefers the page query without changing the
 });
 
 test("event tracker renders the shared tracker surface for every server", () => {
+  assert.match(eventTrackerPageSource, /const trackerVisible = activeView === "tracker" \|\| previewView === "tracker"/u);
   assert.match(
     eventTrackerPageSource,
-    /selectedServer,\s*hasAppliedInitialUrlState && activeView === "tracker" && !isTop10Selected,/u,
+    /selectedServer,\s*hasAppliedInitialUrlState && trackerVisible && !isTop10Selected,/u,
   );
   assert.doesNotMatch(eventTrackerPageSource, /activeView === "tracker" \? selectedServer === 3/u);
   assert.doesNotMatch(eventTrackerPageSource, /分数追踪数据尚未接入|页面结构和服务器上下文已经就绪/u);
@@ -206,8 +207,10 @@ test("event server switcher uses the shared compact local Bestdori-style icons",
   assert.doesNotMatch(eventSwitcherSource, /shadow-\[inset_0_0_0_1px/u);
   assert.doesNotMatch(eventSwitcherSource, /\/res\/server-icons/u);
   assert.match(serverIconSource, /alt=\{isDecorative \? "" : serverCode\}/u);
-  assert.ok(eventSwitcherSource.indexOf(">服务器<") < eventSwitcherSource.indexOf(">活动选择<"));
-  assert.ok(eventSwitcherSource.indexOf(">活动选择<") < eventSwitcherSource.indexOf("<h1"));
+  const serverLabel = eventSwitcherSource.indexOf('{t("serverLabel")}');
+  const eventLabel = eventSwitcherSource.indexOf('{t("eventLabel")}');
+  assert.ok(serverLabel >= 0 && serverLabel < eventLabel);
+  assert.ok(eventLabel < eventSwitcherSource.indexOf("<h1"));
 });
 
 test("event title stays on one line with bounded adaptive sizing", () => {

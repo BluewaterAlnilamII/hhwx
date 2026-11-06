@@ -23,17 +23,25 @@ export default function EventRelativeCountdown({
   const seconds = Math.floor((remainingMs % (1000 * 60)) / 1000).toString().padStart(2, "0");
 
   return (
-    <span className="inline-flex items-baseline gap-0.5 whitespace-nowrap">
+    <span className="event-countdown inline-flex items-baseline gap-0.5">
       <span>{t(target === "start" ? "untilStart" : "untilEnd")}</span>
       <span className="inline-flex items-baseline gap-0.5">
-        <span className="text-[var(--theme-color-semantic-info-foreground)]">{days}</span>
-        <span>{t("days")}</span>
-        <span className="text-[var(--theme-color-semantic-info-foreground)]">{hours}</span>
-        <span>{t("hours")}</span>
-        <span className="text-[var(--theme-color-semantic-info-foreground)]">{minutes}</span>
-        <span>{t("minutes")}</span>
-        <span className="inline-flex min-w-[2ch] justify-end text-[var(--theme-color-semantic-info-foreground)] tabular-nums">{seconds}</span>
-        <span>{t("seconds")}</span>
+        <span className="inline-flex items-baseline gap-0.5 whitespace-nowrap">
+          <span className="text-[var(--theme-color-semantic-info-foreground)]">{days}</span>
+          <span>{t("days")}</span>
+        </span>
+        <span className="inline-flex items-baseline gap-0.5 whitespace-nowrap">
+          <span className="text-[var(--theme-color-semantic-info-foreground)]">{hours}</span>
+          <span>{t("hours")}</span>
+        </span>
+        <span className="inline-flex items-baseline gap-0.5 whitespace-nowrap">
+          <span className="text-[var(--theme-color-semantic-info-foreground)]">{minutes}</span>
+          <span>{t("minutes")}</span>
+        </span>
+        <span className="inline-flex items-baseline gap-0.5 whitespace-nowrap">
+          <span className="inline-flex min-w-[2ch] justify-end text-[var(--theme-color-semantic-info-foreground)] tabular-nums">{seconds}</span>
+          <span>{t("seconds")}</span>
+        </span>
       </span>
     </span>
   );

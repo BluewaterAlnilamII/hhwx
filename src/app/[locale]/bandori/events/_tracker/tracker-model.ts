@@ -48,7 +48,6 @@ type ComparisonTooltipPointIndexEntry = {
   points: ComparisonLinePoint[];
 };
 
-export const ZOOM_WIDTH_MULTIPLIERS = [1, 2, 4, 8, 16, 32] as const;
 
 // Absorb collection-time jitter without merging adjacent 15/30-minute tracker snapshots.
 const TOOLTIP_TIME_TOLERANCE_MS = 5 * 60_000;

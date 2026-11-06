@@ -55,6 +55,10 @@
     }
   },
   "eventSwitcher": {
+    "serverLabel": "Server",
+    "switchServer": "Switch to {server} server",
+    "eventLabel": "Event",
+    "noSearchResults": "No matching events — try an event name or ID",
     "bannerAlt": "Event banner",
     "recommendedLabel": "Latest event",
     "noEvent": "No event",
@@ -70,6 +74,9 @@
   },
   "events": {
     "calculator": {
+      "invalidValue": "Enter a valid number of at least {min}",
+      "missingEfficiency": "Enter your Pt efficiency to see the plan",
+      "checkInputs": "Check the values you entered",
       "title": "Event planner",
       "pointUnit": "EP",
       "enterValue": "Enter value",
@@ -212,6 +219,8 @@
         "minutesAgo": "{count}m ago"
       },
       "comparison": {
+        "selectTarget": "Comparison event or month",
+        "selectTier": "Comparison ranking",
         "instantProjection": "Linear projection (instant)",
         "dayProjection": "Linear projection (24h)",
         "predictionUnavailable": "Bestdori prediction is currently unavailable",
@@ -237,9 +246,7 @@
         "daySpeed": "24h speed"
       },
       "chart": {
-        "noTierData": "No tracking data for this ranking tier",
-        "zoomIn": "Zoom in",
-        "zoomOut": "Zoom out"
+        "noTierData": "No tracking data for this ranking tier"
       },
       "top10": {
         "loading": "Loading latest data…",
