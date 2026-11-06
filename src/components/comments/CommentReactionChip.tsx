@@ -106,7 +106,7 @@ export function ReactionChip({ reaction, disabled, onToggle, onViewAll, onPrevie
 
     tooltip.showPopover?.();
 
-    let frame = window.requestAnimationFrame(updateTooltipPosition);
+    let frame = 0;
     const scheduleUpdate = () => {
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(updateTooltipPosition);
@@ -129,6 +129,11 @@ export function ReactionChip({ reaction, disabled, onToggle, onViewAll, onPrevie
       viewport?.removeEventListener("scroll", scheduleUpdate);
     };
   }, [tooltipOpen, updateTooltipPosition]);
+
+  useLayoutEffect(() => {
+    // The loaded participant list must be positioned before its first paint.
+    if (tooltipReaction) updateTooltipPosition();
+  }, [tooltipReaction, updateTooltipPosition]);
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (event.pointerType === "mouse") return;

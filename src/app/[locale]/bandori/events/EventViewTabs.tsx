@@ -95,6 +95,12 @@ export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, c
   const [previewFrom, setPreviewFrom] = useState<EventTrackerView | null>(null);
   const moving = previewFrom === value;
   useLayoutEffect(() => {
+    if (moving || !section.current) return;
+    // Keep the animation's final frame until React has committed the active panel.
+    delete section.current.dataset.moving;
+    delete section.current.dataset.settling;
+  }, [moving]);
+  useLayoutEffect(() => {
     const root = section.current;
     const marker = sentinel.current;
     const tabs = bar.current?.parentElement;
@@ -161,8 +167,6 @@ export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, c
         root.dataset.settling = "true";
         position(views.indexOf(next));
         const finish = () => {
-          delete root.dataset.moving;
-          delete root.dataset.settling;
           setPreviewFrom(null);
           onChange(next);
           onPreviewChange(null);
