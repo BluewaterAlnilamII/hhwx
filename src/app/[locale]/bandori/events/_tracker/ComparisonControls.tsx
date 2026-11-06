@@ -205,10 +205,11 @@ export const ComparisonControls = memo(function ComparisonControls({
         <div className="event-comparison-editor flex w-full flex-col items-center gap-2 border-t border-[var(--theme-color-border-subtle)] pt-3 pb-3 sm:pb-4">
           {comparisonConfigs.map((config) => {
             const rowTierOptions = comparisonTierOptionsByConfigId.get(config.id) ?? comparisonTierOptions;
+            const colorIndex = resolvedComparisonConfigs.find((resolved) => resolved.id === config.id)?.colorIndex ?? 0;
 
             return (
               <div key={config.id} className="event-comparison-row">
-              <span aria-hidden className="h-5 w-1.5 rounded-full" style={{ backgroundColor: comparisonLineById.get(config.id)?.color ?? COMPARISON_LINE_COLORS[(config.colorIndex ?? 0) % COMPARISON_LINE_COLORS.length] }} />
+              <span aria-hidden className="h-5 w-1.5 rounded-full" style={{ backgroundColor: COMPARISON_LINE_COLORS[colorIndex % COMPARISON_LINE_COLORS.length] }} />
               <span className="event-comparison-field event-comparison-target">
               <select
                 aria-label={t("selectTarget")}
