@@ -49,7 +49,7 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
   const t = useTranslations("bandori.events.tracker");
 
   return (
-    <div className="flex flex-col gap-3.5 items-stretch xl:flex-row xl:items-start xl:gap-4">
+    <div className="event-mode-controls flex flex-col gap-3.5 items-stretch xl:flex-row xl:items-start xl:gap-4">
       <Tabs.List className="relative flex w-full flex-row justify-center gap-1 overflow-x-auto rounded-[20px] border border-[var(--theme-color-panel-border)] bg-[var(--theme-color-panel-background)] p-1 shadow-[var(--theme-shadow-control-inset-highlight)] xl:w-[7.1rem] xl:flex-none xl:flex-col xl:self-start xl:overflow-visible">
         {TRACKING_MODE_OPTIONS.map((mode) => {
           const disabled = mode === "song" && isSongModeDisabled;
@@ -110,6 +110,7 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
               {t("selectMonth")}
             </div>
             <select
+              aria-label={t("selectMonth")}
               className="h-8 w-full max-w-[12rem] rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-text-muted)] outline-none transition-colors hover:border-[var(--theme-color-action-secondary-border)] focus:ring-2 focus:ring-[var(--theme-color-focus-ring)] sm:h-9 sm:text-sm"
               value={selectedMonthlyMonthId}
               onChange={(event) => onMonthlyMonthChange(Number(event.target.value))}
@@ -123,18 +124,20 @@ export const TrackerModeTierControls = memo(function TrackerModeTierControls({
           </div>
         )}
 
-        <div className="overflow-visible rounded-none border border-transparent bg-transparent px-2 pt-1 pb-2 shadow-none sm:px-2.5 sm:pt-1 sm:pb-2.5">
-          <div className="mb-2 flex items-center justify-between gap-2 px-1 text-xs font-bold tracking-[0.1em] text-[var(--theme-color-semantic-info-foreground)] sm:text-[13px]">
-            <label htmlFor="tracker-mobile-ranking">{t("selectRanking")}</label>
+        <div className="event-ranking-controls overflow-visible rounded-none border border-transparent bg-transparent px-2 pt-1 pb-2 shadow-none sm:px-2.5 sm:pt-1 sm:pb-2.5">
+          <div className="event-ranking-toolbar mb-2 flex items-center justify-between gap-2 px-1 text-xs font-bold tracking-[0.1em] text-[var(--theme-color-semantic-info-foreground)] sm:text-[13px]">
+            <label htmlFor="tracker-mobile-ranking" className="max-sm:sr-only">{t("selectRanking")}</label>
+            <span className="event-ranking-field sm:hidden">
+              <select id="tracker-mobile-ranking" className="hhwx-control h-11 w-full rounded-lg border px-3 text-[13px]"
+                value={isTop10Selected ? "top10" : selectedTier}
+                onChange={event => event.target.value === "top10" ? onTop10Change() : onTierChange(Number(event.target.value))}>
+                <option value="top10">TOP10</option>
+                {tierOptions.map(tier => <option key={tier} value={tier}>T{tier}</option>)}
+              </select>
+            </span>
             {action}
           </div>
-          <select id="tracker-mobile-ranking" className="hhwx-control h-9 w-full rounded-lg border px-3 text-sm sm:hidden"
-            value={isTop10Selected ? "top10" : selectedTier}
-            onChange={event => event.target.value === "top10" ? onTop10Change() : onTierChange(Number(event.target.value))}>
-            <option value="top10">TOP10</option>
-            {tierOptions.map(tier => <option key={tier} value={tier}>T{tier}</option>)}
-          </select>
-          <div className="hidden flex-wrap gap-1.5 sm:flex sm:gap-2">
+          <div className="event-ranking-options hidden flex-wrap gap-1.5 sm:flex sm:gap-2">
             {(
               <button
                 type="button"

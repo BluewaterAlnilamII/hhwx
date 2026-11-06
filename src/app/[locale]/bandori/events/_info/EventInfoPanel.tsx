@@ -316,7 +316,9 @@ export default function EventInfoPanel({
 
   if ((loading && !model) || (model && !cardDetailsReady && cardDetailsLoading)) {
     return (
-      <LoadingIndicator label={t("loading")} className="hhwx-panel border p-8" />
+      <div className="event-info-loading hhwx-panel border">
+        <LoadingIndicator label={t("loading")} className="p-8" />
+      </div>
     );
   }
 
@@ -329,7 +331,7 @@ export default function EventInfoPanel({
   }
 
   return (
-    <article className="hhwx-panel border p-4 sm:p-6">
+    <article className="event-info hhwx-panel border">
       {error || musicError || failedRequests.length > 0 ? (
         <div role="alert" className="mb-4 text-sm text-[var(--theme-color-text-muted)]">
           {commonT("states.loadFailed")}{" "}
@@ -347,7 +349,7 @@ export default function EventInfoPanel({
             <OverviewRow label={t("eventId")}>{eventId}</OverviewRow>
             <OverviewRow label={t("eventTitle")} mobileLayout="stacked">
               <span>{localizedTitle ?? t("eventTitleFallback", { eventId })}</span>
-              {jpTitle ? <span className="mt-1 block font-medium text-[var(--theme-color-text-muted)] opacity-70">{jpTitle}</span> : null}
+              {jpTitle ? <span className="mt-1 block font-normal text-[var(--theme-color-text-muted)]">{jpTitle}</span> : null}
             </OverviewRow>
             <OverviewRow label={t("eventType")} alignment="center">
               <span className="inline-flex rounded-full border border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)] px-3 py-1 text-[var(--theme-color-semantic-info-foreground)]">
@@ -467,8 +469,8 @@ export default function EventInfoPanel({
                   ) : musicAssets.loading ? <LoadingPlaceholder label={commonT("states.loading")} className="h-full w-full" /> : <ImageOff className="h-6 w-6" />}
                 </div>
                 <div className="min-w-0">
-                  <div className="truncate text-base font-black text-[var(--theme-color-text-default)]">{song.title}</div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-[var(--theme-color-text-muted)]">
+                  <div className="line-clamp-2 text-base font-semibold leading-6 text-[var(--theme-color-text-default)]">{song.title}</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-normal text-[var(--theme-color-text-muted)]">
                     <span>#{song.id}</span>
                     {song.bandName ? <span>{song.bandName}</span> : null}
                     <span>{t("publishedAt", {

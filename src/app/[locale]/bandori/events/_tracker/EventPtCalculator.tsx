@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
+import { useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ChevronUp, History, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
@@ -17,12 +17,13 @@ function subscribeDesktop(callback: () => void) {
 }
 const desktopSnapshot = () => window.matchMedia(CALCULATOR_DESKTOP_QUERY).matches;
 const serverSnapshot = () => false;
-const controlClass = "hhwx-control h-9 min-w-0 w-full rounded-lg border px-2 text-base tabular-nums outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] xl:text-sm";
-const iconClass = "hhwx-control inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] xl:h-7 xl:w-7 xl:[&>svg]:size-4";
+const controlClass = "event-calculator-control hhwx-control min-w-0 w-full rounded-lg border tabular-nums";
+const iconClass = "hhwx-control inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border xl:h-8 xl:w-8 xl:[&>svg]:size-4";
 const formatIntegerInput = (value: string) => /^\d+$/.test(value) ? value.replace(/\B(?=(\d{3})+(?!\d))/g, ",") : value;
 
 type Props = {
   open: boolean;
+  visible: boolean;
   autoFocus: boolean;
   draft: CalculatorDraft;
   baselineAt: number;
@@ -37,7 +38,7 @@ type Props = {
   onClose: () => void;
 };
 
-export function EventPtCalculator({ open, autoFocus, draft, baselineAt, endAt, naturalFlames, result, eventType, server, triggerRef, onChange, onRefresh, onClose }: Props) {
+export function EventPtCalculator({ open, visible, autoFocus, draft, baselineAt, endAt, naturalFlames, result, eventType, server, triggerRef, onChange, onRefresh, onClose }: Props) {
   const t = useTranslations("bandori.events.calculator");
   const teamT = useTranslations("bandori.teamBuilder");
   const locale = useLocale();
@@ -45,6 +46,7 @@ export function EventPtCalculator({ open, autoFocus, draft, baselineAt, endAt, n
   const [expanded, setExpanded] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
   const fields = useRef<HTMLDivElement>(null);
+  const wasOpen = useRef(false);
   const id = useId();
   const challenge = eventType === "challenge";
   const number = (value: number) => new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value);
@@ -57,8 +59,8 @@ export function EventPtCalculator({ open, autoFocus, draft, baselineAt, endAt, n
   const duration = plan ? getPlayDurationParts(plan.minutes).map(({ unit, count }) => t(unit, { count: number(count) })).join(locale.startsWith("zh") ? "" : " ") : "";
 
   useLayoutEffect(() => {
-    if (!open) return;
-    const viewport = window.visualViewport;
+    if (!open) { wasOpen.current = false; return; }
+    const opening = !wasOpen.current;
     const keepFocusedFieldVisible = () => {
       const active = document.activeElement;
       const body = fields.current;
@@ -68,56 +70,50 @@ export function EventPtCalculator({ open, autoFocus, draft, baselineAt, endAt, n
       body.scrollTop += Math.max(0, inputRect.bottom - bodyRect.bottom + 8)
         + Math.min(0, inputRect.top - bodyRect.top - 8);
     };
-    const observer = new ResizeObserver(keepFocusedFieldVisible);
-    const resize = () => {
-      const element = panel.current;
-      if (!element) return;
-      if (fields.current) observer.observe(fields.current);
-      if (desktop) {
-        const top = element.getBoundingClientRect().top;
-        const visibleTop = top >= window.innerHeight ? 80 : Math.max(80, top);
-        element.style.setProperty("--calculator-available-height", `${Math.max(0, window.innerHeight - visibleTop - 16)}px`);
-        return;
+    let frame = 0;
+    const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(keepFocusedFieldVisible); };
+    const observer = new ResizeObserver(schedule);
+    let body: HTMLDivElement | null = null;
+    let entry: Animation | undefined;
+    // The mobile Dialog.Portal attaches its content after the parent's layout effect.
+    const mountFrame = requestAnimationFrame(() => {
+      wasOpen.current = true;
+      // Restoring a hidden tab must not replay an opening or take focus from its tab button.
+      if (opening && visible && autoFocus) {
+        panel.current?.focus({ preventScroll: true });
+        if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          entry = panel.current?.animate(desktop
+            ? [{ transform: "translateX(1rem)", opacity: 0 }, { transform: "translateX(0)", opacity: 1 }]
+            : [{ transform: "translateY(100%)" }, { transform: "translateY(0)" }],
+          { duration: desktop ? 240 : 300, easing: "cubic-bezier(0.16, 1, 0.3, 1)" });
+        }
       }
-      // Viewport changes (including the keyboard) must not replay the size spring.
-      delete element.dataset.sizeMotion;
-      const height = viewport?.height ?? window.innerHeight;
-      element.style.setProperty("--calculator-viewport-height", `${height}px`);
-      element.style.setProperty("--calculator-viewport-bottom", `${Math.max(0, window.innerHeight - height - (viewport?.offsetTop ?? 0))}px`);
-      const active = document.activeElement;
-      const editing = active instanceof HTMLElement && fields.current?.contains(active);
-      element.toggleAttribute("data-keyboard", !!editing && window.innerHeight - height > 120);
-      keepFocusedFieldVisible();
-    };
-    let frame = requestAnimationFrame(resize);
-    const scheduleResize = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(resize); };
-    if (desktop) resize();
-    window.addEventListener("resize", scheduleResize);
-    if (desktop) window.addEventListener("scroll", scheduleResize, { passive: true });
-    else {
-      viewport?.addEventListener("resize", scheduleResize);
-      viewport?.addEventListener("scroll", scheduleResize);
-    }
+      body = fields.current;
+      if (body) observer.observe(body);
+      body?.addEventListener("focusin", schedule);
+      schedule();
+    });
     return () => {
+      cancelAnimationFrame(mountFrame);
       cancelAnimationFrame(frame);
+      entry?.cancel();
       observer.disconnect();
-      window.removeEventListener("resize", scheduleResize);
-      window.removeEventListener("scroll", scheduleResize);
-      viewport?.removeEventListener("resize", scheduleResize);
-      viewport?.removeEventListener("scroll", scheduleResize);
+      body?.removeEventListener("focusin", schedule);
     };
-  }, [desktop, open]);
+  }, [desktop, open, visible, autoFocus]);
 
   function field(key: keyof CalculatorDraft, label: string, options: { unit?: string; min?: number; step?: number; hideLabel?: boolean; placeholder?: string } = {}) {
     const value = draft[key];
     const integer = options.step === undefined;
     const invalid = value !== "" && (!Number.isFinite(Number(value)) || Number(value) < (options.min ?? 0) || (options.step === undefined && !Number.isSafeInteger(Number(value))));
-    return <div className="grid min-w-0 gap-1 text-xs font-semibold text-[var(--theme-color-text-muted)]">
-      <span id={`${id}-${key}-label`} className={options.hideLabel ? "sr-only" : undefined}>{label}</span>
-      <span className="flex min-w-0 items-center gap-1.5">
+    return <div className="event-calculator-field grid min-w-0 text-[var(--theme-color-text-muted)]">
+      <label htmlFor={`${id}-${key}`} id={`${id}-${key}-label`} className={options.hideLabel ? "sr-only" : undefined}>{label}</label>
+      <span className="event-calculator-input-row">
+        <span className="event-calculator-control-wrap">
         <input id={`${id}-${key}`} name={key} type={integer ? "text" : "number"} inputMode={integer ? "numeric" : "decimal"}
           className={controlClass} value={integer ? formatIntegerInput(value) : value} min={options.min ?? 0} step={options.step ?? 1}
           placeholder={options.placeholder ?? CALCULATOR_FIELD_DEFAULTS[key]}
+          aria-describedby={invalid ? `${id}-${key}-error` : undefined}
           aria-labelledby={`${id}-${key}-label`} aria-invalid={invalid || undefined}
           onKeyDown={event => {
             if (!integer || event.altKey || event.ctrlKey || event.metaKey) return;
@@ -142,25 +138,29 @@ export function EventPtCalculator({ open, autoFocus, draft, baselineAt, endAt, n
             input.setSelectionRange(cursor, cursor);
             onChange(key, raw);
           }} />
-        {options.unit ? <span className="shrink-0 font-normal">{options.unit}</span> : null}
+        </span>
+        {options.unit ? <span className="event-calculator-unit shrink-0 font-normal">{options.unit}</span> : null}
       </span>
+      {invalid ? <span id={`${id}-${key}-error`} className="text-xs font-normal text-[var(--theme-color-semantic-danger-foreground)]">{t("invalidValue", { min: options.min ?? 0 })}</span> : null}
     </div>;
   }
   function costSelect(key: keyof CalculatorDraft, label: string, costs: readonly number[], unit: "flames" | "cp", hideLabel = false) {
-    return <div className="grid min-w-0 gap-1 text-xs font-semibold text-[var(--theme-color-text-muted)]">
-      <span id={`${id}-${key}-label`} className={hideLabel ? "sr-only" : undefined}>{label}</span>
+    return <div className="event-calculator-field grid min-w-0 text-[var(--theme-color-text-muted)]">
+      <label htmlFor={`${id}-${key}`} id={`${id}-${key}-label`} className={hideLabel ? "sr-only" : undefined}>{label}</label>
+      <span className="event-calculator-control-wrap">
       <select id={`${id}-${key}`} name={key} aria-labelledby={`${id}-${key}-label`} className={controlClass} value={draft[key]} onChange={event => onChange(key, event.target.value)}>
         {costs.map(cost => <option key={cost} value={cost}>{t(unit, { count: cost })}</option>)}
       </select>
+      </span>
     </div>;
   }
   const content = <Dialog.Content ref={panel} id="event-pt-calculator" aria-describedby={undefined} tabIndex={-1}
-    data-animate={autoFocus || undefined}
+    data-view-active={visible} inert={!desktop && !visible}
     onInteractOutside={event => event.preventDefault()}
-    onOpenAutoFocus={event => { event.preventDefault(); if (autoFocus) panel.current?.focus({ preventScroll: true }); }}
-    onCloseAutoFocus={event => { event.preventDefault(); setExpanded(false); triggerRef.current?.focus({ preventScroll: true }); }}
+    onOpenAutoFocus={event => event.preventDefault()}
+    onCloseAutoFocus={event => { event.preventDefault(); if (!open) { setExpanded(false); triggerRef.current?.focus({ preventScroll: true }); } }}
     onTransitionEnd={event => { if (event.target === event.currentTarget && event.propertyName === "height") delete event.currentTarget.dataset.sizeMotion; }}
-    style={{ height: desktop ? "min(760px, var(--calculator-available-height, calc(100dvh - 6rem)))" : `calc(var(--calculator-viewport-height, 100dvh) * ${expanded ? 0.88 : CALCULATOR_COLLAPSED_RATIO} + 8px)` }}
+    style={{ "--calculator-height-ratio": expanded ? 0.88 : CALCULATOR_COLLAPSED_RATIO } as CSSProperties}
     className={cn("event-pt-calculator hhwx-floating-surface flex min-h-0 flex-col overflow-hidden border outline-hidden",
       desktop ? "event-pt-calculator-sidebar sticky top-20 z-10 w-90 justify-self-end rounded-2xl" : "event-pt-calculator-sheet fixed inset-x-0 z-[100] rounded-t-2xl pb-2")}>
     <header className="flex shrink-0 items-center gap-2 border-b border-[var(--theme-color-border-subtle)] px-4 py-2 xl:pt-3">
@@ -173,7 +173,7 @@ export function EventPtCalculator({ open, autoFocus, draft, baselineAt, endAt, n
       </button> : null}
       <Dialog.Close className={iconClass} aria-label={t("close")} title={t("close")}><X size={18} aria-hidden /></Dialog.Close>
     </header>
-    <div ref={fields} className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-3 styling-scrollbar xl:[scrollbar-gutter:stable]">
+    <div ref={fields} className="event-pt-calculator-fields min-h-0 flex-1 overflow-y-auto overscroll-contain styling-scrollbar xl:[scrollbar-gutter:stable]">
       <section aria-labelledby={`${id}-activity`} className="space-y-2.5">
         <div className="flex items-center justify-between gap-2">
           <h3 id={`${id}-activity`} className="text-sm font-bold text-[var(--theme-color-semantic-info-foreground)]">{t("activity")}</h3>
@@ -182,7 +182,7 @@ export function EventPtCalculator({ open, autoFocus, draft, baselineAt, endAt, n
             <button type="button" className={iconClass} aria-label={t("refreshTime")} title={t("refreshTime")} onClick={onRefresh}><History size={17} aria-hidden /></button>
           </div>
         </div>
-        <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+        <dl className="event-calculator-overview grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
           <div><dt className="text-[var(--theme-color-text-muted)]">{t("eventType")}</dt><dd className="mt-1 font-semibold">{teamT.has(`eventTypes.${eventType}`) ? teamT(`eventTypes.${eventType}`) : eventType}</dd></div>
           <div><dt className="text-[var(--theme-color-text-muted)]">{t("remainingTime")}</dt><dd className="mt-1 font-semibold">{t("hours", { count: number(Math.max(0, endAt - baselineAt) / 3_600_000) })}</dd></div>
           <div><dt className="text-[var(--theme-color-text-muted)]">{t("naturalFlames")}</dt><dd className="mt-1 font-semibold">{t("flames", { count: number(naturalFlames) })}</dd></div>
@@ -226,7 +226,7 @@ export function EventPtCalculator({ open, autoFocus, draft, baselineAt, endAt, n
         {field("targetPt", t("targetPt"))}
       </section>
     </div>
-    <footer className="shrink-0 space-y-1.5 border-t border-[var(--theme-color-border-subtle)] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-sm tabular-nums" aria-live="polite" aria-atomic="true" data-testid="event-pt-results">
+    <footer className="event-calculator-results shrink-0 space-y-1.5 border-t border-[var(--theme-color-border-subtle)] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-sm tabular-nums" aria-live="polite" aria-atomic="true" data-testid="event-pt-results">
       {plan && result ? <>
         <div className="flex flex-wrap justify-between gap-x-2 gap-y-1"><span>{t("reachablePt")}</span><strong className="text-base text-[var(--theme-color-semantic-info-foreground)]">{number(result.budget.finalPt)} {t("pointUnit")}</strong></div>
         {result?.target && plan.totalGames === 0 ? <div className="font-bold">{t("goalReached")}</div> : null}
@@ -239,7 +239,7 @@ export function EventPtCalculator({ open, autoFocus, draft, baselineAt, endAt, n
             ? t("remainingResources", { flames: number(plan.remainingDrinkFlames), cp: number(plan.remainingCp), usage: plan.spentDrinkFlames === 0 ? "unused" : "used" })
             : t("remainingDrinkFlames", { count: number(plan.remainingDrinkFlames), usage: plan.spentDrinkFlames === 0 ? "unused" : "used" })}
         </div> : null}
-      </> : <div className="flex justify-between"><span>{t("result")}</span><span>—</span></div>}
+      </> : <div className="space-y-1"><div className="font-semibold">{t("result")}</div><p className="text-xs leading-5 text-[var(--theme-color-text-muted)]">{t(!draft.flamePt || (challenge && !draft.cpPt) ? "missingEfficiency" : "checkInputs")}</p></div>}
     </footer>
   </Dialog.Content>;
   return <Dialog.Root open={open} modal={false} onOpenChange={open => { if (!open) onClose(); }}>

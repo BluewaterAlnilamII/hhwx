@@ -2,7 +2,7 @@
 
 import { memo, type Dispatch, type SetStateAction } from "react";
 import { useTranslations } from "next-intl";
-import { Plus, Trash2, X } from "lucide-react";
+import { AlignEndVertical, AlignStartVertical, Plus, Trash2, X } from "lucide-react";
 
 import type { BandoriEventStatus } from "@/lib/bandori/events/status";
 import {
@@ -83,10 +83,10 @@ export const ComparisonControls = memo(function ComparisonControls({
   }
 
   return (
-    <div className="border-t border-[var(--theme-color-border-subtle)] px-1 pt-4 sm:px-2">
-      <div className="flex flex-col items-center gap-3">
+    <div className="event-comparison-controls border-t border-[var(--theme-color-border-subtle)]">
+      <div className="event-comparison-stack flex flex-col items-center gap-3">
         {status === "ongoing" && (
-          <div className="flex flex-wrap items-center justify-center gap-2 rounded-[18px] bg-[var(--theme-color-panel-background)]/85 px-2 py-1.5 sm:gap-3">
+          <div className="event-projection-options flex flex-wrap items-center justify-center gap-2 rounded-[18px] bg-[var(--theme-color-panel-background)]/85 px-2 py-1.5 sm:gap-3">
             <button
               type="button"
               aria-pressed={showInstantProjection}
@@ -140,7 +140,8 @@ export const ComparisonControls = memo(function ComparisonControls({
         )}
 
         {resolvedComparisonConfigs.length > 0 && (
-          <div className="flex max-w-full flex-wrap items-center justify-center gap-2 rounded-[18px] bg-[var(--theme-color-panel-background)]/85 px-2 py-1.5 sm:gap-3">
+          <>
+          <div className="event-comparison-legend flex max-w-full flex-wrap items-center justify-center gap-2 rounded-[18px] bg-[var(--theme-color-panel-background)]/85 px-2 py-1.5 sm:gap-3">
             {resolvedComparisonConfigs.map((config) => {
               const line = comparisonLineById.get(config.id);
               const color = line?.color ?? COMPARISON_LINE_COLORS[(config.colorIndex ?? 0) % COMPARISON_LINE_COLORS.length];
@@ -160,7 +161,7 @@ export const ComparisonControls = memo(function ComparisonControls({
                   className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all sm:text-sm ${
                     config.enabled
                       ? "text-[var(--theme-color-text-default)]"
-                      : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] opacity-60"
+                      : "border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] border-dashed"
                   }`}
                   style={config.enabled ? {
                     borderColor: `${color}66`,
@@ -177,42 +178,40 @@ export const ComparisonControls = memo(function ComparisonControls({
               );
             })}
 
-            <div className="inline-flex overflow-hidden rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-xs font-semibold shadow-xs sm:text-sm">
+          </div>
+            <div className="event-comparison-alignment inline-flex items-center gap-1 rounded-xl bg-[var(--theme-color-control-background-muted)] p-0.5 text-xs sm:text-sm">
               <button
                 type="button"
                 aria-pressed={comparisonAlignment === "start"}
                 onClick={() => onAlignmentChange("start")}
-                className={`rounded-full px-3 py-1.5 outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)] ${
-                  comparisonAlignment === "start"
-                    ? "bg-[var(--theme-color-selection-strong-background)] text-[var(--theme-color-selection-strong-foreground)] ring-2 ring-inset ring-[var(--theme-color-selection-strong-ring)]"
-                    : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)]"
-                }`}
+                className="hhwx-control inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 font-medium"
               >
+                <AlignStartVertical size={16} strokeWidth={1.75} aria-hidden />
                 {t("alignLeft")}
               </button>
               <button
                 type="button"
                 aria-pressed={comparisonAlignment === "end"}
                 onClick={() => onAlignmentChange("end")}
-                className={`rounded-full px-3 py-1.5 outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)] ${
-                  comparisonAlignment === "end"
-                    ? "bg-[var(--theme-color-selection-strong-background)] text-[var(--theme-color-selection-strong-foreground)] ring-2 ring-inset ring-[var(--theme-color-selection-strong-ring)]"
-                    : "text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)]"
-                }`}
+                className="hhwx-control inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 font-medium"
               >
+                <AlignEndVertical size={16} strokeWidth={1.75} aria-hidden />
                 {t("alignRight")}
               </button>
             </div>
-          </div>
+          </>
         )}
 
-        <div className="flex w-full flex-col items-center gap-2 border-t border-[var(--theme-color-border-subtle)] pt-3 pb-3 sm:pb-4">
+        <div className="event-comparison-editor flex w-full flex-col items-center gap-2 border-t border-[var(--theme-color-border-subtle)] pt-3 pb-3 sm:pb-4">
           {comparisonConfigs.map((config) => {
             const rowTierOptions = comparisonTierOptionsByConfigId.get(config.id) ?? comparisonTierOptions;
 
             return (
-              <div key={config.id} className="flex w-full max-w-184 flex-wrap items-center justify-center gap-2">
+              <div key={config.id} className="event-comparison-row">
+              <span aria-hidden className="h-5 w-1.5 rounded-full" style={{ backgroundColor: comparisonLineById.get(config.id)?.color ?? COMPARISON_LINE_COLORS[(config.colorIndex ?? 0) % COMPARISON_LINE_COLORS.length] }} />
+              <span className="event-comparison-field event-comparison-target">
               <select
+                aria-label={t("selectTarget")}
                 className={`h-8 max-w-full rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-text-muted)] outline-hidden transition-colors hover:border-[var(--theme-color-action-secondary-border)] focus:ring-2 focus:ring-[var(--theme-color-focus-ring)] sm:h-9 sm:text-sm ${
                   comparisonTargetType === "monthly" ? "w-30" : "min-w-52"
                 }`}
@@ -232,8 +231,11 @@ export const ComparisonControls = memo(function ComparisonControls({
                   </option>
                 ))}
               </select>
+              </span>
 
+              <span className="event-comparison-field event-comparison-tier">
               <select
+                aria-label={t("selectTier")}
                 className="h-8 rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-text-muted)] outline-hidden transition-colors hover:border-[var(--theme-color-action-secondary-border)] focus:ring-2 focus:ring-[var(--theme-color-focus-ring)] sm:h-9 sm:text-sm"
                 value={config.tier ?? ""}
                 onChange={(event) => {
@@ -247,6 +249,7 @@ export const ComparisonControls = memo(function ComparisonControls({
                   </option>
                 ))}
               </select>
+              </span>
 
               <button
                 type="button"
@@ -255,13 +258,13 @@ export const ComparisonControls = memo(function ComparisonControls({
                 aria-label={t("removeLine")}
               >
                 <X size={13} />
-                {t("remove")}
+                <span>{t("remove")}</span>
               </button>
               </div>
             );
           })}
 
-          <div className="flex flex-wrap items-center justify-center gap-2">
+          <div className="event-comparison-actions flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
               onClick={onAddComparison}

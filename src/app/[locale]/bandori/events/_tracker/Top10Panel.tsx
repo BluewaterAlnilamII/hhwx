@@ -41,18 +41,13 @@ type Top10PanelProps = {
   monthlyRankingId: number;
   songId: number;
   trackingMode: TrackingMode;
-  maxZoomIndex: number;
   midnights: number[];
   nonWorkingDayBands: TrackerChartPanelProps["nonWorkingDayBands"];
-  onZoomIn: () => void;
-  onZoomOut: () => void;
   scheduleTooltipPositionUpdateRef: RefObject<() => void>;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
   server: BandoriServer;
   status: BandoriEventStatus;
   tooltipRef: RefObject<HTMLDivElement | null>;
-  zoomIndex: number;
-  zoomWidthMultiplier: number;
 };
 
 const DISABLED_BESTDORI_PREDICTION = {
@@ -70,11 +65,8 @@ export function Top10Panel({
   domainEnd,
   eventId,
   monthlyRankingId,
-  maxZoomIndex,
   midnights,
   nonWorkingDayBands,
-  onZoomIn,
-  onZoomOut,
   scheduleTooltipPositionUpdateRef,
   scrollContainerRef,
   server,
@@ -82,8 +74,6 @@ export function Top10Panel({
   status,
   tooltipRef,
   trackingMode,
-  zoomIndex,
-  zoomWidthMultiplier,
 }: Top10PanelProps) {
   const t = useTranslations("bandori.events.tracker.top10");
   const targetId = trackingMode === "monthly" ? monthlyRankingId : eventId;
@@ -222,8 +212,6 @@ export function Top10Panel({
         lineSeries={lineSeries}
         midnights={midnights}
         nonWorkingDayBands={nonWorkingDayBands}
-        onZoomIn={onZoomIn}
-        onZoomOut={onZoomOut}
         renderTooltip={renderTooltip}
         scheduleTooltipPositionUpdateRef={scheduleTooltipPositionUpdateRef}
         scrollContainerRef={scrollContainerRef}
@@ -235,10 +223,6 @@ export function Top10Panel({
         trackingMode={trackingMode}
         yDomainInfo={yAxis.domain}
         yTicks={yAxis.ticks}
-        zoomIndex={zoomIndex}
-        zoomWidthMultiplier={zoomWidthMultiplier}
-        zoomEnabled={false}
-        maxZoomIndex={maxZoomIndex}
       />
 
       {view && view.players.length > 0 ? (

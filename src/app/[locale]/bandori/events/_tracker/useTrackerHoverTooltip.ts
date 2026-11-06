@@ -31,7 +31,6 @@ type UseTrackerHoverTooltipArgs = {
   onHoverFrame: (state: TrackerMouseState | null) => void;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
   tooltipRef: RefObject<HTMLDivElement | null>;
-  zoomWidthMultiplier: number;
 };
 
 function isFiniteNumber(value: unknown): value is number {
@@ -128,7 +127,6 @@ export function useTrackerHoverTooltip({
   onHoverFrame,
   scrollContainerRef,
   tooltipRef,
-  zoomWidthMultiplier,
 }: UseTrackerHoverTooltipArgs) {
   const hoverTooltipRef = useRef<HoverTooltipState | null>(null);
   const tooltipAnimationFrameRef = useRef<number | null>(null);
@@ -151,7 +149,6 @@ export function useTrackerHoverTooltip({
       return;
     }
 
-    const viewport = scrollContainerRef.current;
     const tooltip = tooltipRef.current;
     const {
       containerHeight,
@@ -163,16 +160,13 @@ export function useTrackerHoverTooltip({
       return;
     }
 
-    const visibleLeft = viewport.scrollLeft;
-    const visibleRight = visibleLeft + viewportWidth;
-
     let left = currentHoverTooltip.coordinate.x + TOOLTIP_OFFSET;
-    if (left + tooltipWidth > visibleRight - TOOLTIP_EDGE_PADDING) {
+    if (left + tooltipWidth > viewportWidth - TOOLTIP_EDGE_PADDING) {
       left = currentHoverTooltip.coordinate.x - tooltipWidth - TOOLTIP_OFFSET;
     }
     left = Math.max(
-      visibleLeft + TOOLTIP_EDGE_PADDING,
-      Math.min(left, visibleRight - tooltipWidth - TOOLTIP_EDGE_PADDING),
+      TOOLTIP_EDGE_PADDING,
+      Math.min(left, viewportWidth - tooltipWidth - TOOLTIP_EDGE_PADDING),
     );
 
     let top = currentHoverTooltip.coordinate.y - tooltipHeight / 2;
@@ -330,7 +324,7 @@ export function useTrackerHoverTooltip({
     // Tooltip content width can change between normal and projection payloads, so position it once before paint.
     flushTooltipPositionUpdate();
     scheduleTooltipPositionUpdate();
-  }, [flushTooltipPositionUpdate, hoverTooltip, scheduleTooltipPositionUpdate, zoomWidthMultiplier]);
+  }, [flushTooltipPositionUpdate, hoverTooltip, scheduleTooltipPositionUpdate]);
 
   return {
     clearHoverTooltip,

@@ -6,7 +6,6 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  type MouseEvent,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -22,7 +21,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ZoomIn, ZoomOut } from "lucide-react";
 
 import {
   getBandoriServerTimeZone,
@@ -50,6 +48,7 @@ import type { ComparisonLine, TrackerMouseState, TrackingMode } from "./types";
 import type { NonWorkingDayBand } from "./tracker-model";
 import type { EventPtProjection } from "./event-pt-calculator";
 import { generateYTicks } from "./useChartData";
+import { bindTrackerChartPointer } from "./tracker-chart-pointer";
 
 const FIXED_Y_AXIS_WIDTH = 38;
 const CHART_MARGIN = { top: 20, right: 5, left: 0, bottom: 20 } as const;
@@ -143,8 +142,6 @@ export type TrackerChartPanelProps = {
   lineSeries?: readonly TrackerChartLineSeries[];
   midnights: number[];
   nonWorkingDayBands: NonWorkingDayBand[];
-  onZoomIn: () => void;
-  onZoomOut: () => void;
   scheduleTooltipPositionUpdateRef: RefObject<() => void>;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
   server: BandoriServer;
@@ -156,10 +153,6 @@ export type TrackerChartPanelProps = {
   renderTooltip?: (tooltip: HoverTooltipState) => ReactNode;
   yDomainInfo: [number | string, number | string];
   yTicks: number[] | undefined;
-  zoomEnabled?: boolean;
-  zoomIndex: number;
-  zoomWidthMultiplier: number;
-  maxZoomIndex: number;
 };
 
 type TrackerChartCanvasProps = Pick<
@@ -392,8 +385,6 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
   lineSeries,
   midnights,
   nonWorkingDayBands,
-  onZoomIn,
-  onZoomOut,
   scheduleTooltipPositionUpdateRef,
   scrollContainerRef,
   server,
@@ -405,10 +396,6 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
   renderTooltip,
   yDomainInfo: providedYDomain,
   yTicks: providedYTicks,
-  zoomEnabled = true,
-  zoomIndex,
-  zoomWidthMultiplier,
-  maxZoomIndex,
 }: TrackerChartPanelProps) {
   const t = useTranslations("bandori.events.tracker.chart");
   const hasScoreData = hasRenderableChartData && displayedChartData.length > 0;
@@ -420,7 +407,6 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
     ) }])
     : hasScoreData ? { domain: providedYDomain, ticks: providedYTicks } : generateYTicks([]),
   [calculatorProjection, hasScoreData, providedYDomain, providedYTicks]);
-  const effectiveZoomWidthMultiplier = zoomEnabled ? zoomWidthMultiplier : 1;
   const chartTimes = useMemo(
     () => (hasScoreData ? displayedChartData : [])
       .map((point) => point.time)
@@ -475,7 +461,6 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
     onHoverFrame: handleHoverFrame,
     scrollContainerRef,
     tooltipRef,
-    zoomWidthMultiplier: effectiveZoomWidthMultiplier,
   });
   const activePointerRef = useRef<{ activeLabel: number; pointerY: number } | null>(null);
   const chartPointerSizeRef = useRef({ height: 0, width: 0 });
@@ -519,7 +504,7 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
   }, [chartViewportRef, scheduleActivePointerPosition]);
   useLayoutEffect(() => {
     scheduleActivePointerPosition();
-  }, [effectiveZoomWidthMultiplier, scheduleActivePointerPosition]);
+  }, [scheduleActivePointerPosition]);
   const clearActiveHover = useCallback(() => {
     activePointerRef.current = null;
     clearHoverTooltip();
@@ -527,18 +512,18 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
   useLayoutEffect(() => {
     if (!hasScoreData) clearActiveHover();
   }, [clearActiveHover, hasScoreData]);
-  const handleChartMouseMove = useCallback((event: MouseEvent<HTMLDivElement>) => {
+  const handleChartPointerPosition = useCallback((x: number, y: number, contact: boolean) => {
     let { height: chartHeight, width: chartWidth } = chartPointerSizeRef.current;
     if (chartWidth <= 0 || chartHeight <= 0) {
-      chartWidth = event.currentTarget.clientWidth;
-      chartHeight = event.currentTarget.clientHeight;
+      chartWidth = chartViewportRef.current?.clientWidth ?? 0;
+      chartHeight = chartViewportRef.current?.clientHeight ?? 0;
       chartPointerSizeRef.current = { height: chartHeight, width: chartWidth };
     }
-    const pointerX = event.nativeEvent.offsetX;
-    const pointerY = event.nativeEvent.offsetY;
     const plotLeft = CHART_MARGIN.left;
     const plotRight = chartWidth - CHART_MARGIN.right;
     const plotBottom = chartHeight - CHART_MARGIN.bottom - X_AXIS_HEIGHT;
+    const pointerX = contact ? Math.max(plotLeft, Math.min(x, plotRight)) : x;
+    const pointerY = contact ? Math.max(CHART_MARGIN.top, Math.min(y, plotBottom)) : y;
 
     if (
       typeof domainStart !== "number" ||
@@ -563,10 +548,21 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
 
     activePointerRef.current = { activeLabel, pointerY };
     scheduleActivePointerPosition();
-  }, [chartTimes, clearActiveHover, domainEnd, domainStart, scheduleActivePointerPosition]);
-  const handleChartMouseLeave = useCallback(() => {
-    clearActiveHover();
-  }, [clearActiveHover]);
+  }, [chartTimes, chartViewportRef, clearActiveHover, domainEnd, domainStart, scheduleActivePointerPosition]);
+  const pointerHandlersRef = useRef({ point: handleChartPointerPosition, clear: clearActiveHover });
+  useLayoutEffect(() => {
+    pointerHandlersRef.current = { point: handleChartPointerPosition, clear: clearActiveHover };
+  }, [handleChartPointerPosition, clearActiveHover]);
+  useLayoutEffect(() => {
+    pointerHandlersRef.current.clear();
+  }, [chartContainerKey]);
+  const bindPointerLayer = useCallback((layer: HTMLDivElement | null) => {
+    if (!layer) return;
+    return bindTrackerChartPointer(layer, {
+      onPoint: (x, y, contact) => pointerHandlersRef.current.point(x, y, contact),
+      onClear: () => pointerHandlersRef.current.clear(),
+    });
+  }, []);
   const projectionEndpointMarkers = useMemo(
     () => buildProjectionEndpointMarkers(displayedChartData, showInstantProjection, showDayProjection),
     [displayedChartData, showDayProjection, showInstantProjection],
@@ -580,7 +576,7 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
   }, [scheduleTooltipPositionUpdate, scheduleTooltipPositionUpdateRef]);
 
   return (
-    <div ref={chartAnchorRef} data-testid="tracker-chart" className="h-[270px] max-h-[270px] sm:h-[360px] sm:max-h-[360px] motion-safe:transition-[max-height] motion-safe:duration-240 motion-safe:ease-out w-full relative group rounded-xl bg-[var(--theme-color-chart-background)]">
+    <div ref={chartAnchorRef} data-testid="tracker-chart" className="h-[270px] max-h-[270px] sm:h-[360px] sm:max-h-[360px] motion-safe:transition-[max-height] motion-safe:duration-240 motion-safe:ease-out w-full relative rounded-xl bg-[var(--theme-color-chart-background)] touch-pinch-zoom select-none">
         <div className="flex h-full w-full overflow-hidden rounded-xl">
           <FixedYAxis
             ticks={hasChartContent ? yTicks : [0]}
@@ -594,9 +590,8 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
 
           <div
             ref={scrollContainerRef}
-            className="min-w-0 flex-1 h-full overflow-x-auto overflow-y-hidden styling-scrollbar relative"
+            className="min-w-0 flex-1 h-full overflow-hidden relative"
           >
-            <div style={{ minWidth: `${effectiveZoomWidthMultiplier * 100}%`, height: "100%", transition: "min-width 0.3s ease-out" }}>
               <div ref={chartViewportRef} className="relative h-full overflow-hidden">
                 <TrackerChartCanvas
                   calculatorProjection={calculatorProjection}
@@ -617,11 +612,10 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
                   yTicks={yTicks}
                 />
                 <div
+                  ref={bindPointerLayer}
                   aria-hidden="true"
                   className="absolute inset-0 z-[15]"
                   data-testid="tracker-chart-pointer-layer"
-                  onMouseLeave={handleChartMouseLeave}
-                  onMouseMove={handleChartMouseMove}
                 >
                   <span
                     ref={hoverCursorRef}
@@ -643,34 +637,36 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
                   xAxisHeight={X_AXIS_HEIGHT}
                   yDomain={yDomainInfo}
                 />
-                <div
-                  ref={tooltipRef}
-                  className="pointer-events-none absolute left-0 top-0 z-20 transform-gpu transition-opacity duration-75 will-change-transform"
-                  data-testid="tracker-hover-tooltip"
-                  style={{
-                    opacity: hoverTooltip?.active && hoverTooltip.payload?.length ? 1 : 0,
-                    transform: "translate3d(0, 0, 0)",
-                    visibility: hoverTooltip?.active && hoverTooltip.payload?.length ? "visible" : "hidden",
-                  }}
-                >
-                  {hoverTooltip?.active && hoverTooltip.payload?.length ? (
-                    renderTooltip ? renderTooltip(hoverTooltip) : (
-                      <TrackerTooltip
-                        active={hoverTooltip.active}
-                        payload={hoverTooltip.payload}
-                        label={hoverTooltip.label}
-                        server={server}
-                        trackingMode={trackingMode}
-                      />
-                    )
-                  ) : null}
-                </div>
+
               </div>
-            </div>
           </div>
         </div>
+      <div
+        ref={tooltipRef}
+        className="event-chart-tooltip pointer-events-none absolute top-0 z-20 transform-gpu transition-opacity duration-75 will-change-transform"
+        data-testid="tracker-hover-tooltip"
+        style={{
+          left: FIXED_Y_AXIS_WIDTH,
+          maxWidth: `calc(100% - ${FIXED_Y_AXIS_WIDTH + 16}px)`,
+          opacity: hoverTooltip?.active && hoverTooltip.payload?.length ? 1 : 0,
+          transform: "translate3d(0, 0, 0)",
+          visibility: hoverTooltip?.active && hoverTooltip.payload?.length ? "visible" : "hidden",
+        }}
+      >
+        {hoverTooltip?.active && hoverTooltip.payload?.length ? (
+          renderTooltip ? renderTooltip(hoverTooltip) : (
+            <TrackerTooltip
+              active={hoverTooltip.active}
+              payload={hoverTooltip.payload}
+              label={hoverTooltip.label}
+              server={server}
+              trackingMode={trackingMode}
+            />
+          )
+        ) : null}
+      </div>
       {!hasChartContent && !isLoading ? (
-        <div data-testid="tracker-chart-empty" className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center text-[var(--theme-color-text-muted)] opacity-70">
+        <div data-testid="tracker-chart-empty" className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center text-[var(--theme-color-text-muted)]">
               <svg className="w-16 h-16 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
@@ -678,26 +674,6 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
         </div>
       ) : null}
 
-      {zoomEnabled ? (
-        <div className="absolute top-[70%] right-4 -translate-y-1/2 flex flex-col gap-2 z-20 transition-opacity opacity-80 hover:opacity-100">
-          <button
-            onClick={onZoomIn}
-            className={`rounded-full border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] p-1.5 text-[var(--theme-color-action-secondary-foreground)] shadow-sm transition-[background-color,transform] hover:scale-110 hover:bg-[var(--theme-color-action-secondary-background-hover)] active:scale-95 ${zoomIndex >= maxZoomIndex ? "invisible pointer-events-none" : ""}`}
-            disabled={zoomIndex >= maxZoomIndex}
-            title={t("zoomIn")}
-          >
-            <ZoomIn size={22} strokeWidth={2.5} />
-          </button>
-          <button
-            onClick={onZoomOut}
-            className={`rounded-full border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] p-1.5 text-[var(--theme-color-action-secondary-foreground)] shadow-sm transition-[background-color,transform] hover:scale-110 hover:bg-[var(--theme-color-action-secondary-background-hover)] active:scale-95 ${zoomIndex <= 0 ? "invisible pointer-events-none" : ""}`}
-            disabled={zoomIndex <= 0}
-            title={t("zoomOut")}
-          >
-            <ZoomOut size={22} strokeWidth={2.5} />
-          </button>
-        </div>
-      ) : null}
     </div>
   );
 });

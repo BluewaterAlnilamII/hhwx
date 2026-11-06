@@ -57,7 +57,7 @@ export default function FixedYAxis({
 
   return (
     <div
-      className="relative h-full shrink-0 border-r border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-chart-axis-background)]/60 select-none"
+      className="relative h-full shrink-0 border-r border-[var(--theme-color-border-subtle)] select-none"
       style={{ width: `${axisWidth}px` }}
       aria-hidden="true"
     >
