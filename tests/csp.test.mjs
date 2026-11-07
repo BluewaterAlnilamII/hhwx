@@ -1,35 +1,70 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import test from "node:test";
 import { unstable_getResponseFromNextConfig } from "next/experimental/testing/server.js";
-import nextConfig from "../next.config.mjs";
 import { POST } from "../src/app/api/security/csp-report/route.ts";
 
 const reportOnlyHeader = "content-security-policy-report-only";
+const enforcedHeader = "content-security-policy";
 
-test("report-only covers page and Worker responses without relying on Accept", async () => {
-  let expectedPolicy;
-  for (const pathname of ["/", "/auth", "/en/bandori/songs/825", "/_next/static/chunks/worker.js", "/res/bandori/chart-simulator/signalsmith-stretch-1.3.2.mjs"]) {
-    for (const headers of [{}, { accept: "*/*" }, { accept: "text/html" }]) {
-      const response = await unstable_getResponseFromNextConfig({
-        url: `https://example.test${pathname}`, nextConfig, headers,
-      });
-      const policy = response.headers.get(reportOnlyHeader);
-      assert.ok(policy, pathname);
-      expectedPolicy ??= policy;
-      assert.equal(policy, expectedPolicy);
-      assert.equal(response.headers.get("content-security-policy"), null);
+function loadNextConfig(nodeEnv) {
+  const script = "import config from './next.config.mjs'; console.log(JSON.stringify(await config.headers()));";
+  const headers = JSON.parse(execFileSync(process.execPath, ["--input-type=module", "-e", script], {
+    cwd: new URL("../", import.meta.url), encoding: "utf8",
+    env: {
+      ...process.env, NODE_ENV: nodeEnv,
+      NEXT_PUBLIC_SITE_ASSET_CDN_BASE_URL: "https://site-assets.example.test/res",
+      NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL: "https://game-assets.example.test/bandori",
+      NEXT_PUBLIC_SUPABASE_URL: "https://database.example.test",
+      NEXT_PUBLIC_CHAT_ENABLED: "true",
+      CHAT_WEBSOCKET_URL: "wss://chat.example.test/connection/websocket?private=value",
+      CHAT_R2_ENDPOINT: "https://uploads.example.test/bucket?private=value",
+    },
+  }));
+  return { headers: async () => headers };
+}
+
+for (const nodeEnv of ["production", "development", "test"]) {
+  test(`${nodeEnv} selects the CSP mode for pages and Workers without relying on Accept`, async () => {
+    const nextConfig = loadNextConfig(nodeEnv);
+    const header = nodeEnv === "production" ? enforcedHeader : reportOnlyHeader;
+    const absentHeader = nodeEnv === "production" ? reportOnlyHeader : enforcedHeader;
+    let expectedPolicy;
+    for (const pathname of ["/", "/auth", "/en/bandori/songs/825", "/_next/static/chunks/worker.js", "/res/bandori/chart-simulator/signalsmith-stretch-1.3.2.mjs"]) {
+      for (const headers of [{}, { accept: "*/*" }, { accept: "text/html" }]) {
+        const response = await unstable_getResponseFromNextConfig({
+          url: `https://example.test${pathname}`, nextConfig, headers,
+        });
+        const policy = response.headers.get(header);
+        assert.ok(policy, pathname);
+        const resourcePolicy = policy.replace(/; report-to csp$/, "");
+        expectedPolicy ??= resourcePolicy;
+        assert.equal(resourcePolicy, expectedPolicy);
+        assert.equal(response.headers.get(absentHeader), null);
+        if (pathname.startsWith("/_next/") || pathname.startsWith("/res/")) {
+          assert.equal(response.headers.get("reporting-endpoints"), null);
+          assert.doesNotMatch(policy, /(?:^|; )report-to /);
+        } else {
+          assert.equal(response.headers.get("reporting-endpoints"), 'csp="/api/security/csp-report"');
+          assert.match(policy, /(?:^|; )report-to csp(?:;|$)/);
+        }
+        assert.match(policy, /(?:^|; )report-uri \/api\/security\/csp-report(?:;|$)/);
+      }
     }
-  }
-  const api = await unstable_getResponseFromNextConfig({
-    url: "https://example.test/api/security/csp-report", nextConfig,
+    const api = await unstable_getResponseFromNextConfig({
+      url: "https://example.test/api/security/csp-report", nextConfig,
+    });
+    assert.equal(api.headers.get(reportOnlyHeader), null);
+    assert.equal(api.headers.get(enforcedHeader), null);
+    assert.equal(api.headers.get("reporting-endpoints"), null);
   });
-  assert.equal(api.headers.get(reportOnlyHeader), null);
-});
+}
 
 test("local image reads and Turnstile feedback are allowed without expanding script permissions", async () => {
+  const nextConfig = loadNextConfig("production");
   const response = await unstable_getResponseFromNextConfig({url:"https://example.test/", nextConfig});
-  const policy = response.headers.get(reportOnlyHeader);
+  const policy = response.headers.get(enforcedHeader);
   const directives = new Map(policy.split(";").map(value => {
     const [name, ...sources] = value.trim().split(/\s+/);
     return [name, sources];
@@ -40,8 +75,17 @@ test("local image reads and Turnstile feedback are allowed without expanding scr
   assert.deepEqual(directives.get("script-src"), ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'", "https://static.cloudflareinsights.com", "https://challenges.cloudflare.com"]);
   assert.deepEqual(directives.get("worker-src"), ["'self'", "blob:"]);
   assert.deepEqual(directives.get("frame-src"), ["https://challenges.cloudflare.com"]);
+  assert.deepEqual(directives.get("font-src"), ["'self'"]);
+  const imageOrigins = ["https://cdn.hhwx.org", "https://site-assets.example.test", "https://game-assets.example.test"];
+  assert.deepEqual(directives.get("img-src"), ["'self'", "data:", "blob:", ...imageOrigins]);
+  assert.deepEqual(directives.get("media-src"), ["'self'", ...imageOrigins]);
+  for (const source of [...imageOrigins, "https://database.example.test", "wss://database.example.test", "wss://chat.example.test", "https://uploads.example.test"]) {
+    assert.ok(directives.get("connect-src").includes(source), source);
+  }
+  assert.doesNotMatch(policy, /bestdori\.com|private=value/);
   assert.doesNotMatch(policy, /quark\.cn|alicdn\.com|res\.qq\.com|aegis\.qq\.com|rumt-zh\.com|hihonorcdn\.com/);
   assert.deepEqual(directives.get("report-uri"), ["/api/security/csp-report"]);
+  assert.deepEqual(directives.get("report-to"), ["csp"]);
 });
 
 function request(payload, contentType = "application/csp-report") {
@@ -61,7 +105,7 @@ test("legacy reports retain provenance and strip secrets from URLs and script sa
     "blocked-uri": "https://name:password@outside.test/script.js?signed=private#private",
     "source-file": "https://example.test/_next/static/chunks/app.js?private=value",
     "effective-directive": "script-src-elem", "violated-directive": "script-src-elem",
-    disposition: "report", "line-number": 12, "column-number": 4, "status-code": 200,
+    disposition: "enforce", "line-number": 12, "column-number": 4, "status-code": 200,
     "script-sample": "private user data", receivedAt: "1900-01-01", originalPolicyHash: "fake",
   }}));
   assert.equal(response.status, 204);
@@ -77,6 +121,7 @@ test("legacy reports retain provenance and strip secrets from URLs and script sa
   assert.equal(report.blockedUri, "https://outside.test/script.js");
   assert.equal(report.sourceFile, "https://example.test/_next/static/chunks/app.js");
   assert.equal(report.source, "legacy");
+  assert.equal(report.disposition, "enforce");
   assert.equal(report.lineNumber, 12);
   assert.equal(report.userAgent, "CSP fixture browser");
   assert.equal(report.sample, null);

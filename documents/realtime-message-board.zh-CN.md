@@ -143,7 +143,7 @@ JWT 签发地址校验优先使用 `NEXT_PUBLIC_SUPABASE_URL`，未配置时才�
    - `CHAT_PUBLISH_URL=http://127.0.0.1:9000/api/publish` 和 `CHAT_PUBLISH_API_KEY`，仅服务端可见。
    - 目标验证通过后启用运行时 `CHAT_ENABLED=true`，以 `NEXT_PUBLIC_CHAT_ENABLED=true` 重新构建。两者默认 false。
 
-构建和运行时都需设置 `CHAT_WEBSOCKET_URL`，启用构建将其 origin 加入既有 CSP report-only 连接策略。秘密配置仅服务端使用，不写日志。每连接发送队列限制为 2 MiB，慢客户端超限会断开。压缩暂不启用；队列配置和本地冒烟测量均不能证明主机承载能力。
+构建和运行时都需设置 `CHAT_WEBSOCKET_URL`，启用构建将其 origin 加入 CSP 的 `connect-src`（生产强制执行，开发仅报告）。秘密配置仅服务端使用，不写日志。每连接发送队列限制为 2 MiB，慢客户端超限会断开。压缩暂不启用；队列配置和本地冒烟测量均不能证明主机承载能力。
 
 ## 验证与维护
 

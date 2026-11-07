@@ -21,10 +21,11 @@ const MANIFEST_SITE_ASSET_CACHE_PROFILE = {
     cloudflareCdnCacheControl: "public, max-age=43200, stale-while-revalidate=86400",
 };
 const CSP_REPORT_ENDPOINT = "/api/security/csp-report";
+const CSP_REPORT_GROUP = "csp";
+const CSP_HEADER_NAME = process.env.NODE_ENV === "production" ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only";
 const DEFAULT_SITE_ASSET_CDN_BASE_URL = "https://cdn.hhwx.org";
 const CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN = "https://static.cloudflareinsights.com";
 const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
-const BESTDORI_ASSET_ORIGIN = "https://bestdori.com";
 
 function normalizeOrigin(value) {
     if (typeof value !== "string" || !value.trim()) {
@@ -80,7 +81,7 @@ function buildRemoteImagePatterns() {
     });
 }
 
-function buildContentSecurityPolicyReportOnly() {
+function buildContentSecurityPolicy() {
     const directives = [
         ["default-src", ["'self'"]],
         ["base-uri", ["'self'"]],
@@ -90,9 +91,9 @@ function buildContentSecurityPolicyReportOnly() {
         ["object-src", ["'none'"]],
         ["manifest-src", ["'self'"]],
         ["worker-src", ["'self'", "blob:"]],
-        ["img-src", ["'self'", "data:", "blob:", BESTDORI_ASSET_ORIGIN, ...buildImageSources()]],
+        ["img-src", ["'self'", "data:", "blob:", ...buildImageSources()]],
         ["media-src", ["'self'", ...buildImageSources()]],
-        ["font-src", ["'self'", "data:"]],
+        ["font-src", ["'self'"]],
         ["style-src", ["'self'", "'unsafe-inline'"]],
         // Signalsmith performs WebAssembly compilation inside its same-origin
         // AudioWorklet. Keep eval disallowed while permitting WASM explicitly.
@@ -117,7 +118,16 @@ const PAGE_SECURITY_HEADERS = [
     { key: "X-Frame-Options", value: "SAMEORIGIN" },
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
     { key: "Permissions-Policy", value: "camera=(), display-capture=(), geolocation=(), microphone=(), payment=(), usb=()" },
-    { key: "Content-Security-Policy-Report-Only", value: buildContentSecurityPolicyReportOnly() },
+    {
+        key: CSP_HEADER_NAME,
+        value: buildContentSecurityPolicy(),
+    },
+];
+
+// shortcut: Chrome 156 drops Worker report-to uploads; retain report-uri on assets until browser delivery is verified.
+const PAGE_REPORTING_HEADERS = [
+    { key: "Reporting-Endpoints", value: `${CSP_REPORT_GROUP}="${CSP_REPORT_ENDPOINT}"` },
+    { key: CSP_HEADER_NAME, value: `${buildContentSecurityPolicy()}; report-to ${CSP_REPORT_GROUP}` },
 ];
 
 function buildCacheHeaders(profile) {
@@ -143,12 +153,16 @@ const nextConfig = {
                 headers: BASE_SECURITY_HEADERS,
             },
             {
-                source: "/",
+                source: "/:path((?!api(?:/|$)).*)",
                 headers: PAGE_SECURITY_HEADERS,
             },
             {
-                source: "/:path((?!api(?:/|$)).*)",
-                headers: PAGE_SECURITY_HEADERS,
+                source: "/",
+                headers: [...PAGE_SECURITY_HEADERS, ...PAGE_REPORTING_HEADERS],
+            },
+            {
+                source: "/:path((?!api(?:/|$)|_next(?:/|$)|res(?:/|$)).+)",
+                headers: PAGE_REPORTING_HEADERS,
             },
             {
                 source: "/favicon.ico",
