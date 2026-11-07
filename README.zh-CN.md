@@ -59,7 +59,7 @@ npm run dev
 
 `GET /api/status` 提供四类 Bandori 后端服务在 JP/EN/TW/CN 的最新状态。Node 服务端复用现有私有 user-fetcher 配置，每 60 秒采集一次。响应契约与部署要求见[服务状态](documents/service-status.zh-CN.md)。
 
-CSP 在兼容性观察期继续保持 Report-Only。报告来源标识、日志处理、验证和强制拦截条件见 [CSP 观察与上线](documents/content-security-policy.zh-CN.md)。
+CSP 在生产构建中强制执行，开发和测试环境使用 Report-Only 模式。策略边界、违规报告、验证、回滚和既有缓存行为见 [CSP 观察与上线](documents/content-security-policy.zh-CN.md)。
 
 国服档案导入可在兼容私有服务配置后使用官方浏览器登录，流程及发布开关见[浏览器登录与档案同步](documents/game-profile-sync.zh-CN.md)。构建时功能开关默认关闭。
 

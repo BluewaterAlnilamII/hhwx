@@ -143,7 +143,7 @@ Sent and pending images, including failures, open the shared large-image viewer.
    - `CHAT_PUBLISH_URL=http://127.0.0.1:9000/api/publish` and `CHAT_PUBLISH_API_KEY`, server-only.
    - After target checks pass, enable runtime `CHAT_ENABLED=true` and rebuild with `NEXT_PUBLIC_CHAT_ENABLED=true`. Both flags default false.
 
-Set `CHAT_WEBSOCKET_URL` at build and runtime: the enabled build adds its WebSocket origin to the existing CSP report-only connect policy. Secrets remain server-only and are never logged. Per-client queued output is bounded at 2 MiB; slow clients exceeding it disconnect. Compression remains off. Neither this queue setting nor local smoke measurements establish hosting capacity.
+Set `CHAT_WEBSOCKET_URL` at build and runtime: the enabled build adds its WebSocket origin to CSP's `connect-src` (enforced in production, report-only in development). Secrets remain server-only and are never logged. Per-client queued output is bounded at 2 MiB; slow clients exceeding it disconnect. Compression remains off. Neither this queue setting nor local smoke measurements establish hosting capacity.
 
 ## Checks and operations
 

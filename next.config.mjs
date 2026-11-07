@@ -21,10 +21,10 @@ const MANIFEST_SITE_ASSET_CACHE_PROFILE = {
     cloudflareCdnCacheControl: "public, max-age=43200, stale-while-revalidate=86400",
 };
 const CSP_REPORT_ENDPOINT = "/api/security/csp-report";
+const CSP_REPORT_GROUP = "csp";
 const DEFAULT_SITE_ASSET_CDN_BASE_URL = "https://cdn.hhwx.org";
 const CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN = "https://static.cloudflareinsights.com";
 const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
-const BESTDORI_ASSET_ORIGIN = "https://bestdori.com";
 
 function normalizeOrigin(value) {
     if (typeof value !== "string" || !value.trim()) {
@@ -80,7 +80,7 @@ function buildRemoteImagePatterns() {
     });
 }
 
-function buildContentSecurityPolicyReportOnly() {
+function buildContentSecurityPolicy() {
     const directives = [
         ["default-src", ["'self'"]],
         ["base-uri", ["'self'"]],
@@ -90,9 +90,9 @@ function buildContentSecurityPolicyReportOnly() {
         ["object-src", ["'none'"]],
         ["manifest-src", ["'self'"]],
         ["worker-src", ["'self'", "blob:"]],
-        ["img-src", ["'self'", "data:", "blob:", BESTDORI_ASSET_ORIGIN, ...buildImageSources()]],
+        ["img-src", ["'self'", "data:", "blob:", ...buildImageSources()]],
         ["media-src", ["'self'", ...buildImageSources()]],
-        ["font-src", ["'self'", "data:"]],
+        ["font-src", ["'self'"]],
         ["style-src", ["'self'", "'unsafe-inline'"]],
         // Signalsmith performs WebAssembly compilation inside its same-origin
         // AudioWorklet. Keep eval disallowed while permitting WASM explicitly.
@@ -100,6 +100,7 @@ function buildContentSecurityPolicyReportOnly() {
         // Pixi probes a data URL in its image Worker; chat saves local blob images.
         // Turnstile also sends feedback from the page to its challenge origin.
         ["connect-src", ["'self'", "data:", "blob:", TURNSTILE_ORIGIN, ...buildSupabaseConnectSources(), ...buildChatConnectSources(), ...buildImageSources()]],
+        ["report-to", [CSP_REPORT_GROUP]],
         ["report-uri", [CSP_REPORT_ENDPOINT]],
     ];
 
@@ -114,10 +115,14 @@ const BASE_SECURITY_HEADERS = [
 ];
 
 const PAGE_SECURITY_HEADERS = [
+    { key: "Reporting-Endpoints", value: `${CSP_REPORT_GROUP}="${CSP_REPORT_ENDPOINT}"` },
     { key: "X-Frame-Options", value: "SAMEORIGIN" },
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
     { key: "Permissions-Policy", value: "camera=(), display-capture=(), geolocation=(), microphone=(), payment=(), usb=()" },
-    { key: "Content-Security-Policy-Report-Only", value: buildContentSecurityPolicyReportOnly() },
+    {
+        key: process.env.NODE_ENV === "production" ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only",
+        value: buildContentSecurityPolicy(),
+    },
 ];
 
 function buildCacheHeaders(profile) {

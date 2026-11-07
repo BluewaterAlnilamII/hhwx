@@ -59,7 +59,7 @@ Important rules:
 
 `GET /api/status` exposes the latest status of the four Bandori backend services across JP/EN/TW/CN. The Node server collects it every 60 seconds using the existing private user-fetcher configuration. See [service status](documents/service-status.md) for the response contract and deployment requirements.
 
-CSP remains in Report-Only mode during compatibility observation. See [CSP observation and rollout](documents/content-security-policy.md) for report provenance, log handling, validation, and enforcement gates.
+CSP is enforced in production builds; development and test environments use Report-Only mode. See [CSP observation and rollout](documents/content-security-policy.md) for policy boundaries, violation reports, validation, rollback, and existing-cache behavior.
 
 CN profile imports can use an official browser login when the compatible private service is available; see [browser login and rollout](documents/game-profile-sync.md). The build-time feature flag defaults to off.
 
