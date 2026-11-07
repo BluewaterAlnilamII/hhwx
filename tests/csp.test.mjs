@@ -38,11 +38,17 @@ for (const nodeEnv of ["production", "development", "test"]) {
         });
         const policy = response.headers.get(header);
         assert.ok(policy, pathname);
-        expectedPolicy ??= policy;
-        assert.equal(policy, expectedPolicy);
+        const resourcePolicy = policy.replace(/; report-to csp$/, "");
+        expectedPolicy ??= resourcePolicy;
+        assert.equal(resourcePolicy, expectedPolicy);
         assert.equal(response.headers.get(absentHeader), null);
-        assert.equal(response.headers.get("reporting-endpoints"), 'csp="/api/security/csp-report"');
-        assert.match(policy, /(?:^|; )report-to csp(?:;|$)/);
+        if (pathname.startsWith("/_next/") || pathname.startsWith("/res/")) {
+          assert.equal(response.headers.get("reporting-endpoints"), null);
+          assert.doesNotMatch(policy, /(?:^|; )report-to /);
+        } else {
+          assert.equal(response.headers.get("reporting-endpoints"), 'csp="/api/security/csp-report"');
+          assert.match(policy, /(?:^|; )report-to csp(?:;|$)/);
+        }
         assert.match(policy, /(?:^|; )report-uri \/api\/security\/csp-report(?:;|$)/);
       }
     }

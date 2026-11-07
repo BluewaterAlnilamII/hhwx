@@ -22,6 +22,7 @@ const MANIFEST_SITE_ASSET_CACHE_PROFILE = {
 };
 const CSP_REPORT_ENDPOINT = "/api/security/csp-report";
 const CSP_REPORT_GROUP = "csp";
+const CSP_HEADER_NAME = process.env.NODE_ENV === "production" ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only";
 const DEFAULT_SITE_ASSET_CDN_BASE_URL = "https://cdn.hhwx.org";
 const CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN = "https://static.cloudflareinsights.com";
 const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
@@ -100,7 +101,6 @@ function buildContentSecurityPolicy() {
         // Pixi probes a data URL in its image Worker; chat saves local blob images.
         // Turnstile also sends feedback from the page to its challenge origin.
         ["connect-src", ["'self'", "data:", "blob:", TURNSTILE_ORIGIN, ...buildSupabaseConnectSources(), ...buildChatConnectSources(), ...buildImageSources()]],
-        ["report-to", [CSP_REPORT_GROUP]],
         ["report-uri", [CSP_REPORT_ENDPOINT]],
     ];
 
@@ -115,14 +115,19 @@ const BASE_SECURITY_HEADERS = [
 ];
 
 const PAGE_SECURITY_HEADERS = [
-    { key: "Reporting-Endpoints", value: `${CSP_REPORT_GROUP}="${CSP_REPORT_ENDPOINT}"` },
     { key: "X-Frame-Options", value: "SAMEORIGIN" },
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
     { key: "Permissions-Policy", value: "camera=(), display-capture=(), geolocation=(), microphone=(), payment=(), usb=()" },
     {
-        key: process.env.NODE_ENV === "production" ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only",
+        key: CSP_HEADER_NAME,
         value: buildContentSecurityPolicy(),
     },
+];
+
+// shortcut: Chrome 156 drops Worker report-to uploads; retain report-uri on assets until browser delivery is verified.
+const PAGE_REPORTING_HEADERS = [
+    { key: "Reporting-Endpoints", value: `${CSP_REPORT_GROUP}="${CSP_REPORT_ENDPOINT}"` },
+    { key: CSP_HEADER_NAME, value: `${buildContentSecurityPolicy()}; report-to ${CSP_REPORT_GROUP}` },
 ];
 
 function buildCacheHeaders(profile) {
@@ -148,12 +153,16 @@ const nextConfig = {
                 headers: BASE_SECURITY_HEADERS,
             },
             {
-                source: "/",
+                source: "/:path((?!api(?:/|$)).*)",
                 headers: PAGE_SECURITY_HEADERS,
             },
             {
-                source: "/:path((?!api(?:/|$)).*)",
-                headers: PAGE_SECURITY_HEADERS,
+                source: "/",
+                headers: [...PAGE_SECURITY_HEADERS, ...PAGE_REPORTING_HEADERS],
+            },
+            {
+                source: "/:path((?!api(?:/|$)|_next(?:/|$)|res(?:/|$)).+)",
+                headers: PAGE_REPORTING_HEADERS,
             },
             {
                 source: "/favicon.ico",

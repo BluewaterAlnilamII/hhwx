@@ -18,7 +18,9 @@
 
 ## 报告投递与记录
 
-携带 CSP 的响应同时发送 `Reporting-Endpoints: csp="/api/security/csp-report"`。策略通过 `report-to csp` 选择此端点，并保留 `report-uri /api/security/csp-report` 兼容不支持 `report-to` 的浏览器。支持新指令的浏览器使用 `report-to` 并忽略 `report-uri`，两个指令并存不会要求重复投递。两种格式使用同一接收端。
+页面响应同时发送 `Reporting-Endpoints: csp="/api/security/csp-report"`。其策略通过 `report-to csp` 选择此端点，并保留 `report-uri /api/security/csp-report` 兼容不支持 `report-to` 的浏览器。支持新指令的浏览器使用 `report-to` 并忽略 `report-uri`，两个指令并存不会要求重复投递。两种格式使用同一接收端。
+
+`/_next/` 和 `/res/` 下的资源响应，包括应用的 Worker/Worklet 脚本，保留 `report-uri`，不添加 `report-to`。Chrome 156 的受控 HTTPS 验证中，两种策略都拦截了 Worker 的 `eval`，但只有 `report-uri` 配置成功投递 Worker 报告；页面的 Reporting API 投递正常。两类响应保持相同的资源限制，待验证 Worker 投递正常后再统一报告机制。新增 Worker 入口应位于这些路径下，或采用相同的报告处理。
 
 以 `/` 开头的相对端点始终指向响应所在的源，本地化页面和 Worker 脚本也一样。Reporting API 投递需要可信上下文及端点，部署验证使用 HTTPS。浏览器可能批量或延迟发送报告，应比较归一化报告记录，不要求每次违规立即产生一个请求。浏览器选择 `report-to` 后若投递失败，保留的 `report-uri` 不会成为重试通道。
 
@@ -40,7 +42,7 @@
 ## 部署与验证
 
 1. 执行 `npm run test:csp`、受影响的模拟器/聊天检查、类型检查、lint 和构建。在隔离浏览器中对生产构建强制执行候选策略，覆盖模拟器播放与变速、Worker/WASM 初始化、认证/Turnstile、聊天及图片流程。仅在 Report-Only 下浏览正常，不能证明强制策略兼容。
-2. 本地验证完成后，以强制模式部署已批准的生产构建。分别使用 `Accept: text/html` 和 `Accept: */*` 检查代表性页面与 Worker 脚本返回 `Content-Security-Policy` 且没有 Report-Only 响应头，并携带匹配的 `Reporting-Endpoints` 映射。记录发布版本、部署时间和下发策略的 SHA-256 作为基线。确认一条受控浏览器报告经 Reporting API 到达接收端，包含 `source: reporting-api`、`disposition: enforce` 和预期的来源标识字段；继续保留旧格式报告的检查。
+2. 本地验证完成后，以强制模式部署已批准的生产构建。分别使用 `Accept: text/html` 和 `Accept: */*` 检查代表性页面与 Worker 脚本返回 `Content-Security-Policy` 且没有 Report-Only 响应头。页面应携带匹配的 `Reporting-Endpoints` 映射和 `report-to`；Worker 资源应保留 `report-uri`，不含 `report-to`。记录发布版本、部署时间和各份下发策略的 SHA-256 作为基线。确认受控页面报告和 Worker 报告分别经 Reporting API 与旧格式投递到接收端，包含 `disposition: enforce` 和预期的来源标识字段。
 3. 在任何日志轮转或删除前，归档旧原始日志和调查汇总。PM2 错误日志还包含其他应用错误，不能为重置 CSP 计数而直接清空。按部署时间和策略摘要筛选新观察窗口；归档/轮转只在明确授权的生产操作范围内执行。
 4. 分开统计旧策略和未知策略的报告。旧标签页或缓存文档可能在部署后继续上报。如果浏览器序列化导致原始策略字符串发生变化，应核实并记录等价摘要，不能未经验证就归入当前策略。
 5. 以初步 7～14 天为复查窗口；重要流程访问量不足时延长。这是操作上的复查节点，不是仅靠时间给出的安全保证。排查站内违规和来源未明的报告；预期中的浏览器/扩展报告不要求归零。
