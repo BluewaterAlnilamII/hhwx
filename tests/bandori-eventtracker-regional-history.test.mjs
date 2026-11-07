@@ -17,7 +17,7 @@ test("all servers request cutoff and TOP10 HTTP history", () => {
   assert.match(pageSource, /const trackerVisible = activeView === "tracker" \|\| previewView === "tracker"/u);
   assert.match(
     pageSource,
-    /hasAppliedInitialUrlState && trackerVisible && !isTop10Selected/u,
+    /selectedServer,\s+hasAppliedInitialUrlState && !isTop10Selected,\s+!trackerVisible,/u,
   );
   assert.doesNotMatch(
     pageSource,
@@ -25,6 +25,7 @@ test("all servers request cutoff and TOP10 HTTP history", () => {
   );
   assert.match(trackerDataSource, /tracker-\$\{server\}/u);
   assert.match(trackerDataSource, /tracker\/data\?server=\$\{server\}/u);
+  assert.match(trackerDataSource, /enabled: !paused/u);
   assert.match(top10DataSource, /const canReadTopDataHistory = enabled && targetId !== null/u);
   assert.match(top10DataSource, /topdata\?server=\$\{server\}/u);
   assert.match(top10DataSource, /type=\$\{type\}/u);
@@ -59,5 +60,5 @@ test("regional schedules, comparison requests, and caches use the selected serve
 test("CN-only presentation rules do not leak to regional servers", () => {
   assert.match(trackerModelSource, /return server === 3\s+&& targetId <= CN_T1500_LEGACY_EVENT_ID_LIMIT/u);
   assert.match(pageSource, /selectedServer === 3\s+\? buildNonWorkingDayBands/u);
-  assert.match(pageSource, /selectedServer === 3 && trackerVisible.*showBestdoriPrediction/u);
+  assert.match(pageSource, /selectedServer === 3 && trackingMode === "event".*showBestdoriPrediction,\s+paused: !trackerVisible/u);
 });
