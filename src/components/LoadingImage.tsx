@@ -7,10 +7,11 @@ import { cn } from "@/lib/utils";
 type LoadingImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, "src" | "srcSet"> & {
   src: string;
   loadingLabel: string;
+  revealBeforeHydration?: boolean;
 };
 
 // The containing surface owns the image dimensions and positioning.
-export default function LoadingImage({ src, alt, loadingLabel, className, onLoad, ...props }: LoadingImageProps) {
+export default function LoadingImage({ src, alt, loadingLabel, revealBeforeHydration = false, className, onLoad, ...props }: LoadingImageProps) {
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
   const imageRef = useCallback((image: HTMLImageElement | null) => {
     if (image?.complete && image.naturalWidth > 0) setLoadedSrc(src);
@@ -18,6 +19,7 @@ export default function LoadingImage({ src, alt, loadingLabel, className, onLoad
 
   return (
     <>
+      {loadedSrc !== src ? <LoadingPlaceholder label={loadingLabel} className="pointer-events-none absolute inset-0 rounded-[inherit]" /> : null}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         {...props}
@@ -25,10 +27,9 @@ export default function LoadingImage({ src, alt, loadingLabel, className, onLoad
         ref={imageRef}
         src={src}
         alt={alt}
-        className={cn(className, loadedSrc !== src && "opacity-0")}
+        className={cn(className, !revealBeforeHydration && loadedSrc !== src && "opacity-0")}
         onLoad={(event) => { setLoadedSrc(src); onLoad?.(event); }}
       />
-      {loadedSrc !== src ? <LoadingPlaceholder label={loadingLabel} className="pointer-events-none absolute inset-0 rounded-[inherit]" /> : null}
     </>
   );
 }

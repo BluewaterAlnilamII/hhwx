@@ -183,7 +183,7 @@ export function Top10Panel({
       />
 
       {error && (
-        <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] px-3 py-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">
+        <div role="alert" className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] px-3 py-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">
           <span className="font-semibold">{t("loadFailed")}</span>
           <button
             type="button"
@@ -196,6 +196,7 @@ export function Top10Panel({
       )}
 
       <TrackerChartPanel
+        zoomEnabled={false}
         chartAnchorRef={chartAnchorRef}
         calculatorProjection={calculatorProjection}
         bestdoriPredictionPointCount={0}
@@ -209,6 +210,7 @@ export function Top10Panel({
         domainStart={domainStart}
         hasRenderableChartData={hasRenderableChartData}
         isLoading={isBlockingLoading}
+        hasError={Boolean(error)}
         lineSeries={lineSeries}
         midnights={midnights}
         nonWorkingDayBands={nonWorkingDayBands}

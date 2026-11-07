@@ -18,7 +18,10 @@ import {
 } from "@/lib/comments/comment-content";
 import { cn } from "@/lib/utils";
 
-const BandoriStampView = dynamic(() => import("@/components/bandori/BandoriStampView"));
+const BandoriStampView = dynamic(() => import("@/components/bandori/BandoriStampView"), {
+  // Keep a deferred stamp from suspending the already-visible page.
+  loading: () => null,
+});
 const NO_STAMPS: CommentStampLookup = new Map();
 
 type CommentContentTextToken = {

@@ -27,17 +27,18 @@ function useBandoriTrackerLiveSubscription<TSnapshot>(
 ): boolean {
   const userId = useGameStore((state) => state.userId);
   const authReady = useGameStore((state) => state.authReady);
-  const shouldSubscribe = enabled
-    && authReady
+  const hasLiveAccess = authReady
     && userId !== null
     && subscription !== null;
+  const shouldSubscribe = enabled && hasLiveAccess;
 
   useEffect(() => {
     if (!shouldSubscribe || !subscription) return;
     return subscribeBandoriTrackerLive(subscription, listener);
   }, [listener, shouldSubscribe, subscription, userId]);
 
-  return shouldSubscribe;
+  // Pausing a view stops its connection, not its authenticated display snapshot.
+  return hasLiveAccess;
 }
 
 export function useBandoriTrackerLiveSubscriptionSnapshot<TSnapshot>(
@@ -58,7 +59,7 @@ export function useBandoriTrackerLiveSubscriptionSnapshot<TSnapshot>(
     handleSnapshot,
   );
 
-  return hasLiveAccess && topic !== null && state?.topic === topic ? state.snapshot : null;
+  return enabled && hasLiveAccess && topic !== null && state?.topic === topic ? state.snapshot : null;
 }
 
 function useCutoffLiveSubscription(

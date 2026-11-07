@@ -58,7 +58,8 @@ export default function FixedYAxis({
   return (
     <div
       className="relative h-full shrink-0 border-r border-[var(--theme-color-border-subtle)] select-none"
-      style={{ width: `${axisWidth}px` }}
+      style={{ width: `${axisWidth}px`, touchAction: "pan-y pinch-zoom" }}
+      data-testid="tracker-y-axis"
       aria-hidden="true"
     >
       <div

@@ -58,6 +58,8 @@
     "serverLabel": "服务器",
     "switchServer": "切换到 {server} 服务器",
     "eventLabel": "活动选择",
+    "catalogLoadFailed": "活动列表加载失败",
+    "catalogUpdateFailed": "活动列表更新失败，暂时显示已加载列表",
     "noSearchResults": "没有找到匹配的活动，试试活动名或 ID",
     "bannerAlt": "活动横幅",
     "recommendedLabel": "最新活动",
@@ -246,6 +248,14 @@
         "daySpeed": "24h速度"
       },
       "chart": {
+        "title": "{server} {target} {mode} {ranking}",
+        "songTitle": "{server} {target} {mode} #{songId} {ranking}",
+        "eventNumber": "{eventId}期",
+        "loadFailed": "分数追踪数据加载失败",
+        "updateFailed": "分数更新失败，暂时显示已加载数据",
+        "zoom": "图表缩放",
+        "zoomIn": "放大",
+        "zoomOut": "缩小",
         "noTierData": "暂无该排名档位的追踪数据"
       },
       "top10": {

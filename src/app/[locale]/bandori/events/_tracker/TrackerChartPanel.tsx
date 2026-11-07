@@ -6,16 +6,18 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
+  type CSSProperties,
   type ReactNode,
   type RefObject,
 } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { Minus, Plus } from "lucide-react";
 import {
   CartesianGrid,
   Line,
   LineChart,
   ReferenceArea,
-  ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
   XAxis,
@@ -49,6 +51,7 @@ import type { NonWorkingDayBand } from "./tracker-model";
 import type { EventPtProjection } from "./event-pt-calculator";
 import { generateYTicks } from "./useChartData";
 import { bindTrackerChartPointer } from "./tracker-chart-pointer";
+import { chartZoomTicks, useTrackerChartZoom } from "./useTrackerChartZoom";
 
 const FIXED_Y_AXIS_WIDTH = 38;
 const CHART_MARGIN = { top: 20, right: 5, left: 0, bottom: 20 } as const;
@@ -134,11 +137,12 @@ export type TrackerChartPanelProps = {
   chartViewportHeight: number;
   chartViewportRef: RefObject<HTMLDivElement | null>;
   comparisonLines: ComparisonLine[];
-  displayedChartData: Array<{ time: number }>;
+  displayedChartData: Array<{ time: number; ep?: number; isProjection?: boolean; isBaseline?: boolean }>;
   domainEnd: number | "auto";
   domainStart: number | "auto";
   hasRenderableChartData: boolean;
   isLoading: boolean;
+  hasError?: boolean;
   lineSeries?: readonly TrackerChartLineSeries[];
   midnights: number[];
   nonWorkingDayBands: NonWorkingDayBand[];
@@ -151,6 +155,9 @@ export type TrackerChartPanelProps = {
   tooltipRef: RefObject<HTMLDivElement | null>;
   trackingMode: TrackingMode;
   renderTooltip?: (tooltip: HoverTooltipState) => ReactNode;
+  renderControls?: () => ReactNode;
+  zoomEnabled?: boolean;
+  zoomKey?: string;
   yDomainInfo: [number | string, number | string];
   yTicks: number[] | undefined;
 };
@@ -241,7 +248,7 @@ const TrackerChartCanvas = memo(function TrackerChartCanvas({
           dataKey="time"
           domain={hasTimeValues ? [domainStart, domainEnd] : [0, 1]}
           type="number"
-          allowDataOverflow={displayedChartData.length === 0}
+          allowDataOverflow={hasTimeDomain || displayedChartData.length === 0}
           ticks={midnights}
           height={X_AXIS_HEIGHT}
           tickFormatter={(unixTime) => dateFormatter.format(unixTime)}
@@ -356,12 +363,7 @@ const TrackerChartCanvas = memo(function TrackerChartCanvas({
             stroke="var(--theme-color-semantic-danger-foreground)" strokeDasharray="6 4"
             label={{ value: `${calculatorT("limitLine")} ${compactNumber.format(calculatorProjection.limitPt)}`, position: "insideTopLeft", fill: "var(--theme-color-semantic-danger-foreground)", fontSize: 11 }} /> : null}
           <ReferenceLine segment={[{ x: calculatorProjection.baselineAt, y: calculatorProjection.currentPt }, { x: calculatorProjection.endAt, y: calculatorProjection.finalPt }]}
-            stroke="var(--theme-color-semantic-success-foreground)" strokeWidth={2} strokeDasharray="4 4" />
-          <ReferenceDot x={calculatorProjection.baselineAt} y={calculatorProjection.currentPt} r={5}
-            fill="var(--theme-color-semantic-success-foreground)" stroke="var(--theme-color-chart-background)" />
-          <ReferenceDot x={calculatorProjection.endAt} y={calculatorProjection.finalPt} r={5}
-            fill="var(--theme-color-semantic-success-foreground)" stroke="var(--theme-color-chart-background)"
-            label={{ value: `${calculatorT("reachablePoint")} ${compactNumber.format(calculatorProjection.finalPt)}`, position: "insideTopRight", dx: -8, dy: -12, fill: "var(--theme-color-semantic-success-foreground)", fontSize: 11 }} />
+            ifOverflow="hidden" stroke="var(--theme-color-semantic-success-foreground)" strokeWidth={2} strokeDasharray="4 4" />
         </> : null}
       </LineChart>
     </ResponsiveContainer>
@@ -378,10 +380,11 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
   chartViewportRef,
   comparisonLines,
   displayedChartData,
-  domainEnd,
-  domainStart,
+  domainEnd: fullDomainEnd,
+  domainStart: fullDomainStart,
   hasRenderableChartData,
   isLoading,
+  hasError = false,
   lineSeries,
   midnights,
   nonWorkingDayBands,
@@ -394,10 +397,15 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
   tooltipRef,
   trackingMode,
   renderTooltip,
+  renderControls,
+  zoomEnabled = true,
+  zoomKey = chartContainerKey,
   yDomainInfo: providedYDomain,
   yTicks: providedYTicks,
 }: TrackerChartPanelProps) {
   const t = useTranslations("bandori.events.tracker.chart");
+  const calculatorT = useTranslations("bandori.events.calculator");
+  const locale = useLocale();
   const hasScoreData = hasRenderableChartData && displayedChartData.length > 0;
   const hasChartContent = hasScoreData || !!calculatorProjection;
   const { domain: yDomainInfo, ticks: yTicks } = useMemo(() => calculatorProjection
@@ -414,6 +422,67 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
       .sort((left, right) => left - right),
     [displayedChartData, hasScoreData],
   );
+  const zoom = useTrackerChartZoom(zoomKey);
+  const fullStart = typeof fullDomainStart === "number" ? fullDomainStart : chartTimes[0];
+  const fullEnd = typeof fullDomainEnd === "number" ? fullDomainEnd : chartTimes.at(-1);
+  const canZoom = zoomEnabled && fullStart !== undefined && fullEnd !== undefined && fullEnd > fullStart && hasChartContent;
+  const domainStart = canZoom ? fullStart + zoom.view.start * (fullEnd - fullStart) : fullDomainStart;
+  const domainEnd = canZoom ? fullStart + zoom.view.end * (fullEnd - fullStart) : fullDomainEnd;
+  const zoomed = canZoom && zoom.scale > 1.001;
+  const timeTicks = useMemo(() => zoomed && typeof domainStart === "number" && typeof domainEnd === "number"
+    ? chartZoomTicks(domainStart, domainEnd, midnights[0] ?? domainStart) : [],
+  [domainEnd, domainStart, midnights, zoomed]);
+  const showHours = typeof domainStart === "number" && typeof domainEnd === "number" && domainEnd - domainStart < 3 * 86400000;
+  const timeFormatter = useMemo(() => new Intl.DateTimeFormat(locale, {
+    timeZone: getBandoriServerTimeZone(server), month: "2-digit", day: "2-digit",
+    ...(showHours ? { hour: "2-digit", minute: "2-digit", hour12: false } as const : {}),
+  }), [locale, server, showHours]);
+  const [plotWidth, setPlotWidth] = useState(0);
+  const latestActualDataTime = useMemo(() => displayedChartData.findLast(point =>
+    Number.isFinite(point.ep) && !point.isProjection && !point.isBaseline)?.time ?? null,
+  [displayedChartData]);
+  const selectedTimeRef = useRef<number | null>(null);
+  const zoomControlsRef = useRef<HTMLDivElement>(null);
+  const zoomFeedbackRef = useRef<HTMLOutputElement>(null);
+  const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gestureActive = useRef(false);
+  const feedbackLive = useRef(true);
+  const previousScale = useRef(zoom.scale);
+  const hideFeedbackLater = useCallback(() => {
+    if (!feedbackLive.current) return;
+    if (feedbackTimer.current !== null) clearTimeout(feedbackTimer.current);
+    feedbackTimer.current = setTimeout(() => {
+      if (zoomFeedbackRef.current) zoomFeedbackRef.current.dataset.visible = "false";
+      feedbackTimer.current = null;
+    }, 700);
+  }, []);
+  useLayoutEffect(() => {
+    if (Math.abs(previousScale.current - zoom.scale) < 0.0001) return;
+    previousScale.current = zoom.scale;
+    if (zoomFeedbackRef.current) zoomFeedbackRef.current.dataset.visible = "true";
+    if (!gestureActive.current) hideFeedbackLater();
+  }, [hideFeedbackLater, zoom.scale]);
+  useLayoutEffect(() => {
+    feedbackLive.current = true;
+    previousScale.current = 1;
+    if (zoomFeedbackRef.current) zoomFeedbackRef.current.dataset.visible = "false";
+    return () => {
+      feedbackLive.current = false;
+      if (feedbackTimer.current !== null) clearTimeout(feedbackTimer.current);
+      gestureActive.current = false;
+    };
+  }, [zoomKey]);
+  const stepZoom = (direction: -1 | 1) => {
+    if (!canZoom) return;
+    const view = zoom.current.current;
+    const selected = selectedTimeRef.current;
+    const anchor = selected !== null ? (selected - fullStart) / (fullEnd - fullStart)
+      : latestActualDataTime !== null ? (latestActualDataTime - fullStart) / (fullEnd - fullStart)
+        : (view.start + view.end) / 2;
+    const position = selected !== null ? Math.max(0, Math.min(1, (anchor - view.start) / (view.end - view.start)))
+      : latestActualDataTime !== null ? 0.76 : 0.5;
+    zoom.step(direction, anchor, position);
+  };
   const activeMarkerIndex = useMemo(() => {
     const index = new Map<number, ActiveChartMarker[]>();
     for (const activeLabel of chartTimes) {
@@ -480,13 +549,19 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
 
     const plotRight = chartWidth - CHART_MARGIN.right;
     const activeProgress = (activePointer.activeLabel - domainStart) / (domainEnd - domainStart);
+    if (activeProgress < 0 || activeProgress > 1) {
+      clearHoverTooltip();
+      return;
+    }
     const activeX = CHART_MARGIN.left + activeProgress * (plotRight - CHART_MARGIN.left);
     scheduleHoverTooltipUpdate({
       isTooltipActive: true,
       activeLabel: activePointer.activeLabel,
       activeCoordinate: { x: activeX, y: activePointer.pointerY },
     });
-  }, [domainEnd, domainStart, scheduleHoverTooltipUpdate]);
+  }, [clearHoverTooltip, domainEnd, domainStart, scheduleHoverTooltipUpdate]);
+  const activePositionRef = useRef(scheduleActivePointerPosition);
+  useLayoutEffect(() => { activePositionRef.current = scheduleActivePointerPosition; }, [scheduleActivePointerPosition]);
   useLayoutEffect(() => {
     const viewport = chartViewportRef.current;
     if (!viewport) return;
@@ -497,15 +572,17 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
         height: entry.contentRect.height,
         width: entry.contentRect.width,
       };
-      scheduleActivePointerPosition();
+      setPlotWidth(Math.max(0, entry.contentRect.width - CHART_MARGIN.left - CHART_MARGIN.right));
+      activePositionRef.current();
     });
     observer.observe(viewport);
     return () => observer.disconnect();
-  }, [chartViewportRef, scheduleActivePointerPosition]);
+  }, [chartViewportRef]);
   useLayoutEffect(() => {
     scheduleActivePointerPosition();
   }, [scheduleActivePointerPosition]);
-  const clearActiveHover = useCallback(() => {
+  const clearActiveHover = useCallback((reason: "leave" | "outside" | "gesture" | "cancel" = "outside") => {
+    if (reason !== "leave") selectedTimeRef.current = null;
     activePointerRef.current = null;
     clearHoverTooltip();
   }, [clearHoverTooltip]);
@@ -541,31 +618,75 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
 
     const pointerTime = domainStart + ((pointerX - plotLeft) / (plotRight - plotLeft)) * (domainEnd - domainStart);
     const activeLabel = findNearestChartTime(chartTimes, pointerTime);
-    if (activeLabel === null) {
+    if (activeLabel === null || activeLabel < domainStart || activeLabel > domainEnd) {
       clearActiveHover();
       return;
     }
 
     activePointerRef.current = { activeLabel, pointerY };
+    if (contact) selectedTimeRef.current = activeLabel;
     scheduleActivePointerPosition();
   }, [chartTimes, chartViewportRef, clearActiveHover, domainEnd, domainStart, scheduleActivePointerPosition]);
-  const pointerHandlersRef = useRef({ point: handleChartPointerPosition, clear: clearActiveHover });
+  const { beginGesture, updateGesture, endGesture } = zoom;
+  const beginChartGesture = useCallback((x: number) => {
+    gestureActive.current = true;
+    if (feedbackTimer.current !== null) clearTimeout(feedbackTimer.current);
+    beginGesture(x / Math.max(1, chartPointerSizeRef.current.width - CHART_MARGIN.left - CHART_MARGIN.right));
+  }, [beginGesture]);
+  const moveChartGesture = useCallback((x: number, ratio: number) => {
+    updateGesture(x / Math.max(1, chartPointerSizeRef.current.width - CHART_MARGIN.left - CHART_MARGIN.right), ratio);
+  }, [updateGesture]);
+  const endChartGesture = useCallback(() => {
+    gestureActive.current = false;
+    endGesture();
+    hideFeedbackLater();
+  }, [endGesture, hideFeedbackLater]);
+  const doubleTapZoom = (x: number) => {
+    if (!canZoom) return;
+    const position = x / Math.max(1, plotWidth);
+    const view = zoom.current.current;
+    zoom.step(1, view.start + position * (view.end - view.start), position);
+  };
+  const wheelZoom = (x: number, delta: number) => {
+    if (canZoom) zoom.wheel(x / Math.max(1, plotWidth), delta);
+  };
+  const pointerHandlersRef = useRef({ point: handleChartPointerPosition, clear: clearActiveHover, beginChartGesture, moveChartGesture, endChartGesture, doubleTapZoom, wheelZoom, canZoom, scale: zoom.scale });
   useLayoutEffect(() => {
-    pointerHandlersRef.current = { point: handleChartPointerPosition, clear: clearActiveHover };
-  }, [handleChartPointerPosition, clearActiveHover]);
+    pointerHandlersRef.current = { point: handleChartPointerPosition, clear: clearActiveHover, beginChartGesture, moveChartGesture, endChartGesture, doubleTapZoom, wheelZoom, canZoom, scale: zoom.scale };
+  });
   useLayoutEffect(() => {
     pointerHandlersRef.current.clear();
   }, [chartContainerKey]);
   const bindPointerLayer = useCallback((layer: HTMLDivElement | null) => {
     if (!layer) return;
+    const root = layer.closest<HTMLElement>('[data-testid="tracker-chart"]') ?? layer;
     return bindTrackerChartPointer(layer, {
-      onPoint: (x, y, contact) => pointerHandlersRef.current.point(x, y, contact),
-      onClear: () => pointerHandlersRef.current.clear(),
+      interactionRoot: root,
+      onPoint: (x, y, contact) => pointerHandlersRef.current.point(x + CHART_MARGIN.left, y + CHART_MARGIN.top, contact),
+      onClear: reason => pointerHandlersRef.current.clear(reason),
+      isControlTarget: target => zoomControlsRef.current?.contains(target as Node | null) ?? false,
+      canPan: () => pointerHandlersRef.current.canZoom && pointerHandlersRef.current.scale > 1,
+      canZoom: () => pointerHandlersRef.current.canZoom,
+      onDoubleTap: x => pointerHandlersRef.current.doubleTapZoom(x),
+      onWheel: (x, delta) => pointerHandlersRef.current.wheelZoom(x, delta),
+      onWheelActive: active => { root.dataset.wheelActive = String(active); },
+      onGestureStart: x => { if (pointerHandlersRef.current.canZoom) pointerHandlersRef.current.beginChartGesture(x); },
+      onGesture: (x, ratio) => { if (pointerHandlersRef.current.canZoom) pointerHandlersRef.current.moveChartGesture(x, ratio); },
+      onGestureEnd: () => pointerHandlersRef.current.endChartGesture(),
     });
   }, []);
   const projectionEndpointMarkers = useMemo(
-    () => buildProjectionEndpointMarkers(displayedChartData, showInstantProjection, showDayProjection),
-    [displayedChartData, showDayProjection, showInstantProjection],
+    () => {
+      const markers = buildProjectionEndpointMarkers(displayedChartData, showInstantProjection, showDayProjection);
+      if (calculatorProjection) {
+        const color = "var(--theme-color-semantic-success-foreground)";
+        markers.push({ key: "calculator-start", x: calculatorProjection.baselineAt, y: calculatorProjection.currentPt, radius: 5, color });
+        markers.push({ key: "calculator-end", x: calculatorProjection.endAt, y: calculatorProjection.finalPt, radius: 5, color,
+          label: `${calculatorT("reachablePoint")} ${new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: 1 }).format(calculatorProjection.finalPt)}` });
+      }
+      return markers;
+    },
+    [calculatorProjection, calculatorT, displayedChartData, locale, showDayProjection, showInstantProjection],
   );
   useLayoutEffect(() => {
     scheduleTooltipPositionUpdateRef.current = scheduleTooltipPositionUpdate;
@@ -575,8 +696,14 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
     };
   }, [scheduleTooltipPositionUpdate, scheduleTooltipPositionUpdateRef]);
 
-  return (
-    <div ref={chartAnchorRef} data-testid="tracker-chart" className="h-[270px] max-h-[270px] sm:h-[360px] sm:max-h-[360px] motion-safe:transition-[max-height] motion-safe:duration-240 motion-safe:ease-out w-full relative rounded-xl bg-[var(--theme-color-chart-background)] touch-pinch-zoom select-none">
+  const zoomControls = zoomEnabled ? <div ref={zoomControlsRef} className="event-chart-zoom" data-tracker-zoom-controls role="group" aria-label={t("zoom")}>
+    <button type="button" className="hhwx-control" aria-label={t("zoomOut")} title={t("zoomOut")} disabled={!canZoom || zoom.scale <= 1.001} onClick={() => stepZoom(-1)}><Minus size={13} aria-hidden /></button>
+    <span className="tabular-nums" data-testid="tracker-zoom-scale">{new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(zoom.scale)}×</span>
+    <button type="button" className="hhwx-control" aria-label={t("zoomIn")} title={t("zoomIn")} disabled={!canZoom || zoom.scale >= 31.999} onClick={() => stepZoom(1)}><Plus size={13} aria-hidden /></button>
+  </div> : null;
+
+  return (<>
+    <div ref={chartAnchorRef} data-testid="tracker-chart" data-zoom-enabled={zoomEnabled} data-zoom={zoom.scale} data-view-start={domainStart} data-view-end={domainEnd} className="h-[270px] max-h-[270px] sm:h-[360px] sm:max-h-[360px] motion-safe:transition-[max-height] motion-safe:duration-240 motion-safe:ease-out w-full relative rounded-xl bg-[var(--theme-color-chart-background)] select-none">
         <div className="flex h-full w-full overflow-hidden rounded-xl">
           <FixedYAxis
             ticks={hasChartContent ? yTicks : [0]}
@@ -592,15 +719,16 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
             ref={scrollContainerRef}
             className="min-w-0 flex-1 h-full overflow-hidden relative"
           >
-              <div ref={chartViewportRef} className="relative h-full overflow-hidden">
+              <div ref={chartViewportRef} className="event-chart-canvas relative h-full overflow-hidden" data-zoomed={zoomed}
+                style={{ "--tracker-x-scale": zoom.scale, "--tracker-x-offset": `${-zoom.view.start * plotWidth * zoom.scale}px` } as CSSProperties}>
                 <TrackerChartCanvas
                   calculatorProjection={calculatorProjection}
                   bestdoriPredictionPointCount={bestdoriPredictionPointCount}
                   chartContainerKey={chartContainerKey}
                   comparisonLines={comparisonLines}
                   displayedChartData={hasScoreData ? displayedChartData : []}
-                  domainEnd={domainEnd}
-                  domainStart={domainStart}
+                  domainEnd={fullDomainEnd}
+                  domainStart={fullDomainStart}
                   lineSeries={lineSeries}
                   midnights={midnights}
                   nonWorkingDayBands={nonWorkingDayBands}
@@ -611,18 +739,22 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
                   yDomainInfo={yDomainInfo}
                   yTicks={yTicks}
                 />
+                {timeTicks.map(time => typeof domainStart === "number" && typeof domainEnd === "number" ? <span key={time}
+                  className="event-chart-time-tick pointer-events-none absolute bottom-3 -translate-x-1/2 whitespace-nowrap text-xs text-[var(--theme-color-text-muted)]"
+                  style={{ left: (time - domainStart) / (domainEnd - domainStart) * plotWidth + CHART_MARGIN.left }}>{timeFormatter.format(time)}</span> : null)}
                 <div
                   ref={bindPointerLayer}
                   aria-hidden="true"
-                  className="absolute inset-0 z-[15]"
+                  className="absolute z-[15]"
+                  style={{ top: CHART_MARGIN.top, bottom: CHART_MARGIN.bottom + X_AXIS_HEIGHT, left: CHART_MARGIN.left, right: CHART_MARGIN.right, touchAction: zoomEnabled ? "none" : "pinch-zoom" }}
                   data-testid="tracker-chart-pointer-layer"
                 >
                   <span
                     ref={hoverCursorRef}
                     className="pointer-events-none absolute left-0 border-l border-dashed border-[var(--theme-color-border-subtle)] opacity-0 will-change-transform"
                     style={{
-                      bottom: CHART_MARGIN.bottom + X_AXIS_HEIGHT,
-                      top: CHART_MARGIN.top,
+                      bottom: 0,
+                      top: 0,
                       transform: "translate3d(0, 0, 0)",
                       visibility: "hidden",
                     }}
@@ -665,7 +797,7 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
           )
         ) : null}
       </div>
-      {!hasChartContent && !isLoading ? (
+      {!hasChartContent && !isLoading && !hasError ? (
         <div data-testid="tracker-chart-empty" className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center text-[var(--theme-color-text-muted)]">
               <svg className="w-16 h-16 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -674,6 +806,12 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
         </div>
       ) : null}
 
+      {zoomControls}
+      {zoomEnabled && <output ref={zoomFeedbackRef} className="event-chart-zoom-feedback tabular-nums" data-testid="tracker-zoom-feedback" aria-hidden="true">
+        {new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(zoom.scale)}×
+      </output>}
     </div>
+    {renderControls?.()}
+    </>
   );
 });

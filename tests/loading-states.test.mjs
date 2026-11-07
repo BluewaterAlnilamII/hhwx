@@ -56,6 +56,16 @@ test("block and compact loading announce their label and hide the decorative spi
   }
 });
 
+test("first-paint banners can appear before hydration with their placeholder behind the image", () => {
+  const html = renderToString(createElement(LoadingImage, {
+    src: "/banner.png", alt: "Event banner", loadingLabel: "Loading image", revealBeforeHydration: true,
+    className: "absolute inset-0", loading: "eager", fetchPriority: "high",
+  }));
+  assert.doesNotMatch(html, /opacity-0/u);
+  assert.ok(html.indexOf('<span') < html.indexOf('<img'));
+  assert.match(html, /fetchPriority="high"/u);
+});
+
 test("full card metadata loading and a resolved missing image have distinct feedback", () => {
   const props = {
     metadata: { cardId: 3, resourceSetName: "res001003", rarity: 3, attribute: "happy", bandId: 1 },
@@ -131,6 +141,19 @@ test("avatar waits for identity and card metadata without showing a username or 
   const missing = render({ cardId: null });
   assert.match(missing, /Image unavailable/u);
   assert.doesNotMatch(missing, /aria-busy|Bluewater|<img/u);
+});
+
+test("event catalog failure belongs to the picker and ends its initial skeleton", () => {
+  const props = { title: "Event", events: [], selectedEventId: "302", onSelectedEventIdChange() {},
+    catalogError: new Error("Catalog unavailable"), onRetryCatalog() {} };
+  const failed = renderLocalized(BandoriEventSwitcher, props);
+  assert.ok(failed.includes(messages.bandori.eventSwitcher.catalogLoadFailed));
+  assert.match(failed, /role="alert"/u);
+  assert.match(failed, />Retry<\/button>/u);
+  assert.doesNotMatch(failed, /animate-pulse/u);
+  const cached = renderLocalized(BandoriEventSwitcher, { ...props, events: [{ id: 302, name: "Event", startAt: null, endAt: null }] });
+  assert.ok(cached.includes(messages.bandori.eventSwitcher.catalogUpdateFailed));
+  assert.ok(cached.includes('value="302"'));
 });
 
 test("event banners share one unavailable state without individual retry buttons", () => {

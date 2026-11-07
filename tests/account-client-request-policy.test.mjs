@@ -4,16 +4,16 @@ import test from "node:test";
 
 const readSource = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("global card-avatar resources preload once and remain stable for the page lifetime", async () => {
+test("card-avatar resources load together on demand and retain the session cache", async () => {
   const appChrome = await readSource("src/components/AppChrome.tsx");
+  const avatar = await readSource("src/components/account/AccountCardAvatar.tsx");
   const hook = await readSource("src/hooks/useBandoriPublicAssetIndex.ts");
-  const client = await readSource("src/lib/bandori-public-asset-index-client.ts");
+  const client = await readSource("src/lib/public-asset-index-client.ts");
   const tracker = await readSource("src/app/[locale]/bandori/events/EventTrackerPage.tsx");
 
-  assert.match(appChrome, /function BandoriCardAvatarResourcesPreloader/u);
-  assert.equal((appChrome.match(/useBandoriCardsMaster\(\)/gu) ?? []).length, 1);
-  assert.equal((appChrome.match(/useBandoriCardsAssetIndex\(\)/gu) ?? []).length, 1);
-  assert.equal((appChrome.match(/<BandoriCardAvatarResourcesPreloader \/>/gu) ?? []).length, 1);
+  assert.doesNotMatch(appChrome, /useBandoriCardsMaster|useBandoriCardsAssetIndex/u);
+  assert.match(avatar, /useBandoriCardsAssetIndex\(Boolean\(!pending && cardId\)\)/u);
+  assert.match(avatar, /useBandoriCardsMaster\([\s\S]*Boolean\(!pending && cardId && !resourceSetName\)/u);
   assert.doesNotMatch(hook, /setInterval|INDEX_REVALIDATE_INTERVAL_MS/u);
   assert.match(client, /entry\.state\.value && !options\?\.refresh/u);
   assert.match(client, /options\?\.refresh \? "no-cache" : "default"/u);

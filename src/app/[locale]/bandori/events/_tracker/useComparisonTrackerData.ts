@@ -274,6 +274,7 @@ export function mergeComparisonLines(baseData: TrackerData[], lines: ComparisonL
 
 export function useComparisonTrackerData({
   enabled,
+  paused = false,
   configs,
   events,
   monthlyOptions,
@@ -284,6 +285,7 @@ export function useComparisonTrackerData({
   server,
 }: {
   enabled: boolean;
+  paused?: boolean;
   configs: ComparisonConfig[];
   events: MinimalEvent[];
   monthlyOptions: MonthlyRankingOption[];
@@ -341,13 +343,13 @@ export function useComparisonTrackerData({
   }, [server]);
   const hasLiveAccess = useBandoriTrackerLiveListener(
     liveTarget,
-    enabled && server === 3,
+    enabled && !paused && server === 3,
     handleLiveSnapshot,
   );
 
   useEffect(() => {
     const resolvedConfigs = configs.filter(isResolvedConfig);
-    if (!enabled || resolvedConfigs.length === 0) return;
+    if (!enabled || paused || resolvedConfigs.length === 0) return;
 
     let cancelled = false;
     const loadingTimeoutIds: number[] = [];
@@ -391,7 +393,7 @@ export function useComparisonTrackerData({
         window.clearTimeout(timeoutId);
       }
     };
-  }, [configSignature, configs, enabled, server]);
+  }, [configSignature, configs, enabled, paused, server]);
 
   const comparisonLines = useMemo(() => {
     if (!enabled) return [];

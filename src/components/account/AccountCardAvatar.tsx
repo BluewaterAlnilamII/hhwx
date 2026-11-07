@@ -5,6 +5,7 @@ import { UserRound } from "lucide-react";
 import { useTranslations } from "next-intl";
 import LoadingPlaceholder from "@/components/LoadingPlaceholder";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
+import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { type AccountAvatarCardTrainType } from "@/lib/account-avatar-defaults";
 import { type BandoriServer } from "@/lib/bandori-server";
 import { pickGameProfileCardName } from "@/lib/bandori/cards/game-profile-card";
@@ -46,6 +47,8 @@ export default function AccountCardAvatar({
   const t = useTranslations("bandori.cards.common");
   const commonT = useTranslations("common");
   const preferredServer = useBandoriPreferredServer();
+  // Start both resources together, only when an actual card avatar needs them.
+  useBandoriCardsAssetIndex(Boolean(!pending && cardId));
   const { data: cards, loading } = useBandoriCardsMaster(
     entityServer ?? undefined,
     Boolean(!pending && cardId && !resourceSetName),

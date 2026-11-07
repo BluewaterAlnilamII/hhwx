@@ -70,10 +70,12 @@ export function mergeBestdoriPredictionData(
 
 export function useBestdoriPrediction({
   enabled,
+  paused = false,
   eventId,
   tier,
 }: {
   enabled: boolean;
+  paused?: boolean;
   eventId: number | null;
   tier: number;
 }) {
@@ -88,7 +90,7 @@ export function useBestdoriPrediction({
     requestKey,
     requestUrl,
     normalizePredictionResponse,
-    { ...LIVE_CLIENT_CACHE_POLICY },
+    { ...LIVE_CLIENT_CACHE_POLICY, enabled: !paused },
   );
 
   const predictionPoints = useMemo(

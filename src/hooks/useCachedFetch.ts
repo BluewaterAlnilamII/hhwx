@@ -85,6 +85,7 @@ function isCacheStale(entry: CacheEntry<unknown> | undefined, staleTimeMs: numbe
  * @param url        请求地址（传 null 则跳过请求）
  * @param transform  将原始 JSON 响应转换为目标类型 T 的纯函数
  * @param options.refreshOnVisible  是否在切回前台时自动刷新（默认 true）
+ * @param options.enabled  Pause requests while retaining the current key's data (default true).
  * @param options.staleTimeMs       缓存保鲜时长。命中且未过期时，跳过挂载刷新与可见性刷新。
  * @param options.retainOnError     Return false to discard invalid or expired data after a failed request.
  * @param options.merge  合并策略函数，用于防止静默刷新覆盖实时推送的新数据。
@@ -97,7 +98,7 @@ export function useCachedFetch<T>(
   key: string | null,
   url: string | null,
   transform?: (raw: unknown) => T,
-  options?: { refreshOnVisible?: boolean; staleTimeMs?: number; merge?: (incoming: T, existing: T) => T; retainOnError?: (error: Error, data: T) => boolean }
+  options?: { enabled?: boolean; refreshOnVisible?: boolean; staleTimeMs?: number; merge?: (incoming: T, existing: T) => T; retainOnError?: (error: Error, data: T) => boolean }
 ): { data: T | null; loading: boolean; refreshing: boolean; error: Error | null; refresh: () => void } {
   const refreshOnVisible = options?.refreshOnVisible ?? true;
 
@@ -115,6 +116,7 @@ export function useCachedFetch<T>(
   const [refreshingKey, setRefreshingKey] = useState<string | null>(null);
   const [requestError, setRequestError] = useState<VisibleData<Error> | null>(null);
   const enabled = Boolean(key && url);
+  const requestsEnabled = enabled && options?.enabled !== false;
   const cachedEntry = enabled && key ? readCacheEntry<T>(key) : undefined;
   const currentData = enabled && visibleData?.key === key ? visibleData : null;
   // A successful null/empty response is still loaded. Resolve this during render,
@@ -122,11 +124,12 @@ export function useCachedFetch<T>(
   const hasData = currentData !== null || cachedEntry !== undefined;
   const data = currentData ? currentData.value : cachedEntry?.value ?? null;
   const error = enabled ? selectCachedFetchData(requestError, key) : null;
-  const loading = enabled && !hasData && !error;
-  const refreshing = enabled && hasData && refreshingKey === key;
+  const loading = requestsEnabled && !hasData && !error;
+  const refreshing = requestsEnabled && hasData && refreshingKey === key;
 
   // 使用 ref 持有最新值，避免 doFetch 的 useCallback 因依赖数组为空而产生 stale closure
   const keyRef = useRef(key);
+  const requestsEnabledRef = useRef(requestsEnabled);
   const urlRef = useRef(url);
   const transformRef = useRef(transform);
   const mergeRef = useRef(options?.merge);
@@ -136,12 +139,13 @@ export function useCachedFetch<T>(
 
   useEffect(() => {
     keyRef.current = key;
+    requestsEnabledRef.current = requestsEnabled;
     urlRef.current = url;
     transformRef.current = transform;
     mergeRef.current = options?.merge;
     staleTimeRef.current = options?.staleTimeMs;
     retainOnErrorRef.current = options?.retainOnError;
-  }, [key, options?.merge, options?.staleTimeMs, options?.retainOnError, transform, url]);
+  }, [key, requestsEnabled, options?.merge, options?.staleTimeMs, options?.retainOnError, transform, url]);
 
   const shouldRefresh = useCallback((currentKey: string) => {
     return isCacheStale(readCacheEntry(currentKey), staleTimeRef.current);
@@ -159,7 +163,7 @@ export function useCachedFetch<T>(
     // 从 ref 读取调用时刻的 key / url
     const currentKey = keyRef.current;
     const currentUrl = urlRef.current;
-    if (!currentKey || !currentUrl) return;
+    if (!requestsEnabledRef.current || !currentKey || !currentUrl) return;
     setRequestError(null);
 
     if (silent) {
@@ -219,6 +223,7 @@ export function useCachedFetch<T>(
 
   // key / url 变化时：缓存命中 → 立即显示 + 后台静默刷新；未命中 → 常规 loading
   useEffect(() => {
+    if (key && url && !requestsEnabled) return;
     const timeoutId = window.setTimeout(() => {
       setRefreshingKey(null);
       if (!key || !url) {
@@ -240,7 +245,7 @@ export function useCachedFetch<T>(
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [key, url, doFetch, shouldRefresh]);
+  }, [key, url, requestsEnabled, doFetch, shouldRefresh]);
 
   // 页面从后台切回前台时自动静默刷新
   useEffect(() => {

@@ -12,20 +12,34 @@ import tailwind from "@tailwindcss/postcss";
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
 const root = process.cwd();
-const messages = Object.fromEntries(await Promise.all(["bandori", "comments"].map(async name =>
+const messages = Object.fromEntries(await Promise.all(["bandori", "comments", "common"].map(async name =>
   [name, JSON.parse(await readFile(`messages/zh-CN/${name}.json`, "utf8"))])));
 const bundle = await build({
   absWorkingDir: root, bundle: true, write: false, platform: "browser", format: "esm", jsx: "automatic",
   define: { "process.env": '{"NODE_ENV":"production"}' },
   stdin: { resolveDir: root, loader: "tsx", contents: `
-    import {memo, useCallback, useState} from 'react';
+    import {memo, Suspense, useCallback, useState} from 'react';
     import {createRoot} from 'react-dom/client';
     import {NextIntlClientProvider} from 'next-intl';
+    import {ResponsiveContainer, LineChart, Line} from 'recharts';
     import {EventViewTabs} from './src/app/[locale]/bandori/events/EventViewTabs';
     import {ReactionChip} from './src/components/comments/CommentReactionChip';
+    import {CommentContent} from './src/components/comments/CommentContent';
     import {ComparisonControls} from './src/app/[locale]/bandori/events/_tracker/ComparisonControls';
     import {COMPARISON_LINE_COLORS} from './src/app/[locale]/bandori/events/_tracker/constants';
     const noop = () => {};
+    const chartPoints = [{time:0,ep:0},{time:1,ep:50},{time:2,ep:100}];
+    function CommentLoading() {
+      const [loaded, setLoaded] = useState(false);
+      const stamp = {id: 1, region: 'cn', kind: 'normal', imageName: 'fixture', characterId: null,
+        imageUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', voiceUrl: ''};
+      return <Suspense fallback={<p data-page-loading>加载中</p>}><main>
+        <h1>分数追踪</h1><input aria-label="comment draft" defaultValue="retained draft"/>
+        <button onClick={() => setLoaded(true)}>Load stamp catalog</button>
+        <CommentContent content="before :stamp-cn-1: after" isDeleted={false}
+          stampLookup={new Map(loaded ? [['cn:1:normal', stamp]] : [])}/>
+      </main></Suspense>;
+    }
     const SlowCommit = memo(function SlowCommit({value}) {
       if (window.slowCommits) { const end = performance.now() + 4; while (performance.now() < end) {} }
       return null;
@@ -40,6 +54,11 @@ const bundle = await build({
         {view => <div data-view={view} style={{height: 420, padding: 24}}>
           <h1>{view === 'tracker' ? '分数追踪' : '活动信息'}</h1>
           <input aria-label={view + ' draft'} defaultValue="saved draft" />
+          {view === 'tracker' ? <div data-chart-probe style={{height:180}}>
+            <ResponsiveContainer width="100%" height="100%"><LineChart data={chartPoints}>
+              <Line dataKey="ep" isAnimationActive={false}/>
+            </LineChart></ResponsiveContainer>
+          </div> : null}
         </div>}
       </EventViewTabs>{Array.from({length: 24}, (_,i) => <SlowCommit key={i} value={value} />)}</>;
     }
@@ -72,13 +91,23 @@ const bundle = await build({
         showBestdoriPrediction={false} showDayProjection={false} showInstantProjection={false}/>;
     }
     createRoot(document.getElementById('root')).render(<NextIntlClientProvider locale="zh-CN" timeZone="UTC" messages={${JSON.stringify(messages)}}>
-      {location.pathname === '/tabs' ? <Tabs/> : location.pathname === '/reactions' ? <Reaction/> : <Comparisons/>}
+      {location.pathname === '/comment-loading' ? <CommentLoading/> : location.pathname === '/tabs' ? <Tabs/> : location.pathname === '/reactions' ? <Reaction/> : <Comparisons/>}
     </NextIntlClientProvider>);
   `},
   plugins: [{ name: "fixture-avatar", setup(builder) {
     builder.onResolve({filter: /^@\/components\/account\/AccountCardAvatar$/}, ({path}) => ({path, namespace: "fixture"}));
     builder.onLoad({filter: /.*/, namespace: "fixture"}, () => ({
       contents: "import {createElement} from 'react'; export default () => createElement('span', {style:{display:'inline-block',width:28,height:28}}, '头像');",
+      resolveDir: root,
+    }));
+  }}, { name: "app-router-dynamic", setup(builder) {
+    // Exercise App Router's real lazy boundary, with a deliberately delayed module.
+    builder.onResolve({filter: /^next\/dynamic$/}, ({path}) => ({path, namespace: "app-dynamic"}));
+    builder.onLoad({filter: /.*/, namespace: "app-dynamic"}, () => ({
+      contents: `import dynamic from 'next/dist/shared/lib/app-dynamic';
+        export default (loader, options) => dynamic(() => new Promise(resolve => {
+          window.releaseStampModule = () => resolve(loader());
+        }), options);`,
       resolveDir: root,
     }));
   }}],
@@ -99,9 +128,23 @@ try {
     const errors = [];
     page.on("pageerror", error => { errors.push(error.message); console.error(error.message); });
     const base = `http://localhost:${server.address().port}`;
+    await page.goto(`${base}/comment-loading`);
+    await page.getByRole('textbox', {name: 'comment draft'}).fill('keep this draft');
+    await page.getByRole('button', {name: 'Load stamp catalog'}).click();
+    await page.waitForFunction(() => typeof window.releaseStampModule === 'function');
+    await page.waitForTimeout(400);
+    assert.equal(await page.locator('[data-page-loading]').count(), 0, `${width}: a pending stamp must not hide the page`);
+    assert.ok(await page.getByRole('heading', {name: '分数追踪'}).isVisible());
+    assert.equal(await page.getByRole('textbox', {name: 'comment draft'}).inputValue(), 'keep this draft');
+    await page.evaluate(() => { window.releaseStampModule(); });
+    await page.getByRole('img', {name: ':stamp-cn-1:', exact: true}).waitFor();
+    assert.equal(await page.locator('[data-page-loading]').count(), 0);
+    assert.equal(await page.getByRole('textbox', {name: 'comment draft'}).inputValue(), 'keep this draft');
     await page.goto(`${base}/tabs`);
     await page.getByRole("tab", {name: "活动信息"}).waitFor();
     await page.getByRole("textbox", {name: "tracker draft"}).fill("retained planner draft");
+    await page.locator('[data-chart-probe] .recharts-line-curve').waitFor();
+    await page.evaluate(() => { window.retainedCurve = document.querySelector('[data-chart-probe] .recharts-line-curve'); });
     await page.evaluate(() => { window.slowCommits = true; });
     for (const [label, destination] of [["活动信息", "info"], ["分数追踪", "tracker"]]) {
       await page.evaluate(() => {
@@ -137,6 +180,9 @@ try {
       assert.ok(arrived >= 0, `${width}: destination was displayed`);
       assert.ok(frames.slice(arrived).every(visible => visible.length === 1 && visible[0] === destination),
         `${width}: completed slide must not flash the previous panel: ${JSON.stringify(frames)}`);
+      assert.ok(await page.evaluate(() => window.retainedCurve.isConnected
+        && window.retainedCurve === document.querySelector('[data-chart-probe] .recharts-line-curve')),
+        `${width}: hiding/restoring a tab preserves the rendered chart curve`);
     }
     assert.equal(await page.getByRole("textbox", {name: "tracker draft"}).inputValue(), "retained planner draft");
     await page.evaluate(() => { window.slowCommits = false; });
@@ -207,7 +253,7 @@ try {
     assert.deepEqual(await colors(), before);
     assert.deepEqual(errors, []);
     await page.close();
-    console.log(`PASS ${width}px: tab frames, cancelled/reversed transitions, retained draft, reduced motion, async popup frames, hidden comparison colors`);
+    console.log(`PASS ${width}px: isolated stamp loading, tab frames, cancelled/reversed transitions, retained draft, reduced motion, async popup frames, hidden comparison colors`);
   }
 } finally {
   await browser.close();

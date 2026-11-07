@@ -186,7 +186,7 @@ test("event tracker renders the shared tracker surface for every server", () => 
   assert.match(eventTrackerPageSource, /const trackerVisible = activeView === "tracker" \|\| previewView === "tracker"/u);
   assert.match(
     eventTrackerPageSource,
-    /selectedServer,\s*hasAppliedInitialUrlState && trackerVisible && !isTop10Selected,/u,
+    /selectedServer,\s*hasAppliedInitialUrlState && !isTop10Selected,\s*!trackerVisible,/u,
   );
   assert.doesNotMatch(eventTrackerPageSource, /activeView === "tracker" \? selectedServer === 3/u);
   assert.doesNotMatch(eventTrackerPageSource, /分数追踪数据尚未接入|页面结构和服务器上下文已经就绪/u);

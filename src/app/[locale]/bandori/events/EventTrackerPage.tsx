@@ -2,7 +2,7 @@
 
 import LoadingIndicator from "@/components/LoadingIndicator";
 
-import { Suspense, useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
+import { Activity, Suspense, useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import * as Tabs from "@radix-ui/react-tabs";
@@ -70,6 +70,7 @@ import {
   type EventTrackerView,
 } from "./urlQuery";
 import { buildBandoriEventsPath, parseBandoriEventRouteId } from "@/lib/bandori/events/route";
+import type { BandoriEventSummary } from "@/lib/bandori/events/summary";
 import { mergeComparisonLines, useComparisonTrackerData } from "./_tracker/useComparisonTrackerData";
 import { mergeBestdoriPredictionData, useBestdoriPrediction } from "./_tracker/useBestdoriPrediction";
 import { buildTooltipSignature, type HoverTooltipState } from "./_tracker/useTrackerHoverTooltip";
@@ -207,6 +208,9 @@ function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: 
 
 type EventTrackerPageProps = {
   initialEventId: number | null;
+  initialEvent?: BandoriEventSummary;
+  initialServer?: BandoriServer;
+  initialBannerUrls?: string[];
 };
 
 function EventTrackerRouteStateSync({
@@ -232,25 +236,25 @@ function EventTrackerRouteStateSync({
   return null;
 }
 
-function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
+function EventTrackerPageContent({ initialEventId, initialEvent, initialServer, initialBannerUrls }: EventTrackerPageProps) {
   useEventKeyboardViewport();
   const locale = useLocale();
   const commonT = useTranslations("bandori.events.common");
+  const trackerT = useTranslations("bandori.events.tracker");
   const sharedT = useTranslations("common");
   const calculatorT = useTranslations("bandori.events.calculator");
   const router = useRouter();
   const preferredServer = useBandoriPreferredServer();
   const hasHydratedPreferredServer = useBandoriPreferencesStore((state) => state.hydrated);
-  const { music: masterMusic, loading: musicLoading, error: musicError, refresh: refreshMusic } = useBandoriMusicMaster();
   const { value: eventAssetIndex, loading: eventAssetIndexLoading, error: eventAssetIndexError } = useBandoriEventsAssetIndex();
-  const [currentEventId, setCurrentEventId] = useState<number | null>(null);
+  const [currentEventId, setCurrentEventId] = useState<number | null>(initialEventId);
   const [trackingMode, setTrackingMode] = useState<TrackingMode>("event");
   const [selectedRanking, setSelectedRanking] = useState<TrackerRankingSelection>(() => getDefaultTierForMode("event"));
   const [selectedSongId, setSelectedSongId] = useState<number>(0);
   const [selectedMonthlyMonthId, setSelectedMonthlyMonthId] = useState<number>(
     () => getCurrentMonthlyRankingWindow(DEFAULT_BANDORI_PREFERRED_SERVER).monthId,
   );
-  const [selectedServer, setSelectedServer] = useState<BandoriServer>(DEFAULT_BANDORI_PREFERRED_SERVER);
+  const [selectedServer, setSelectedServer] = useState<BandoriServer>(initialServer ?? DEFAULT_BANDORI_PREFERRED_SERVER);
   const [activeView, setActiveView] = useState<EventTrackerView>("tracker");
   const [previewView, setPreviewView] = useState<EventTrackerView | null>(null);
   const trackerVisible = activeView === "tracker" || previewView === "tracker";
@@ -307,7 +311,13 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
     selectedSongId,
     selectedMonthlyMonthId,
     selectedServer,
-    hasAppliedInitialUrlState && trackerVisible && !isTop10Selected,
+    hasAppliedInitialUrlState && !isTop10Selected,
+    !trackerVisible,
+    initialEvent,
+  );
+  const { music: masterMusic, loading: musicLoading, error: musicError, refresh: refreshMusic } = useBandoriMusicMaster(
+    hasAppliedInitialUrlState && (activeView === "info" || previewView === "info"
+      || (trackingMode === "song" && eventMeta?.eventType === "challenge")),
   );
 
   const calculatorKey = `${selectedServer}:${resolvedCurrentEventId}`;
@@ -876,9 +886,10 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
       getBandoriServerCode(candidateServer),
     ))
     .find((candidate) => candidate !== null) ?? null;
-  const bannerUrl = buildBandoriPublicAssetUrl(
-    bannerAsset,
-  ) ?? "";
+  const bannerUrl = buildBandoriPublicAssetUrl(bannerAsset)
+    ?? (!eventAssetIndex && resolvedCurrentEventId === initialEventId
+      ? getBandoriRegionalDisplayOrder(selectedServer).map(server => initialBannerUrls?.[server]).find(Boolean)
+      : null) ?? "";
   const eventDetail = useBandoriEventDetail(
     resolvedCurrentEventId,
     hasAppliedInitialUrlState && (activeView === "info" || previewView === "info"),
@@ -902,12 +913,14 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
   );
   const finalDisplayedData = useFinalDisplayedData(fullProcessedData, cutoffEnd, status, showInstantProjection, showDayProjection);
   const bestdoriPrediction = useBestdoriPrediction({
-    enabled: hasAppliedInitialUrlState && selectedServer === 3 && trackerVisible && trackingMode === "event" && !isTop10Selected && status === "ongoing" && showBestdoriPrediction,
+    enabled: hasAppliedInitialUrlState && selectedServer === 3 && trackingMode === "event" && !isTop10Selected && status === "ongoing" && showBestdoriPrediction,
+    paused: !trackerVisible,
     eventId: resolvedCurrentEventId,
     tier: selectedTier,
   });
   const { comparisonLines } = useComparisonTrackerData({
-    enabled: hasAppliedInitialUrlState && trackerVisible && !isTop10Selected && (trackingMode === "event" || trackingMode === "monthly"),
+    enabled: hasAppliedInitialUrlState && !isTop10Selected && (trackingMode === "event" || trackingMode === "monthly"),
+    paused: !trackerVisible,
     configs: activeComparisonConfigs,
     events: allEvents,
     monthlyOptions: monthlyRankingOptions,
@@ -1022,14 +1035,15 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
   useEffect(() => {
     const viewport = scrollContainerRef.current;
     if (!viewport) return;
-    const observer = new ResizeObserver(() => {
-      syncChartViewportMetrics();
+    const observer = new ResizeObserver(([entry]) => {
+      const height = entry?.borderBoxSize[0]?.blockSize;
+      if (!height) return;
+      setChartViewportHeight(previous => previous === height ? previous : height);
       scheduleTooltipPositionUpdate();
     });
     observer.observe(viewport);
-    syncChartViewportMetrics();
     return () => observer.disconnect();
-  }, [activeView, previewView, isTop10Selected, trackingMode, scheduleTooltipPositionUpdate, syncChartViewportMetrics]);
+  }, [trackerVisible, isTop10Selected, trackingMode, scheduleTooltipPositionUpdate]);
 
   useEffect(() => {
     const rebuildChart = () => {
@@ -1060,6 +1074,15 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
   );
   const comparisonChartKey = comparisonConfigs.map((config) => `${config.targetType}:${config.targetId}:${config.tier}`).join(",");
   const chartContainerKey = `${selectedServer}-${resolvedCurrentEventId ?? "none"}-${trackingMode}-${selectedMonthlyMonthId}-${selectedTier}-${resolvedSelectedSongId}-${comparisonChartKey}-${comparisonAlignment}-${showBestdoriPrediction}-${bestdoriPrediction.status}-${chartRenderRevision}`;
+  const chartTitle = trackerT(trackingMode === "song" && resolvedSelectedSongId > 0 ? "chart.songTitle" : "chart.title", {
+    server: getBandoriServerCode(selectedServer).toUpperCase(),
+    target: trackingMode === "monthly"
+      ? monthlyRankingOptions.find(option => option.monthId === selectedMonthlyMonthId)?.shortLabel ?? "—"
+      : trackerT("chart.eventNumber", { eventId: resolvedCurrentEventId ?? "—" }),
+    mode: trackerT(`modes.${trackingMode}`),
+    ranking: isTop10Selected ? "TOP10" : `T${selectedTier}`,
+    songId: resolvedSelectedSongId,
+  });
 
   // ===== 分数摘要 =====
   const scoreSummary = useMemo(() => {
@@ -1118,6 +1141,8 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
           loading={!hasAppliedInitialUrlState || catalogLoading}
           bannerLoading={eventAssetIndexLoading}
           bannerError={catalogError ?? eventAssetIndexError}
+          catalogError={catalogError}
+          onRetryCatalog={refreshCatalog}
           startText={startDate ? `${formatBandoriDateTime(startDate, eventTimeServer, locale)} (${getBandoriServerCode(eventTimeServer).toUpperCase()})` : null}
           endText={endDate ? `${formatBandoriDateTime(endDate, eventTimeServer, locale)} (${getBandoriServerCode(eventTimeServer).toUpperCase()})` : null}
           recommendedEventId={recommendedEventId !== null ? String(recommendedEventId) : null}
@@ -1127,19 +1152,12 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
 
         {view => view === "tracker" ? (
           <>
-            {catalogError || trackerError ? (
-              <div role="alert" className="hhwx-panel border p-4 text-sm">
-                {sharedT("states.loadFailed")}{" "}
-                <button type="button" className="underline" onClick={() => {
-                  if (catalogError) refreshCatalog();
-                  if (trackerError) refreshTracker();
-                }}>{sharedT("actions.retry")}</button>
-              </div>
-            ) : null}
             {/* ========== 导航与控制区 ========== */}
             <div className="event-tracker-surface hhwx-panel space-y-4 border p-4 sm:space-y-5 sm:p-6">
-            {eventStatusStartDate !== null && eventStatusEndDate !== null ? (
-              <EventProgressBar startDate={eventStatusStartDate} endDate={eventStatusEndDate} />
+            {hasAppliedInitialUrlState && eventStatusStartDate !== null && eventStatusEndDate !== null ? (
+              <Activity mode={trackerVisible ? "visible" : "hidden"}>
+                <EventProgressBar startDate={eventStatusStartDate} endDate={eventStatusEndDate} />
+              </Activity>
             ) : null}
           <Tabs.Root
             value={trackingMode}
@@ -1177,12 +1195,24 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
             <Tabs.Content value={trackingMode} className="event-tracker-content w-full outline-hidden focus:outline-hidden">
               <div data-calculator-open={calculatorOpen} data-calculator-motion={calculator ? !calculator.autoOpened : false} className="event-pt-calculator-layout grid items-start gap-y-4">
               <div className="event-chart-surface relative min-w-0">
+                <h2 className="event-chart-title mb-2 px-0.5 text-balance text-[15px] font-semibold leading-6 text-[var(--theme-color-text-default)] sm:text-base">
+                  {chartTitle}
+                </h2>
+                {!isTop10Selected && trackerError ? (
+                  <div role="alert" className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 px-0.5 text-[13px] text-[var(--theme-color-semantic-danger-foreground)]">
+                    <span>{trackerT(chartData.length > 0 ? "chart.updateFailed" : "chart.loadFailed")}</span>
+                    <button type="button" className="event-retry rounded-sm underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-[var(--theme-color-focus-ring)]" onClick={refreshTracker}>
+                      {sharedT("actions.retry")}
+                    </button>
+                  </div>
+                ) : null}
 
                 {!isTop10Selected && loading && (
                   <LoadingIndicator label={commonT("loadingLatestData")} className="absolute inset-0 z-30 rounded-2xl bg-[color-mix(in_srgb,var(--theme-color-panel-background)_75%,transparent)]" />
                 )}
 
                 {isTop10Selected ? (
+                  <Activity mode={trackerVisible ? "visible" : "hidden"}>
                   <Top10Panel
                     chartAnchorRef={chartAnchorRef}
                     calculatorProjection={calculatorProjection}
@@ -1203,8 +1233,10 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
                     tooltipRef={tooltipRef}
                     trackingMode={trackingMode}
                   />
+                  </Activity>
                 ) : (
                   <>
+                <Activity mode={trackerVisible ? "visible" : "hidden"}>
                 <TrackerStatusSummary
                   bestdoriPrediction={bestdoriPrediction}
                   scoreSummary={scoreSummary}
@@ -1213,8 +1245,10 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
                   status={status}
                   trackingMode={trackingMode}
                 />
+                </Activity>
 
                 <TrackerChartPanel
+                  zoomKey={`${selectedServer}-${resolvedCurrentEventId}-${trackingMode}-${selectedMonthlyMonthId}-${selectedTier}-${resolvedSelectedSongId}`}
                   chartAnchorRef={chartAnchorRef}
                   calculatorProjection={calculatorProjection}
                   bestdoriPredictionPointCount={bestdoriPrediction.predictionPoints.length}
@@ -1228,6 +1262,7 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
                   domainStart={domainStart}
                   hasRenderableChartData={hasRenderableChartData}
                   isLoading={loading}
+                  hasError={Boolean(trackerError)}
                   midnights={midnights}
                   nonWorkingDayBands={nonWorkingDayBands}
                   scheduleTooltipPositionUpdateRef={scheduleTooltipPositionUpdateRef}
@@ -1240,9 +1275,7 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
                   trackingMode={trackingMode}
                   yDomainInfo={yDomainInfo}
                   yTicks={yTicks}
-                />
-
-                <ComparisonControls
+                  renderControls={() => <ComparisonControls
                   bestdoriPrediction={bestdoriPrediction}
                   canAddComparisonRow={canAddComparisonRow}
                   comparisonAlignment={comparisonAlignment}
@@ -1268,6 +1301,7 @@ function EventTrackerPageContent({ initialEventId }: EventTrackerPageProps) {
                   showInstantProjection={showInstantProjection}
                   status={status}
                   trackingMode={trackingMode}
+                />}
                 />
                   </>
                 )}

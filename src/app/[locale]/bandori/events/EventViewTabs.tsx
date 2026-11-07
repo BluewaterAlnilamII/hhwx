@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Activity, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import type { EventTrackerView } from "./urlQuery";
 
@@ -143,11 +143,18 @@ export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, c
     let frame = 0;
     let timer = 0;
     const index = views.indexOf(value);
-    const position = (next: number) => root.style.setProperty("--event-view-position", String(next));
+    const position = (next: number) => {
+      // A changing inherited variable invalidates styles throughout both panels.
+      body.querySelectorAll<HTMLElement>(".event-view-panel").forEach((panel, panelIndex) => {
+        panel.style.transform = `translateX(${(panelIndex - next) * 100}%)`;
+      });
+      const indicator = strip.querySelector<HTMLElement>(".event-view-indicator");
+      if (indicator) indicator.style.transform = `translateX(${next * 100}%)`;
+    };
     const stop = () => { cancelAnimationFrame(frame); window.clearTimeout(timer); };
     const prepare = () => {
       const panel = body.querySelector<HTMLElement>("[data-active=true]");
-      const transform = panel ? getComputedStyle(panel).transform : "none";
+      const transform = panel && root.hasAttribute("data-moving") ? getComputedStyle(panel).transform : "none";
       const current = transform === "none" ? index : index - new DOMMatrixReadOnly(transform).m41 / body.clientWidth;
       stop();
       delete root.dataset.settling;
@@ -191,7 +198,7 @@ export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, c
     <span ref={sentinel} className="event-view-sentinel" aria-hidden />
     <div className="event-view-tabs">
       <div ref={bar} role="tablist" aria-label={t("label")} className="event-view-tabs-bar">
-        <span className="event-view-indicator" aria-hidden />
+        <span className="event-view-indicator" style={{ transform: `translateX(${views.indexOf(value) * 100}%)` }} aria-hidden />
         {views.map((view, index) => <button key={view} type="button" role="tab" id={`${id}-${view}`}
           aria-selected={value === view} aria-controls={`${id}-${view}-panel`} tabIndex={value === view ? 0 : -1}
           onClick={() => selectView.current(view)}
@@ -206,11 +213,12 @@ export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, c
       </div>
     </div>
     <div ref={viewport} className="event-view-viewport">
-      {views.map((view, index) => <Activity key={view} mode={value === view || moving ? "visible" : "hidden"}>
+      {/* Keep chart layout/effects intact; the tracker pauses its data work separately. */}
+      {views.map((view, index) => <Activity key={view} mode={view === "tracker" || value === view || moving ? "visible" : "hidden"}>
         <div id={`${id}-${view}-panel`}
         role="tabpanel" aria-labelledby={`${id}-${view}`} aria-hidden={value !== view} inert={value !== view}
         className="event-view-panel" data-active={value === view}
-        style={{ "--event-panel-index": index } as CSSProperties}>{children(view)}</div>
+        style={{ transform: `translateX(${(index - views.indexOf(value)) * 100}%)` }}>{children(view)}</div>
       </Activity>)}
     </div>
   </div>;
