@@ -37,8 +37,8 @@ test("TOP10 adapts its data into the mature tracker components", () => {
   assert.match(top10PanelSource, /lineSeries=\{lineSeries\}/u);
   assert.match(top10PanelSource, /nonWorkingDayBands=\{nonWorkingDayBands\}/u);
   assert.match(top10PanelSource, /showScoreValues=\{false\}/u);
-  assert.doesNotMatch(top10PanelSource, /zoomEnabled|zoomWidthMultiplier|onZoomIn/u);
-  assert.doesNotMatch(trackerChartPanelSource, /zoomEnabled|zoomWidthMultiplier|onZoomIn|overflow-x-auto/u);
+  assert.match(top10PanelSource, /zoomEnabled=\{false\}/u);
+  assert.doesNotMatch(trackerChartPanelSource, /overflow-x-auto/u);
   assert.match(trackerActiveMarkerOverlaySource, /BANDORI_TOPDATA_MAX_SAMPLE_SIZE/u);
   assert.doesNotMatch(top10PanelSource, /Top10ChartPanel/u);
 });

@@ -58,6 +58,8 @@
     "serverLabel": "Server",
     "switchServer": "Switch to {server} server",
     "eventLabel": "Event",
+    "catalogLoadFailed": "Event list failed to load",
+    "catalogUpdateFailed": "Event list update failed; showing the previously loaded list",
     "noSearchResults": "No matching events — try an event name or ID",
     "bannerAlt": "Event banner",
     "recommendedLabel": "Latest event",
@@ -246,6 +248,14 @@
         "daySpeed": "24h speed"
       },
       "chart": {
+        "title": "{server} {target} {mode} {ranking}",
+        "songTitle": "{server} {target} {mode} #{songId} {ranking}",
+        "eventNumber": "Event {eventId}",
+        "loadFailed": "Score tracking data failed to load",
+        "updateFailed": "Score update failed; showing previously loaded data",
+        "zoom": "Chart zoom",
+        "zoomIn": "Zoom in",
+        "zoomOut": "Zoom out",
         "noTierData": "No tracking data for this ranking tier"
       },
       "top10": {

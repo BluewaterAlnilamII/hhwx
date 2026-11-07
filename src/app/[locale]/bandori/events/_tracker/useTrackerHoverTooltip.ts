@@ -23,6 +23,7 @@ export type ActiveChartMarker = {
   y: number;
   color: string;
   radius: number;
+  label?: string;
 };
 
 type UseTrackerHoverTooltipArgs = {

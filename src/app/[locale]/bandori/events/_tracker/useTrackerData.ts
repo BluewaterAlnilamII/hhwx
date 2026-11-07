@@ -166,6 +166,8 @@ export function useTrackerData(
   selectedMonthlyMonthId: number | null,
   server: BandoriServer,
   enabled = true,
+  paused = false,
+  initialEvent?: BandoriEventSummary,
 ) {
   const t = useTranslations("bandori.events.common");
   const [liveCutoffsByKey, setLiveCutoffsByKey] = useState<Record<string, TrackerData[]>>({});
@@ -185,8 +187,10 @@ export function useTrackerData(
   );
 
   const eventMetaMap = useMemo(() => {
-    return new Map<number, BandoriEventSummary>(eventCatalog.map((event) => [event.eventId, event]));
-  }, [eventCatalog]);
+    const events = new Map<number, BandoriEventSummary>(eventCatalog.map((event) => [event.eventId, event]));
+    if (!eventCatalogRequest.loaded && initialEvent) events.set(initialEvent.eventId, initialEvent);
+    return events;
+  }, [eventCatalog, eventCatalogRequest.loaded, initialEvent]);
 
   const allEvents = useMemo<MinimalEvent[]>(() => {
     return eventCatalog
@@ -327,6 +331,7 @@ export function useTrackerData(
     {
       merge: trackerMerge,
       ...LIVE_CLIENT_CACHE_POLICY,
+      enabled: !paused,
     }
   );
 
@@ -379,7 +384,7 @@ export function useTrackerData(
 
   const hasPrivateLiveAccess = useBandoriTrackerLiveListener(
     liveTarget,
-    canUseTrackerLive,
+    canUseTrackerLive && !paused,
     handlePrivateLiveSnapshot,
   );
   const liveCutoffsForView = trackerCacheKey && hasPrivateLiveAccess

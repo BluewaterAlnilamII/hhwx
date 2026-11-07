@@ -47,6 +47,8 @@ type BandoriEventSwitcherProps = {
   bannerAlt?: string;
   bannerLoading?: boolean;
   bannerError?: Error | null;
+  catalogError?: Error | null;
+  onRetryCatalog?: () => void;
   startText?: ReactNode;
   endText?: ReactNode;
   recommendedEventId?: string | null;
@@ -69,6 +71,8 @@ export default function BandoriEventSwitcher({
   bannerAlt,
   bannerLoading = false,
   bannerError,
+  catalogError,
+  onRetryCatalog,
   startText,
   endText,
   recommendedEventId,
@@ -104,7 +108,7 @@ export default function BandoriEventSwitcher({
     setSearchQuery("");
   };
 
-  const showSkeleton = loading || (!allowNoEvent && events.length === 0);
+  const showSkeleton = loading || (!allowNoEvent && events.length === 0 && !catalogError);
 
   return (
     <div className={cn("hhwx-panel relative z-20 grid grid-cols-1 gap-6 border p-4 sm:p-8 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] xl:items-center xl:gap-10", className)}>
@@ -292,6 +296,12 @@ export default function BandoriEventSwitcher({
               <div className="h-11 w-11 motion-safe:animate-pulse rounded-xl bg-[var(--theme-color-control-background-muted)]" />
             </div>
           )}
+          {catalogError ? (
+            <div role="alert" className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-[var(--theme-color-semantic-danger-foreground)]">
+              <span>{t(events.length > 0 ? "catalogUpdateFailed" : "catalogLoadFailed")}</span>
+              {onRetryCatalog ? <button type="button" onClick={onRetryCatalog} className="event-retry rounded-sm underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-[var(--theme-color-focus-ring)]">{commonT("actions.retry")}</button> : null}
+            </div>
+          ) : null}
         </div>
 
         <h1
@@ -344,6 +354,7 @@ export default function BandoriEventSwitcher({
               loadingLabel={commonT("states.loading")}
               loading="eager"
               fetchPriority="high"
+              revealBeforeHydration
               decoding="async"
               onError={() => setFailedBannerUrl(bannerUrl)}
               className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 hover:scale-105"

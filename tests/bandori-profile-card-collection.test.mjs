@@ -616,7 +616,7 @@ test("profile cards and team builder use one shared collection implementation", 
   const [
     page,
     teamBuilderPage,
-    appChrome,
+    accountAvatar,
     panel,
     picker,
     pickerDialog,
@@ -640,7 +640,7 @@ test("profile cards and team builder use one shared collection implementation", 
   ] = await Promise.all([
     readSource("src/app/[locale]/bandori/game-profiles/[profileId]/cards/page.tsx"),
     readSource("src/app/[locale]/bandori/teambuilder/page.tsx"),
-    readSource("src/components/AppChrome.tsx"),
+    readSource("src/components/account/AccountCardAvatar.tsx"),
     readSource("src/app/[locale]/bandori/teambuilder/CardPreferencesPanel.tsx"),
     readSource("src/components/bandori/card-picker/BandoriCardPicker.tsx"),
     readSource("src/components/bandori/card-picker/BandoriCardPickerDialog.tsx"),
@@ -690,7 +690,7 @@ test("profile cards and team builder use one shared collection implementation", 
   assert.match(page, /DynamicGameProfileCardEditorDialog/u);
   assert.doesNotMatch(page, /import GameProfileCardEditorDialog from/u);
   assert.match(page, /mutedCardIds=\{draftCardIdSet\}/u);
-  assert.match(appChrome, /useBandoriCardsAssetIndex\(\)/u);
+  assert.match(accountAvatar, /useBandoriCardsAssetIndex\(Boolean\(!pending && cardId\)\)/u);
   assert.doesNotMatch(page, /useBandoriCardsAssetIndex/u);
   assert.match(pickerDialog, /mutedCardIds=\{mutedCardIds\}/u);
   assert.match(picker, /isMuted=\{mutedCardIds\?\.has\(card\.cardId\) \?\? false\}/u);

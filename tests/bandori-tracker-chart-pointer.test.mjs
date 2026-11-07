@@ -10,13 +10,14 @@ class Events {
   }
   removeEventListener(type, fn) { this.listeners.get(type)?.delete(fn); }
   emit(type, properties = {}) {
-    const event = { type, target: this, pointerId: 1, pointerType: "touch", isPrimary: true, button: 0, clientX: 150, clientY: 90, ...properties };
+    const event = { type, target: this, pointerId: 1, pointerType: "touch", isPrimary: true, button: 0, clientX: 150, clientY: 90, timeStamp: performance.now(), cancelable: true, preventDefault() { this.defaultPrevented = true; }, ...properties };
     this.listeners.get(type)?.forEach(fn => fn(event));
+    return event;
   }
   get listenerCount() { return [...this.listeners.values()].reduce((sum, set) => sum + set.size, 0); }
 }
 
-function chart(context) {
+function chart(context, callbacks = {}) {
   const view = new Events();
   const document = Object.assign(new Events(), { defaultView: view });
   const captures = new Set();
@@ -33,6 +34,7 @@ function chart(context) {
   const cleanup = bindTrackerChartPointer(layer, {
     onPoint: (x, y, contact) => { selection = { x, y, contact }; updates++; },
     onClear: () => { selection = null; },
+    ...callbacks,
   });
   context.after(cleanup);
   return { layer, document, view, captures, cleanup, get selection() { return selection; }, get updates() { return updates; } };
@@ -45,6 +47,60 @@ test("mouse hover reads a point and clears on leaving", context => {
   c.layer.emit("pointerleave", { pointerType: "mouse" });
   assert.equal(c.selection, null);
   c.layer.emit("pointerdown", { pointerType: "mouse", button: 2 });
+  assert.equal(c.selection, null);
+});
+
+test("two fingers continuously pan and pinch, then wait for all fingers to lift", context => {
+  const gestures = [];
+  let ended = 0;
+  const c = chart(context, {
+    onGestureStart: center => gestures.push({ center, ratio: 1 }),
+    onGesture: (center, ratio) => gestures.push({ center, ratio }),
+    onGestureEnd: () => ended++,
+  });
+  c.layer.emit("pointerdown", { clientX: 150 });
+  c.layer.emit("pointerdown", { pointerId: 2, isPrimary: false, clientX: 250 });
+  assert.deepEqual(gestures[0], { center: 100, ratio: 1 });
+  c.layer.emit("pointermove", { pointerId: 2, clientX: 310 });
+  assert.deepEqual(gestures.at(-1), { center: 130, ratio: 1.6 });
+  assert.equal(c.selection, null);
+  assert.deepEqual([...c.captures], [1, 2]);
+  c.layer.emit("pointerup", { pointerId: 2 });
+  const count = gestures.length;
+  c.layer.emit("pointermove", { clientX: 200 });
+  assert.equal(gestures.length, count);
+  assert.equal(c.selection, null);
+  assert.equal(ended, 1);
+  c.layer.emit("pointerup");
+  c.layer.emit("pointerdown");
+  assert.notEqual(c.selection, null);
+});
+
+test("mouse drag pans only after crossing the movement threshold", context => {
+  const gestures = [];
+  const c = chart(context, {
+    canPan: () => true,
+    onGestureStart: center => gestures.push({ center, ratio: 1 }),
+    onGesture: (center, ratio) => gestures.push({ center, ratio }),
+  });
+  c.layer.emit("pointerdown", { pointerType: "mouse" });
+  c.layer.emit("pointermove", { pointerType: "mouse", clientX: 152 });
+  assert.equal(gestures.length, 0);
+  c.layer.emit("pointermove", { pointerType: "mouse", clientX: 180 });
+  assert.deepEqual(gestures, [{ center: 50, ratio: 1 }, { center: 80, ratio: 1 }]);
+  c.layer.emit("pointerleave", { pointerType: "mouse" });
+  c.layer.emit("pointerup", { pointerType: "mouse" });
+  assert.equal(c.captures.size, 0);
+});
+
+test("zoom controls keep the selected point while ordinary outside clicks dismiss it", context => {
+  const button = {};
+  const c = chart(context, { isControlTarget: target => target === button });
+  c.layer.emit("pointerdown");
+  c.layer.emit("pointerup");
+  c.document.emit("pointerdown", { target: button });
+  assert.notEqual(c.selection, null);
+  c.document.emit("pointerdown");
   assert.equal(c.selection, null);
 });
 
@@ -124,4 +180,51 @@ test("unmount removes listeners and releases pointer capture", context => {
   assert.equal(c.updates, previousUpdates);
   assert.equal(c.captures.size, 0);
   assert.equal(c.layer.listenerCount + c.document.listenerCount + c.view.listenerCount, 0);
+});
+
+test("double tap zooms only on release and ordinary point selection stays immediate", context => {
+  const steps=[];
+  const c=chart(context,{canZoom:()=>true,onDoubleTap:x=>steps.push(x)});
+  for(const base of [0,400,800]) {
+    c.layer.emit('pointerdown',{timeStamp:base});
+    assert.notEqual(c.selection,null);
+    c.layer.emit('pointerup',{timeStamp:base+30});
+    c.layer.emit('pointerdown',{timeStamp:base+130});
+    assert.equal(steps.length,base/400);
+    c.layer.emit('pointerup',{timeStamp:base+160});
+  }
+  assert.deepEqual(steps,[50,50,50]);
+});
+
+test("double tap drag zooms both ways without committing a step", context => {
+  const ratios=[];let steps=0;
+  const c=chart(context,{canZoom:()=>true,onDoubleTap:()=>steps++,onGestureStart:()=>{},onGesture:(_x,r)=>ratios.push(r)});
+  c.layer.emit('pointerdown',{timeStamp:0});c.layer.emit('pointerup',{timeStamp:30});
+  c.layer.emit('pointerdown',{timeStamp:100});
+  c.layer.emit('pointermove',{clientY:-30});
+  c.layer.emit('pointermove',{clientY:210});
+  c.layer.emit('pointerup',{timeStamp:200,clientY:210});
+  assert.deepEqual(ratios,[2,0.5]);assert.equal(steps,0);
+  c.layer.emit('pointerdown',{timeStamp:210});assert.notEqual(c.selection,null);
+});
+
+test("dragging, long presses and cancellation cannot prime a double tap", context => {
+  let steps=0;const c=chart(context,{canZoom:()=>true,onDoubleTap:()=>steps++});
+  c.layer.emit('pointerdown',{timeStamp:0});c.layer.emit('pointermove',{clientX:200});c.layer.emit('pointerup',{timeStamp:50});
+  c.layer.emit('pointerdown',{timeStamp:100});c.layer.emit('pointerup',{timeStamp:500});
+  c.layer.emit('pointerdown',{timeStamp:550});c.layer.emit('pointercancel',{timeStamp:580});
+  c.layer.emit('pointerdown',{timeStamp:600});c.layer.emit('pointerup',{timeStamp:630});
+  assert.equal(steps,0);
+});
+
+test("wheel requires activation, normalizes units, and releases on Escape or leaving", context => {
+  const moves=[];const c=chart(context,{canZoom:()=>true,onWheel:(x,d)=>moves.push([x,d])});
+  const wheel=extra=>c.layer.emit('wheel',{deltaY:-3,deltaMode:1,...extra});
+  assert.ok(!wheel().defaultPrevented);
+  c.layer.emit('pointerdown',{pointerType:'mouse'});c.layer.emit('pointerup',{pointerType:'mouse'});
+  assert.ok(wheel().defaultPrevented);assert.deepEqual(moves,[[50,-48]]);
+  assert.ok(!wheel({ctrlKey:true}).defaultPrevented);
+  c.document.emit('keydown',{key:'Escape'});assert.ok(!wheel().defaultPrevented);
+  c.layer.emit('pointerdown',{pointerType:'mouse'});c.layer.emit('pointerup',{pointerType:'mouse'});
+  c.layer.emit('pointerleave',{pointerType:'mouse'});assert.ok(!wheel().defaultPrevented);
 });

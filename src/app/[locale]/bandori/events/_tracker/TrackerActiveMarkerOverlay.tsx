@@ -9,6 +9,7 @@ import {
   useRef,
   type CSSProperties,
 } from "react";
+import { Text } from "recharts";
 
 import { BANDORI_TOPDATA_MAX_SAMPLE_SIZE } from "@/lib/bandori/event-tracker/topdata-contract";
 import type { ActiveChartMarker } from "./useTrackerHoverTooltip";
@@ -183,6 +184,10 @@ export const TrackerActiveMarkerOverlay = memo(forwardRef<
         data-tracker-active-marker={marker.key}
         style={style}
       />,
+      ...(marker.label ? [<svg key={`${marker.key}-label`} width={1} height={1}
+        className="absolute overflow-visible" style={{ left: style.left, top: style.top }}>
+        <Text x={-8} y={-12} textAnchor="end" verticalAnchor="start" fontSize={11} fill={marker.color}>{marker.label}</Text>
+      </svg>] : []),
     ];
   });
 

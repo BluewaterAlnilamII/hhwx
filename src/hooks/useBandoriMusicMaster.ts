@@ -10,7 +10,7 @@ import {
 export const BANDORI_MUSIC_MASTER_CACHE_KEY = "bandori-master-music-v1";
 export const BANDORI_MUSIC_MASTER_URL = "/api/bandori/master/music";
 
-export function useBandoriMusicMaster(): {
+export function useBandoriMusicMaster(enabled = true): {
   music: BandoriMusicMasterMap | null;
   loaded: boolean;
   loading: boolean;
@@ -22,7 +22,7 @@ export function useBandoriMusicMaster(): {
     BANDORI_MUSIC_MASTER_CACHE_KEY,
     BANDORI_MUSIC_MASTER_URL,
     parseBandoriMusicMasterResponse,
-    SESSION_CLIENT_CACHE_POLICY,
+    { ...SESSION_CLIENT_CACHE_POLICY, enabled },
   );
 
   return {

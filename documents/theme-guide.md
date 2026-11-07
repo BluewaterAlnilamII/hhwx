@@ -105,6 +105,20 @@ Calendar bars retain band identity, white labels and no added colored outlines. 
 
 PWA installation colors are separate metadata in `src/app/manifest.ts` and `src/app/[locale]/manifest.webmanifest/route.ts`. They currently retain the fixed yellow brand color and are not changed by CSS media queries.
 
+## Event tracker chart interaction
+
+A compact, left-aligned chart heading identifies the server, event number or month, ranking mode, and tier/TOP10 before the score summary. Song-specific charts also identify the song number. Omit full event names; allow wrapping at narrow widths or larger text settings instead of truncating identifiers. Catalog errors belong beside event selection and score errors beside the chart; failed refreshes explicitly retain previously loaded data and expose the corresponding retry action.
+
+Failed chart requests do not show the successful-empty message, including TOP10. Inline retry links retain compact type with a 44 px touch target. The temporary zoom readout disables its fade when reduced motion is requested.
+
+Activity, song and monthly cutoff charts zoom horizontally from 1× to 32×; the Y axis keeps its score scale. TOP10 retains its full-timeline view. Fine-pointer devices show compact minus/multiplier/plus controls at the bottom right, below the time labels. Buttons use adjacent 1/2/4/8/16/32× levels. Touch devices hide these controls during ordinary use (keyboard focus reveals them); a small multiplier appears at the plot's top left during zoom, stays until 700 ms after the gesture ends, then fades. There is no separate reset control; 1× shows the full timeline.
+
+One finger inside the plot selects points immediately without scrolling the page. A double tap zooms in one level at that time; repeated double taps stop at 32× and never toggle back. Holding the second tap and dragging up zooms in continuously; dragging down zooms out. Releasing a drag does not also trigger a zoom step. Two fingers pan horizontally and pinch around their midpoint; after one finger lifts, selection waits until all contacts end. Gestures beginning on the fixed Y axis scroll the page, including when they cross into the plot. Only the plot captures chart gestures; browser page zoom remains available outside it.
+
+Mouse dragging pans a zoomed chart. Clicking the plot or zoom controls enables wheel zoom around the pointer's time; wheel up zooms in, wheel down zooms out continuously. Leaving the whole chart, clicking outside, Escape or window blur disables it. The Y axis and modified browser zoom shortcuts remain outside wheel capture. Limits never hand an active wheel sequence back to page scrolling unexpectedly.
+
+Button zoom anchors to an explicitly selected time, otherwise to the latest actual main-series point at approximately 76% of the viewport, with edge clamping. New data and tracker/info tab switches preserve the viewport; changing server, event, ranking mode, month, tier or song resets it. Pinch and drag updates follow the input directly; button, double-tap and wheel transitions are brief, interruptible, and respect reduced motion. Repeated wheel input accumulates the target scale, while reversing direction starts from the visible view immediately. Pointer contacts, animation frames, feedback timers and listeners are cleaned up with their owner.
+
 ## Catalog filters and Meta parameters
 
 Bandori and OurNotes card/song catalogs share the compact mobile layout through [FilterControls](../src/components/FilterControls.tsx), [SongFilterControls](../src/components/SongFilterControls.tsx), and their card filter consumers. The same primitives also serve card pickers and OurNotes detail skill levels. OurNotes Meta adds its parameter layout in [OurNotesSongMeta](../src/components/ournotes/OurNotesSongMeta.tsx). Keep these dimensions in the owning components; do not shrink every `hhwx-control` globally or apply them to navigation, playback controls, artwork, or unrelated forms.
@@ -158,7 +172,7 @@ Group required dependencies behind one initial panel loader; do not give each co
 | `LoadingIndicator` | Initial page or panel loading; `compact` places a small spinner beside the label for inline sections |
 | `LoadingSpinner` | Decorative progress inside an action; keep an accessible button label and use `text-current` when it should inherit the button ink |
 | `LoadingPlaceholder` | Reserve image or known layout dimensions while data is pending; supply a localized accessible label |
-| `LoadingImage` | Keep an image hidden until its actual source loads; reuse the placeholder and preserve the image dimensions |
+| `LoadingImage` | Keep an image hidden until its actual source loads; reuse the placeholder and preserve the image dimensions. First-paint event banners use `revealBeforeHydration` to let the browser paint the loaded image over its placeholder without waiting for JavaScript. |
 
 Wait for the data required to render a meaningful initial view. Do not present initial defaults such as zero results, unknown service states, a fallback card identity or an incomplete filter list as loaded content. Show an empty state only after a successful response. An initial failure replaces loading with an error and a retry for the failed dependencies; it must not also show a false empty state. Keep complete data during a background refresh of the same resource, with refresh errors shown alongside it. A different account, item or data key must not inherit the previous result.
 
