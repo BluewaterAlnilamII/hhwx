@@ -159,9 +159,9 @@ function readInitialTrackerQueryState(
  * 将每秒的 Date.now() 调用隔离在此组件内部，
  * 防止父组件每秒触发包含 Recharts 图表的全量重渲染。
  */
-function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: number }) {
+function EventProgressBar({ startDate, endDate, initialNow }: { startDate: number; endDate: number; initialNow?: number }) {
   const t = useTranslations("bandori.events.progress");
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => initialNow ?? Date.now());
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
@@ -211,6 +211,7 @@ type EventTrackerPageProps = {
   initialEvent?: BandoriEventSummary;
   initialServer?: BandoriServer;
   initialBannerUrls?: string[];
+  initialNow?: number;
 };
 
 function EventTrackerRouteStateSync({
@@ -236,7 +237,7 @@ function EventTrackerRouteStateSync({
   return null;
 }
 
-function EventTrackerPageContent({ initialEventId, initialEvent, initialServer, initialBannerUrls }: EventTrackerPageProps) {
+function EventTrackerPageContent({ initialEventId, initialEvent, initialServer, initialBannerUrls, initialNow }: EventTrackerPageProps) {
   useEventKeyboardViewport();
   const locale = useLocale();
   const commonT = useTranslations("bandori.events.common");
@@ -1154,9 +1155,9 @@ function EventTrackerPageContent({ initialEventId, initialEvent, initialServer, 
           <>
             {/* ========== 导航与控制区 ========== */}
             <div className="event-tracker-surface hhwx-panel space-y-4 border p-4 sm:space-y-5 sm:p-6">
-            {hasAppliedInitialUrlState && eventStatusStartDate !== null && eventStatusEndDate !== null ? (
+            {eventStatusStartDate !== null && eventStatusEndDate !== null ? (
               <Activity mode={trackerVisible ? "visible" : "hidden"}>
-                <EventProgressBar startDate={eventStatusStartDate} endDate={eventStatusEndDate} />
+                <EventProgressBar startDate={eventStatusStartDate} endDate={eventStatusEndDate} initialNow={initialNow} />
               </Activity>
             ) : null}
           <Tabs.Root
@@ -1333,10 +1334,11 @@ function EventTrackerPageContent({ initialEventId, initialEvent, initialServer, 
           />
         )}
         </EventViewTabs>
+        {/* Let the canonical event navigation finish before comments write pagination to history. */}
         <EventComments
           eventId={resolvedCurrentEventId}
           server={selectedServer}
-          loading={!hasAppliedInitialUrlState || catalogLoading}
+          loading={initialEventId === null || !hasAppliedInitialUrlState || catalogLoading}
         />
     </BandoriPageShell>
   );

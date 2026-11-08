@@ -77,7 +77,9 @@ try {
   await page.goto(`${base}/bandori/events/328?server=cn&tier=1000`);
   const pickerError=page.locator('.event-switcher-field [role=alert]');
   await pickerError.waitFor();
-  assert.match(await pickerError.innerText(),/活动列表加载失败/);
+  assert.match(await pickerError.innerText(),/活动列表更新失败/);
+  assert.equal(await page.locator('.event-switcher-field select').inputValue(),'328');
+  assert.equal(await page.locator('.event-progress').isVisible(),true,'catalog failure keeps server-provided progress');
   catalogFails=false;
   await pickerError.getByRole('button',{name:'重试',exact:true}).click();
   await pickerError.waitFor({state:'detached'});

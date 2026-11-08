@@ -193,7 +193,7 @@ export function useTrackerData(
   }, [eventCatalog, eventCatalogRequest.loaded, initialEvent]);
 
   const allEvents = useMemo<MinimalEvent[]>(() => {
-    return eventCatalog
+    return Array.from(eventMetaMap.values())
       .map((event) => {
         const scheduleWindow = resolveBandoriEventServerScheduleWindow(event, server);
 
@@ -212,7 +212,7 @@ export function useTrackerData(
         };
       })
       .sort((left, right) => right.id - left.id);
-  }, [eventCatalog, server, t]);
+  }, [eventMetaMap, server, t]);
 
   const eventScheduleBoundaries = useMemo(
     () => allEvents.flatMap((event) => {

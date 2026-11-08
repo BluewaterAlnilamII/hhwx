@@ -21,6 +21,8 @@ The shared appearance classes are in Tailwind's `components` layer. Utilities ca
 
 ## Palette responsibilities
 
+Smile Patrol paints its page canvas in a fixed viewport layer, not with `background-attachment: fixed`. The layer uses the large viewport height so document growth and mobile browser chrome changes do not resize the pattern; the existing fixed logo decorations stay above it.
+
 The nine HHW accent seeds are fixed. Neutrals and functional success/warning/danger inputs are separate; they are not additional HHW brand seeds. Seed use is judged by purpose, not equal area or frequency.
 
 | Fixed HHW seed | Light use | Dark use |
@@ -175,6 +177,8 @@ Group required dependencies behind one initial panel loader; do not give each co
 | `LoadingImage` | Keep an image hidden until its actual source loads; reuse the placeholder and preserve the image dimensions. First-paint event banners use `revealBeforeHydration` to let the browser paint the loaded image over its placeholder without waiting for JavaScript. |
 
 Wait for the data required to render a meaningful initial view. Do not present initial defaults such as zero results, unknown service states, a fallback card identity or an incomplete filter list as loaded content. Show an empty state only after a successful response. An initial failure replaces loading with an error and a retry for the failed dependencies; it must not also show a false empty state. Keep complete data during a background refresh of the same resource, with refresh errors shown alongside it. A different account, item or data key must not inherit the previous result.
+
+Event pages render known server-provided selection and progress metadata from the first paint. While the full event catalog loads, keep the selected label visible and disable selection actions; do not replace it with a skeleton or remove the progress row. Seed the initial countdown from the server timestamp to keep hydration consistent.
 
 Image identity follows the resolved source URL. When it changes, remove the old image immediately and show a placeholder until the new image loads; do not remount an unchanged URL merely because the selected server changed. Metadata loading and the subsequent image download both need feedback. A viewer that needs its own image ref for zoom and gestures may keep a keyed native image with a centered `LoadingSpinner` over it. Viewers show no visible loading text; the status container retains a generic localized loading label for assistive technology. Failure ends the busy state. Fixed dark viewer overlays may retain white feedback text for contrast; ordinary image placeholders still use the theme roles above.
 

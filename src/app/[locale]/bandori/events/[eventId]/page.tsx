@@ -60,6 +60,8 @@ export async function generateMetadata({
   };
 }
 
+const readRequestTime = cache(() => Date.now());
+
 export default async function BandoriEventPage({ params, searchParams }: BandoriEventPageProps) {
   const [{ eventId: rawEventId }, query] = await Promise.all([params, searchParams]);
   const eventId = parseBandoriEventRouteId(rawEventId);
@@ -73,6 +75,7 @@ export default async function BandoriEventPage({ params, searchParams }: Bandori
   }
 
   return <EventTrackerPage initialEventId={eventId}
+    initialNow={readRequestTime()}
     initialEvent={toBandoriEventSummary(String(eventId), event)}
     initialServer={parseBandoriServerParam(typeof query.server === "string" ? query.server : null) ?? undefined}
     initialBannerUrls={assetIndex?.events[String(eventId)]?.banners.map(asset => buildBandoriPublicAssetUrl(asset) ?? "")} />;

@@ -156,6 +156,16 @@ test("event catalog failure belongs to the picker and ends its initial skeleton"
   assert.ok(cached.includes('value="302"'));
 });
 
+test("event selection retains known metadata while the full catalog is loading", () => {
+  const html = renderLocalized(BandoriEventSwitcher, {
+    title: "Event", events: [{ id: 302, name: "Event", startAt: null, endAt: null }],
+    selectedEventId: "302", recommendedEventId: "302", onSelectedEventIdChange() {}, loading: true,
+  });
+  assert.match(html, /<select[^>]*disabled/u);
+  assert.match(html, /<option value="302" selected="">302: Event<\/option>/u);
+  assert.equal((html.match(/<button[^>]*disabled/gu) ?? []).length, 2);
+});
+
 test("event banners share one unavailable state without individual retry buttons", () => {
   const render = (props) => renderLocalized(BandoriEventSwitcher, {
     title: "Event", events: [{ id: 302, name: "Event", startAt: null, endAt: null }],
