@@ -69,8 +69,7 @@
     var(--smile-patrol-canvas-gap) calc(86.4% + 1px) 87.4%,
     var(--smile-patrol-canvas-strong) calc(87.4% + 1px) 100%);
   --theme-effect-shell-canvas-size: 100% 100%;
-  background-attachment: fixed;
-  background-repeat: no-repeat;
+  background-image: none;
 
   /* Smile Patrol intentionally lifts controls onto a clean white surface. */
   --theme-color-control-background: #ffffff;
@@ -111,6 +110,18 @@
     --theme-shadow-toolbar-header: none;
     --theme-shadow-shell-sidebar: none;
   }
+}
+
+/* A viewport layer avoids iOS fixed-background sizing against the document height. */
+[data-visual-theme="smile-patrol"]::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  height: 100lvh;
+  z-index: -2;
+  pointer-events: none;
+  background: var(--theme-effect-shell-canvas-image) 0 0 / var(--theme-effect-shell-canvas-size) no-repeat;
+  background-color: var(--theme-color-shell-canvas-background);
 }
 
 /* Continuous fine lines fade toward the interior; soft edges avoid hard one-pixel strokes. */

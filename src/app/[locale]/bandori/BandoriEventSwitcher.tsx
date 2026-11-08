@@ -108,7 +108,7 @@ export default function BandoriEventSwitcher({
     setSearchQuery("");
   };
 
-  const showSkeleton = loading || (!allowNoEvent && events.length === 0 && !catalogError);
+  const showSkeleton = events.length === 0 && (loading || (!allowNoEvent && !catalogError));
 
   return (
     <div className={cn("hhwx-panel relative z-20 grid grid-cols-1 gap-6 border p-4 sm:p-8 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] xl:items-center xl:gap-10", className)}>
@@ -164,6 +164,7 @@ export default function BandoriEventSwitcher({
                 aria-label={t("eventLabel")}
                 className="min-w-0 cursor-pointer truncate rounded-xl border border-[var(--theme-color-control-border-accent)] bg-[var(--theme-color-control-background)] px-4 py-2.5 text-sm font-bold text-[var(--theme-color-text-default)] shadow-xs outline-hidden transition-colors focus:border-[var(--theme-color-focus-ring)] focus:ring-2 focus:ring-[var(--theme-color-focus-ring)]"
                 value={selectedEventId}
+                disabled={loading}
                 onChange={(event) => onSelectedEventIdChange(event.target.value)}
               >
                 {allowNoEvent ? <option value="none">{effectiveNoEventLabel}</option> : <option disabled value="">{t("switchPastEvents")}</option>}
@@ -177,7 +178,7 @@ export default function BandoriEventSwitcher({
               <button
                 type="button"
                 onClick={() => recommendedEventId && onSelectedEventIdChange(recommendedEventId)}
-                disabled={!recommendedEventId}
+                disabled={loading || !recommendedEventId}
                 className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] text-[var(--theme-color-action-secondary-foreground)] shadow-xs transition-all hover:bg-[var(--theme-color-action-secondary-background-hover)] disabled:cursor-not-allowed disabled:border-[var(--theme-color-control-border-disabled)] disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] disabled:opacity-60 disabled:hover:bg-[var(--theme-color-control-background-disabled)]"
                 title={effectiveRecommendedLabel}
                 aria-label={effectiveRecommendedLabel}
@@ -189,6 +190,7 @@ export default function BandoriEventSwitcher({
                 <Dialog.Trigger asChild>
                   <button
                     type="button"
+                    disabled={loading}
                     className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] shadow-xs transition-all hover:border-[var(--theme-color-action-secondary-border)] hover:text-[var(--theme-color-action-secondary-foreground)]"
                     title={t("searchAction")}
                     aria-label={t("searchAction")}
