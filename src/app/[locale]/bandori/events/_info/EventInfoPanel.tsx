@@ -1,4 +1,5 @@
 "use client";
+import LoadingError from "@/components/LoadingError";
 
 import { useMemo } from "react";
 import { useLocale, useTranslations } from "next-intl";
@@ -287,10 +288,8 @@ export default function EventInfoPanel({
   const { data: characters } = charactersRequest;
   const { data: skills } = skillsRequest;
   const { data: bands } = bandsRequest;
-  const cardDetailsLoading = cardsRequest.loading || charactersRequest.loading || skillsRequest.loading;
-  const cardDetailsReady = cards !== null && characters !== null && skills !== null;
-  const failedRequests = [cardsRequest, charactersRequest, skillsRequest, bandsRequest, stamps, musicAssets]
-    .filter((request) => request.error);
+  const missingRequests = [cardsRequest, charactersRequest, skillsRequest, bandsRequest]
+    .filter((request) => request.data === null);
   const jpTitle = model && server !== 0
     ? pickBandoriRegionalText(model.eventName, 0, 0)
     : null;
@@ -314,34 +313,24 @@ export default function EventInfoPanel({
     };
   }, [model]);
 
-  if ((loading && !model) || (model && !cardDetailsReady && cardDetailsLoading)) {
+  if (!model || eventId === null || !musicMaster || missingRequests.length > 0) {
+    const failed = (!model && error) || (!musicMaster && musicError) || missingRequests.some((request) => request.error);
+    const pending = (!model && loading) || (!musicMaster && musicLoading) || missingRequests.some((request) => request.loading);
     return (
       <div className="event-info-loading hhwx-panel border">
-        <LoadingIndicator label={t("loading")} className="p-8" />
-      </div>
-    );
-  }
-
-  if (!model || eventId === null) {
-    return (
-      <div className="hhwx-panel border border-dashed p-10 text-center text-sm font-semibold text-[var(--theme-color-text-muted)]">
-        {error ? <span role="alert">{commonT("states.loadFailed")} <button type="button" className="underline" onClick={onRetry}>{commonT("actions.retry")}</button></span> : t("unavailable")}
+        {!failed && pending ? <LoadingIndicator label={commonT("states.loading")} className="p-8" /> : (
+          <LoadingError className="p-8" onRetry={() => {
+            if (!model) onRetry();
+            if (!musicMaster) onRetryMusic();
+            missingRequests.filter((request) => !request.loading).forEach((request) => request.refresh());
+          }} />
+        )}
       </div>
     );
   }
 
   return (
     <article className="event-info hhwx-panel border">
-      {error || musicError || failedRequests.length > 0 ? (
-        <div role="alert" className="mb-4 text-sm text-[var(--theme-color-text-muted)]">
-          {commonT("states.loadFailed")}{" "}
-          <button type="button" className="underline" onClick={() => {
-            if (error) onRetry();
-            if (musicError) onRetryMusic();
-            failedRequests.forEach((request) => request.refresh());
-          }}>{commonT("actions.retry")}</button>
-        </div>
-      ) : null}
       <section className="@container">
         <Heading as="h2" visualRole="section" accentSlot="a" icon={<ClipboardList className="h-5 w-5" />}>{t("overviewTitle")}</Heading>
         <div className="mt-4">
@@ -370,7 +359,7 @@ export default function EventInfoPanel({
                     className="h-7 w-7 shrink-0 object-contain"
                   />
                 ) : null}
-                {bandsRequest.loading ? <LoadingPlaceholder label={commonT("states.loading")} className="h-5 w-24" /> : <span>{bandsRequest.error && !bands ? "—" : bandName}</span>}
+                <span>{bandName}</span>
               </span>
             </OverviewRow>
             <OverviewRow label={t("eventStatus")}>
@@ -386,7 +375,7 @@ export default function EventInfoPanel({
               {formatDateTime(model.endAt, model.timeServer, locale, t("unannounced"))}
             </OverviewRow>
           </dl>} right={
-            cardDetailsReady ? <BandoriEventBonusPanel
+            <BandoriEventBonusPanel
               variant="embedded"
               eventTypeLabel={eventTypeLabel}
               eventBonus={eventBonus}
@@ -396,7 +385,7 @@ export default function EventInfoPanel({
               preferredServer={server}
               showMatch={false}
               showMasterRank={false}
-            /> : <p className="p-4 text-sm">{commonT("states.loadFailed")}</p>
+            />
           } />
         </div>
       </section>
@@ -405,7 +394,7 @@ export default function EventInfoPanel({
         <Heading as="h2" visualRole="section" accentSlot="b" icon={<Gift className="h-5 w-5" />}>{t("rewardsTitle")}</Heading>
         <div className="mt-4">
           <BandoriDetailColumns left={<dl>
-            <OverviewRow label={t("rewardStamps", { server: SERVER_LABELS[rewardStampSelection.server] })} mobileLayout="stacked" alignment="start">
+            {stampCatalog || !stamps.error ? <OverviewRow label={t("rewardStamps", { server: SERVER_LABELS[rewardStampSelection.server] })} mobileLayout="stacked" alignment="start">
               {rewardStamps.length > 0 ? (
                 <div className="flex min-h-16 flex-wrap items-center justify-end gap-2">
                   {rewardStamps.map((stamp) => (
@@ -419,13 +408,13 @@ export default function EventInfoPanel({
                 </div>
               ) : (
                 <div className="flex min-h-16 items-center justify-end">
-                  {stampsLoading ? <LoadingIndicator compact label={t("loadingRewardStamps")} /> : stamps.error ? commonT("states.loadFailed") : t("noRewardStamps")}
+                  {stampsLoading ? <LoadingIndicator compact label={commonT("states.loading")} /> : t("noRewardStamps")}
                 </div>
               )}
-            </OverviewRow>
+            </OverviewRow> : null}
           </dl>} right={<dl className="mt-2 pt-2 @min-[54rem]:mt-0 @min-[54rem]:pt-0">
             <OverviewRow label={t("rewardCards")} mobileLayout="stacked" alignment="start">
-              {model.rewardCardIds.length > 0 && !cardDetailsReady ? commonT("states.loadFailed") : model.rewardCardIds.length > 0 ? (
+              {model.rewardCardIds.length > 0 ? (
                 <div className="flex min-h-16 flex-wrap items-start justify-end gap-3">
                   {model.rewardCardIds.map((cardId) => (
                     <EventCardTile
@@ -507,11 +496,9 @@ export default function EventInfoPanel({
               </div>
             );
           })}
-          {musicLoading ? <LoadingIndicator label={commonT("states.loading")} className="h-24 w-full" /> : songs.length === 0 ? (
+          {songs.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] px-5 py-8 text-center text-sm font-semibold text-[var(--theme-color-text-muted)]">
-              {musicError ? commonT("states.loadFailed") : songSelection?.startAt === null || songSelection?.endAt === null
-                ? t("songWindowUnavailable")
-                : t("noSongs")}
+              {t("noSongs")}
             </div>
           ) : null}
         </div>

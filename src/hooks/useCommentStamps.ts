@@ -64,7 +64,7 @@ export function useCommentStampsForRegion(
   return {
     stamps,
     loading: loading && catalog === null,
-    error,
+    error: catalog ? null : error,
     refresh,
   };
 }

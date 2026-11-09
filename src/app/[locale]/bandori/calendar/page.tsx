@@ -1,4 +1,5 @@
 "use client";
+import RetryButton from "@/components/RetryButton";
 
 import Heading from "@/components/Heading";
 import { useState, useCallback, useMemo } from "react";
@@ -626,7 +627,7 @@ export default function CalendarPage() {
         )}
 
         {/* 加载状态 */}
-        {error ? <div role="alert" className="hhwx-panel border p-4 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{commonT(loaded ? "states.refreshFailed" : "states.loadFailed")} <button type="button" className="hhwx-text-link" onClick={refresh}>{commonT("actions.retry")}</button></div> : null}
+        {error ? <div role="alert" className="hhwx-panel border p-4 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{commonT(loaded ? "states.refreshFailed" : "states.loadFailed")} <RetryButton onClick={refresh} /></div> : null}
         {loading && <CalendarPageSkeleton showEditorPlaceholder={hasPermission} />}
 
         {/* 日历 */}

@@ -1,4 +1,5 @@
 "use client";
+import RetryButton from "@/components/RetryButton";
 
 import { useDeferredValue, useMemo, useState, type RefObject } from "react";
 import { RotateCcw } from "lucide-react";
@@ -385,12 +386,12 @@ export default function BandoriCardPicker({
   const errorPanel = error ? (
     <div role="alert" className="hhwx-catalog-error rounded-2xl border p-5 text-sm font-bold">
       {commonT(hasCatalog ? "states.refreshFailed" : "states.loadFailed")}{" "}
-      <button type="button" className="hhwx-text-link" onClick={() => {
+      <RetryButton onClick={() => {
         if (cardsMaster.error) cardsMaster.refresh();
         if (charactersMaster.error) charactersMaster.refresh();
         if (skillsMaster.error) skillsMaster.refresh();
         if (cardsAssetIndex.error) cardsAssetIndex.refresh();
-      }}>{commonT("actions.retry")}</button>
+      }} />
     </div>
   ) : null;
 

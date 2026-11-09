@@ -1,4 +1,5 @@
 "use client";
+import RetryButton from "@/components/RetryButton";
 
 import { SongDifficultyControls } from "@/components/SongDetailLayout";
 
@@ -345,10 +346,6 @@ function createLoopSeekTransport(
     previewTimeSeconds: null,
     shouldResumeAfterInteraction: false,
   };
-}
-
-function controlClassName(): string {
-  return "inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] px-4 text-sm font-semibold text-[var(--theme-color-action-secondary-foreground)] shadow-xs outline-hidden transition hover:bg-[var(--theme-color-action-secondary-background-hover)] focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-color-panel-background)] disabled:cursor-not-allowed disabled:border-[var(--theme-color-control-border-disabled)] disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] disabled:opacity-50";
 }
 
 function formatPlaybackTime(timeSeconds: number): string {
@@ -2554,13 +2551,7 @@ export default function ChartSimulatorRuntime({
       <section className="hhwx-catalog-error rounded-3xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] p-6">
         <h2 className="text-lg font-bold text-[var(--theme-color-semantic-danger-foreground)]">{t("unavailableTitle")}</h2>
         <p className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{loadState.message}</p>
-        <button
-          type="button"
-          className={`${controlClassName()} mt-4`}
-          onClick={retryChartLoading}
-        >
-          {t("retry")}
-        </button>
+        <RetryButton onClick={retryChartLoading} className="mt-4" />
       </section>
     );
   }
@@ -2570,9 +2561,7 @@ export default function ChartSimulatorRuntime({
       <section className="hhwx-catalog-error rounded-3xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] p-6">
         <h2 className="text-lg font-bold text-[var(--theme-color-semantic-danger-foreground)]">{t("unavailableTitle")}</h2>
         <p className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{assetLoadState.message}</p>
-        <button type="button" className={`${controlClassName()} mt-4`} onClick={retryLoading}>
-          {t("retry")}
-        </button>
+        <RetryButton onClick={retryLoading} className="mt-4" />
       </section>
     );
   }
@@ -2738,13 +2727,7 @@ export default function ChartSimulatorRuntime({
                   <p className="mt-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">
                     {chartLoadingError ?? audioLoadingError}
                   </p>
-                  <button
-                    type="button"
-                    className={`${controlClassName()} mt-4`}
-                    onClick={chartLoadingError ? retryChartLoading : retryLoading}
-                  >
-                    {t("retry")}
-                  </button>
+                  <RetryButton onClick={chartLoadingError ? retryChartLoading : retryLoading} className="mt-4" />
                 </div>
               </div>
             ) : simulatorLoadingLabel ? (

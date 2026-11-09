@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LoadingIndicator, { LoadingSpinner } from "@/components/LoadingIndicator";
+import LoadingError from "@/components/LoadingError";
+import ActionFeedback from "@/components/ActionFeedback";
+import { useActionFeedback } from "@/hooks/useActionFeedback";
 import {
-  CheckCircle2,
   ChevronFirst,
   ChevronLast,
   ChevronLeft,
   ChevronRight,
-  CircleX,
   MessageSquare,
   RefreshCw,
 } from "lucide-react";
@@ -29,19 +30,12 @@ import { CommentComposer } from "./CommentComposer";
 import { CommentItem } from "./CommentItem";
 
 const paginationButtonClassName = "inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--theme-color-text-default)] transition hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-action-secondary-foreground)] active:bg-[var(--theme-color-control-background-pressed)] disabled:pointer-events-none disabled:cursor-not-allowed disabled:text-[var(--theme-color-text-muted)] disabled:opacity-25";
-const REFRESH_SUCCESS_DURATION_MS = 2_000;
-const REFRESH_ERROR_DURATION_MS = 4_000;
 
 function getDisplayDegreeKey(
   selection: Pick<AccountDisplayDegreeSelection, "server" | "degreeId">,
 ): string {
   return `${selection.server}:${selection.degreeId}`;
 }
-
-type RefreshState = {
-  targetKey: string;
-  phase: "pending" | "success" | "error";
-};
 
 type CommentThreadProps = {
   apiBase: string | null;
@@ -67,9 +61,9 @@ export default function CommentThread({
   emptyMessage,
 }: CommentThreadProps) {
   const t = useTranslations("comments");
-  const [refreshState, setRefreshState] = useState<RefreshState | null>(null);
+  const [refreshTarget, setRefreshTarget] = useState<string | null>(null);
   const refreshSequenceRef = useRef(0);
-  const refreshFeedbackTimerRef = useRef<number | null>(null);
+  const { feedback, showFeedback, clearFeedback } = useActionFeedback(targetKey);
   const {
     authReady,
     canReact,
@@ -82,13 +76,17 @@ export default function CommentThread({
     focusedCommentId,
     goToCommentPage,
     loading,
+    loadFailed,
+    hasLoadedComments,
     loadingReplies,
+    failedReplies,
     loadReactionParticipants,
     loadReplies,
     navigateToComment,
     pageInput,
     replies,
     refreshComments,
+    retryComments,
     setPageInput,
     stampLookup,
     submitPageInput,
@@ -122,42 +120,29 @@ export default function CommentThread({
 
   const handleCreateRootComment = useCallback((content: string) => createComment(content, null), [createComment]);
   const handleCreateReply = useCallback((parentId: string, content: string) => createComment(content, parentId), [createComment]);
-  const visibleRefreshPhase = refreshState?.targetKey === targetKey
-    ? refreshState.phase
-    : null;
   const draftTargetKey = `${apiBase ?? "disabled"}?${apiQuery}`;
   const rootDraftStorageKey = userId && apiBase
     ? buildCommentDraftStorageKey({ userId, targetKey: draftTargetKey })
     : null;
 
+  const refreshing = refreshTarget === targetKey;
   const handleRefresh = useCallback(async () => {
-    const sequence = refreshSequenceRef.current + 1;
-    refreshSequenceRef.current = sequence;
-    if (refreshFeedbackTimerRef.current !== null) {
-      window.clearTimeout(refreshFeedbackTimerRef.current);
-      refreshFeedbackTimerRef.current = null;
-    }
-    setRefreshState({ targetKey, phase: "pending" });
-
+    const sequence = ++refreshSequenceRef.current;
+    clearFeedback();
+    setRefreshTarget(targetKey);
     const succeeded = await refreshComments();
     if (sequence !== refreshSequenceRef.current) return;
-
-    const phase = succeeded ? "success" : "error";
-    setRefreshState({ targetKey, phase });
-    refreshFeedbackTimerRef.current = window.setTimeout(() => {
-      if (sequence === refreshSequenceRef.current) {
-        setRefreshState(null);
-      }
-      refreshFeedbackTimerRef.current = null;
-    }, succeeded ? REFRESH_SUCCESS_DURATION_MS : REFRESH_ERROR_DURATION_MS);
-  }, [refreshComments, targetKey]);
-
+    setRefreshTarget(null);
+    if (hasLoadedComments) {
+      showFeedback(succeeded ? "success" : "error", t(succeeded ? "states.refreshSuccess" : "states.refreshFailed"));
+    }
+  }, [clearFeedback, hasLoadedComments, refreshComments, showFeedback, t, targetKey]);
   useEffect(() => () => {
     refreshSequenceRef.current += 1;
-    if (refreshFeedbackTimerRef.current !== null) {
-      window.clearTimeout(refreshFeedbackTimerRef.current);
-    }
-  }, []);
+  }, [targetKey]);
+  useEffect(() => {
+    if (error) showFeedback("error", error);
+  }, [error, showFeedback]);
 
   return (
     <section className="hhwx-panel border p-3 sm:p-5">
@@ -165,37 +150,21 @@ export default function CommentThread({
         <Heading as="h2" visualRole="section" accentSlot="a" icon={<MessageSquare size={20} />}>
           {title}
           <span className="text-sm font-semibold text-[var(--theme-color-text-muted)]">
-            {loading && comments.length === 0 ? null : t("thread.commentCount", { count: totalCommentCount })}
+            {hasLoadedComments ? t("thread.commentCount", { count: totalCommentCount }) : null}
           </span>
         </Heading>
         <div className="relative shrink-0">
           <button
             type="button"
             onClick={handleRefresh}
-            disabled={apiBase === null || loading || visibleRefreshPhase === "pending"}
+            disabled={apiBase === null || loading || refreshing}
             aria-label={t("actions.refresh")}
             title={t("actions.refresh")}
             className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-text-muted)] shadow-xs transition hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)] disabled:cursor-not-allowed disabled:opacity-45"
           >
-            {loading || visibleRefreshPhase === "pending" ? <LoadingSpinner /> : <RefreshCw size={17} />}
+            {loading || refreshing ? <LoadingSpinner /> : <RefreshCw size={17} />}
           </button>
-          {visibleRefreshPhase === "success" ? (
-            <div
-              role="status"
-              className="pointer-events-none absolute right-full top-1/2 z-20 mr-2 inline-flex -translate-y-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border border-[var(--theme-color-semantic-success-border)] bg-[var(--theme-color-semantic-success-background)] px-3 py-1.5 text-xs font-semibold text-[var(--theme-color-semantic-success-foreground)] shadow-md"
-            >
-              <CheckCircle2 size={14} aria-hidden="true" />
-              {t("states.refreshSuccess")}
-            </div>
-          ) : visibleRefreshPhase === "error" ? (
-            <div
-              role="alert"
-              className="pointer-events-none absolute right-full top-1/2 z-20 mr-2 inline-flex -translate-y-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] px-3 py-1.5 text-xs font-semibold text-[var(--theme-color-semantic-danger-foreground)] shadow-md"
-            >
-              <CircleX size={14} aria-hidden="true" />
-              {t("states.refreshFailed")}
-            </div>
-          ) : null}
+          <ActionFeedback feedback={feedback} className="right-full top-1/2 mr-2 -translate-y-1/2" />
         </div>
       </div>
 
@@ -223,15 +192,11 @@ export default function CommentThread({
         )}
       </div>
 
-      {error ? (
-        <div role="alert" className="mt-4 rounded-2xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] p-3 text-sm text-[var(--theme-color-semantic-danger-foreground)]">
-          {error}
-        </div>
-      ) : null}
-
       <div className="mt-5 divide-y divide-[var(--theme-color-border-subtle)]">
-        {loading && comments.length === 0 ? <LoadingIndicator label={t("states.loading")} className="min-h-32" /> : null}
-        {comments.map((comment) => (
+        {!hasLoadedComments && (loadFailed ? (
+          <LoadingError onRetry={retryComments} className="min-h-32" />
+        ) : loading ? <LoadingIndicator label={t("states.loading")} className="min-h-32" /> : null)}
+        {hasLoadedComments && comments.map((comment) => (
           <CommentItem
             key={comment.id}
             comment={comment}
@@ -239,6 +204,7 @@ export default function CommentThread({
             highlightedId={focusedCommentId}
             replies={replies}
             loadingReplies={loadingReplies}
+            failedReplies={failedReplies}
             stampLookup={stampLookup}
             canReact={canReact}
             commentPage={currentPage}
@@ -256,14 +222,14 @@ export default function CommentThread({
           />
         ))}
 
-        {!loading && !error && comments.length === 0 ? (
+        {hasLoadedComments && comments.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-[var(--theme-color-semantic-neutral-border)] bg-[var(--theme-color-semantic-neutral-background)] py-10 text-center text-sm font-semibold text-[var(--theme-color-semantic-neutral-foreground)]">
             {emptyMessage}
           </div>
         ) : null}
       </div>
 
-      {totalCount > COMMENT_PAGE_SIZE ? (
+      {hasLoadedComments && totalCount > COMMENT_PAGE_SIZE ? (
         <div className="mt-5 flex justify-center">
           <div className="inline-flex max-w-full items-center gap-1 rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-1 shadow-xs">
             <button
@@ -332,9 +298,6 @@ export default function CommentThread({
         </div>
       ) : null}
 
-      {loading && comments.length > 0 ? (
-        <LoadingIndicator compact label={t("states.loading")} className="mt-3 text-xs" />
-      ) : null}
     </section>
   );
 }

@@ -1,4 +1,5 @@
 "use client";
+import RetryButton from "@/components/RetryButton";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { SearchX } from "lucide-react";
@@ -109,10 +110,10 @@ function SongInformation() {
       {musicMaster.error || musicAssetIndex.error ? (
         <div role="alert" className="hhwx-catalog-error rounded-2xl border p-5 text-sm font-bold">
           {commonT(musicMaster.loaded && musicAssetIndex.value ? "states.refreshFailed" : "states.loadFailed")}{" "}
-          <button type="button" className="hhwx-text-link" onClick={() => {
+          <RetryButton onClick={() => {
             if (musicMaster.error) musicMaster.refresh();
             if (musicAssetIndex.error) musicAssetIndex.refresh();
-          }}>{commonT("actions.retry")}</button>
+          }} />
         </div>
       ) : null}
       {musicMaster.error && !musicMaster.loaded ? null : musicMaster.loading ? (

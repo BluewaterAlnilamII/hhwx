@@ -10,7 +10,7 @@
     "refresh": "刷新评论",
     "reply": "回复",
     "save": "保存",
-    "sending": "发送中"
+    "sending": "发布中"
   },
   "composer": {
     "replyPlaceholder": "以 {username} 发布回复...",
@@ -21,14 +21,14 @@
     "reactionsTitle": "回应"
   },
   "errors": {
+    "copyFailed": "复制失败",
     "deleteFailed": "删除失败",
-    "loadFailed": "评论加载失败",
     "locateFailed": "无法定位评论",
-    "reactionFailed": "评论回应失败",
+    "reactionFailed": "回应失败",
     "reactionParticipantsLoadFailed": "回应用户加载失败",
     "requestFailed": "请求失败（HTTP {status}）",
-    "submitFailed": "提交失败",
-    "updateFailed": "更新失败"
+    "publishFailed": "发布失败",
+    "updateFailed": "保存失败"
   },
   "pagination": {
     "expandReplies": "{count, plural, one {展开 # 条回复} other {展开 # 条回复}}",
@@ -59,13 +59,18 @@
     "empty": "暂无回应用户",
     "filterLabel": "查看 :{emoji}: 的 {count} 个回应",
     "filtersLabel": "回应分类",
-    "loadFailedRetry": "加载失败，点击重试",
     "loadingMore": "正在加载更多回应",
     "participantsLabel": "回应 :{emoji}: 的用户",
     "previewLabel": ":{emoji}:，{count} 个回应",
     "viewAll": "查看全部"
   },
   "states": {
+    "copySuccess": "复制成功",
+    "publishSuccess": "发布成功",
+    "updateSuccess": "保存成功",
+    "deleteSuccess": "删除成功",
+    "reactionSuccess": "回应成功",
+    "reactionRemoved": "已取消回应",
     "anonymous": "匿名用户",
     "currentAccount": "当前账号",
     "deleted": "（已删除）",

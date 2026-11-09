@@ -4,7 +4,7 @@ import LoadingIndicator from "@/components/LoadingIndicator";
 
 import { Activity, Suspense, useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { useSearchParams } from "next/navigation";
+import { notFound, useSearchParams } from "next/navigation";
 import * as Tabs from "@radix-ui/react-tabs";
 import { Calculator } from "lucide-react";
 
@@ -70,7 +70,6 @@ import {
   type EventTrackerView,
 } from "./urlQuery";
 import { buildBandoriEventsPath, parseBandoriEventRouteId } from "@/lib/bandori/events/route";
-import type { BandoriEventSummary } from "@/lib/bandori/events/summary";
 import { mergeComparisonLines, useComparisonTrackerData } from "./_tracker/useComparisonTrackerData";
 import { mergeBestdoriPredictionData, useBestdoriPrediction } from "./_tracker/useBestdoriPrediction";
 import { buildTooltipSignature, type HoverTooltipState } from "./_tracker/useTrackerHoverTooltip";
@@ -91,6 +90,7 @@ import EventDocumentTitle from "./EventDocumentTitle";
 import EventInfoPanel from "./_info/EventInfoPanel";
 import EventRelativeCountdown from "./_info/EventRelativeCountdown";
 import { useBandoriEventDetail } from "./_info/useBandoriEventDetail";
+import LoadingError from "@/components/LoadingError";
 import { buildChinaMainlandHolidayLookup } from "@/lib/bandori-china-mainland-holiday-calendar";
 import {
   buildComparisonPointMap,
@@ -159,9 +159,9 @@ function readInitialTrackerQueryState(
  * 将每秒的 Date.now() 调用隔离在此组件内部，
  * 防止父组件每秒触发包含 Recharts 图表的全量重渲染。
  */
-function EventProgressBar({ startDate, endDate, initialNow }: { startDate: number; endDate: number; initialNow?: number }) {
+function EventProgressBar({ startDate, endDate }: { startDate: number; endDate: number }) {
   const t = useTranslations("bandori.events.progress");
-  const [now, setNow] = useState(() => initialNow ?? Date.now());
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
@@ -208,10 +208,7 @@ function EventProgressBar({ startDate, endDate, initialNow }: { startDate: numbe
 
 type EventTrackerPageProps = {
   initialEventId: number | null;
-  initialEvent?: BandoriEventSummary;
   initialServer?: BandoriServer;
-  initialBannerUrls?: string[];
-  initialNow?: number;
 };
 
 function EventTrackerRouteStateSync({
@@ -237,12 +234,12 @@ function EventTrackerRouteStateSync({
   return null;
 }
 
-function EventTrackerPageContent({ initialEventId, initialEvent, initialServer, initialBannerUrls, initialNow }: EventTrackerPageProps) {
+function EventTrackerPageContent({ initialEventId, initialServer }: EventTrackerPageProps) {
   useEventKeyboardViewport();
   const locale = useLocale();
   const commonT = useTranslations("bandori.events.common");
+  const stateT = useTranslations("common.states");
   const trackerT = useTranslations("bandori.events.tracker");
-  const sharedT = useTranslations("common");
   const calculatorT = useTranslations("bandori.events.calculator");
   const router = useRouter();
   const preferredServer = useBandoriPreferredServer();
@@ -273,6 +270,7 @@ function EventTrackerPageContent({ initialEventId, initialEvent, initialServer, 
   const [calculator, setCalculator] = useState<{ key: string; open: boolean; autoOpened: boolean; baselineAt: number; draft: CalculatorDraft } | null>(null);
   const [hasAppliedInitialUrlState, setHasAppliedInitialUrlState] = useState(false);
   const [routeUrlStateKey, setRouteUrlStateKey] = useState<string | null>(null);
+  const routeReady = hasAppliedInitialUrlState && currentEventId === initialEventId;
   const monthlyRankingOptions = useMemo(
     () => getMonthlyRankingOptions(selectedServer, locale),
     [locale, selectedServer],
@@ -295,10 +293,12 @@ function EventTrackerPageContent({ initialEventId, initialEvent, initialServer, 
     eventStatusStartDate,
     eventStatusEndDate,
     chartData,
+    hasData: hasTrackerData,
     holidayData,
     loading,
     refreshing,
     catalogLoading,
+    catalogLoaded,
     catalogError,
     refreshCatalog,
     error: trackerError,
@@ -314,10 +314,9 @@ function EventTrackerPageContent({ initialEventId, initialEvent, initialServer, 
     selectedServer,
     hasAppliedInitialUrlState && !isTop10Selected,
     !trackerVisible,
-    initialEvent,
   );
   const { music: masterMusic, loading: musicLoading, error: musicError, refresh: refreshMusic } = useBandoriMusicMaster(
-    hasAppliedInitialUrlState && (activeView === "info" || previewView === "info"
+    hasAppliedInitialUrlState && eventMeta !== null && (activeView === "info" || previewView === "info"
       || (trackingMode === "song" && eventMeta?.eventType === "challenge")),
   );
 
@@ -879,18 +878,15 @@ function EventTrackerPageContent({ initialEventId, initialEvent, initialServer, 
         selectedServer,
         selectedServer,
       ) ?? commonT("eventFallback", { eventId: eventMeta.eventId })
-    : commonT("loadingEvent");
+    : "";
   const bannerAsset = getBandoriRegionalDisplayOrder(selectedServer)
     .map((candidateServer) => lookupBandoriEventBanner(
       eventAssetIndex,
-      resolvedCurrentEventId,
+      initialEventId ?? resolvedCurrentEventId,
       getBandoriServerCode(candidateServer),
     ))
     .find((candidate) => candidate !== null) ?? null;
-  const bannerUrl = buildBandoriPublicAssetUrl(bannerAsset)
-    ?? (!eventAssetIndex && resolvedCurrentEventId === initialEventId
-      ? getBandoriRegionalDisplayOrder(selectedServer).map(server => initialBannerUrls?.[server]).find(Boolean)
-      : null) ?? "";
+  const bannerUrl = buildBandoriPublicAssetUrl(bannerAsset) ?? "";
   const eventDetail = useBandoriEventDetail(
     resolvedCurrentEventId,
     hasAppliedInitialUrlState && (activeView === "info" || previewView === "info"),
@@ -920,7 +916,7 @@ function EventTrackerPageContent({ initialEventId, initialEvent, initialServer, 
     tier: selectedTier,
   });
   const { comparisonLines } = useComparisonTrackerData({
-    enabled: hasAppliedInitialUrlState && !isTop10Selected && (trackingMode === "event" || trackingMode === "monthly"),
+    enabled: routeReady && eventMeta !== null && !isTop10Selected && (trackingMode === "event" || trackingMode === "monthly"),
     paused: !trackerVisible,
     configs: activeComparisonConfigs,
     events: allEvents,
@@ -1044,7 +1040,7 @@ function EventTrackerPageContent({ initialEventId, initialEvent, initialServer, 
     });
     observer.observe(viewport);
     return () => observer.disconnect();
-  }, [trackerVisible, isTop10Selected, trackingMode, scheduleTooltipPositionUpdate]);
+  }, [routeReady, eventMeta, trackerVisible, isTop10Selected, trackingMode, scheduleTooltipPositionUpdate]);
 
   useEffect(() => {
     const rebuildChart = () => {
@@ -1117,6 +1113,8 @@ function EventTrackerPageContent({ initialEventId, initialEvent, initialServer, 
   }, [scoreData, status, trackingMode, domainEnd, endDate]);
 
   // ===== 渲染 =====
+  if (routeReady && initialEventId !== null && catalogLoaded && !eventMeta) notFound();
+
   return (
     <BandoriPageShell className="event-page" contentClassName="max-w-6xl space-y-5 lg:space-y-6">
         <EventDocumentTitle event={eventMeta} server={selectedServer} />
@@ -1128,28 +1126,34 @@ function EventTrackerPageContent({ initialEventId, initialEvent, initialServer, 
           />
         </Suspense>
 
-        {/* ========== 页头：活动名称、切换器、活动横幅 ========== */}
+        {routeReady && catalogLoaded && !eventMeta ? (
+          <div className="hhwx-panel flex min-h-64 items-center justify-center border p-5">
+            <p className="text-sm text-[var(--theme-color-text-muted)]">{stateT("noData")}</p>
+          </div>
+        ) : (
         <BandoriEventSwitcher
           className="event-heading"
           pickerClassName="event-search-dialog"
-          title={selectedEventName}
-          events={allEvents}
-          selectedEventId={resolvedCurrentEventId ? String(resolvedCurrentEventId) : ""}
+          title={routeReady ? selectedEventName : ""}
+          events={routeReady ? allEvents : []}
+          selectedEventId={routeReady && resolvedCurrentEventId ? String(resolvedCurrentEventId) : ""}
           onSelectedEventIdChange={handleSelectedEventIdChange}
           server={selectedServer}
           onServerChange={handleServerChange}
           bannerUrl={bannerUrl}
-          loading={!hasAppliedInitialUrlState || catalogLoading}
+          loading={!routeReady || catalogLoading}
           bannerLoading={eventAssetIndexLoading}
-          bannerError={catalogError ?? eventAssetIndexError}
-          catalogError={catalogError}
+          bannerError={eventAssetIndexError}
+          catalogError={routeReady ? catalogError : null}
           onRetryCatalog={refreshCatalog}
-          startText={startDate ? `${formatBandoriDateTime(startDate, eventTimeServer, locale)} (${getBandoriServerCode(eventTimeServer).toUpperCase()})` : null}
-          endText={endDate ? `${formatBandoriDateTime(endDate, eventTimeServer, locale)} (${getBandoriServerCode(eventTimeServer).toUpperCase()})` : null}
+          startText={routeReady && startDate ? `${formatBandoriDateTime(startDate, eventTimeServer, locale)} (${getBandoriServerCode(eventTimeServer).toUpperCase()})` : null}
+          endText={routeReady && endDate ? `${formatBandoriDateTime(endDate, eventTimeServer, locale)} (${getBandoriServerCode(eventTimeServer).toUpperCase()})` : null}
           recommendedEventId={recommendedEventId !== null ? String(recommendedEventId) : null}
         />
+        )}
 
-        <EventViewTabs value={activeView} onChange={handleViewChange} onPreviewChange={setPreviewView} plannerOpen={calculatorOpen && activeView === "tracker"}>
+        {routeReady && eventMeta ? <>
+        <EventViewTabs value={activeView} onChange={handleViewChange} onPreviewChange={setPreviewView} plannerOpen={calculatorOpen && activeView === "tracker"} scrollKey={calculatorKey}>
 
         {view => view === "tracker" ? (
           <>
@@ -1157,7 +1161,7 @@ function EventTrackerPageContent({ initialEventId, initialEvent, initialServer, 
             <div className="event-tracker-surface hhwx-panel space-y-4 border p-4 sm:space-y-5 sm:p-6">
             {eventStatusStartDate !== null && eventStatusEndDate !== null ? (
               <Activity mode={trackerVisible ? "visible" : "hidden"}>
-                <EventProgressBar startDate={eventStatusStartDate} endDate={eventStatusEndDate} initialNow={initialNow} />
+                <EventProgressBar startDate={eventStatusStartDate} endDate={eventStatusEndDate} />
               </Activity>
             ) : null}
           <Tabs.Root
@@ -1199,15 +1203,6 @@ function EventTrackerPageContent({ initialEventId, initialEvent, initialServer, 
                 <h2 className="event-chart-title mb-2 px-0.5 text-balance text-[15px] font-semibold leading-6 text-[var(--theme-color-text-default)] sm:text-base">
                   {chartTitle}
                 </h2>
-                {!isTop10Selected && trackerError ? (
-                  <div role="alert" className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 px-0.5 text-[13px] text-[var(--theme-color-semantic-danger-foreground)]">
-                    <span>{trackerT(chartData.length > 0 ? "chart.updateFailed" : "chart.loadFailed")}</span>
-                    <button type="button" className="event-retry rounded-sm underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-[var(--theme-color-focus-ring)]" onClick={refreshTracker}>
-                      {sharedT("actions.retry")}
-                    </button>
-                  </div>
-                ) : null}
-
                 {!isTop10Selected && loading && (
                   <LoadingIndicator label={commonT("loadingLatestData")} className="absolute inset-0 z-30 rounded-2xl bg-[color-mix(in_srgb,var(--theme-color-panel-background)_75%,transparent)]" />
                 )}
@@ -1237,6 +1232,12 @@ function EventTrackerPageContent({ initialEventId, initialEvent, initialServer, 
                   </Activity>
                 ) : (
                   <>
+                {trackerError && !hasTrackerData ? (
+                  <div className="grid h-[270px] sm:h-[360px]">
+                    <LoadingError onRetry={refreshTracker} />
+                  </div>
+                ) : null}
+                <div hidden={Boolean(trackerError && !hasTrackerData)}>
                 <Activity mode={trackerVisible ? "visible" : "hidden"}>
                 <TrackerStatusSummary
                   bestdoriPrediction={bestdoriPrediction}
@@ -1263,7 +1264,7 @@ function EventTrackerPageContent({ initialEventId, initialEvent, initialServer, 
                   domainStart={domainStart}
                   hasRenderableChartData={hasRenderableChartData}
                   isLoading={loading}
-                  hasError={Boolean(trackerError)}
+                  hasError={Boolean(trackerError && !hasTrackerData)}
                   midnights={midnights}
                   nonWorkingDayBands={nonWorkingDayBands}
                   scheduleTooltipPositionUpdateRef={scheduleTooltipPositionUpdateRef}
@@ -1304,6 +1305,7 @@ function EventTrackerPageContent({ initialEventId, initialEvent, initialServer, 
                   trackingMode={trackingMode}
                 />}
                 />
+                </div>
                   </>
                 )}
               </div>
@@ -1325,9 +1327,9 @@ function EventTrackerPageContent({ initialEventId, initialEvent, initialServer, 
             server={selectedServer}
             eventRecord={eventDetail.data}
             musicMaster={masterMusic}
-            loading={!hasAppliedInitialUrlState || catalogLoading || eventDetail.loading}
-            error={catalogError ?? eventDetail.error}
-            onRetry={catalogError ? refreshCatalog : eventDetail.refresh}
+            loading={!hasAppliedInitialUrlState || eventDetail.loading}
+            error={eventDetail.error}
+            onRetry={eventDetail.refresh}
             musicLoading={musicLoading}
             musicError={musicError}
             onRetryMusic={refreshMusic}
@@ -1340,6 +1342,7 @@ function EventTrackerPageContent({ initialEventId, initialEvent, initialServer, 
           server={selectedServer}
           loading={initialEventId === null || !hasAppliedInitialUrlState || catalogLoading}
         />
+        </> : null}
     </BandoriPageShell>
   );
 }

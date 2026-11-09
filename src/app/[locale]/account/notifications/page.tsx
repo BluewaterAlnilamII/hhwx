@@ -1,4 +1,5 @@
 "use client";
+import RetryButton from "@/components/RetryButton";
 
 import { LoadingSpinner } from "@/components/LoadingIndicator";
 
@@ -463,9 +464,7 @@ export default function AccountNotificationsPage() {
         loading || !error ? <AccountLoadingState message={t("loading")} /> : (
           <div className="space-y-3">
             <AccountErrorState message={error} />
-            <button type="button" onClick={() => setLoadAttempt((attempt) => attempt + 1)} className="hhwx-control rounded-xl border px-4 py-2 text-sm font-semibold transition">
-              {commonT("actions.retry")}
-            </button>
+            <RetryButton onClick={() => setLoadAttempt((attempt) => attempt + 1)} />
           </div>
         )
       ) : (

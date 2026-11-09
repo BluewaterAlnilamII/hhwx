@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import LoadingIndicator from "@/components/LoadingIndicator";
+import LoadingError from "@/components/LoadingError";
+import RetryButton from "@/components/RetryButton";
 import { useTranslations } from "next-intl";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
 import { useCommentReactionParticipants } from "@/hooks/useCommentReactionParticipants";
@@ -190,20 +192,8 @@ export function CommentReactionsDialog({
                 </div>
               ))}
 
-              {selectedPage?.isLoading ? (
-                <LoadingIndicator compact label={t("reactions.loadingMore")} className="h-12 text-xs" />
-              ) : null}
-
-              {selectedPage?.hasError ? (
-                <div className="flex min-h-14 items-center justify-center">
-                  <button
-                    type="button"
-                    onClick={retry}
-                    className="rounded-full border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] px-4 py-2 text-xs font-semibold text-[var(--theme-color-semantic-danger-foreground)] transition hover:brightness-95 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]"
-                  >
-                    {t("reactions.loadFailedRetry")}
-                  </button>
-                </div>
+              {selectedPage?.users.length === 0 && selectedPage.hasError ? (
+                <LoadingError onRetry={retry} className="h-full" />
               ) : null}
 
               {selectedPage?.isInitialized
@@ -215,7 +205,10 @@ export function CommentReactionsDialog({
                   </div>
                 ) : null}
 
-              <div ref={sentinelRef} data-testid="reaction-load-sentinel" className="h-px" />
+              {!(selectedPage?.hasError && selectedPage.users.length === 0) ? <div ref={sentinelRef} data-testid="reaction-load-sentinel" className="flex h-12 items-center justify-center">
+                {selectedPage?.isLoading ? <LoadingIndicator compact label={t("states.loading")} className="text-xs" />
+                  : selectedPage?.hasError && selectedPage.users.length > 0 ? <RetryButton onClick={retry} /> : null}
+              </div> : null}
             </div>
           </div>
         </Dialog.Content>

@@ -1,4 +1,5 @@
 "use client";
+import LoadingError from "@/components/LoadingError";
 
 import type { CSSProperties, ReactNode } from "react";
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -114,7 +115,6 @@ export const StampPickerButton = memo(function StampPickerButton({
 }: StampPickerButtonProps) {
   const t = useTranslations("comments");
   const pickerLabel = label ?? t("pickers.stamp");
-  const commonT = useTranslations("common");
   const popoverId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -360,11 +360,8 @@ export const StampPickerButton = memo(function StampPickerButton({
             </div>
           <div ref={gridRef} onScroll={rememberPosition} className="relative grid min-h-0 min-w-0 flex-1 grid-cols-4 content-start gap-1 overflow-x-hidden overflow-y-auto overscroll-contain pr-1 [scrollbar-color:var(--theme-color-shell-scrollbar-thumb)_var(--theme-color-shell-scrollbar-track)] scrollbar-thin [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[var(--theme-color-shell-scrollbar-thumb)] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-[var(--theme-color-shell-scrollbar-track)]">
             {loading || !hydrated ? <LoadingIndicator label={t("states.loading")} className="col-span-4 min-h-40" /> : null}
-            {error ? (
-              <div role="alert" className="col-span-4 flex min-h-20 items-center justify-center gap-2 text-sm text-[var(--theme-color-text-muted)]">
-                {commonT("states.loadFailed")}
-                <button type="button" className="hhwx-text-link" onClick={refresh}>{commonT("actions.retry")}</button>
-              </div>
+            {error && stamps.length === 0 ? (
+              <LoadingError className="col-span-4 min-h-40" onRetry={refresh} />
             ) : !loading && hydrated && visibleStamps.length === 0 ? (
               <p className="col-span-4 py-10 text-center text-sm text-[var(--theme-color-text-muted)]">{t(category === "favorites" ? "pickers.stampFavoritesEmpty" : category === "all" ? "pickers.stampEmpty" : "pickers.stampCategoryEmpty")}</p>
             ) : null}

@@ -76,9 +76,11 @@ test("legacy redirects canonicalize locale prefixes and links without event IDs"
   assert.equal(entryResponse.headers.get("location"), "https://hhwx.org/bandori/events?view=info");
 });
 
-test("dynamic event pages validate existence on the server and query state no longer owns event", () => {
-  assert.match(dynamicPageSource, /readBandoriEventApiDetail/u);
+test("event routes validate ID syntax and leave game data and existence checks to the browser", () => {
+  assert.match(dynamicPageSource, /parseBandoriEventRouteId\(rawEventId\)/u);
   assert.match(dynamicPageSource, /notFound\(\)/u);
+  assert.doesNotMatch(dynamicPageSource, /api-server|asset-index-server|initialEvent=|initialEventDetail|initialBannerUrls|initialNow|generateMetadata/u);
+  assert.match(eventTrackerPageSource, /routeReady && initialEventId !== null && catalogLoaded && !eventMeta\) notFound\(\)/u);
   assert.match(eventTrackerPageSource, /readInitialTrackerQueryState\(preferredServer, initialEventId\)/u);
   assert.doesNotMatch(eventTrackerPageSource, /params\.get\("event"\)/u);
 });

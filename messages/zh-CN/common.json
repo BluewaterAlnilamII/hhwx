@@ -16,6 +16,7 @@
   },
   "states": {
     "loading": "加载中",
+    "noData": "暂无数据",
     "imageUnavailable": "暂无图片",
     "loadFailed": "加载失败",
     "refreshFailed": "更新失败，正在显示已加载的数据",

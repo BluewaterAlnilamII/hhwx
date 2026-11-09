@@ -16,6 +16,7 @@
   },
   "states": {
     "loading": "Loading",
+    "noData": "No data",
     "imageUnavailable": "Image unavailable",
     "loadFailed": "Unable to load data",
     "refreshFailed": "Update failed; showing previously loaded data",

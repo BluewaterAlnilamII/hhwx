@@ -1,4 +1,6 @@
 "use client";
+import LoadingError from "@/components/LoadingError";
+import LoadingIndicator from "@/components/LoadingIndicator";
 
 import type { ReactNode } from "react";
 import { useId, useMemo, useState } from "react";
@@ -108,7 +110,8 @@ export default function BandoriEventSwitcher({
     setSearchQuery("");
   };
 
-  const showSkeleton = events.length === 0 && (loading || (!allowNoEvent && !catalogError));
+  const catalogFailed = Boolean(catalogError) && events.length === 0;
+  const catalogUnavailable = events.length === 0 && (loading || catalogFailed || !allowNoEvent);
 
   return (
     <div className={cn("hhwx-panel relative z-20 grid grid-cols-1 gap-6 border p-4 sm:p-8 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] xl:items-center xl:gap-10", className)}>
@@ -157,17 +160,16 @@ export default function BandoriEventSwitcher({
 
         <div className={cn("event-switcher-field min-h-13", server !== undefined && "sm:col-start-2 sm:row-start-1")}>
           {server !== undefined ? <label htmlFor={selectId} className="event-switcher-label mb-2 block text-sm font-semibold text-[var(--theme-color-text-muted)]">{t("eventLabel")}</label> : null}
-          {!showSkeleton ? (
             <div className="event-switcher-selection grid w-full max-w-[492px] grid-cols-[minmax(0,1fr)_44px_44px] items-center gap-2">
               <select
                 id={selectId}
                 aria-label={t("eventLabel")}
                 className="min-w-0 cursor-pointer truncate rounded-xl border border-[var(--theme-color-control-border-accent)] bg-[var(--theme-color-control-background)] px-4 py-2.5 text-sm font-bold text-[var(--theme-color-text-default)] shadow-xs outline-hidden transition-colors focus:border-[var(--theme-color-focus-ring)] focus:ring-2 focus:ring-[var(--theme-color-focus-ring)]"
-                value={selectedEventId}
-                disabled={loading}
+                value={catalogUnavailable ? "" : selectedEventId}
+                disabled={loading || catalogUnavailable}
                 onChange={(event) => onSelectedEventIdChange(event.target.value)}
               >
-                {allowNoEvent ? <option value="none">{effectiveNoEventLabel}</option> : <option disabled value="">{t("switchPastEvents")}</option>}
+                {catalogUnavailable ? <option value="" /> : allowNoEvent ? <option value="none">{effectiveNoEventLabel}</option> : <option disabled value="">{t("switchPastEvents")}</option>}
                 {events.map((event) => (
                   <option key={event.id} value={event.id}>
                     {t("eventOption", { eventId: event.id, eventName: event.name })}
@@ -178,7 +180,7 @@ export default function BandoriEventSwitcher({
               <button
                 type="button"
                 onClick={() => recommendedEventId && onSelectedEventIdChange(recommendedEventId)}
-                disabled={loading || !recommendedEventId}
+                disabled={loading || catalogUnavailable || !recommendedEventId}
                 className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] text-[var(--theme-color-action-secondary-foreground)] shadow-xs transition-all hover:bg-[var(--theme-color-action-secondary-background-hover)] disabled:cursor-not-allowed disabled:border-[var(--theme-color-control-border-disabled)] disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] disabled:opacity-60 disabled:hover:bg-[var(--theme-color-control-background-disabled)]"
                 title={effectiveRecommendedLabel}
                 aria-label={effectiveRecommendedLabel}
@@ -190,7 +192,7 @@ export default function BandoriEventSwitcher({
                 <Dialog.Trigger asChild>
                   <button
                     type="button"
-                    disabled={loading}
+                    disabled={loading || catalogUnavailable}
                     className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] shadow-xs transition-all hover:border-[var(--theme-color-action-secondary-border)] hover:text-[var(--theme-color-action-secondary-foreground)]"
                     title={t("searchAction")}
                     aria-label={t("searchAction")}
@@ -291,21 +293,14 @@ export default function BandoriEventSwitcher({
                 </Dialog.Portal>
               </Dialog.Root>
             </div>
-          ) : (
-            <div className="event-switcher-selection grid w-full max-w-[492px] grid-cols-[minmax(0,1fr)_44px_44px] items-center gap-2" aria-hidden="true">
-              <div className="h-11 motion-safe:animate-pulse rounded-xl bg-[var(--theme-color-control-background-muted)]" />
-              <div className="h-11 w-11 motion-safe:animate-pulse rounded-xl bg-[var(--theme-color-control-background-pressed)]" />
-              <div className="h-11 w-11 motion-safe:animate-pulse rounded-xl bg-[var(--theme-color-control-background-muted)]" />
-            </div>
-          )}
-          {catalogError ? (
-            <div role="alert" className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-[var(--theme-color-semantic-danger-foreground)]">
-              <span>{t(events.length > 0 ? "catalogUpdateFailed" : "catalogLoadFailed")}</span>
-              {onRetryCatalog ? <button type="button" onClick={onRetryCatalog} className="event-retry rounded-sm underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-[var(--theme-color-focus-ring)]">{commonT("actions.retry")}</button> : null}
-            </div>
-          ) : null}
         </div>
 
+        {catalogUnavailable ? (
+          <div className={cn("event-switcher-summary flex min-h-26 items-center justify-center", server !== undefined && "sm:col-span-2 sm:row-start-2 sm:row-span-2")}>
+            {catalogFailed ? <LoadingError onRetry={onRetryCatalog} />
+              : <LoadingIndicator compact label={commonT("states.loading")} />}
+          </div>
+        ) : <>
         <h1
           title={title}
           className={cn(
@@ -333,11 +328,6 @@ export default function BandoriEventSwitcher({
                 </p>
               ) : null}
             </div>
-          ) : showSkeleton ? (
-            <div className="flex flex-col gap-2 py-0.5" aria-hidden="true">
-              <div className="h-4 w-48 motion-safe:animate-pulse rounded-full bg-[var(--theme-color-control-background-muted)]" />
-              <div className="h-4 w-56 motion-safe:animate-pulse rounded-full bg-[var(--theme-color-control-background-muted)]" />
-            </div>
           ) : (
             <>
               <p>{t("startLabel")} -</p>
@@ -345,6 +335,7 @@ export default function BandoriEventSwitcher({
             </>
           )}
         </div>
+        </>}
       </div>
 
       <div className="w-full max-w-[420px] xl:w-[420px] xl:justify-self-end">

@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Activity, useCallback, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import type { EventTrackerView } from "./urlQuery";
 
@@ -8,6 +8,18 @@ const views = ["tracker", "info"] as const;
 
 export const getEventTabsCollapseProgress = (markerTop: number, headerBottom: number, normalHeight: number, compactHeight: number) =>
   Math.max(0, Math.min(1, (headerBottom - markerTop) / (normalHeight - compactHeight)));
+
+export const getEventViewScrollTarget = (origin: number, current: number, saved?: number) =>
+  Math.max(0, current < Math.round(origin) ? current : origin + Math.max(0, saved ?? 0));
+
+function ownsSwipe(target: Element, root: HTMLElement) {
+  if (target.closest(".event-view-tabs-bar")) return false;
+  if (target.closest("input, textarea, select, button, a, [contenteditable=true], [role=slider], [role=dialog], [data-event-swipe-ignore], #event-pt-calculator")) return true;
+  for (let element: Element | null = target; element && element !== root; element = element.parentElement) {
+    if (element.scrollWidth > element.clientWidth && /auto|scroll/.test(getComputedStyle(element).overflowX)) return true;
+  }
+  return false;
+}
 
 export function bindEventViewTabsSwipe(bar: HTMLElement, value: EventTrackerView, callbacks: {
   onStart: () => number;
@@ -26,10 +38,17 @@ export function bindEventViewTabsSwipe(bar: HTMLElement, value: EventTrackerView
     clear();
     if (horizontal) callbacks.onEnd(value);
   };
+  const lostCapture = (event: PointerEvent) => {
+    // Taking capture from the touched child also bubbles its lost-capture event here.
+    if (event.target === bar) cancel();
+  };
   const down = (event: PointerEvent) => {
-    if (event.pointerType === "mouse" || !bar.ownerDocument.defaultView?.matchMedia("(max-width: 1279px)").matches) return;
     if (!event.isPrimary) { cancel(); suppressClick = true; return; }
     suppressClick = false;
+    const view = bar.ownerDocument.defaultView;
+    if (event.pointerType === "mouse" || !view?.matchMedia("(max-width: 1279px)").matches
+      || (view.visualViewport?.scale ?? 1) > 1) return;
+    if (typeof Element !== "undefined" && event.target instanceof Element && ownsSwipe(event.target, bar)) return;
     pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, horizontal: false, origin: views.indexOf(value) };
   };
   const move = (event: PointerEvent) => {
@@ -61,28 +80,38 @@ export function bindEventViewTabsSwipe(bar: HTMLElement, value: EventTrackerView
     if (suppressClick && event.detail > 0) { event.preventDefault(); event.stopPropagation(); }
     suppressClick = false;
   };
+  // Cancel only a claimed horizontal gesture; descendants retain native scrolling and pinch zoom.
+  const touchMove = (event: TouchEvent) => {
+    if (!pointer || event.touches.length !== 1) return;
+    const x = Math.abs(event.touches[0].clientX - pointer.x);
+    const y = Math.abs(event.touches[0].clientY - pointer.y);
+    if (event.cancelable && (pointer.horizontal || (x >= 8 && x > y * 1.2))) event.preventDefault();
+  };
   bar.addEventListener("pointerdown", down);
   bar.addEventListener("pointermove", move);
   bar.addEventListener("pointerup", end);
   bar.addEventListener("pointercancel", end);
-  bar.addEventListener("lostpointercapture", cancel);
+  bar.addEventListener("lostpointercapture", lostCapture);
   bar.addEventListener("click", click, true);
+  bar.addEventListener("touchmove", touchMove, { passive: false });
   return () => {
     clear();
     bar.removeEventListener("pointerdown", down);
     bar.removeEventListener("pointermove", move);
     bar.removeEventListener("pointerup", end);
     bar.removeEventListener("pointercancel", end);
-    bar.removeEventListener("lostpointercapture", cancel);
+    bar.removeEventListener("lostpointercapture", lostCapture);
     bar.removeEventListener("click", click, true);
+    bar.removeEventListener("touchmove", touchMove);
   };
 }
 
-export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, children }: {
+export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, scrollKey, children }: {
   value: EventTrackerView;
   onChange: (view: EventTrackerView) => void;
   onPreviewChange: (view: EventTrackerView | null) => void;
   plannerOpen: boolean;
+  scrollKey: string;
   children: (view: EventTrackerView) => ReactNode;
 }) {
   const t = useTranslations("bandori.events.view");
@@ -92,14 +121,28 @@ export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, c
   const bar = useRef<HTMLDivElement>(null);
   const viewport = useRef<HTMLDivElement>(null);
   const selectView = useRef(onChange);
-  const [previewFrom, setPreviewFrom] = useState<EventTrackerView | null>(null);
-  const moving = previewFrom === value;
+  const scroll = useRef<{ key: string; positions: Partial<Record<EventTrackerView, number>>; pending: number | null }>({
+    key: scrollKey, positions: {}, pending: null,
+  });
+  const [previewFrom, setPreviewFrom] = useState<{ view: EventTrackerView; key: string } | null>(null);
+  const moving = previewFrom?.view === value && previewFrom.key === scrollKey;
+  const scrollOrigin = useCallback(() => (viewport.current?.getBoundingClientRect().top ?? 0) + window.scrollY
+    - (document.querySelector("header")?.getBoundingClientRect().height ?? 0)
+    - parseFloat(getComputedStyle(bar.current!.querySelector("button")!).minHeight), []);
   useLayoutEffect(() => {
     if (moving || !section.current) return;
     // Keep the animation's final frame until React has committed the active panel.
     delete section.current.dataset.moving;
     delete section.current.dataset.settling;
-  }, [moving]);
+    viewport.current?.querySelectorAll<HTMLElement>(".event-view-panel").forEach(panel => { panel.style.top = ""; });
+    if (scroll.current.key !== scrollKey) {
+      scroll.current = { key: scrollKey, positions: {}, pending: Math.min(0, window.scrollY - scrollOrigin()) };
+    }
+    if (scroll.current.pending !== null) {
+      window.scrollTo({ top: getEventViewScrollTarget(scrollOrigin(), window.scrollY, scroll.current.pending), behavior: "instant" });
+      scroll.current.pending = null;
+    }
+  }, [moving, value, scrollKey, scrollOrigin]);
   useLayoutEffect(() => {
     const root = section.current;
     const marker = sentinel.current;
@@ -143,10 +186,13 @@ export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, c
     let frame = 0;
     let timer = 0;
     const index = views.indexOf(value);
+    const target = (view: EventTrackerView) => getEventViewScrollTarget(scrollOrigin(), window.scrollY, scroll.current.positions[view]);
     const position = (next: number) => {
       // A changing inherited variable invalidates styles throughout both panels.
       body.querySelectorAll<HTMLElement>(".event-view-panel").forEach((panel, panelIndex) => {
         panel.style.transform = `translateX(${(panelIndex - next) * 100}%)`;
+        panel.style.top = root.hasAttribute("data-moving") && panelIndex !== index
+          ? `${window.scrollY - target(views[panelIndex])}px` : "";
       });
       const indicator = strip.querySelector<HTMLElement>(".event-view-indicator");
       if (indicator) indicator.style.transform = `translateX(${next * 100}%)`;
@@ -158,10 +204,14 @@ export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, c
       const current = transform === "none" ? index : index - new DOMMatrixReadOnly(transform).m41 / body.clientWidth;
       stop();
       delete root.dataset.settling;
-      if (!root.hasAttribute("data-moving")) body.style.setProperty("--event-view-height", `${body.getBoundingClientRect().height}px`);
-      position(current);
+      if (!root.hasAttribute("data-moving")) {
+        // The heading is shared; only the content below the tabs has a per-view position.
+        scroll.current.positions[value] = Math.max(0, window.scrollY - scrollOrigin());
+        body.style.setProperty("--event-view-height", `${body.getBoundingClientRect().height}px`);
+      }
       root.dataset.moving = "true";
-      setPreviewFrom(value);
+      position(current);
+      setPreviewFrom(previous => previous?.view === value && previous.key === scrollKey ? previous : { view: value, key: scrollKey });
       onPreviewChange(views[1 - index]);
       return current;
     };
@@ -174,6 +224,7 @@ export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, c
         root.dataset.settling = "true";
         position(views.indexOf(next));
         const finish = () => {
+          if (next !== value) scroll.current.pending = target(next) - scrollOrigin();
           setPreviewFrom(null);
           onChange(next);
           onPreviewChange(null);
@@ -184,7 +235,7 @@ export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, c
     };
     position(index);
     selectView.current = settle;
-    const unbind = bindEventViewTabsSwipe(strip, value, { onStart: prepare, onProgress: position, onEnd: settle });
+    const unbind = bindEventViewTabsSwipe(root, value, { onStart: prepare, onProgress: position, onEnd: settle });
     return () => {
       stop();
       unbind();
@@ -192,7 +243,7 @@ export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, c
       delete root.dataset.settling;
       onPreviewChange(null);
     };
-  }, [value, onChange, onPreviewChange]);
+  }, [value, onChange, onPreviewChange, scrollKey, scrollOrigin]);
 
   return <div ref={section} className="event-view-section hhwx-panel border" data-planner-open={plannerOpen || undefined}>
     <span ref={sentinel} className="event-view-sentinel" aria-hidden />

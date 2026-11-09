@@ -1,6 +1,10 @@
 "use client";
 
 import { LoadingSpinner } from "@/components/LoadingIndicator";
+import ActionFeedback from "@/components/ActionFeedback";
+import RetryButton from "@/components/RetryButton";
+import { useActionFeedback } from "@/hooks/useActionFeedback";
+import { CommentRequestCancelledError, getCommentActionErrorCode } from "@/lib/comments/comment-request-guard";
 
 import type {
   MouseEvent,
@@ -53,6 +57,7 @@ export type CommentItemProps = {
   highlightedId: string | null;
   replies: Record<string, CommentListResponse>;
   loadingReplies: Record<string, boolean>;
+  failedReplies: Record<string, boolean>;
   stampLookup: CommentStampLookup;
   canReact: boolean;
   commentPage: number;
@@ -79,6 +84,7 @@ export const CommentItem = memo(function CommentItem({
   highlightedId,
   replies,
   loadingReplies,
+  failedReplies,
   stampLookup,
   canReact,
   commentPage,
@@ -97,6 +103,7 @@ export const CommentItem = memo(function CommentItem({
   onLocateComment,
 }: CommentItemProps) {
   const t = useTranslations("comments");
+  const errorsT = useTranslations("errors.api");
   const locale = useLocale();
   const localDateTimeFormatter = useMemo(() => new Intl.DateTimeFormat(locale, {
     month: "short",
@@ -116,7 +123,7 @@ export const CommentItem = memo(function CommentItem({
   const editSaveInFlightRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [actionError, setActionError] = useState("");
+  const { feedback, showFeedback, clearFeedback } = useActionFeedback(`${draftTargetKey}:${comment.id}`);
   const editTextareaRef = useAutoResizeTextarea(editValue, editing);
   const threadRootId = rootCommentId ?? comment.id;
   const loadedReplies = replies[threadRootId];
@@ -160,7 +167,13 @@ export const CommentItem = memo(function CommentItem({
 
   const handleCopyLink = async () => {
     if (!permalink) return;
-    await navigator.clipboard?.writeText(permalink).catch(() => undefined);
+    clearFeedback();
+    try {
+      await navigator.clipboard.writeText(permalink);
+      showFeedback("success", t("states.copySuccess"));
+    } catch {
+      showFeedback("error", t("errors.copyFailed"));
+    }
   };
 
   const handleReplyToClick = (event: MouseEvent<HTMLAnchorElement>) => {
@@ -181,12 +194,16 @@ export const CommentItem = memo(function CommentItem({
     setReactionPickerOpen(false);
     setEditEmojiOpen(false);
     setEditStampOpen(false);
-    setActionError("");
+    clearFeedback();
     try {
       await onUpdate(comment.id, editValue);
       setEditing(false);
+      showFeedback("success", t("states.updateSuccess"));
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : t("errors.updateFailed"));
+      if (!(err instanceof CommentRequestCancelledError)) {
+        const code = getCommentActionErrorCode(err);
+        showFeedback("error", code ? errorsT(code) : t("errors.updateFailed"));
+      }
     } finally {
       editSaveInFlightRef.current = false;
       setIsSaving(false);
@@ -198,13 +215,17 @@ export const CommentItem = memo(function CommentItem({
       return;
     }
 
-    setActionError("");
+    clearFeedback();
     setDeleting(true);
     try {
       await onDelete(comment.id);
       setDeleteDialogOpen(false);
+      showFeedback("success", t("states.deleteSuccess"));
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : t("errors.deleteFailed"));
+      if (!(err instanceof CommentRequestCancelledError)) {
+        const code = getCommentActionErrorCode(err);
+        showFeedback("error", code ? errorsT(code) : t("errors.deleteFailed"));
+      }
     } finally {
       setDeleting(false);
     }
@@ -212,9 +233,9 @@ export const CommentItem = memo(function CommentItem({
 
   const handleToggleReaction = async (emojiKey: string, reactedByViewer: boolean) => {
     if (reactingEmojiKey || isDeleted) return;
-    setActionError("");
+    clearFeedback();
     if (!canReact) {
-      setActionError(t("reactions.authenticationRequired"));
+      showFeedback("error", t("reactions.authenticationRequired"));
       return;
     }
 
@@ -222,8 +243,12 @@ export const CommentItem = memo(function CommentItem({
     try {
       await onToggleReaction(comment.id, emojiKey, reactedByViewer);
       setReactionPickerOpen(false);
+      showFeedback("success", t(reactedByViewer ? "states.reactionRemoved" : "states.reactionSuccess"));
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : t("errors.reactionFailed"));
+      if (!(err instanceof CommentRequestCancelledError)) {
+        const code = getCommentActionErrorCode(err);
+        showFeedback("error", code ? errorsT(code) : t("errors.reactionFailed"));
+      }
     } finally {
       setReactingEmojiKey(null);
     }
@@ -260,7 +285,8 @@ export const CommentItem = memo(function CommentItem({
   const handleSubmitReply = useCallback(async (content: string) => {
     await onCreateReply(comment.id, content);
     setReplying(false);
-  }, [comment.id, onCreateReply]);
+    showFeedback("success", t("states.publishSuccess"));
+  }, [comment.id, onCreateReply, showFeedback, t]);
 
   return (
     <article
@@ -340,7 +366,10 @@ export const CommentItem = memo(function CommentItem({
                 <textarea
                   ref={editTextareaRef}
                   value={editValue}
-                  onChange={(event) => setEditValue(truncateCommentContent(event.target.value))}
+                  onChange={(event) => {
+                    clearFeedback();
+                    setEditValue(truncateCommentContent(event.target.value));
+                  }}
                   className="block min-h-20 max-h-60 w-full resize-y overflow-y-hidden rounded-t-xl border-0 bg-transparent px-3 py-2 text-[15px] leading-[26px] text-[var(--theme-color-text-default)] outline-hidden placeholder:text-[var(--theme-color-text-muted)] selection:bg-[var(--theme-color-selection-strong-background)] selection:text-[var(--theme-color-selection-strong-foreground)]"
                 />
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--theme-color-border-subtle)] px-3 py-2">
@@ -365,13 +394,15 @@ export const CommentItem = memo(function CommentItem({
                       onSelect={insertEditStamp}
                     />
                   </div>
-                  <div className="flex justify-end gap-2">
+                  <div className="relative flex justify-end gap-2">
+                    <ActionFeedback feedback={feedback} className="bottom-full right-0 mb-2" />
                     <button
                       type="button"
                       onClick={() => {
                         setEditing(false);
                         setEditEmojiOpen(false);
                         setEditStampOpen(false);
+                        clearFeedback();
                       }}
                       className="rounded-full px-3 py-1.5 text-xs font-semibold text-[var(--theme-color-text-muted)] hover:bg-[var(--theme-color-control-background-hover)] hover:text-[var(--theme-color-text-default)]"
                     >
@@ -395,10 +426,11 @@ export const CommentItem = memo(function CommentItem({
           <div
             data-comment-action-layout={hasDedicatedReactionRow ? "stacked" : "inline"}
             className={cn(
-              "mt-3",
+              "relative mt-3",
               hasDedicatedReactionRow ? "space-y-1.5" : "flex flex-wrap items-center gap-1.5",
             )}
           >
+            {!editing && !deleteDialogOpen ? <ActionFeedback feedback={feedback} className="bottom-full right-0 mb-2" /> : null}
             {!isDeleted ? (
               <div data-comment-reactions className="flex flex-wrap items-center gap-1.5">
                 {commentReactions.map((reaction) => (
@@ -473,6 +505,7 @@ export const CommentItem = memo(function CommentItem({
                   setDeleteDialogOpen(false);
                   setReactionPickerOpen(false);
                   setEditing(true);
+                  clearFeedback();
                 }}
                 aria-label={t("actions.edit")}
                 title={t("actions.edit")}
@@ -488,7 +521,7 @@ export const CommentItem = memo(function CommentItem({
                 onOpenChange={(open) => {
                   if (!deleting && !isSaving) {
                     setDeleteDialogOpen(open);
-                    if (!open) setActionError("");
+                    clearFeedback();
                   }
                 }}
               >
@@ -506,11 +539,12 @@ export const CommentItem = memo(function CommentItem({
                 </Dialog.Trigger>
                 <Dialog.Portal>
                   <Dialog.Overlay className="fixed inset-0 z-120 bg-black/35 backdrop-blur-[1px] data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:animate-in data-[state=open]:fade-in" />
-                  <Dialog.Content className="fixed left-1/2 top-1/2 z-121 w-[min(18rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[18px] border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-floating-background)] text-[var(--theme-color-text-default)] shadow-2xl outline-hidden data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in data-[state=open]:zoom-in-95">
+                  <Dialog.Content className="fixed left-1/2 top-1/2 z-121 w-[min(18rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-[18px] border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-floating-background)] text-[var(--theme-color-text-default)] shadow-2xl outline-hidden data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in data-[state=open]:zoom-in-95">
+                    <ActionFeedback feedback={feedback} className="bottom-full left-1/2 mb-2 -translate-x-1/2" />
                     <Dialog.Title className="px-5 py-5 text-center text-base font-semibold">
                       {t("dialogs.deleteTitle")}
                     </Dialog.Title>
-                    <div className="grid grid-cols-2 border-t border-[var(--theme-color-border-subtle)]">
+                    <div className="grid grid-cols-2 overflow-hidden rounded-b-[18px] border-t border-[var(--theme-color-border-subtle)]">
                       <button
                         type="button"
                         onClick={handleDelete}
@@ -535,8 +569,6 @@ export const CommentItem = memo(function CommentItem({
             ) : null}
             </div>
           </div>
-
-          {actionError ? <div className="mt-2 text-xs text-[var(--theme-color-semantic-danger-foreground)]">{actionError}</div> : null}
 
           {replying ? (
             <div className="mt-3">
@@ -564,6 +596,7 @@ export const CommentItem = memo(function CommentItem({
                   highlightedId={highlightedId}
                   replies={replies}
                   loadingReplies={loadingReplies}
+                  failedReplies={failedReplies}
                   stampLookup={stampLookup}
                   canReact={canReact}
                   commentPage={commentPage}
@@ -586,19 +619,25 @@ export const CommentItem = memo(function CommentItem({
           ) : null}
 
           {comment.replyCount > 0 && hiddenReplyCount > 0 ? (
-            <button
-              type="button"
-              onClick={() => onLoadReplies(threadRootId, loadedReplies?.nextCursor)}
-              disabled={loadingReplies[threadRootId]}
-              className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] px-3 text-xs font-semibold text-[var(--theme-color-action-secondary-foreground)] shadow-xs transition hover:bg-[var(--theme-color-action-secondary-background-hover)] disabled:opacity-60"
-            >
-              {loadingReplies[threadRootId] ? <LoadingSpinner className="h-3.5 w-3.5 text-current" /> : <MoreHorizontal size={14} />}
-              {loadingReplies[threadRootId]
-                ? t("states.loading")
-                : loadedReplies?.hasMore
-                  ? t("pagination.loadMoreReplies", { count: COMMENT_PAGE_SIZE })
-                  : t("pagination.expandReplies", { count: hiddenReplyCount })}
-            </button>
+            <div className="mt-3 flex h-8 items-center">
+              {failedReplies[threadRootId] ? (
+                <RetryButton onClick={() => void onLoadReplies(threadRootId, loadedReplies?.nextCursor)} disabled={loadingReplies[threadRootId]} />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onLoadReplies(threadRootId, loadedReplies?.nextCursor)}
+                  disabled={loadingReplies[threadRootId]}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-action-secondary-border)] bg-[var(--theme-color-action-secondary-background)] px-3 text-xs font-semibold text-[var(--theme-color-action-secondary-foreground)] shadow-xs transition hover:bg-[var(--theme-color-action-secondary-background-hover)] disabled:opacity-60"
+                >
+                  {loadingReplies[threadRootId] ? <LoadingSpinner className="h-3.5 w-3.5 text-current" /> : <MoreHorizontal size={14} />}
+                  {loadingReplies[threadRootId]
+                    ? t("states.loading")
+                    : loadedReplies?.hasMore
+                      ? t("pagination.loadMoreReplies", { count: COMMENT_PAGE_SIZE })
+                      : t("pagination.expandReplies", { count: hiddenReplyCount })}
+                </button>
+              )}
+            </div>
           ) : null}
         </div>
       </div>

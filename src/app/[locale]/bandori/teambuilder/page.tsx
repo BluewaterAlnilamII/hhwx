@@ -1,4 +1,5 @@
 "use client";
+import RetryButton from "@/components/RetryButton";
 
 import { Link } from "@/i18n/navigation";
 import dynamic from "next/dynamic";
@@ -3122,9 +3123,7 @@ function TeamBuilderPanel({ userId }: { userId: string }) {
     return (
       <div className="space-y-4">
         <AccountErrorState message={error} />
-        <button type="button" className="hhwx-accent-button" onClick={retryLoadData}>
-          {errorsT("retry")}
-        </button>
+        <RetryButton onClick={retryLoadData} />
       </div>
     );
   }

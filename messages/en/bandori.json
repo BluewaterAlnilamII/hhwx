@@ -58,8 +58,6 @@
     "serverLabel": "Server",
     "switchServer": "Switch to {server} server",
     "eventLabel": "Event",
-    "catalogLoadFailed": "Event list failed to load",
-    "catalogUpdateFailed": "Event list update failed; showing the previously loaded list",
     "noSearchResults": "No matching events — try an event name or ID",
     "bannerAlt": "Event banner",
     "recommendedLabel": "Latest event",
@@ -77,7 +75,7 @@
   "events": {
     "calculator": {
       "invalidValue": "Enter a valid number of at least {min}",
-      "missingEfficiency": "Enter your Pt efficiency to see the plan",
+      "missingEfficiency": "Enter your Pt efficiency to see the calculation results",
       "checkInputs": "Check the values you entered",
       "title": "Event planner",
       "pointUnit": "EP",
@@ -167,13 +165,10 @@
     "common": {
       "eventFallback": "Event #{eventId}",
       "eventOption": "Event {eventId}: {eventName}",
-      "loadingEvent": "Loading event",
       "loadingLatestData": "Loading latest data"
     },
     "info": {
       "unannounced": "Not announced",
-      "loading": "Loading event details…",
-      "unavailable": "Event details are temporarily unavailable",
       "overviewTitle": "Event overview",
       "eventId": "Event ID",
       "eventTitle": "Event title",
@@ -185,15 +180,13 @@
       "endTime": "End time ({server})",
       "rewardsTitle": "Event rewards",
       "rewardStamps": "Reward stamps ({server})",
-      "loadingRewardStamps": "Loading reward stamps",
       "noRewardStamps": "No reward stamps",
       "rewardCards": "Reward cards",
-      "noRewardCards": "No reward cards for this event",
+      "noRewardCards": "No reward cards",
       "songsTitle": "Event songs ({server})",
       "coverAlt": "{title} cover",
       "publishedAt": "Published {date}",
-      "songWindowUnavailable": "The event window is unavailable, so songs cannot be matched",
-      "noSongs": "No newly released songs match this event window"
+      "noSongs": "No songs"
     },
     "tracker": {
       "modes": {
@@ -251,8 +244,6 @@
         "title": "{server} {target} {mode} {ranking}",
         "songTitle": "{server} {target} {mode} #{songId} {ranking}",
         "eventNumber": "Event {eventId}",
-        "loadFailed": "Score tracking data failed to load",
-        "updateFailed": "Score update failed; showing previously loaded data",
         "zoom": "Chart zoom",
         "zoomIn": "Zoom in",
         "zoomOut": "Zoom out",
@@ -260,8 +251,6 @@
       },
       "top10": {
         "loading": "Loading latest data…",
-        "loadFailed": "Failed to load TOP10 tracking data",
-        "reload": "Reload",
         "legend": "TOP10 player legend",
         "ranking": "TOP10 player ranking",
         "rank": "Rank",

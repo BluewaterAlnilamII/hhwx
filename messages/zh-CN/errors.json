@@ -28,7 +28,7 @@
     "INVALID_COMMENT_CONTENT": "评论内容无效",
     "EMPTY_COMMENT": "评论内容不能为空",
     "COMMENT_TOO_LONG": "评论内容过长",
-    "COMMENT_CREATE_FAILED": "评论发送失败",
+    "COMMENT_CREATE_FAILED": "发布失败",
     "DEFAULT": "{message}",
     "INVALID_LOGIN_REQUEST": "登录请求参数无效，请刷新页面后重新同步",
     "USER_SNAPSHOT_UNAVAILABLE": "游戏档案自动同步暂不可用，请稍后再试",

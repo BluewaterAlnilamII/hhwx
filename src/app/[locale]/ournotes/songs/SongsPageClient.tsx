@@ -1,4 +1,5 @@
 "use client";
+import RetryButton from "@/components/RetryButton";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
@@ -76,9 +77,9 @@ function SongInformation() {
   function update(patch: Partial<OurNotesSongFilter>) { navigate(updateOurNotesSongsQuery(window.location.search, patch, options)); }
   return <>
     {failed ? <div role="alert" className="hhwx-catalog-error rounded-2xl border p-5 text-sm font-bold">
-      {commonT(ready ? "states.refreshFailed" : "states.loadFailed")}{" "}<button type="button" className="hhwx-text-link" onClick={() => {
+      {commonT(ready ? "states.refreshFailed" : "states.loadFailed")}{" "}<RetryButton onClick={() => {
         if (music.error) music.refresh(); if (bands.error) bands.refresh(); if (images.error) images.refresh();
-      }}>{commonT("actions.retry")}</button>
+      }} />
     </div> : null}
     {!ready && !failed ? <LoadingIndicator label={t("states.loading")} className="hhwx-panel min-h-64 border" /> : null}
     {ready && bands.data ? <>
