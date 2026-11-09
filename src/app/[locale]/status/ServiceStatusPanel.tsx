@@ -1,4 +1,5 @@
 "use client";
+import RetryButton from "@/components/RetryButton";
 
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
@@ -19,7 +20,6 @@ export default function ServiceStatusPanel() {
   const [snapshot, setSnapshot] = useState<ServiceStatusSnapshot | null>(null);
   const [failed, setFailed] = useState(false);
   const [retry, setRetry] = useState(0);
-  const commonT = useTranslations("common");
 
   useEffect(() => {
     let active = true;
@@ -74,7 +74,7 @@ export default function ServiceStatusPanel() {
             </>
           )}
         </p>
-        {failed ? <button type="button" className="hhwx-control rounded-lg border px-3 py-1 text-sm" onClick={() => { setFailed(false); setRetry((value) => value + 1); }}>{commonT("actions.retry")}</button> : null}
+        {failed ? <RetryButton onClick={() => { setFailed(false); setRetry((value) => value + 1); }} /> : null}
       </header>
 
       <section className="mt-5" aria-labelledby="backend-status-title">

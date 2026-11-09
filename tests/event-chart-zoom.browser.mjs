@@ -66,7 +66,7 @@ const bundle = await build({
         </div>
         <button onClick={()=>setRevision(r=>r+1)}>Refresh data</button>
         <button onClick={()=>setEvent(e=>e+1)}>Change event</button>
-        <EventViewTabs value={view} onChange={setView} onPreviewChange={noop} plannerOpen={false}>
+        <EventViewTabs value={view} onChange={setView} onPreviewChange={noop} plannerOpen={false} scrollKey={String(event)}>
           {tab=>tab==='tracker'?<Chart event={event} revision={revision}/>:<div style={{height:700}}>活动信息</div>}
         </EventViewTabs>
       </main>;
@@ -271,10 +271,18 @@ try {
       await plot.scrollIntoViewIfNeeded();box=await plot.boundingBox();
       await page.mouse.click(box.x+box.width*0.4,box.y+70);
       const reducedWheel=await plot.evaluate(async el=>{
-        const box=el.getBoundingClientRect();
+        const box=el.getBoundingClientRect(), chart=el.closest('[data-testid="tracker-chart"]');
+        const initial=chart.dataset.zoom;
+        const nextCommit=new Promise((resolve,reject)=>{
+          const timeout=setTimeout(()=>{observer.disconnect();reject(new Error('reduced-motion wheel did not commit'));},1000);
+          const observer=new MutationObserver(()=>{
+            if(chart.dataset.zoom===initial)return;
+            clearTimeout(timeout);observer.disconnect();resolve(+chart.dataset.zoom);
+          });
+          observer.observe(chart,{attributes:true,attributeFilter:['data-zoom']});
+        });
         el.dispatchEvent(new WheelEvent('wheel',{deltaY:-90,clientX:box.x+box.width*0.4,cancelable:true}));
-        await new Promise(requestAnimationFrame);
-        return +el.closest('[data-testid="tracker-chart"]').dataset.zoom;
+        return nextCommit;
       });
       close(reducedWheel,4*Math.exp(0.3),'wheel applies immediately with reduced motion');
     }

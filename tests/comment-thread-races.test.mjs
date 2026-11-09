@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   CommentRequestError,
+  getCommentActionErrorCode,
   classifyLinkedCommentLocateError,
   isCommentTargetRequestCurrent,
 } from "../src/lib/comments/comment-request-guard.ts";
@@ -12,6 +13,15 @@ const hookSource = readFileSync(
   new URL("../src/hooks/useCommentThread.ts", import.meta.url),
   "utf8",
 );
+
+test("comment actions expose only recognized actionable error codes", () => {
+  assert.equal(getCommentActionErrorCode(new CommentRequestError(400, "COMMENT_TOO_LONG", "raw server text")), "COMMENT_TOO_LONG");
+  assert.equal(getCommentActionErrorCode(new CommentRequestError(401, "UNAUTHENTICATED", "raw server text")), "UNAUTHENTICATED");
+  for (const error of [new TypeError("Failed to fetch"), new CommentRequestError(503, "COMMENT_TOO_LONG", "server fault"),
+    new CommentRequestError(400, "INTERNAL_DETAIL", "private details"), new CommentRequestError(400, null, "unrecognized")]) {
+    assert.equal(getCommentActionErrorCode(error), null);
+  }
+});
 
 test("comment mutations fail closed after target changes or unmounts", () => {
   const captured = { generation: 4, identity: '["event:1","/api/events/1",""]' };
@@ -99,8 +109,8 @@ test("linked comment failures distinguish missing comments from transient failur
 
   assert.match(hookSource, /response\.status,[\s\S]*?getApiErrorCode\(payload\)/u);
   assert.match(locateSource, /const failure = classifyLinkedCommentLocateError\(err\)/u);
-  assert.match(locateSource, /if \(failure === "failed" \|\| !options\.silent\) \{\s*setError/u);
-  assert.match(initialLoadSource, /if \(locateFailure === "failed"\) \{[\s\S]*?return;/u);
+  assert.match(locateSource, /if \(!options\.silent\) \{\s*setError/u);
+  assert.match(initialLoadSource, /if \(locateFailure === "failed"\) \{[\s\S]*?setLoadFailed\(true\);[\s\S]*?return false;/u);
   assert.ok(
     initialLoadSource.indexOf('if (locateFailure === "failed")')
       < initialLoadSource.indexOf("const data = await loadRootComments(requestedPage"),

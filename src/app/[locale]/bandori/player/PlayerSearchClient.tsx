@@ -1,4 +1,5 @@
 "use client";
+import RetryButton from "@/components/RetryButton";
 
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
@@ -95,7 +96,7 @@ function RatingDetails({ player }: { player: PlayerProfileView }) {
   const error = music.error ?? assets.error;
   if ((!music.music || !assets.value) && !error) return <LoadingIndicator label={common("states.loading")} className="min-h-40" />;
   return <>
-    {error ? <p role="alert" className="mb-4 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{t("mediaFailed")} <button type="button" className="hhwx-text-link" onClick={() => { music.refresh(); assets.refresh(); }}>{common("actions.retry")}</button></p> : null}
+    {error ? <p role="alert" className="mb-4 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{t("mediaFailed")} <RetryButton onClick={() => { music.refresh(); assets.refresh(); }} /></p> : null}
     <dl><DetailRow label={t("total")} className="w-20 grid-cols-1 justify-items-center gap-1 sm:grid-cols-1 sm:gap-1"><span className="tabular-nums">{format(player.rating.value?.total ?? null)}</span></DetailRow></dl>
     <dl>{player.rating.value?.groups.map((group) => <DetailRow key={group.bandId} alignment="center" className="grid-cols-[5rem_minmax(0,1fr)] gap-4 sm:grid-cols-[5rem_minmax(0,1fr)] sm:gap-4" label={<span className="flex w-20 flex-col items-center gap-1 text-center"><BandLabel bandId={group.bandId} /><span className="tabular-nums">{format(group.total)}</span></span>}>
       {group.songs?.length ? <div className="grid w-full min-w-0 grid-cols-3 gap-2 text-left sm:gap-3">{group.songs.map((song, index) => {
@@ -153,7 +154,7 @@ function PlayerResults({ player }: { player: PlayerProfileView }) {
     return <BandoriCardTile interaction={{ kind: "information" }} card={tileCard} metadata={master ?? undefined} cardName={pickBandoriRegionalText(master?.prefix, server, server) || cardLabel(card.cardId)} server={server} characterName={pickBandoriCharacterDisplayName(characters.data?.[String(master?.characterId)], server, server)} skillEffectLabel={skill.label} skillEffectLanguageTag={skill.languageTag} size="compact" showPower={player.power.public} leaderLabel={card.isLeader ? t("leader") : undefined} />;
   };
   return <>
-    {error ? <p role="alert" className="mt-5 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{t("mediaFailed")} <button type="button" className="hhwx-text-link" onClick={() => { cards.refresh(); characters.refresh(); skills.refresh(); assets.refresh(); degrees.refresh(); }}>{common("actions.retry")}</button></p> : null}
+    {error ? <p role="alert" className="mt-5 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{t("mediaFailed")} <RetryButton onClick={() => { cards.refresh(); characters.refresh(); skills.refresh(); assets.refresh(); degrees.refresh(); }} /></p> : null}
     <Section title={t("profile")} icon={<UserRound className="h-5 w-5" />}>
       <div className="mx-auto grid max-w-[59rem] items-center gap-x-8 gap-y-4 @min-[52rem]:grid-cols-[minmax(0,1fr)_29rem]">
         <div className="mx-auto aspect-square w-full max-w-md">{portrait ? <BandoriCardArtImage cardId={portrait.cardId} resourceSetName={metadata(portrait.cardId)?.resourceSetName} trainType={portrait.illust} imageKind="trim" alt={cardLabel(portrait.cardId)} className="object-contain" /> : null}</div>
@@ -195,7 +196,7 @@ function PlayerResults({ player }: { player: PlayerProfileView }) {
     <Section title={t("currentItemsAndBonuses")} icon={<SlidersHorizontal className="h-5 w-5" />}>
       <Availability section={player.power}>
         <div className="mx-auto max-w-3xl">
-          {areas.error ? <p role="alert" className="text-[var(--theme-color-semantic-danger-foreground)]">{t("itemsFailed")} <button type="button" className="hhwx-text-link" onClick={areas.refresh}>{common("actions.retry")}</button></p>
+          {areas.error ? <p role="alert" className="text-[var(--theme-color-semantic-danger-foreground)]">{t("itemsFailed")} <RetryButton onClick={areas.refresh} /></p>
             : areas.loading ? <LoadingIndicator label={common("states.loading")} />
               : player.power.value?.areaItems.length ? <dl>{player.power.value.areaItems.map((item) => {
                 const master = areas.data?.[item.categoryId];
@@ -236,7 +237,6 @@ function PlayerResults({ player }: { player: PlayerProfileView }) {
 
 export default function PlayerSearchClient({ initialServer, initialUid }: { initialServer: BandoriServer; initialUid: string }) {
   const t = useTranslations("bandori.player");
-  const common = useTranslations("common");
   const router = useRouter();
   const [server, setServer] = useState(initialServer);
   const [uid, setUid] = useState(initialUid);
@@ -262,7 +262,7 @@ export default function PlayerSearchClient({ initialServer, initialUid }: { init
       <button type="submit" className="hhwx-action-accent inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-5 text-sm font-bold disabled:opacity-50" disabled={(result.loading || result.refreshing) && server === initialServer && uid.trim() === initialUid}><Search className="h-4 w-4" />{t(result.loading || result.refreshing ? "searching" : "search")}</button>
     </form>
     {invalid ? <p id="player-id-error" role="alert" className="mt-3 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{t("invalidId")}</p> : null}
-    {result.error ? <p role="alert" className="mt-5 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{t(playerErrorMessageKey(errorCode))} <button type="button" className="hhwx-text-link" onClick={result.refresh} disabled={result.refreshing}>{common("actions.retry")}</button></p> : null}
+    {result.error ? <p role="alert" className="mt-5 text-sm text-[var(--theme-color-semantic-danger-foreground)]">{t(playerErrorMessageKey(errorCode))} <RetryButton onClick={result.refresh} disabled={result.refreshing} /></p> : null}
     {result.loading || result.refreshing && !data ? <LoadingIndicator label={t("searching")} className="min-h-64" /> : data ? <PlayerResults player={data} /> : !result.error && !invalid ? <p className="py-12 text-center text-sm text-[var(--theme-color-text-muted)]">{t("prompt")}</p> : null}
   </article></BandoriPageShell>;
 }

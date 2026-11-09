@@ -167,7 +167,6 @@ export function useTrackerData(
   server: BandoriServer,
   enabled = true,
   paused = false,
-  initialEvent?: BandoriEventSummary,
 ) {
   const t = useTranslations("bandori.events.common");
   const [liveCutoffsByKey, setLiveCutoffsByKey] = useState<Record<string, TrackerData[]>>({});
@@ -186,11 +185,10 @@ export function useTrackerData(
     { ...LONG_CLIENT_CACHE_POLICY },
   );
 
-  const eventMetaMap = useMemo(() => {
-    const events = new Map<number, BandoriEventSummary>(eventCatalog.map((event) => [event.eventId, event]));
-    if (!eventCatalogRequest.loaded && initialEvent) events.set(initialEvent.eventId, initialEvent);
-    return events;
-  }, [eventCatalog, eventCatalogRequest.loaded, initialEvent]);
+  const eventMetaMap = useMemo(
+    () => new Map<number, BandoriEventSummary>(eventCatalog.map((event) => [event.eventId, event])),
+    [eventCatalog],
+  );
 
   const allEvents = useMemo<MinimalEvent[]>(() => {
     return Array.from(eventMetaMap.values())
@@ -237,9 +235,9 @@ export function useTrackerData(
     () => findBestEvent(allEvents, eventScheduleNow)?.id ?? null,
     [allEvents, eventScheduleNow],
   );
-  const resolvedCurrentEventId = currentEventId !== null && eventMetaMap.has(currentEventId)
-    ? currentEventId
-    : recommendedEventId;
+  const resolvedCurrentEventId = currentEventId === null
+    ? recommendedEventId
+    : eventMetaMap.has(currentEventId) ? currentEventId : null;
 
   // The tracker currently only needs fields already present in the event catalog,
   // so derive the current event from that list instead of issuing a detail request.
@@ -281,7 +279,7 @@ export function useTrackerData(
     };
   }, [enabled, eventMeta, eventScheduleNow, server, targetEventParam, trackingMode]);
   const canUseTrackerLive = server === 3 && liveTarget !== null;
-  const trackerCacheKey = enabled && targetEventParam !== null
+  const trackerCacheKey = enabled && eventMeta !== null && targetEventParam !== null
     ? `tracker-${server}-${targetEventParam}-${trackingMode}-${selectedTier}`
     : null;
 
@@ -462,8 +460,10 @@ export function useTrackerData(
     eventStatusStartDate: resolvedCurrentEventWindow.statusStartDate,
     eventStatusEndDate: resolvedCurrentEventWindow.statusEndDate,
     chartData,
+    hasData: trackerResult !== null || chartData.length > 0,
     holidayData,
-    loading: eventCatalogRequest.loading || loading,
+    loading,
+    catalogLoaded: eventCatalogRequest.loaded,
     catalogLoading: eventCatalogRequest.loading,
     catalogError: eventCatalogRequest.error,
     refreshCatalog: eventCatalogRequest.refresh,

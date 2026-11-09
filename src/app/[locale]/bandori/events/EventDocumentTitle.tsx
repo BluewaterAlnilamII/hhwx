@@ -22,12 +22,10 @@ export default function EventDocumentTitle({ event, server }: EventDocumentTitle
     : null;
   const pageTitle = event && eventName
     ? t("eventTitle", { eventId: event.eventId, eventName })
-    : null;
+    : t("title");
 
   useEffect(() => {
-    if (pageTitle) {
-      document.title = formatSiteDocumentTitle(pageTitle);
-    }
+    document.title = formatSiteDocumentTitle(pageTitle);
   }, [pageTitle]);
 
   return null;

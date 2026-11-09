@@ -1,4 +1,5 @@
 "use client";
+import RetryButton from "@/components/RetryButton";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -329,7 +330,7 @@ export default function AccountDisplayDegreeControl({
                     {catalogError ? (
                       <div role="alert" className="mb-3 flex flex-col items-center gap-3 py-6 text-center text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)]">
                         <span>{t("resourceUnavailable")}</span>
-                        <button type="button" onClick={refreshCatalog} className="hhwx-control rounded-xl border px-4 py-2 transition">{t("retry")}</button>
+                        <RetryButton onClick={refreshCatalog} />
                       </div>
                     ) : null}
                     {loadingCatalog ? (
@@ -360,7 +361,7 @@ export default function AccountDisplayDegreeControl({
               ) : (
                 <div className="flex min-h-48 flex-col items-center justify-center gap-3 text-center text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)]">
                   <span>{message || t("loadFailed")}</span>
-                  <button type="button" onClick={() => void loadOptions()} className="hhwx-control rounded-xl border px-4 py-2 transition">{t("retry")}</button>
+                  <RetryButton onClick={() => void loadOptions()} />
                 </div>
               )}
             </div>

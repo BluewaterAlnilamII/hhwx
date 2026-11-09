@@ -58,8 +58,6 @@
     "serverLabel": "服务器",
     "switchServer": "切换到 {server} 服务器",
     "eventLabel": "活动选择",
-    "catalogLoadFailed": "活动列表加载失败",
-    "catalogUpdateFailed": "活动列表更新失败，暂时显示已加载列表",
     "noSearchResults": "没有找到匹配的活动，试试活动名或 ID",
     "bannerAlt": "活动横幅",
     "recommendedLabel": "最新活动",
@@ -77,7 +75,7 @@
   "events": {
     "calculator": {
       "invalidValue": "请输入不小于 {min} 的有效数值",
-      "missingEfficiency": "填写 Pt 效率后查看规划结果",
+      "missingEfficiency": "输入 Pt 效率后可查看计算结果",
       "checkInputs": "请检查已填写的数值",
       "title": "活动规划",
       "pointUnit": "Pt",
@@ -167,13 +165,10 @@
     "common": {
       "eventFallback": "活动 #{eventId}",
       "eventOption": "{eventId}期: {eventName}",
-      "loadingEvent": "正在读取活动",
       "loadingLatestData": "正在获取最新数据"
     },
     "info": {
       "unannounced": "尚未公布",
-      "loading": "正在读取活动详细信息…",
-      "unavailable": "暂时无法读取这一期活动的详细信息",
       "overviewTitle": "活动概览",
       "eventId": "活动 ID",
       "eventTitle": "活动标题",
@@ -185,15 +180,13 @@
       "endTime": "结束时间（{server}）",
       "rewardsTitle": "活动奖励",
       "rewardStamps": "奖励贴纸（{server}）",
-      "loadingRewardStamps": "正在读取奖励贴纸",
       "noRewardStamps": "暂无奖励贴纸",
       "rewardCards": "奖励卡牌",
-      "noRewardCards": "本期活动暂无奖励卡牌",
+      "noRewardCards": "暂无奖励卡牌",
       "songsTitle": "活动歌曲（{server}）",
       "coverAlt": "{title} 封面",
       "publishedAt": "{date} 发布",
-      "songWindowUnavailable": "暂时无法确定活动时间，无法匹配歌曲",
-      "noSongs": "该活动时间区间内没有匹配到新发布歌曲"
+      "noSongs": "暂无歌曲"
     },
     "tracker": {
       "modes": {
@@ -251,8 +244,6 @@
         "title": "{server} {target} {mode} {ranking}",
         "songTitle": "{server} {target} {mode} #{songId} {ranking}",
         "eventNumber": "{eventId}期",
-        "loadFailed": "分数追踪数据加载失败",
-        "updateFailed": "分数更新失败，暂时显示已加载数据",
         "zoom": "图表缩放",
         "zoomIn": "放大",
         "zoomOut": "缩小",
@@ -260,8 +251,6 @@
       },
       "top10": {
         "loading": "正在获取最新数据…",
-        "loadFailed": "TOP10 追踪数据加载失败",
-        "reload": "重新加载",
         "legend": "TOP10 玩家图例",
         "ranking": "TOP10 玩家排名",
         "rank": "排名",

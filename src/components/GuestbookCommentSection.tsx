@@ -1,4 +1,5 @@
 "use client";
+import RetryButton from "@/components/RetryButton";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import LoadingIndicator, { LoadingSpinner } from "@/components/LoadingIndicator";
@@ -165,7 +166,7 @@ export default function GuestbookCommentSection() {
 
             {/* Comment list */}
             <div className="space-y-3">
-                {loadFailed ? <div role="alert" className="text-sm text-[var(--theme-color-semantic-danger-foreground)]">{commonT("states.loadFailed")} <button type="button" className="hhwx-text-link" onClick={() => void fetchComments()}>{commonT("actions.retry")}</button></div> : null}
+                {loadFailed ? <div role="alert" className="text-sm text-[var(--theme-color-semantic-danger-foreground)]">{commonT("states.loadFailed")} <RetryButton onClick={() => void fetchComments()} /></div> : null}
                 {loadingComments && comments.length === 0 ? <LoadingIndicator label={commonT("states.loading")} className="min-h-32" /> : null}
                 {!loadingComments && !loadFailed && comments.length === 0 && (
                     <div className="text-center text-[var(--theme-color-text-muted)] text-sm py-8">

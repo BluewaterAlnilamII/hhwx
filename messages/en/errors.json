@@ -28,7 +28,7 @@
     "INVALID_COMMENT_CONTENT": "Comment content is invalid",
     "EMPTY_COMMENT": "Comment content cannot be empty",
     "COMMENT_TOO_LONG": "Comment content is too long",
-    "COMMENT_CREATE_FAILED": "Failed to post comment",
+    "COMMENT_CREATE_FAILED": "Post failed",
     "DEFAULT": "{message}",
     "INVALID_LOGIN_REQUEST": "Invalid login request; refresh the page and start a new sync",
     "USER_SNAPSHOT_UNAVAILABLE": "Automatic game profile sync is unavailable; try again later",

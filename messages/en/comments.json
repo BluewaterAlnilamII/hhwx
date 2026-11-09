@@ -10,7 +10,7 @@
     "refresh": "Refresh comments",
     "reply": "Reply",
     "save": "Save",
-    "sending": "Sending"
+    "sending": "Posting"
   },
   "composer": {
     "replyPlaceholder": "Post a reply as {username}...",
@@ -21,14 +21,14 @@
     "reactionsTitle": "Reactions"
   },
   "errors": {
+    "copyFailed": "Copy failed",
     "deleteFailed": "Delete failed",
-    "loadFailed": "Failed to load comments",
     "locateFailed": "Unable to locate comment",
-    "reactionFailed": "Comment reaction failed",
+    "reactionFailed": "Reaction failed",
     "reactionParticipantsLoadFailed": "Failed to load reaction users",
     "requestFailed": "Request failed (HTTP {status})",
-    "submitFailed": "Submission failed",
-    "updateFailed": "Update failed"
+    "publishFailed": "Post failed",
+    "updateFailed": "Save failed"
   },
   "pagination": {
     "expandReplies": "{count, plural, one {Expand # reply} other {Expand # replies}}",
@@ -59,13 +59,18 @@
     "empty": "No reaction users found",
     "filterLabel": "View :{emoji}: reactions ({count})",
     "filtersLabel": "Reaction filters",
-    "loadFailedRetry": "Loading failed, click to retry",
     "loadingMore": "Loading more reactions",
     "participantsLabel": "Users who reacted with :{emoji}:",
     "previewLabel": ":{emoji}:, {count} reactions",
     "viewAll": "View all"
   },
   "states": {
+    "copySuccess": "Copied",
+    "publishSuccess": "Posted",
+    "updateSuccess": "Saved",
+    "deleteSuccess": "Deleted",
+    "reactionSuccess": "Reacted",
+    "reactionRemoved": "Reaction removed",
     "anonymous": "Anonymous user",
     "currentAccount": "Current account",
     "deleted": "(deleted)",

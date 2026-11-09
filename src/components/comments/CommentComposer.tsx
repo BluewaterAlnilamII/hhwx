@@ -3,8 +3,11 @@
 import { memo, useEffect, useState } from "react";
 import { Check, X } from "lucide-react";
 import { LoadingSpinner } from "@/components/LoadingIndicator";
+import ActionFeedback from "@/components/ActionFeedback";
+import { useActionFeedback } from "@/hooks/useActionFeedback";
 import { useTranslations } from "next-intl";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
+import { CommentRequestCancelledError, getCommentActionErrorCode } from "@/lib/comments/comment-request-guard";
 import type { CommentStamp } from "@/lib/comments/stamps";
 import {
   COMMENT_LENGTH_WARNING_THRESHOLD,
@@ -43,11 +46,12 @@ export const CommentComposer = memo(function CommentComposer({
   draftStorageKey = null,
 }: CommentComposerProps) {
   const t = useTranslations("comments");
+  const errorsT = useTranslations("errors.api");
   const [content, setContent] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [stampOpen, setStampOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const { feedback, showFeedback, clearFeedback } = useActionFeedback(draftStorageKey ?? "composer");
   const textareaRef = useAutoResizeTextarea(content);
   const contentLength = countCommentCharacters(content);
 
@@ -56,6 +60,7 @@ export const CommentComposer = memo(function CommentComposer({
   }, [draftStorageKey]);
 
   const updateContent = (value: string) => {
+    clearFeedback();
     setContent(writeCommentDraft(draftStorageKey, value));
   };
 
@@ -68,15 +73,19 @@ export const CommentComposer = memo(function CommentComposer({
   const handleSubmit = async () => {
     if (!content.trim() || submitting) return;
     setSubmitting(true);
-    setError("");
+    clearFeedback();
     try {
       await onSubmit(content.trim());
       clearCommentDraft(draftStorageKey);
       setContent("");
       setEmojiOpen(false);
       setStampOpen(false);
+      showFeedback("success", t("states.publishSuccess"));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("errors.submitFailed"));
+      if (!(err instanceof CommentRequestCancelledError)) {
+        const code = getCommentActionErrorCode(err);
+        showFeedback("error", code ? errorsT(code) : t("errors.publishFailed"));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -143,7 +152,8 @@ export const CommentComposer = memo(function CommentComposer({
             onSelect={insertStamp}
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="relative flex items-center gap-2">
+          <ActionFeedback feedback={feedback} className="bottom-full right-0 mb-2" />
           {onCancel ? (
             <button
               type="button"
@@ -165,7 +175,6 @@ export const CommentComposer = memo(function CommentComposer({
           </button>
         </div>
       </div>
-      {error ? <div className="px-3 pb-2 text-xs text-[var(--theme-color-semantic-danger-foreground)]">{error}</div> : null}
     </div>
   );
 });

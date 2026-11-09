@@ -24,6 +24,20 @@ export class CommentRequestCancelledError extends Error {
   }
 }
 
+export function getCommentActionErrorCode(error: unknown) {
+  if (!(error instanceof CommentRequestError) || error.status < 400 || error.status >= 500) return null;
+  switch (error.code) {
+    case "UNAUTHENTICATED":
+    case "EMAIL_VERIFICATION_REQUIRED":
+    case "INVALID_COMMENT_CONTENT":
+    case "EMPTY_COMMENT":
+    case "COMMENT_TOO_LONG":
+      return error.code;
+    default:
+      return null;
+  }
+}
+
 export function isCommentTargetRequestCurrent(
   request: CommentTargetRequest,
   current: CommentTargetRequest,

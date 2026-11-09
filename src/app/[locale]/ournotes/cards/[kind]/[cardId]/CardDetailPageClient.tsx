@@ -1,4 +1,5 @@
 "use client";
+import RetryButton from "@/components/RetryButton";
 
 import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
@@ -78,10 +79,10 @@ export default function CardDetailPageClient({ kind, cardId, card }: { kind: Our
           selectedServer={server} availableServers={available} label={t("filters.displayServer")}
           onChange={navigateServer} />} />
       {failed ? <div role="alert" className="mt-5 text-sm text-[var(--theme-color-semantic-danger-foreground)]">
-        {t("states.loadFailed")}{" "}<button type="button" className="hhwx-text-link" onClick={() => {
+        {t("states.loadFailed")}{" "}<RetryButton onClick={() => {
           dependencies.forEach((item) => { if (item.error) item.refresh(); });
           if (images.error) images.refresh();
-        }}>{t("actions.retry")}</button>
+        }} />
       </div> : null}
       {!ready && !failed ? <LoadingIndicator label={t("states.loading")} className="min-h-64" /> : null}
       {ready ? <>

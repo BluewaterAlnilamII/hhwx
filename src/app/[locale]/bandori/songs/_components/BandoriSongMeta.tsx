@@ -1,4 +1,5 @@
 "use client";
+import RetryButton from "@/components/RetryButton";
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "next-intl";
@@ -68,8 +69,7 @@ export default function BandoriSongMeta() {
   }
   return <>
     {failed ? <div role="alert" className="hhwx-catalog-error rounded-2xl border p-5 text-sm font-bold">
-      {commonT(ready ? "states.refreshFailed" : "states.loadFailed")}{" "}<button type="button" className="hhwx-text-link"
-        onClick={() => requests.forEach((request) => { if (request.error) request.refresh(); })}>{commonT("actions.retry")}</button>
+      {commonT(ready ? "states.refreshFailed" : "states.loadFailed")}{" "}<RetryButton onClick={() => requests.forEach((request) => { if (request.error) request.refresh(); })} />
     </div> : null}
     {!ready && !failed ? <LoadingIndicator label={t("loading")} className="hhwx-panel min-h-64 border" /> : null}
     {ready ? <>

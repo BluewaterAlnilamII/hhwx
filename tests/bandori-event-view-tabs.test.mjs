@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bindEventViewTabsSwipe, getEventTabsCollapseProgress } from "../src/app/[locale]/bandori/events/EventViewTabs.tsx";
+import { bindEventViewTabsSwipe, getEventTabsCollapseProgress, getEventViewScrollTarget } from "../src/app/[locale]/bandori/events/EventViewTabs.tsx";
 
 function tabs(context, value = "tracker", mobile = true) {
   const listeners = new Map();
@@ -25,7 +25,7 @@ function tabs(context, value = "tracker", mobile = true) {
   context.after(cleanup);
   return { bar, changes, positions, endings, captures, listeners, cleanup,
     emit(type, detail = {}) {
-      const event = { type, pointerId: 1, pointerType: "touch", isPrimary: true, clientX: 200, clientY: 100,
+      const event = { type, target: bar, pointerId: 1, pointerType: "touch", isPrimary: true, clientX: 200, clientY: 100,
         preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; }, ...detail };
       listeners.get(type)?.(event);
       return event;
@@ -85,7 +85,7 @@ test("a second finger, browser cancellation, or lost capture aborts selection", 
   }
 });
 
-test("desktop, mouse drags, and gestures started outside the bar cannot switch views", context => {
+test("desktop, mouse drags, and gestures without a start cannot switch views", context => {
   for (const [mobile, pointerType] of [[false, "touch"], [true, "mouse"]]) {
     const t = tabs(context, "tracker", mobile);
     t.emit("pointerdown", { pointerType }); t.emit("pointermove", { clientX: 90 }); t.emit("pointerup", { clientX: 90 });
@@ -94,6 +94,57 @@ test("desktop, mouse drags, and gestures started outside the bar cannot switch v
   const t = tabs(context);
   t.emit("pointermove", { clientX: 90 }); t.emit("pointerup", { clientX: 90 });
   assert.deepEqual(t.changes, []);
+});
+
+test("tab positions keep the shared heading in place and never restore above sticky tabs", () => {
+  assert.equal(getEventViewScrollTarget(300, 900), 300);
+  assert.equal(getEventViewScrollTarget(300, 100), 100);
+  assert.equal(getEventViewScrollTarget(300, 900, 450), 750);
+  assert.equal(getEventViewScrollTarget(350, 100, 450), 100);
+  assert.equal(getEventViewScrollTarget(150, 600, -250), 150);
+  assert.equal(getEventViewScrollTarget(300, 900, 0), 300);
+  assert.equal(getEventViewScrollTarget(300, 0, 450), 0);
+  assert.equal(getEventViewScrollTarget(300, 299, 450), 299);
+  assert.equal(getEventViewScrollTarget(300, 300, 450), 750);
+  assert.equal(getEventViewScrollTarget(300.4, 300, 450), 750.4);
+  assert.equal(getEventViewScrollTarget(300.4, 299, 450), 299);
+});
+
+test("page zoom leaves horizontal panning to the browser", context => {
+  const t = tabs(context);
+  t.bar.ownerDocument.defaultView.visualViewport = {scale: 2};
+  t.emit("pointerdown");
+  assert.equal(t.emit("touchmove", {cancelable: true, touches: [{clientX: 90, clientY: 100}]}).prevented, undefined);
+  t.emit("pointermove", {clientX: 90}); t.emit("pointerup", {clientX: 90});
+  assert.deepEqual(t.changes, []);
+  assert.deepEqual(t.positions, []);
+});
+
+test("a fresh mouse click is not suppressed after a cancelled touch gesture", context => {
+  const t = tabs(context);
+  t.emit("pointerdown"); t.emit("pointermove", {clientX: 170}); t.emit("pointercancel");
+  t.emit("pointerdown", {pointerType: "mouse"}); t.emit("pointerup", {pointerType: "mouse"});
+  assert.equal(t.emit("click", {detail: 1}).prevented, undefined);
+  assert.deepEqual(t.changes, []);
+});
+
+test("only horizontal single-touch movement claims native scrolling", context => {
+  const t = tabs(context);
+  t.emit("pointerdown");
+  const move = touches => t.emit("touchmove", {cancelable: true, touches});
+  assert.equal(move([{clientX: 100, clientY: 102}]).prevented, true);
+  assert.equal(move([{clientX: 199, clientY: 200}]).prevented, undefined);
+  assert.equal(move([{clientX: 100, clientY: 100}, {clientX: 200, clientY: 100}]).prevented, undefined);
+});
+
+test("taking capture from a touched descendant does not cancel the swipe", context => {
+  const t = tabs(context);
+  t.emit("pointerdown");
+  t.emit("pointermove", {clientX: 90});
+  t.emit("lostpointercapture", {target: {}});
+  assert.deepEqual(t.endings, []);
+  t.emit("pointerup", {clientX: 90});
+  assert.deepEqual(t.changes, ["info"]);
 });
 
 test("unmount removes handlers and capture without committing a pending gesture", context => {

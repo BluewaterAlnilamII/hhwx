@@ -1,4 +1,5 @@
 "use client";
+import RetryButton from "@/components/RetryButton";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ClipboardList, Images, Play } from "lucide-react";
@@ -287,11 +288,11 @@ export default function CardDetailPageClient({
         {charactersMaster.error || skillsMaster.error || assetIndexError ? (
           <div role="alert" className="mt-5 text-sm text-[var(--theme-color-semantic-danger-foreground)]">
             {commonT("states.loadFailed")}{" "}
-            <button type="button" className="hhwx-text-link" onClick={() => {
+            <RetryButton onClick={() => {
               if (charactersMaster.error) charactersMaster.refresh();
               if (skillsMaster.error) skillsMaster.refresh();
               if (assetIndexError) refreshAssetIndex();
-            }}>{commonT("actions.retry")}</button>
+            }} />
           </div>
         ) : null}
         <section className="@container mt-6 border-t border-[var(--theme-color-border-subtle)] pt-6">

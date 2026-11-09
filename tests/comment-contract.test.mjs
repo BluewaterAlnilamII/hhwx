@@ -624,16 +624,12 @@ test("manual comment refresh loads the latest page and clears stale deep-link st
   );
 
   assert.match(hook, /const refreshComments = useCallback\(async \(\): Promise<boolean> => \{/u);
-  assert.match(hook, /const data = await loadRootComments\(1, requestTarget\)/u);
+  assert.match(hook, /const data = await loadRootComments\(1, requestTarget, true\)/u);
   assert.match(hook, /updateLocation\(\{ page: data\.page \?\? 1, commentId: null \}\)/u);
-  assert.match(hook, /const replyResults = await Promise\.allSettled\(/u);
-  assert.match(hook, /replyResults\.every\(\(result\) => result\.status === "fulfilled"\)/u);
+  assert.match(hook, /expandedVisibleRootIds\.forEach\(\(rootId\) => \{ void loadReplies\(rootId, undefined, true\); \}\)/u);
   assert.match(thread, /onClick=\{handleRefresh\}/u);
   assert.match(thread, /aria-label=\{t\("actions\.refresh"\)\}/u);
-  assert.match(thread, /loading \|\| visibleRefreshPhase === "pending" \? <LoadingSpinner/u);
-  assert.match(thread, /role="status"[\s\S]*t\("states\.refreshSuccess"\)/u);
-  assert.match(thread, /role="alert"[\s\S]*t\("states\.refreshFailed"\)/u);
-  assert.equal(thread.match(/absolute right-full top-1\/2 z-20 mr-2/gu)?.length, 2);
-  assert.doesNotMatch(thread, /absolute right-0 top-full z-20 mt-2/u);
-  assert.match(thread, /window\.clearTimeout\(refreshFeedbackTimerRef\.current\)/u);
+  assert.match(thread, /loading \|\| refreshing \? <LoadingSpinner/u);
+  assert.match(thread, /if \(hasLoadedComments\) \{\s*showFeedback/u);
+  assert.match(thread, /<ActionFeedback feedback=\{feedback\}/u);
 });

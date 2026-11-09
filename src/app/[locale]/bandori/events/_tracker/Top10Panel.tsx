@@ -1,4 +1,5 @@
 "use client";
+import LoadingError from "@/components/LoadingError";
 
 import LoadingIndicator from "@/components/LoadingIndicator";
 
@@ -168,6 +169,8 @@ export function Top10Panel({
 
   return (
     <div className="relative">
+      {error && data === null ? <div className="grid h-[270px] sm:h-[360px]"><LoadingError onRetry={refresh} /></div> : null}
+      <div hidden={Boolean(error && data === null)}>
       {isBlockingLoading && (
         <LoadingIndicator label={t("loading")} className="absolute inset-0 z-30 rounded-xl bg-[var(--theme-color-panel-background)]/75" />
       )}
@@ -181,19 +184,6 @@ export function Top10Panel({
         status={status}
         trackingMode={trackingMode}
       />
-
-      {error && (
-        <div role="alert" className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-semantic-danger-background)] px-3 py-2 text-sm text-[var(--theme-color-semantic-danger-foreground)]">
-          <span className="font-semibold">{t("loadFailed")}</span>
-          <button
-            type="button"
-            onClick={refresh}
-            className="shrink-0 rounded-full border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-control-background)] px-3 py-1 text-xs font-bold transition hover:bg-[var(--theme-color-semantic-danger-background)]"
-          >
-            {t("reload")}
-          </button>
-        </div>
-      )}
 
       <TrackerChartPanel
         zoomEnabled={false}
@@ -210,7 +200,7 @@ export function Top10Panel({
         domainStart={domainStart}
         hasRenderableChartData={hasRenderableChartData}
         isLoading={isBlockingLoading}
-        hasError={Boolean(error)}
+        hasError={Boolean(error && data === null)}
         lineSeries={lineSeries}
         midnights={midnights}
         nonWorkingDayBands={nonWorkingDayBands}
@@ -244,6 +234,7 @@ export function Top10Panel({
           <Top10PlayerList players={view.players} server={server} />
         </>
       ) : null}
+      </div>
     </div>
   );
 }

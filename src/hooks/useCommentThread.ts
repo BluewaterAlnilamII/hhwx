@@ -233,9 +233,12 @@ export function useCommentThread({
   const [totalCommentCount, setTotalCommentCount] = useState(0);
   const [loading, setLoading] = useState(Boolean(apiBase));
   const [error, setError] = useState("");
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [hasLoadedComments, setHasLoadedComments] = useState(false);
   const [focusedCommentId, setFocusedCommentId] = useState<string | null>(null);
   const [replies, setReplies] = useState<Record<string, CommentListResponse>>({});
   const [loadingReplies, setLoadingReplies] = useState<Record<string, boolean>>({});
+  const [failedReplies, setFailedReplies] = useState<Record<string, boolean>>({});
   const commentsRef = useRef<CommentNode[]>([]);
   const currentPageRef = useRef(1);
   const targetGenerationRef = useRef(0);
@@ -332,12 +335,15 @@ export function useCommentThread({
   const loadRootComments = useCallback(async (
     page = 1,
     expectedTarget = captureTargetRequest(),
+    retainCurrentPage = false,
   ): Promise<CommentListResponse | null> => {
     if (!apiBase || !isTargetRequestCurrent(expectedTarget)) return null;
     const requestId = rootLoadSequenceRef.current + 1;
     rootLoadSequenceRef.current = requestId;
     setLoading(true);
     setError("");
+    setLoadFailed(false);
+    if (!retainCurrentPage && page !== currentPageRef.current) setHasLoadedComments(false);
     try {
       const headers = await authHeaders();
       if (!isTargetRequestCurrent(expectedTarget)) return null;
@@ -356,17 +362,18 @@ export function useCommentThread({
       }
 
       setComments(data.comments);
+      setHasLoadedComments(true);
       setCurrentPage(data.page ?? page);
       setTotalPages(data.totalPages ?? 1);
       setTotalCount(data.totalCount ?? data.comments.length);
       setTotalCommentCount(data.totalCommentCount ?? data.totalCount ?? data.comments.length);
       return data;
-    } catch (err) {
+    } catch {
       if (
         isTargetRequestCurrent(expectedTarget)
         && requestId === rootLoadSequenceRef.current
       ) {
-        setError(err instanceof Error ? err.message : t("errors.loadFailed"));
+        setLoadFailed(true);
       }
       return null;
     } finally {
@@ -377,7 +384,7 @@ export function useCommentThread({
         setLoading(false);
       }
     }
-  }, [apiBase, apiQuery, captureTargetRequest, isTargetRequestCurrent, requestFailedMessage, t]);
+  }, [apiBase, apiQuery, captureTargetRequest, isTargetRequestCurrent, requestFailedMessage]);
 
   const locateLinkedComment = useCallback(async (
     commentId: string,
@@ -389,6 +396,7 @@ export function useCommentThread({
   ): Promise<number | null> => {
     if (!apiBase) return null;
     const requestTarget = captureReadRequest();
+    setError("");
     pendingCommentScrollIdRef.current = commentId;
     setFocusedCommentId(commentId);
     if (scrollToRenderedComment(commentId)) {
@@ -450,8 +458,8 @@ export function useCommentThread({
       setFocusedCommentId(null);
       const failure = classifyLinkedCommentLocateError(err);
       options.onFailure?.(failure);
-      if (failure === "failed" || !options.silent) {
-        setError(err instanceof Error ? err.message : t("errors.locateFailed"));
+      if (!options.silent) {
+        setError(t("errors.locateFailed"));
       }
       return null;
     }
@@ -467,7 +475,11 @@ export function useCommentThread({
         locateFailure = failure;
       },
     });
-    if (!isReadRequestCurrent(requestTarget) || locateFailure === "failed") {
+    if (!isReadRequestCurrent(requestTarget)) {
+      return;
+    }
+    if (locateFailure === "failed") {
+      setError(t("errors.locateFailed"));
       return;
     }
 
@@ -475,7 +487,46 @@ export function useCommentThread({
       page: locatedPage ?? currentPageRef.current,
       commentId: locatedPage !== null ? commentId : null,
     });
-  }, [captureReadRequest, isReadRequestCurrent, locateLinkedComment, updateLocation]);
+  }, [captureReadRequest, isReadRequestCurrent, locateLinkedComment, t, updateLocation]);
+
+  const loadCommentsFromLocation = useCallback(async (): Promise<boolean> => {
+    if (!apiBase) return false;
+    const requestTarget = captureReadRequest();
+    setLoading(true);
+    setLoadFailed(false);
+    setError("");
+    const { page: requestedPage, commentId } = readLocation();
+    if (commentId) {
+      // Comment IDs are stable while reverse-sorted page numbers drift as new roots arrive.
+      let locateFailure: LinkedCommentLocateFailure | null = null;
+      const locatedPage = await locateLinkedComment(commentId, {
+        silent: true,
+        onFailure: (failure) => {
+          locateFailure = failure;
+        },
+      });
+      if (!isReadRequestCurrent(requestTarget)) return false;
+      if (locatedPage !== null) {
+        setLoading(false);
+        updateLocation({
+          page: locatedPage,
+          commentId,
+        });
+        return true;
+      }
+      if (locateFailure === "failed") {
+        // Preserve the share URL so retry can resolve the same comment.
+        setLoadFailed(true);
+        setLoading(false);
+        return false;
+      }
+    }
+
+    const data = await loadRootComments(requestedPage, requestTarget);
+    if (!isReadRequestCurrent(requestTarget) || !data) return false;
+    updateLocation({ page: data.page ?? requestedPage, commentId: null });
+    return true;
+  }, [apiBase, captureReadRequest, isReadRequestCurrent, loadRootComments, locateLinkedComment, readLocation, updateLocation]);
 
   const [pageInputPage, setPageInputPage] = useState(currentPage);
   if (pageInputPage !== currentPage) {
@@ -487,7 +538,6 @@ export function useCommentThread({
     rootLoadSequenceRef.current += 1;
     readGenerationRef.current += 1;
     replyLoadsInFlightRef.current.clear();
-    const requestTarget = captureReadRequest();
 
     // Start a new guarded URL/API read with an empty view; stale replies must not cross targets.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -501,49 +551,13 @@ export function useCommentThread({
     setLoading(Boolean(apiBase));
     setLoadingReplies({});
     setError("");
+    setLoadFailed(false);
+    setHasLoadedComments(false);
+    setFailedReplies({});
     pendingCommentScrollIdRef.current = null;
     setFocusedCommentId(null);
-    if (!apiBase) return;
-
-    const { page: requestedPage, commentId } = readLocation();
-    void (async () => {
-      if (commentId) {
-        // Comment IDs are stable while reverse-sorted page numbers drift as new roots arrive.
-        // Resolve the comment before loading a potentially stale or invalid requested page.
-        let locateFailure: LinkedCommentLocateFailure | null = null;
-        const locatedPage = await locateLinkedComment(commentId, {
-          silent: true,
-          onFailure: (failure) => {
-            locateFailure = failure;
-          },
-        });
-        if (!isReadRequestCurrent(requestTarget)) {
-          return;
-        }
-
-        if (locatedPage !== null) {
-          updateLocation({
-            page: locatedPage,
-            commentId,
-          });
-          return;
-        }
-        if (locateFailure === "failed") {
-          // A transient context failure must not destroy a valid share URL.
-          setLoading(false);
-          return;
-        }
-      }
-
-      const data = await loadRootComments(requestedPage, requestTarget);
-      if (!isReadRequestCurrent(requestTarget) || !data) {
-        return;
-      }
-
-      const loadedPage = data.page ?? requestedPage;
-      updateLocation({ page: loadedPage, commentId: null });
-    })();
-  }, [apiBase, captureReadRequest, isReadRequestCurrent, loadRootComments, locateLinkedComment, readLocation, targetKey, updateLocation]);
+    void loadCommentsFromLocation();
+  }, [apiBase, loadCommentsFromLocation, targetKey]);
 
   const createComment = useCallback(async (content: string, parentId?: string | null) => {
     if (!apiBase) return;
@@ -601,14 +615,13 @@ export function useCommentThread({
       }
 
       const createdPage = 1;
-      await loadRootComments(createdPage, requestTarget);
-      if (!isTargetRequestCurrent(requestTarget)) return;
-      setFocusedCommentId(created.id);
-      updateLocation({
-        page: createdPage,
-        commentId: created.id,
+      // POST completion is the publishing result; the following read must not delay it.
+      void loadRootComments(createdPage, requestTarget, true).then((data) => {
+        if (!data || !isTargetRequestCurrent(requestTarget)) return;
+        setFocusedCommentId(created.id);
+        updateLocation({ page: createdPage, commentId: created.id });
+        scrollToCommentAfterRender(created.id);
       });
-      scrollToCommentAfterRender(created.id);
     } catch (error) {
       if (!isTargetRequestCurrent(requestTarget)) {
         if (writeCompleted) {
@@ -716,11 +729,12 @@ export function useCommentThread({
     }
   }, [apiBase, apiQuery, captureTargetRequest, isTargetRequestCurrent, requestFailedMessage]);
 
-  const loadReplies = useCallback(async (commentId: string, cursor?: string | null) => {
+  const loadReplies = useCallback(async (commentId: string, cursor?: string | null, silent = false) => {
     if (!apiBase || replyLoadsInFlightRef.current.has(commentId)) return;
     const requestTarget = captureReadRequest();
     replyLoadsInFlightRef.current.add(commentId);
     setLoadingReplies((current) => ({ ...current, [commentId]: true }));
+    if (!silent) setFailedReplies((current) => ({ ...current, [commentId]: false }));
     try {
       const headers = await authHeaders();
       if (!isReadRequestCurrent(requestTarget)) return;
@@ -735,6 +749,7 @@ export function useCommentThread({
         return;
       }
 
+      setFailedReplies((current) => ({ ...current, [commentId]: false }));
       setReplies((current) => {
         const existing = current[commentId];
         return {
@@ -746,9 +761,13 @@ export function useCommentThread({
           },
         };
       });
+    } catch {
+      if (!silent && isReadRequestCurrent(requestTarget)) {
+        setFailedReplies((current) => ({ ...current, [commentId]: true }));
+      }
     } finally {
-      replyLoadsInFlightRef.current.delete(commentId);
       if (isReadRequestCurrent(requestTarget)) {
+        replyLoadsInFlightRef.current.delete(commentId);
         setLoadingReplies((current) => ({ ...current, [commentId]: false }));
       }
     }
@@ -778,7 +797,9 @@ export function useCommentThread({
     pendingCommentScrollIdRef.current = null;
     setFocusedCommentId(null);
 
-    const data = await loadRootComments(1, requestTarget);
+    if (!hasLoadedComments) return loadCommentsFromLocation();
+
+    const data = await loadRootComments(1, requestTarget, true);
     if (!data || !isTargetRequestCurrent(requestTarget)) return false;
 
     const visibleRootIds = new Set(data.comments.map((comment) => comment.id));
@@ -791,12 +812,13 @@ export function useCommentThread({
     setPageInput("1");
     updateLocation({ page: data.page ?? 1, commentId: null });
 
-    const replyResults = await Promise.allSettled(
-      expandedVisibleRootIds.map((rootId) => loadReplies(rootId)),
-    );
-    return isTargetRequestCurrent(requestTarget)
-      && replyResults.every((result) => result.status === "fulfilled");
-  }, [captureTargetRequest, isTargetRequestCurrent, loadReplies, loadRootComments, replies, updateLocation]);
+    expandedVisibleRootIds.forEach((rootId) => { void loadReplies(rootId, undefined, true); });
+    return true;
+  }, [captureTargetRequest, hasLoadedComments, isTargetRequestCurrent, loadCommentsFromLocation, loadReplies, loadRootComments, replies, updateLocation]);
+
+  const retryComments = useCallback(() => {
+    void loadCommentsFromLocation();
+  }, [loadCommentsFromLocation]);
 
   const submitPageInput = useCallback(() => {
     const parsed = Number.parseInt(pageInput, 10);
@@ -824,12 +846,16 @@ export function useCommentThread({
     goToCommentPage,
     loading,
     loadingReplies,
+    failedReplies,
     loadReactionParticipants,
     loadReplies,
     navigateToComment,
     pageInput,
     replies,
     refreshComments,
+    retryComments,
+    loadFailed,
+    hasLoadedComments,
     setPageInput,
     stampLookup,
     submitPageInput,

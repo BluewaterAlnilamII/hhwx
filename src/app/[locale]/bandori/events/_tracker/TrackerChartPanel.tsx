@@ -703,7 +703,7 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
   </div> : null;
 
   return (<>
-    <div ref={chartAnchorRef} data-testid="tracker-chart" data-zoom-enabled={zoomEnabled} data-zoom={zoom.scale} data-view-start={domainStart} data-view-end={domainEnd} className="h-[270px] max-h-[270px] sm:h-[360px] sm:max-h-[360px] motion-safe:transition-[max-height] motion-safe:duration-240 motion-safe:ease-out w-full relative rounded-xl bg-[var(--theme-color-chart-background)] select-none">
+    <div ref={chartAnchorRef} data-event-swipe-ignore data-testid="tracker-chart" data-zoom-enabled={zoomEnabled} data-zoom={zoom.scale} data-view-start={domainStart} data-view-end={domainEnd} className="h-[270px] max-h-[270px] sm:h-[360px] sm:max-h-[360px] motion-safe:transition-[max-height] motion-safe:duration-240 motion-safe:ease-out w-full relative rounded-xl bg-[var(--theme-color-chart-background)] select-none">
         <div className="flex h-full w-full overflow-hidden rounded-xl">
           <FixedYAxis
             ticks={hasChartContent ? yTicks : [0]}
@@ -721,7 +721,7 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
           >
               <div ref={chartViewportRef} className="event-chart-canvas relative h-full overflow-hidden" data-zoomed={zoomed}
                 style={{ "--tracker-x-scale": zoom.scale, "--tracker-x-offset": `${-zoom.view.start * plotWidth * zoom.scale}px` } as CSSProperties}>
-                <TrackerChartCanvas
+                {!hasError && <TrackerChartCanvas
                   calculatorProjection={calculatorProjection}
                   bestdoriPredictionPointCount={bestdoriPredictionPointCount}
                   chartContainerKey={chartContainerKey}
@@ -738,7 +738,7 @@ export const TrackerChartPanel = memo(function TrackerChartPanel({
                   showInstantProjection={showInstantProjection}
                   yDomainInfo={yDomainInfo}
                   yTicks={yTicks}
-                />
+                />}
                 {timeTicks.map(time => typeof domainStart === "number" && typeof domainEnd === "number" ? <span key={time}
                   className="event-chart-time-tick pointer-events-none absolute bottom-3 -translate-x-1/2 whitespace-nowrap text-xs text-[var(--theme-color-text-muted)]"
                   style={{ left: (time - domainStart) / (domainEnd - domainStart) * plotWidth + CHART_MARGIN.left }}>{timeFormatter.format(time)}</span> : null)}

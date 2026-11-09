@@ -13,6 +13,7 @@ import pickerModule from "../src/components/bandori/card-picker/BandoriCardPicke
 import { BandoriFullCardArt } from "../src/app/[locale]/bandori/cards/[cardId]/_components/BandoriFullCardArt.tsx";
 import relatedMediaModule from "../src/app/[locale]/bandori/cards/[cardId]/_components/BandoriCardRelatedMedia.tsx";
 import eventInfoModule from "../src/app/[locale]/bandori/events/_info/EventInfoPanel.tsx";
+import { useBandoriEventDetail } from "../src/app/[locale]/bandori/events/_info/useBandoriEventDetail.ts";
 
 const AccountCardAvatar = avatarModule.default ?? avatarModule;
 const LoadingIndicator = loadingModule.default ?? loadingModule;
@@ -143,16 +144,20 @@ test("avatar waits for identity and card metadata without showing a username or 
   assert.doesNotMatch(missing, /aria-busy|Bluewater|<img/u);
 });
 
-test("event catalog failure belongs to the picker and ends its initial skeleton", () => {
+test("event catalog failure keeps an empty styled picker and replaces the event summary", () => {
   const props = { title: "Event", events: [], selectedEventId: "302", onSelectedEventIdChange() {},
-    catalogError: new Error("Catalog unavailable"), onRetryCatalog() {} };
+    startText: "Known start", endText: "Known end", catalogError: new Error("Catalog unavailable"), onRetryCatalog() {} };
   const failed = renderLocalized(BandoriEventSwitcher, props);
-  assert.ok(failed.includes(messages.bandori.eventSwitcher.catalogLoadFailed));
+  assert.ok(failed.includes(messages.common.states.loadFailed));
   assert.match(failed, /role="alert"/u);
   assert.match(failed, />Retry<\/button>/u);
-  assert.doesNotMatch(failed, /animate-pulse/u);
+  assert.match(failed, /<select[^>]*disabled/u);
+  assert.match(failed, /<option value="" selected=""><\/option>/u);
+  assert.doesNotMatch(failed, /animate-pulse|<h1|Known start|Known end/u);
+  assert.equal((failed.match(/role="alert"/gu) ?? []).length, 1);
+  assert.equal((failed.match(/<button[^>]*\sdisabled(?:=|[\s>])/gu) ?? []).length, 2);
   const cached = renderLocalized(BandoriEventSwitcher, { ...props, events: [{ id: 302, name: "Event", startAt: null, endAt: null }] });
-  assert.ok(cached.includes(messages.bandori.eventSwitcher.catalogUpdateFailed));
+  assert.doesNotMatch(cached, /role="alert"/u);
   assert.ok(cached.includes('value="302"'));
 });
 
@@ -163,7 +168,7 @@ test("event selection retains known metadata while the full catalog is loading",
   });
   assert.match(html, /<select[^>]*disabled/u);
   assert.match(html, /<option value="302" selected="">302: Event<\/option>/u);
-  assert.equal((html.match(/<button[^>]*disabled/gu) ?? []).length, 2);
+  assert.equal((html.match(/<button[^>]*\sdisabled(?:=|[\s>])/gu) ?? []).length, 2);
 });
 
 test("event banners share one unavailable state without individual retry buttons", () => {
@@ -193,8 +198,44 @@ test("event information waits for required metadata as one panel instead of show
   };
   const pending = renderLocalized(EventInfoPanel, props);
   assert.equal((pending.match(/aria-busy="true"/gu) ?? []).length, 1);
-  assert.ok(pending.includes(messages.bandori.events.info.loading));
+  assert.ok(pending.includes(messages.common.states.loading));
   assert.ok(!pending.includes(messages.bandori.events.info.overviewTitle));
+});
+
+test("event information replaces all content with one failure when required data fails", () => {
+  for (const failedDetail of [true, false]) {
+    const html = renderLocalized(EventInfoPanel, {
+      eventId: 302, server: 0,
+      eventRecord: failedDetail ? null : { eventName: ["Test event"], eventType: "story" },
+      musicMaster: null, loading: false, error: failedDetail ? new Error("Detail failed") : null,
+      onRetry() {}, musicLoading: false, musicError: new Error("Music failed"), onRetryMusic() {},
+    });
+    assert.equal((html.match(/role="alert"/gu) ?? []).length, 1);
+    assert.equal((html.match(/>Retry<\/button>/gu) ?? []).length, 1);
+    assert.ok(html.includes(messages.common.states.loadFailed));
+    assert.ok(!html.includes(messages.bandori.events.info.overviewTitle));
+    assert.doesNotMatch(html, /aria-busy|<dl|<article/u);
+  }
+});
+
+test("event detail waits for its browser request and reuses the shared client cache", () => {
+  let result;
+  const data = { eventName: ["Cached event"], eventType: "story" };
+  function Probe({ enabled = true }) {
+    result = useBandoriEventDetail(987654, enabled);
+    return null;
+  }
+  renderToString(createElement(Probe, { enabled: false }));
+  assert.equal(result.data, null);
+  assert.equal(result.loading, false);
+  renderToString(createElement(Probe));
+  assert.equal(result.data, null);
+  assert.equal(result.loading, true);
+  updateFetchCache("bandori-master-event-detail-987654", () => data);
+  renderToString(createElement(Probe));
+  assert.equal(result.data, data);
+  assert.equal(result.loading, false);
+  assert.equal(result.error, null);
 });
 
 test("TOP10 keeps player scores but waits for metadata before rendering an avatar frame", () => {

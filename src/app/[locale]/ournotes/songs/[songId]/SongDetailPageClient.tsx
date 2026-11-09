@@ -1,4 +1,5 @@
 "use client";
+import RetryButton from "@/components/RetryButton";
 
 import { useEffect } from "react";
 import { useTranslations } from "next-intl";
@@ -50,7 +51,7 @@ export default function SongDetailPageClient({ songId, detail }: { songId: numbe
       difficulties={region.charts.map((chart) => ({ difficulty: chart.difficulty, label: t(`difficulties.${chart.difficulty}`), level: chart.level }))}
       labels={{ artwork: t("artworkAlt", { title }), unavailable: commonT("states.imageUnavailable"), loading: t("states.loading") }} />
     {images.error ? <div role="alert" className="hhwx-catalog-error rounded-2xl border p-5 text-sm font-bold">
-      {commonT(images.value ? "states.refreshFailed" : "states.loadFailed")}{" "}<button type="button" className="hhwx-text-link" onClick={images.refresh}>{commonT("actions.retry")}</button>
+      {commonT(images.value ? "states.refreshFailed" : "states.loadFailed")}{" "}<RetryButton onClick={images.refresh} />
     </div> : null}
     <SongDetailTabs value="info" simulatorDisabled labels={{ label: t("detail.view.label"), info: t("detail.view.info"), simulator: t("detail.view.simulator"), unavailable: t("detail.simulatorUnavailable") }} />
     <div id="song-panel-info" role="tabpanel" aria-labelledby="song-tab-info">

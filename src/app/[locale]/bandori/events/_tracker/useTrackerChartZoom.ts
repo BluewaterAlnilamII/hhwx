@@ -74,7 +74,7 @@ export function useTrackerChartZoom(key: string) {
 
   const animateTo = useCallback((to: ChartWindow, duration: number) => {
     interrupt();
-    const from = current.current;
+    const from = renderedView.current;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       current.current = to;
       setView(to);
@@ -98,7 +98,7 @@ export function useTrackerChartZoom(key: string) {
 
   const wheel = useCallback((position: number, delta: number) => {
     if (delta === 0) return;
-    const view = current.current;
+    const view = renderedView.current;
     const span = view.end - view.start;
     const target = animationTarget.current ?? view;
     const targetSpan = target.end - target.start;

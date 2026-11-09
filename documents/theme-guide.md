@@ -59,13 +59,15 @@ Values below are the current configuration, not literals to copy into components
 | Interactive seek / volume fill | Same as solid blue operation | Same as solid blue operation |
 | Custom range track / thumb edge | `#E5E9EC` / white | `#08111A` / white |
 | Solid success action | `#008348` / `#FFFEF4` | `#008348` / `#FFFFFF` |
-| Solid danger/retry action | `#E0002F` / `#FFFEF4` | `#E0002F` / `#FFFFFF` |
+| Solid danger action | `#E0002F` / `#FFFEF4` | `#E0002F` / `#FFFFFF` |
 | Primary action | Same blue fill and inverse ink as solid blue operation | Same blue fill and inverse ink as solid blue operation |
 | Selected tab and standard focus | Operation blue | Sky blue |
 
 The legacy `--theme-seed-surface: #FFFEF4` still supplies light chart-axis and other base recipes. Independent inverse ink also uses that value in light mode. Neither is the content-panel source. `--smile-patrol-content-surface` owns light panel/floating content; the dark panel currently inherits the dark surface role. `--theme-seed-shell-canvas: #FFEA2F` is a legacy input still used by light toolbar icon hover; the actual canvas has its own explicit role. Do not mass-replace these values to change panels.
 
 ## Component rules and exceptions
+
+Make the interface understandable through layout, hierarchy, grouping, and familiar controls. Omit decorative slogans, redundant explanations, and secondary labels. If removing them makes a flow unclear, redesign the affected composition instead of adding explanatory filler. Keep necessary action names, validation, domain information, and accessible labels.
 
 | Purpose | Use |
 | --- | --- |
@@ -74,7 +76,7 @@ The legacy `--theme-seed-surface: #FFFEF4` still supplies light chart-axis and o
 | Neutral button/input | `hhwx-control`, including selected and disabled states where applicable |
 | Solid blue operation | `hhwx-action-accent`, or the matching `action-accent-background` / `foreground` pair in custom controls |
 | Quiet operation, link or reply/expand button | `action-secondary-*`; neutral or lightly tinted surface, operation text and border |
-| Solid success or danger/retry action | Matching `action-success-*` or `action-danger-*` background/foreground pair; hover keeps the same fill unless separately configured |
+| Solid success or danger action | Matching `action-success-*` or `action-danger-*` background/foreground pair; hover keeps the same fill unless separately configured |
 | Quiet destructive action | Existing `action-destructive-*` roles; these use a quiet surface, distinct from solid danger feedback |
 | Floating menu, help, tooltip or dialog | `hhwx-floating-surface`, or matching floating roles when geometry is specialized |
 | Chat message canvas and own bubbles | `chat-background` and paired `chat-own-background` / `chat-own-foreground`; others use control fill and default text. Smile Patrol mixes cyan into the control fill for own bubbles, inheriting the active light/dark roles. |
@@ -109,9 +111,13 @@ PWA installation colors are separate metadata in `src/app/manifest.ts` and `src/
 
 ## Event tracker chart interaction
 
-A compact, left-aligned chart heading identifies the server, event number or month, ranking mode, and tier/TOP10 before the score summary. Song-specific charts also identify the song number. Omit full event names; allow wrapping at narrow widths or larger text settings instead of truncating identifiers. Catalog errors belong beside event selection and score errors beside the chart; failed refreshes explicitly retain previously loaded data and expose the corresponding retry action.
+The tracking and information tabs retain separate content-scroll offsets during the current page visit. The heading above the tabs is shared: switching while it is visible keeps the current document position, even when the destination has a saved offset. Once the tab bar is fully sticky, switching keeps it sticky; returning to a tab last viewed above the bar starts at its content opening, never brings the heading back into view. Otherwise, returning restores the saved content offset; changing event or server clears both offsets. This does not persist across reloads. The incoming panel previews its target position during the horizontal transition, and committing the tab restores document scrolling without a smooth vertical animation. Comments remain outside the tabs.
 
-Failed chart requests do not show the successful-empty message, including TOP10. Inline retry links retain compact type with a 44 px touch target. The temporary zoom readout disables its fade when reduced motion is requested.
+Below 1280 CSS pixels, a single-finger horizontal swipe can start on the tab bar or noninteractive panel content. Vertical gestures retain normal page scrolling. A zoomed page keeps native horizontal panning. Charts, inputs, links/buttons, the planner, and nested horizontal scrollers keep their own gestures; they do not initiate tab switching. Short or cancelled swipes return to the current tab without changing its scroll position, and do not suppress a subsequent independent touch or mouse click. Clicking and keyboard selection use the same position restoration, including reduced motion.
+
+A compact, left-aligned chart heading identifies the server, event number or month, ranking mode, and tier/TOP10 before the score summary. Song-specific charts also identify the song number. Omit full event names; allow wrapping at narrow widths or larger text settings instead of truncating identifiers. An initial overview failure keeps the server controls and an empty, disabled event selector in the existing heading layout; one failure state replaces the event name and dates below. Disable dependent selection actions, and keep an available banner from its independent asset index. Downstream modules wait for a valid overview. An initial score failure replaces the summary and chart. Event information has one failure state for its required dependencies.
+
+Failed chart requests do not show the successful-empty message, including TOP10. Retry controls follow the existing service-status action: `hhwx-control`, a small rounded border, and `px-3 py-1` padding. Extend the hit area to at least 44 px without stretching the visible button. The temporary zoom readout disables its fade when reduced motion is requested.
 
 Activity, song and monthly cutoff charts zoom horizontally from 1× to 32×; the Y axis keeps its score scale. TOP10 retains its full-timeline view. Fine-pointer devices show compact minus/multiplier/plus controls at the bottom right, below the time labels. Buttons use adjacent 1/2/4/8/16/32× levels. Touch devices hide these controls during ordinary use (keyboard focus reveals them); a small multiplier appears at the plot's top left during zoom, stays until 700 ms after the gesture ends, then fades. There is no separate reset control; 1× shows the full timeline.
 
@@ -167,18 +173,29 @@ Password fields provide a keyboard-accessible show/hide button without a confirm
 
 Reuse the loading components below. Block loading follows the event information panel: an orange spinner above muted text. Keep dimensions appropriate to the containing page, panel or dialog rather than making every loader full-screen.
 
-Group required dependencies behind one initial panel loader; do not give each column or field its own spinner. Individual images retain their dimensions with a placeholder. Missing or failed images use the shared `common.states.imageUnavailable` message ("Image unavailable"), without per-image retry buttons or media-specific wording. Data-loading errors that block a page or panel retain their retry action.
+Group required dependencies behind one initial panel loader; do not give each column or field its own spinner. Individual images retain their dimensions with a placeholder. Missing or failed images use an existing icon placeholder, or the shared `common.states.imageUnavailable` message ("Image unavailable") when text is necessary, without per-image retry buttons or media-specific wording.
+
+Default to no additional copy. Blocking read failures use the shared `common.states.loadFailed` and `common.actions.retry` labels. Do not add resource-specific or initial-load/refresh variants, technical fallback explanations, or repeated messages. A blocking read failure replaces the affected module's contents in its existing slot with one `LoadingError`; it does not append an alert, expand the layout, or leave unusable fields beneath it. Optional artwork, audio and other auxiliary requests fail silently.
+
+Action outcomes are separate from content availability. Posting, saving, deleting, reacting, copying, and manual refresh use `ActionFeedback`, extracted from the existing comment refresh feedback: a compact outlined pill with a success/check or danger/cross icon, placed beside the relevant action without changing layout height. It appears only after completion and clears after 2 seconds for success or 4 seconds for failure; clear it when retrying, editing the affected input, or changing target. Keep failed-operation content and input and retry through the original action, without replacing the module with `LoadingError`. Use concise action-matched copy, never raw exceptions or HTTP details; recognized actionable validation or permission errors may use their localized reason. Content reads, including pagination, tab changes, and load retries, restore content on success without a success badge. Their being triggered by a click does not turn them into write operations.
 
 | Component | Purpose |
 | --- | --- |
 | `LoadingIndicator` | Initial page or panel loading; `compact` places a small spinner beside the label for inline sections |
+| `LoadingError` | One blocking failure in the affected module's existing content slot, with a retry action when available |
+| `RetryButton` | Shared compact read-retry control, including content pagination and route errors; preserve its styling and expanded hit area |
+| `ActionFeedback` | Success or failure of an explicit operation, using the compact comment-refresh appearance beside its action |
 | `LoadingSpinner` | Decorative progress inside an action; keep an accessible button label and use `text-current` when it should inherit the button ink |
 | `LoadingPlaceholder` | Reserve image or known layout dimensions while data is pending; supply a localized accessible label |
-| `LoadingImage` | Keep an image hidden until its actual source loads; reuse the placeholder and preserve the image dimensions. First-paint event banners use `revealBeforeHydration` to let the browser paint the loaded image over its placeholder without waiting for JavaScript. |
+| `LoadingImage` | Keep an image hidden until its actual source loads; reuse the placeholder and preserve the image dimensions. |
 
-Wait for the data required to render a meaningful initial view. Do not present initial defaults such as zero results, unknown service states, a fallback card identity or an incomplete filter list as loaded content. Show an empty state only after a successful response. An initial failure replaces loading with an error and a retry for the failed dependencies; it must not also show a false empty state. Keep complete data during a background refresh of the same resource, with refresh errors shown alongside it. A different account, item or data key must not inherit the previous result.
+Wait for the data required to render a meaningful initial view. Do not present initial defaults such as zero results, unknown service states, a fallback card identity or an incomplete filter list as loaded content. Show an empty state only after a successful response. An initial failure replaces loading with one failure state and retries missing dependencies; it must not also show a false empty state. Keep usable data during a background refresh of the same resource and handle refresh failure silently. A different account, item or data key must not inherit the previous result.
 
-Event pages render known server-provided selection and progress metadata from the first paint. While the full event catalog loads, keep the selected label visible and disable selection actions; do not replace it with a skeleton or remove the progress row. Seed the initial countdown from the server timestamp to keep hydration consistent.
+Event pages fetch `/api/bandori/master/events` in the browser and derive the selected event, title, dates, and progress locally. The overview is the only game-data dependency of the heading; the banner uses the optional public asset index. Once an event is resolved, tracking reads its ranking API, while opening or swiping toward information requests `/api/bandori/master/events/{eventId}` and the required metadata APIs through the shared client cache. Server pages validate route syntax and supply generic metadata without preloading game data. A valid numeric ID missing from a successfully loaded overview shows the not-found view; a failed overview request remains retryable. Event-specific document titles update after the overview loads.
+
+Manual comment refresh keeps the current list and page until the replacement succeeds. Reuse the existing feedback beside the refresh control for success or failure, without changing layout height. Its outcome follows the main list request; updating already-expanded replies is an auxiliary read and retains old replies silently on failure. If no list is available, show only the module failure instead of duplicating it beside the control. Posting and saving feedback use their corresponding action verbs. A successful POST immediately reports success and clears the submitted draft; the subsequent list read runs independently, preserves the previous list/page on failure, and never turns a confirmed post into a publishing failure. Replies returned by a successful POST can be inserted directly.
+
+For explicit reply expansion or participant pagination, retain loaded entries and retry only the failed page through `RetryButton` in the existing action/loading slot. Participant lists reserve one fixed-height footer for loading and retry; a failure must not append a second row or restart automatic pagination. A first failure without usable entries replaces the list slot with `LoadingError`. Chat resend and player play/retry icons retain their operation-specific controls; they are not ordinary content-read retry buttons.
 
 Image identity follows the resolved source URL. When it changes, remove the old image immediately and show a placeholder until the new image loads; do not remount an unchanged URL merely because the selected server changed. Metadata loading and the subsequent image download both need feedback. A viewer that needs its own image ref for zoom and gestures may keep a keyed native image with a centered `LoadingSpinner` over it. Viewers show no visible loading text; the status container retains a generic localized loading label for assistive technology. Failure ends the busy state. Fixed dark viewer overlays may retain white feedback text for contrast; ordinary image placeholders still use the theme roles above.
 

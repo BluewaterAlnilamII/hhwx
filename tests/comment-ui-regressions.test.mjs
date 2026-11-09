@@ -114,7 +114,7 @@ const itemSource = readFileSync(
 test("comment load errors and empty states are mutually exclusive", () => {
   assert.match(
     threadSource,
-    /!loading && !error && comments\.length === 0/u,
+    /hasLoadedComments && comments\.length === 0/u,
   );
 });
 

@@ -1,4 +1,5 @@
 "use client";
+import RetryButton from "@/components/RetryButton";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
@@ -69,7 +70,7 @@ export default function CardsPageClient() {
       </Tabs.List>
       <Tabs.Content value={kind} className="space-y-4 lg:space-y-8">
         {failed ? <div role="alert" className="hhwx-panel flex flex-wrap items-center justify-center gap-3 border p-6 text-sm">
-          <span>{t("states.loadFailed")}</span><button type="button" onClick={retry} className="hhwx-control rounded-xl border px-4 py-2 font-semibold">{t("actions.retry")}</button>
+          <span>{t("states.loadFailed")}</span><RetryButton onClick={retry} />
         </div> : null}
         {!ready && !failed ? <LoadingIndicator label={t("states.loading")} className="hhwx-panel min-h-64 border" /> : null}
         {ready && characters.data && bands.data ? <>

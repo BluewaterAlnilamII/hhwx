@@ -1,4 +1,5 @@
 "use client";
+import RetryButton from "@/components/RetryButton";
 
 import dynamic from "next/dynamic";
 import {
@@ -577,14 +578,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
           {pageError ? (
             <div role="alert" className="mb-4 space-y-3">
               <AccountErrorState message={pageError} />
-              <button
-                type="button"
-                onClick={handleRetryLoad}
-                disabled={isLoadingCards || loadingProfile || cardsMaster.refreshing || charactersMaster.refreshing || skillsMaster.refreshing}
-                className="hhwx-control rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-50"
-              >
-                {commonT("actions.retry")}
-              </button>
+              <RetryButton onClick={handleRetryLoad} disabled={isLoadingCards || loadingProfile || cardsMaster.refreshing || charactersMaster.refreshing || skillsMaster.refreshing} />
             </div>
           ) : null}
           {pageError && !hasPageData ? null : isPageLoading || !hasPageData ? (

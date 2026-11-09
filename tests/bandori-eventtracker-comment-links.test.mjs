@@ -51,7 +51,7 @@ test("linked comments scroll after React commits the loaded comment tree", () =>
 });
 
 test("copying a comment permalink does not mutate the current history entry", () => {
-  assert.match(commentItemSource, /navigator\.clipboard\?\.writeText\(permalink\)/u);
+  assert.match(commentItemSource, /await navigator\.clipboard\.writeText\(permalink\)/u);
   assert.doesNotMatch(
     commentItemSource,
     /handleCopyLink[\s\S]*?window\.history\.(?:pushState|replaceState)/u,
