@@ -5,6 +5,7 @@ import { BANDORI_META_DEFAULT_PREFERENCES as defaults, BANDORI_META_PREFERENCES_
   readBandoriMetaPreferences, resolveBandoriMetaPreferences, writeBandoriMetaPreferences } from "../src/lib/bandori/songs/meta-preferences.ts";
 import { parseBandoriSongsPageFilter, updateBandoriSongsQuery } from "../src/lib/bandori/songs/catalog.ts";
 import { formatSongMetaTime } from "../src/lib/song-meta.ts";
+import { buildEventSongMetaRows } from "../src/app/[locale]/bandori/events/_info/eventInfo.ts";
 
 const rawSkill = (type = "score", value = 150, condition = "perfect") => ({ duration: [5, 5.5, 6, 6.5, 7],
   description: ["{0} seconds", "", "", "{0}秒"],
@@ -75,6 +76,24 @@ function ranking() {
   const rows = (query = "", sort = "score", direction = "desc") => buildBandoriMetaRows(music, { durations: [7], songs }, 3, filter(query), level(rawSkill()), true, 1, 30, sort, direction);
   return { music, songs, rows };
 }
+
+test("event Meta fixes no fever defaults and ranks every difficulty before event filtering", () => {
+  const { music, songs } = ranking();
+  music[1].difficulty[1] = { playLevel: 12 };
+  songs[1][0] = { total: [100, 1], covered: { 7: [1, 1] } };
+  songs[1][1] = { total: [90, 1], covered: { 7: [1, 1] } };
+  const meta = { durations: [7], songs }, skills = { 69: rawSkill() };
+  const rows = buildEventSongMetaRows(music, meta, skills, 3);
+  const expected = buildBandoriMetaRows(music, meta, 3, filter(), level(rawSkill()), false, 1, 30, "score", "desc");
+  assert.deepEqual(rows, expected);
+  assert.deepEqual(rows.slice(0, 2).map((row) => row.difficulty), ["easy", "normal"]);
+  const expert = rows.filter((row) => row.difficulty === "expert");
+  assert.equal(expert[0].scoreRank, 3);
+  assert.notEqual(expert[0].scoreRank, expert[0].efficiencyRank);
+  const filtered = buildBandoriMetaRows(music, meta, 3, filter("difficulty=expert&q=%2320"), level(rawSkill()), false, 1, 30, "score", "desc");
+  assert.equal(filtered[0].scoreRank, expert[0].scoreRank);
+  assert.equal(filtered[0].efficiencyRank, expert[0].efficiencyRank);
+});
 
 test("ranking applies filters to each chart and uses regional names, official notes and the longest single BPM segment", () => {
   const { rows } = ranking(), all = rows();

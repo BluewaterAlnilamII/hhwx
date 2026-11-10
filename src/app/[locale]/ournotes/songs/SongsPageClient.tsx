@@ -96,7 +96,7 @@ function SongInformation() {
           const missions = entry.missions.map((mission) => mission === null ? "—"
             : (GEKISOU_MISSION_TYPES as readonly (string | number)[]).includes(mission) ? t(`missions.${mission}`)
               : t("unknownValue", { value: String(mission) })).join("-");
-          return <SongCatalogRow key={entry.songId} href={`/ournotes/songs/${entry.songId}`} songId={entry.songId} title={title}
+          return <SongCatalogRow key={entry.songId} game="ournotes" href={`/ournotes/songs/${entry.songId}`} songId={entry.songId} title={title}
             bandName={entry.bandName || t("unknownBand")}
             attribute={attributeIcon ? { src: attributeIcon, label: cardT(`attributes.${attributeId}`) } : undefined}
             missions={{ text: missions, label: t("filters.rows.gekisou") }}

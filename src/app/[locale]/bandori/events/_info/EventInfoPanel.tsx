@@ -6,15 +6,10 @@ import { useLocale, useTranslations } from "next-intl";
 import {
   ClipboardList,
   Gift,
-  ImageOff,
-  Music2,
-  Play,
 } from "lucide-react";
-import MusicArtwork from "@/components/music-player/MusicArtwork";
 import BandoriEventBonusPanel from "@/components/bandori/BandoriEventBonusPanel";
 import BandoriStampView from "@/components/bandori/BandoriStampView";
 import Heading from "@/components/Heading";
-import LoadingPlaceholder from "@/components/LoadingPlaceholder";
 import LoadingIndicator from "@/components/LoadingIndicator";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
@@ -24,14 +19,12 @@ import { useBandoriMusicAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { parseApiSuccessData } from "@/lib/api-contracts";
 import { SESSION_CLIENT_CACHE_POLICY } from "@/lib/api-cache";
 import { buildBandoriCardBandIconUrl } from "@/lib/bandori-builtin-resources";
-import { buildBandoriPublicAssetUrl } from "@/lib/bandori-public-asset-index";
 import {
   getBandoriEventBandId,
   resolveBandoriEventBandName,
   type BandoriBandNameRecord,
 } from "@/lib/bandori/events/band";
 import type { BandoriMusicMasterMap } from "@/lib/bandori-music-api-client";
-import { buildBandoriMusicPlayerItem } from "@/lib/bandori-music-player";
 import {
   getBandoriRegionalDisplayOrder,
   getBandoriServerCode,
@@ -47,12 +40,12 @@ import {
   resolveBandoriSkillLabel,
   type BandoriSkillLabelMaster,
 } from "@/lib/bandori-skill-label";
-import { useMusicPlayerStore } from "@/store/useMusicPlayerStore";
 import {
   buildEventInfoModel,
-  deriveEventSongsWithFallback,
 } from "./eventInfo";
 import EventStatusSummary from "./EventStatusSummary";
+import EventSongs from "./EventSongs";
+import { parseBandoriSongMetaResponse } from "@/lib/bandori/songs/meta";
 
 type CharacterRecord = Record<string, unknown> & {
   bandId?: number | null;
@@ -210,16 +203,10 @@ export default function EventInfoPanel({
   const t = useTranslations("bandori.events.info");
   const commonT = useTranslations("common");
   const eventTypesT = useTranslations("bandori.teamBuilder.eventTypes");
-  const playerT = useTranslations("navigation.toolbar.player");
   const model = useMemo(
     () => eventRecord ? buildEventInfoModel(eventRecord, server) : null,
     [eventRecord, server],
   );
-  const songSelection = useMemo(
-    () => eventRecord ? deriveEventSongsWithFallback(musicMaster, eventRecord, server) : null,
-    [eventRecord, musicMaster, server],
-  );
-  const songs = useMemo(() => songSelection?.songs ?? [], [songSelection]);
   const eventBandId = model ? getBandoriEventBandId(model.band) : null;
   const shouldLoadBandNames = eventId !== null;
   const stamps = useCommentStampCatalog(Boolean(model));
@@ -250,26 +237,6 @@ export default function EventInfoPanel({
   const rewardStamps = rewardStampSelection.stamps;
   const musicAssets = useBandoriMusicAssetIndex(Boolean(model));
   const { value: musicAssetIndex } = musicAssets;
-  const playQueueFromStart = useMusicPlayerStore((state) => state.playQueueFromStart);
-  const playableSongs = useMemo(
-    () => songs.flatMap((song) => {
-      const item = buildBandoriMusicPlayerItem({
-        musicId: song.id,
-        music: musicMaster?.[String(song.id)],
-        assets: musicAssetIndex?.songs[String(song.id)],
-        preferredServer: server,
-        contextServer: songSelection?.sourceServer ?? server,
-        fallbackTitle: song.title,
-        fallbackArtist: song.bandName,
-      });
-      return item ? [item] : [];
-    }),
-    [musicAssetIndex, musicMaster, server, songSelection?.sourceServer, songs],
-  );
-  const playableSongIndexById = useMemo(
-    () => new Map(playableSongs.map((song, index) => [song.providerTrackId, index])),
-    [playableSongs],
-  );
   const cardsRequest = useBandoriCardsMaster(server, Boolean(model), "regional");
   const charactersRequest = useCachedFetch<Record<string, CharacterRecord | undefined>>(
     model ? "bandori-master-characters-main" : null,
@@ -278,6 +245,12 @@ export default function EventInfoPanel({
     SESSION_CLIENT_CACHE_POLICY,
   );
   const skillsRequest = useBandoriSkillsMaster(Boolean(model));
+  const metaRequest = useCachedFetch(
+    model ? "bandori-song-meta-v2" : null,
+    model ? "/api/bandori/master/music/meta" : null,
+    parseBandoriSongMetaResponse,
+    SESSION_CLIENT_CACHE_POLICY,
+  );
   const bandsRequest = useCachedFetch<Record<string, BandoriBandNameRecord | undefined>>(
     shouldLoadBandNames ? "bandori-master-bands-all" : null,
     shouldLoadBandNames ? "/api/bandori/master/bands/all" : null,
@@ -288,7 +261,7 @@ export default function EventInfoPanel({
   const { data: characters } = charactersRequest;
   const { data: skills } = skillsRequest;
   const { data: bands } = bandsRequest;
-  const missingRequests = [cardsRequest, charactersRequest, skillsRequest, bandsRequest]
+  const missingRequests = [cardsRequest, charactersRequest, skillsRequest, bandsRequest, metaRequest]
     .filter((request) => request.data === null);
   const jpTitle = model && server !== 0
     ? pickBandoriRegionalText(model.eventName, 0, 0)
@@ -313,7 +286,7 @@ export default function EventInfoPanel({
     };
   }, [model]);
 
-  if (!model || eventId === null || !musicMaster || missingRequests.length > 0) {
+  if (!model || !eventRecord || eventId === null || !musicMaster || !skills || !metaRequest.data || missingRequests.length > 0) {
     const failed = (!model && error) || (!musicMaster && musicError) || missingRequests.some((request) => request.error);
     const pending = (!model && loading) || (!musicMaster && musicLoading) || missingRequests.some((request) => request.loading);
     return (
@@ -437,72 +410,8 @@ export default function EventInfoPanel({
         </div>
       </section>
 
-      <section className="mt-6 border-t border-[var(--theme-color-border-subtle)] pt-6">
-        <Heading as="h2" visualRole="section" accentSlot="c" icon={<Music2 className="h-5 w-5" />}>
-          {t("songsTitle", { server: SERVER_LABELS[songSelection?.sourceServer ?? server] })}
-        </Heading>
-        <div className="mt-4 max-w-3xl space-y-3">
-          {songs.map((song) => {
-            const thumbnailUrl = buildBandoriPublicAssetUrl(musicAssetIndex?.songs[String(song.id)]?.files.thumb);
-            const playableSongIndex = playableSongIndexById.get(String(song.id));
-            return (
-              <div key={song.id} data-music-id={song.id} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] p-3 shadow-sm transition hover:border-[var(--theme-color-action-secondary-border)] hover:shadow-md sm:grid-cols-[4.5rem_minmax(0,1fr)_auto] sm:items-center">
-                <div className="flex h-18 w-18 items-center justify-center overflow-hidden rounded-xl bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-action-secondary-foreground)]">
-                  {thumbnailUrl ? (
-                    <MusicArtwork
-                      src={thumbnailUrl}
-                      alt={t("coverAlt", { title: song.title })}
-                      className="h-full w-full object-cover"
-                      fallback={<ImageOff className="h-6 w-6" />}
-                    />
-                  ) : musicAssets.loading ? <LoadingPlaceholder label={commonT("states.loading")} className="h-full w-full" /> : <ImageOff className="h-6 w-6" />}
-                </div>
-                <div className="min-w-0">
-                  <div className="line-clamp-2 text-base font-semibold leading-6 text-[var(--theme-color-text-default)]">{song.title}</div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-normal text-[var(--theme-color-text-muted)]">
-                    <span>#{song.id}</span>
-                    {song.bandName ? <span>{song.bandName}</span> : null}
-                    <span>{t("publishedAt", {
-                      date: formatDateTime(
-                        song.publishedAt,
-                        songSelection?.sourceServer ?? server,
-                        locale,
-                        t("unannounced"),
-                      ),
-                    })}</span>
-                  </div>
-                </div>
-                <div className="col-start-2 flex flex-wrap gap-1.5 sm:col-start-auto sm:justify-end">
-                  {song.difficultyLevels.map((level, index) => (
-                    <span key={`${level}-${index}`} className="inline-flex h-7 min-w-7 items-center justify-center rounded-lg bg-[var(--theme-color-control-background-muted)] px-1.5 text-[11px] font-black text-[var(--theme-color-text-muted)]">{level}</span>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (playableSongIndex !== undefined) {
-                        playQueueFromStart(playableSongs, playableSongIndex);
-                      }
-                    }}
-                    disabled={playableSongIndex === undefined}
-                    title={musicAssets.loading ? commonT("states.loading") : playableSongIndex === undefined ? playerT("audioUnavailable") : undefined}
-                    aria-label={playableSongIndex === undefined
-                      ? musicAssets.loading ? commonT("states.loading") : playerT("audioUnavailable")
-                      : playerT("playSong", { title: song.title })}
-                    className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--theme-color-action-accent-background)] text-[var(--theme-color-action-accent-foreground)] shadow-sm outline-hidden transition hover:scale-105 hover:bg-[var(--theme-color-action-accent-background-hover)] focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)] disabled:shadow-none"
-                  >
-                    <Play className="ml-px h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-          {songs.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background-muted)] px-5 py-8 text-center text-sm font-semibold text-[var(--theme-color-text-muted)]">
-              {t("noSongs")}
-            </div>
-          ) : null}
-        </div>
-      </section>
+      <EventSongs music={musicMaster} event={eventRecord} server={server} meta={metaRequest.data}
+        skills={skills} assets={musicAssetIndex} assetsLoading={musicAssets.loading && !musicAssetIndex} />
     </article>
   );
 }

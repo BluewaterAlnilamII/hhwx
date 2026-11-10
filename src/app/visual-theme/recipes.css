@@ -1,4 +1,16 @@
 [data-visual-theme] {
+  /* Bandori chart identities stay fixed across visual themes and color schemes. */
+  --theme-color-bandori-difficulty-easy-background: #3e62e5;
+  --theme-color-bandori-difficulty-easy-foreground: #ffffff;
+  --theme-color-bandori-difficulty-normal-background: #6ad252;
+  --theme-color-bandori-difficulty-normal-foreground: #15370c;
+  --theme-color-bandori-difficulty-hard-background: #f5cd60;
+  --theme-color-bandori-difficulty-hard-foreground: #513900;
+  --theme-color-bandori-difficulty-expert-background: #d23f40;
+  --theme-color-bandori-difficulty-expert-foreground: #ffffff;
+  --theme-color-bandori-difficulty-special-background: #c53982;
+  --theme-color-bandori-difficulty-special-foreground: #ffffff;
+
   /* Site-wide recipes shared by every visual theme. */
   --theme-color-shell-canvas-background: var(--theme-seed-shell-canvas);
   --theme-color-shell-header-background: var(--theme-seed-brand-primary);

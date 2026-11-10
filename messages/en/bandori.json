@@ -184,6 +184,12 @@
       "rewardCards": "Reward cards",
       "noRewardCards": "No reward cards",
       "songsTitle": "Event songs ({server})",
+      "songGroups": {
+        "ranking": "Event ranking songs",
+        "added": "Songs added during the event",
+        "special": "New SPECIAL charts"
+      },
+      "specialAddedAt": "Added {date}",
       "coverAlt": "{title} cover",
       "publishedAt": "Published {date}",
       "noSongs": "No songs"
@@ -938,6 +944,8 @@
       "meta": "Chart Meta"
     },
     "meta": {
+      "globalRank": "Global chart rank {rank}",
+      "compactDifficulty": "Lv.",
       "parameters": "Parameters",
       "liveSkill": "Member skill",
       "skillLevel": "{skill} level",

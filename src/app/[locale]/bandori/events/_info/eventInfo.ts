@@ -11,9 +11,15 @@ import type {
 } from "@/lib/bandori-music-api-client";
 import {
   getBandoriRegionalDisplayOrder,
+  getBandoriServerCode,
   pickBandoriRegionalText,
   type BandoriServer,
 } from "@/lib/bandori-server";
+import { getBandoriSongDifficultyLevels, parseBandoriSongsPageFilter } from "@/lib/bandori/songs/catalog";
+import { bandoriMetaSkillOptions, buildBandoriMetaRows } from "@/lib/bandori/songs/meta";
+import { BANDORI_META_DEFAULT_PREFERENCES } from "@/lib/bandori/songs/meta-preferences";
+import type { BandoriSkillLabelMaster } from "@/lib/bandori-skill-label";
+import type { BandoriSongMetaDataset } from "@/lib/bandori-song-meta-server";
 
 export type EventReward = {
   point?: number;
@@ -43,13 +49,13 @@ export type EventSong = {
   id: number;
   title: string;
   bandName: string | null;
-  publishedAt: number;
-  difficultyLevels: number[];
+  publishedAt: number | null;
+  difficultyLevels: ReturnType<typeof getBandoriSongDifficultyLevels>;
   record: BandoriMusicMasterRecord;
 };
 
 export type EventSongsSelection = {
-  songs: EventSong[];
+  groups: { kind: "ranking" | "added" | "special"; songs: EventSong[] }[];
   sourceServer: BandoriServer;
   startAt: number | null;
   endAt: number | null;
@@ -290,53 +296,66 @@ export function deriveEventSongs(
     if (publishedAt === null || publishedAt < startAt || publishedAt > endAt) return [];
     const id = toPositiveInteger(musicId);
     if (id === null) return [];
-    const difficultyLevels = Object.entries(record.difficulty ?? {})
-      .sort(([left], [right]) => Number(left) - Number(right))
-      .flatMap(([, difficulty]) => {
-        const level = toPositiveInteger(difficulty?.playLevel);
-        return level === null ? [] : [level];
-      });
     return [{
       id,
       title: pickBandoriRegionalText(record.musicTitle, server, server) ?? `Music #${id}`,
       bandName: pickBandoriRegionalText(record.bandName, server, server),
       publishedAt,
-      difficultyLevels,
+      difficultyLevels: getBandoriSongDifficultyLevels(record, [server]),
       record,
     }];
   }).sort((left, right) => left.publishedAt - right.publishedAt || left.id - right.id);
 }
 
-export function deriveEventSongsWithFallback(
+export function deriveEventSongGroups(
   music: BandoriMusicMasterMap | null,
   eventRecord: Record<string, unknown>,
   server: BandoriServer,
 ): EventSongsSelection {
-  const event = { timeline: buildEventTimeline(eventRecord) };
-  let firstWindow: EventSongsSelection | null = null;
-
-  for (const candidateServer of getBandoriRegionalDisplayOrder(server)) {
-    const window = resolveBandoriEventServerScheduleWindow(event, candidateServer);
-    if (window.startAt === null || window.endAt === null) {
-      continue;
-    }
-    const songs = deriveEventSongs(music, candidateServer, window.startAt, window.endAt);
-    const selection = {
-      songs,
-      sourceServer: candidateServer,
-      startAt: window.startAt,
-      endAt: window.endAt,
-    };
-    firstWindow ??= selection;
-    if (songs.length > 0) {
-      return selection;
-    }
-  }
-
-  return firstWindow ?? {
-    songs: [],
-    sourceServer: server,
-    startAt: null,
-    endAt: null,
+  const timeline = buildEventTimeline(eventRecord);
+  const official = timeline[getBandoriServerCode(server)];
+  const name = getRegionalValue(eventRecord.eventName, server);
+  const hasOfficialInfo = (typeof name === "string" && name.trim().length > 0)
+    || official?.startAt != null || official?.endAt != null;
+  const sourceServer = hasOfficialInfo ? server : 0;
+  const { startAt, endAt } = resolveBandoriEventServerScheduleWindow({ timeline }, sourceServer);
+  const added = deriveEventSongs(music, sourceServer, startAt, endAt);
+  const addedIds = new Set(added.map((song) => song.id));
+  const song = (id: number, publishedAt?: number): EventSong[] => {
+    const record = music?.[String(id)];
+    return record ? [{ id, record,
+      title: pickBandoriRegionalText(record.musicTitle, sourceServer, sourceServer) ?? `Music #${id}`,
+      bandName: pickBandoriRegionalText(record.bandName, sourceServer, sourceServer),
+      publishedAt: publishedAt ?? toFiniteNumber(getRegionalValue(record.publishedAt, sourceServer)),
+      difficultyLevels: getBandoriSongDifficultyLevels(record, [sourceServer]),
+    }] : [];
   };
+  const musics = getRegionalValue(eventRecord.musics, sourceServer);
+  const ranking = Array.isArray(musics) ? musics.flatMap((entry) => {
+    const id = isRecord(entry) ? toPositiveInteger(entry.musicId) : null;
+    return id === null ? [] : song(id);
+  }) : [];
+  const special = Object.entries(music ?? {}).flatMap(([key, record]) => {
+    const id = toPositiveInteger(key);
+    const publishedAt = toFiniteNumber(getRegionalValue(record?.difficulty?.["4"]?.publishedAt, sourceServer));
+    if (id === null || addedIds.has(id) || publishedAt === null || startAt === null || endAt === null
+      || publishedAt < startAt || publishedAt > endAt) return [];
+    return song(id, publishedAt);
+  }).sort((a, b) => a.publishedAt! - b.publishedAt! || a.id - b.id);
+  return { sourceServer, startAt, endAt, groups: [
+    { kind: "ranking", songs: ranking }, { kind: "added", songs: added }, { kind: "special", songs: special },
+  ] };
+}
+
+export function buildEventSongMetaRows(
+  music: BandoriMusicMasterMap,
+  meta: BandoriSongMetaDataset,
+  skills: Record<string, BandoriSkillLabelMaster | null | undefined>,
+  server: BandoriServer,
+) {
+  const defaults = BANDORI_META_DEFAULT_PREFERENCES;
+  const skill = bandoriMetaSkillOptions(skills, server).find(({ id }) => id === defaults.liveSkill)?.levels[defaults.liveLevel - 1];
+  if (!skill) return [];
+  return buildBandoriMetaRows(music, meta, server, parseBandoriSongsPageFilter(new URLSearchParams()),
+    skill, false, defaults.perfect / 100, defaults.downtime, "score", "desc");
 }

@@ -12,7 +12,7 @@ import { getBandoriEventStatusAt } from "../src/lib/bandori/events/status.ts";
 import {
   buildEventInfoModel,
   deriveEventSongs,
-  deriveEventSongsWithFallback,
+  deriveEventSongGroups,
 } from "../src/app/[locale]/bandori/events/_info/eventInfo.ts";
 import {
   parseEventTrackerServerSearchParam,
@@ -120,15 +120,39 @@ test("event info time windows follow current, JP, EN, TW, CN with per-server sch
 });
 
 test("event songs keep publication timestamps and event windows on one fallback server", () => {
-  const selection = deriveEventSongsWithFallback(music, {
+  const selection = deriveEventSongGroups(music, {
     startAt: [1768024800000, null, 1800000000000, null],
     endAt: [1768823999000, null, 1800600000000, null],
   }, 1);
 
   assert.equal(selection.sourceServer, 0);
-  assert.deepEqual(selection.songs.map((song) => song.id), [764, 765]);
+  assert.deepEqual(selection.groups[1].songs.map((song) => song.id), [764, 765]);
   assert.equal(selection.startAt, 1768024800000);
   assert.equal(selection.endAt, 1768823999000);
+});
+
+test("event song groups preserve API order, timestamp boundaries, overlaps and separate SPECIAL releases", () => {
+  const song = (publishedAt, specialAt) => ({ bandId: 1, musicTitle: ["Song", null, null, "曲"],
+    publishedAt: [publishedAt, null, null, publishedAt], difficulty: {
+      0: { playLevel: 7 }, 1: { playLevel: 12 }, 2: { playLevel: 18 }, 3: { playLevel: 25 },
+      4: { playLevel: 27, ...(specialAt === undefined ? {} : { publishedAt: [specialAt, null, null, specialAt] }) },
+    } });
+  const catalog = { 8: song(200, 200), 7: song(100, 900), 6: song(200, 200), 5: song(201, 201),
+    4: song(50, 150), 3: song(50, 150), 2: song(50), 1: song(50, 99) };
+  const record = { startAt: [100, null, null, 100], endAt: [200, null, null, 200],
+    musics: [[{ musicId: 8 }, { musicId: 3 }, { musicId: 7 }], null, null, [{ musicId: 8 }, { musicId: 3 }, { musicId: 7 }]] };
+  const selected = deriveEventSongGroups(catalog, record, 3);
+  assert.equal(selected.sourceServer, 3);
+  assert.deepEqual(selected.groups.map((group) => group.songs.map((song) => song.id)), [[8, 3, 7], [7, 6, 8], [3, 4]]);
+  assert.deepEqual(selected.groups[1].songs[0].difficultyLevels, { easy: 7, normal: 12, hard: 18, expert: 25, special: 27 });
+  assert.equal(selected.groups[2].songs[0].publishedAt, 150);
+  const emptyCn = deriveEventSongGroups(catalog, { ...record, startAt: [100, null, null, 500], endAt: [200, null, null, 600],
+    musics: [record.musics[0], null, null, []] }, 3);
+  assert.equal(emptyCn.sourceServer, 3);
+  assert.ok(emptyCn.groups.every((group) => group.songs.length === 0));
+  const missingCn = { ...record, startAt: [100, null, null, null], endAt: [200, null, null, null], cnSchedule: { startAt: 500, endAt: 600 } };
+  assert.equal(deriveEventSongGroups(catalog, missingCn, 3).sourceServer, 0);
+  assert.equal(deriveEventSongGroups(catalog, { ...missingCn, eventName: ["JP", null, null, "CN"] }, 3).sourceServer, 3);
 });
 
 test("event status uses the tracker three-state rule", () => {
@@ -307,7 +331,7 @@ test("event rewards fallback stamps by server and keep reward cards unlabelled",
   assert.deepEqual(model.rewardStampIdsByServer, [[541, 9001], [], [], [541, 10135]]);
   assert.ok(
     eventInfoPanelSource.indexOf('t("rewardsTitle")')
-      < eventInfoPanelSource.indexOf('t("songsTitle"'),
+      < eventInfoPanelSource.indexOf('<EventSongs '),
   );
   assert.ok(
     eventInfoPanelSource.indexOf('t("rewardStamps"')
@@ -336,7 +360,8 @@ test("only source-sensitive activity information fields display fallback server 
   assert.match(eventInfoPanelSource, /t\("startTime", \{ server:/u);
   assert.match(eventInfoPanelSource, /t\("endTime", \{ server:/u);
   assert.match(eventInfoPanelSource, /t\("rewardStamps", \{ server:/u);
-  assert.match(eventInfoPanelSource, /t\("songsTitle", \{ server:/u);
+  const songsSource = readFileSync(new URL("../src/app/[locale]/bandori/events/_info/EventSongs.tsx", import.meta.url), "utf8");
+  assert.match(songsSource, /t\("songsTitle", \{ server: getBandoriServerCode\(sourceServer\)/u);
   assert.doesNotMatch(
     eventInfoPanelSource,
     /活动状态（|活动标题（|主题乐队（|活动横幅（|奖励卡牌（|加成角色（|加成卡牌（|歌曲标题（|乐队名（|封面（/u,

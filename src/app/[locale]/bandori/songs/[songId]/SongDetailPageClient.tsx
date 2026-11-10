@@ -134,7 +134,7 @@ export default function SongDetailPageClient({
 
   return (
     <BandoriPageShell contentClassName="max-w-6xl">
-      <SongDetailHeader title={title} bandName={bandName} idLabel={t("songId", { songId })} artworkUrl={artworkUrl}
+      <SongDetailHeader game="bandori" title={title} bandName={bandName} idLabel={t("songId", { songId })} artworkUrl={artworkUrl}
         difficulties={difficulties.map((option) => ({ difficulty: option.difficulty, label: t(`difficulties.${option.difficulty}`),
           level: option.playLevels.find((value) => value !== null) ?? null }))}
         track={simulator.audioUrl ? {
