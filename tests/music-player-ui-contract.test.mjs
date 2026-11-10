@@ -56,26 +56,30 @@ test("player UI uses semantic theme tokens without fixed palette classes", async
   );
 });
 
-test("event song play action always dispatches the restart-from-beginning queue command", async () => {
-  const eventInfoPanel = await readFile(
-    new URL("src/app/[locale]/bandori/events/_info/EventInfoPanel.tsx", ROOT_URL),
+test("event songs reuse the catalog playback toggle and persistent queue", async () => {
+  const eventSongs = await readFile(
+    new URL("src/app/[locale]/bandori/events/_info/EventSongs.tsx", ROOT_URL),
     "utf8",
   );
 
-  assert.match(eventInfoPanel, /playQueueFromStart\(playableSongs, playableSongIndex\)/u);
-  assert.match(eventInfoPanel, /files\.thumb/u);
+  const row = await readFile(new URL("src/components/SongCatalogRow.tsx", ROOT_URL), "utf8");
+  const strip = await readFile(new URL("src/components/SongDifficultyStrip.tsx", ROOT_URL), "utf8");
+  assert.match(eventSongs, /<SongCatalogRow/u);
+  assert.match(row, /<SongDifficultyStrip/u);
+  assert.match(strip, /getState\(\)\.playItem\(track\)/u);
+  assert.match(eventSongs, /files\.thumb/u);
 });
 
 test("page and player artwork use durable CDN source URLs without a Blob cache", async () => {
   const [artwork, eventInfoPanel, player] = await Promise.all([
     readFile(new URL("src/components/music-player/MusicArtwork.tsx", ROOT_URL), "utf8"),
-    readFile(new URL("src/app/[locale]/bandori/events/_info/EventInfoPanel.tsx", ROOT_URL), "utf8"),
+    readFile(new URL("src/components/SongCatalogRow.tsx", ROOT_URL), "utf8"),
     readFile(new URL("src/components/music-player/ToolbarMusicPlayer.tsx", ROOT_URL), "utf8"),
   ]);
 
   assert.match(artwork, /src=\{src\}/u);
   assert.doesNotMatch(artwork, /\bfetch\(|createObjectURL|revokeObjectURL/u);
-  assert.match(eventInfoPanel, /<MusicArtwork[\s\S]*?src=\{thumbnailUrl\}/u);
+  assert.match(eventInfoPanel, /<MusicArtwork[\s\S]*?src=\{artworkUrl\}/u);
   assert.match(player, /<MusicArtwork[\s\S]*?src=\{currentTrack\.artworkUrl\}/u);
 });
 

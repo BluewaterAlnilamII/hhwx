@@ -5,18 +5,40 @@ import { useLocale, useTranslations } from "next-intl";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import HelpPopover from "@/components/HelpPopover";
-import { SONG_DIFFICULTY_CLASSES } from "@/components/SongDifficultyStrip";
+import { getSongDifficultyClassName } from "@/components/SongDifficultyStrip";
 import { formatSongMetaTime, type SongMetaRow, type SongMetaSort } from "@/lib/song-meta";
 
-export default function SongMetaTable({ game, rows, sort, direction, busy, onSort }: {
+export default function SongMetaTable({ game, rows, sort = "score", direction = "desc", busy = false, onSort, compact = false }: {
   game: "bandori" | "ournotes";
-  rows: (SongMetaRow & { topScore: boolean; topEfficiency: boolean })[];
-  sort: SongMetaSort; direction: "asc" | "desc"; busy: boolean; onSort: (sort: SongMetaSort) => void;
+  rows: (SongMetaRow & { topScore: boolean; topEfficiency: boolean; scoreRank: number; efficiencyRank: number })[];
+  sort?: SongMetaSort; direction?: "asc" | "desc"; busy?: boolean; onSort?: (sort: SongMetaSort) => void; compact?: boolean;
 }) {
   const t = useTranslations(`${game}.songs.meta`), songsT = useTranslations(`${game}.songs`);
   const locale = useLocale();
   const format = useMemo(() => new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), [locale]);
   const bpmFormat = useMemo(() => new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }), [locale]);
+  if (compact) return <div className="hhwx-panel @container/meta min-w-0 overflow-hidden border" role="region" aria-label={t("tableLabel")} aria-busy={busy}>
+    <table className="hhwx-meta-table w-full table-fixed border-collapse text-xs leading-4 tabular-nums @[26rem]/meta:text-sm @[26rem]/meta:leading-5">
+      <caption className="sr-only">{t("tableLabel")}</caption>
+      <colgroup><col /><col className="w-8 @[26rem]/meta:w-22" /><col className="w-17.5 @[26rem]/meta:w-22" /><col className="w-17.5 @[26rem]/meta:w-22" /></colgroup>
+      <thead className="text-[11px] leading-4 @[26rem]/meta:text-xs @[26rem]/meta:leading-4.5"><tr className="border-b border-[var(--theme-color-border-subtle)] text-[var(--theme-color-text-muted)]">
+        {(["title", "level", "score", "efficiency"] as const).map((key) => <th key={key} scope="col" aria-sort={key === "score" ? "descending" : undefined}
+          title={key === "level" ? t("columns.level") : undefined}
+          className={`py-2.5 ${key === "title" ? "pr-1 pl-3 text-left" : "px-0.5 text-center"}`}>{key === "level" ? t("compactDifficulty") : t(`columns.${key}`)}</th>)}
+      </tr></thead>
+      <tbody>{rows.map((row) => <tr key={`${row.songId}:${row.difficulty}`} className="border-b last:border-0">
+        <th scope="row" className="py-2 pr-1 pl-3 text-left font-semibold"><div className="line-clamp-2 wrap-anywhere focus-within:line-clamp-none"><Link prefetch={false} href={`/${game}/songs/${row.songId}`} title={row.title}
+          className="hhwx-title-link">{row.title || songsT("unknownTitle", { songId: row.songId })}</Link></div></th>
+        <td className="px-0.5 py-2 text-center"><span className={`${getSongDifficultyClassName(game, row.difficulty)} inline-flex items-center justify-center border text-[11px] @[26rem]/meta:text-xs ${game === "bandori" ? "h-5.5 w-5.5 rounded-lg font-bold @[26rem]/meta:h-6 @[26rem]/meta:w-6" : "h-6 w-6 rounded-md font-black @[26rem]/meta:h-7 @[26rem]/meta:w-7"}`}
+          title={songsT(`difficulties.${row.difficulty}`)} aria-label={`${songsT(`difficulties.${row.difficulty}`)} ${row.level ?? "—"}`}><span>{row.level ?? "—"}</span></span></td>
+        {(["score", "efficiency"] as const).map((key) => <td key={key} className="px-0.5 py-2 text-center">
+          <span className={`block whitespace-nowrap ${row[key === "score" ? "topScore" : "topEfficiency"] ? "font-bold" : "font-medium"}`}>{format.format(row[key])}%</span>
+          <span className="block text-[10px] leading-4 text-[var(--theme-color-text-muted)] @[26rem]/meta:text-xs" aria-label={t("globalRank", { rank: row[key === "score" ? "scoreRank" : "efficiencyRank"] })}>#{row[key === "score" ? "scoreRank" : "efficiencyRank"]}</span>
+        </td>)}
+      </tr>)}</tbody>
+    </table>
+    {rows.length === 0 ? <p className="p-5 text-center text-xs text-[var(--theme-color-text-muted)]">{t("empty")}</p> : null}
+  </div>;
   return <div className="hhwx-panel overflow-x-auto border" role="region" aria-label={t("tableLabel")} tabIndex={0} aria-busy={busy}>
     <table className="hhwx-meta-table w-full min-w-192 border-collapse text-[13px] leading-5 tabular-nums sm:text-sm">
       <caption className="sr-only">{t("tableLabel")}</caption>
@@ -27,7 +49,7 @@ export default function SongMetaTable({ game, rows, sort, direction, busy, onSor
           return <th key={key} scope="col" aria-sort={sort === key ? direction === "asc" ? "ascending" : "descending" : "none"}
             className={key === "title" ? "w-full min-w-30 pl-2 pr-5 text-left sm:min-w-41 sm:pl-3 sm:pr-7" : "w-px px-3.5 text-center sm:px-4"}>
             <div className="relative inline-flex items-center gap-0.5 sm:gap-1">
-              <button type="button" className="hhwx-text-link min-w-6 whitespace-nowrap py-2 font-bold sm:py-3" onClick={() => onSort(key)}>{t(`columns.${key}`)}<span className="absolute top-1/2 left-full ml-0.5 h-3 w-3 -translate-y-1/2 sm:ml-1" aria-hidden="true">
+              <button type="button" className="hhwx-text-link min-w-6 whitespace-nowrap py-2 font-medium text-inherit sm:py-3" onClick={() => onSort?.(key)}>{t(`columns.${key}`)}<span className="absolute top-1/2 left-full ml-0.5 h-3 w-3 -translate-y-1/2 sm:ml-1" aria-hidden="true">
                 {sort === key ? direction === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" /> : null}
               </span></button>
               {hasHelp ? <div className="flex text-left">
@@ -41,9 +63,9 @@ export default function SongMetaTable({ game, rows, sort, direction, busy, onSor
       </tr></thead>
       <tbody>{rows.map((row, index) => <tr key={`${row.songId}:${row.difficulty}`} className="h-10 border-b last:border-0 sm:h-auto">
         <td className="px-1 py-1.5 text-center text-[var(--theme-color-text-muted)] sm:px-2 sm:py-3">{index + 1}</td>
-        <th scope="row" className="max-w-0 px-2 py-1.5 text-left font-semibold sm:px-3 sm:py-3"><Link prefetch={false} href={`/${game}/songs/${row.songId}`} className="hhwx-text-link line-clamp-2 break-words sm:line-clamp-none">{row.title || songsT("unknownTitle", { songId: row.songId })}</Link></th>
-        <td className="px-2 py-1.5 text-center sm:px-3 sm:py-3"><span className={`${SONG_DIFFICULTY_CLASSES[row.difficulty]} inline-flex min-w-8 items-center justify-center rounded-lg border px-2 py-1 text-xs font-black`}
-          title={songsT(`difficulties.${row.difficulty}`)} aria-label={`${songsT(`difficulties.${row.difficulty}`)} ${row.level ?? "—"}`}>{row.level ?? "—"}</span></td>
+        <th scope="row" className="max-w-0 px-2 py-1.5 text-left font-semibold sm:px-3 sm:py-3"><div className="line-clamp-2 break-words focus-within:line-clamp-none sm:line-clamp-none"><Link prefetch={false} href={`/${game}/songs/${row.songId}`} className="hhwx-title-link">{row.title || songsT("unknownTitle", { songId: row.songId })}</Link></div></th>
+        <td className="px-2 py-1.5 text-center sm:px-3 sm:py-3"><span className={`${getSongDifficultyClassName(game, row.difficulty)} inline-flex items-center justify-center rounded-lg border ${game === "bandori" ? "h-5.5 w-5.5 text-[11px] font-bold sm:h-6 sm:w-6 sm:text-xs" : "min-w-8 px-2 py-1 text-xs font-black"}`}
+          title={songsT(`difficulties.${row.difficulty}`)} aria-label={`${songsT(`difficulties.${row.difficulty}`)} ${row.level ?? "—"}`}><span>{row.level ?? "—"}</span></span></td>
         <td className={`whitespace-nowrap px-2 py-1.5 text-center sm:px-3 sm:py-3${row.topScore ? " font-bold" : ""}`}>{format.format(row.score)}%</td>
         <td className={`whitespace-nowrap px-2 py-1.5 text-center sm:px-3 sm:py-3${row.topEfficiency ? " font-bold" : ""}`}>{format.format(row.efficiency)}%</td>
         <td className="min-w-20 whitespace-nowrap px-2 py-1.5 text-center sm:min-w-22 sm:px-3 sm:py-3">{formatSongMetaTime(row.length)}</td>

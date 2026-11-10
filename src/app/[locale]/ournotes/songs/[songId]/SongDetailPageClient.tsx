@@ -45,7 +45,7 @@ export default function SongDetailPageClient({ songId, detail }: { songId: numbe
   const attributeLabel = attributeId > 0 ? cardT(`attributes.${attributeId}`) : region.attribute === null ? "—"
     : region.attribute === "None" || region.attribute === "All" ? t(`missions.${region.attribute}`) : t("unknownValue", { value: String(region.attribute) });
   return <PageShell contentClassName="max-w-6xl">
-    <SongDetailHeader title={title} bandName={region.bandName || t("unknownBand")} idLabel={t("songId", { songId })}
+    <SongDetailHeader game="ournotes" title={title} bandName={region.bandName || t("unknownBand")} idLabel={t("songId", { songId })}
       artworkUrl={ourNotesMusicImageUrl(images.value, songId, "jacket")} artworkLoading={images.loading}
       track={buildOurNotesMusicPlayerItem({ songId, title, artist: region.bandName, assetIndex: images.value })} playbackLoading={images.loading}
       difficulties={region.charts.map((chart) => ({ difficulty: chart.difficulty, label: t(`difficulties.${chart.difficulty}`), level: chart.level }))}

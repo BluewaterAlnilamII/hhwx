@@ -41,6 +41,42 @@
 
 /* Shared appearance follows theme roles; utilities retain component layout. */
 @layer components {
+  .hhwx-bandori-difficulty {
+    border-color: transparent;
+    background-color: var(--difficulty-background);
+    color: var(--difficulty-foreground);
+  }
+
+  .hhwx-bandori-difficulty > span {
+    line-height: 1;
+    text-box: trim-both cap alphabetic;
+  }
+
+  .hhwx-bandori-difficulty-easy {
+    --difficulty-background: var(--theme-color-bandori-difficulty-easy-background);
+    --difficulty-foreground: var(--theme-color-bandori-difficulty-easy-foreground);
+  }
+
+  .hhwx-bandori-difficulty-normal {
+    --difficulty-background: var(--theme-color-bandori-difficulty-normal-background);
+    --difficulty-foreground: var(--theme-color-bandori-difficulty-normal-foreground);
+  }
+
+  .hhwx-bandori-difficulty-hard {
+    --difficulty-background: var(--theme-color-bandori-difficulty-hard-background);
+    --difficulty-foreground: var(--theme-color-bandori-difficulty-hard-foreground);
+  }
+
+  .hhwx-bandori-difficulty-expert {
+    --difficulty-background: var(--theme-color-bandori-difficulty-expert-background);
+    --difficulty-foreground: var(--theme-color-bandori-difficulty-expert-foreground);
+  }
+
+  .hhwx-bandori-difficulty-special {
+    --difficulty-background: var(--theme-color-bandori-difficulty-special-background);
+    --difficulty-foreground: var(--theme-color-bandori-difficulty-special-foreground);
+  }
+
   .chat-mention-banner-slot {
     grid-template-rows: 0fr;
     display: grid;
@@ -190,6 +226,12 @@
 
   .hhwx-meta-table > thead {
     background-color: var(--theme-color-table-header-background);
+    font-size: 0.75rem;
+    line-height: 1.125rem;
+  }
+
+  .hhwx-meta-table > thead th {
+    font-weight: 500;
   }
 
   .hhwx-meta-table > tbody > tr {
@@ -223,6 +265,22 @@
   .hhwx-text-link {
     color: var(--theme-color-action-secondary-foreground);
     text-underline-offset: 3px;
+  }
+
+  .hhwx-title-link {
+    color: var(--theme-color-text-default);
+    text-underline-offset: 3px;
+  }
+
+  .hhwx-title-link:focus-visible {
+    text-decoration-line: underline;
+    text-decoration-thickness: 2px;
+  }
+
+  @media (hover: hover) {
+    .hhwx-title-link:hover {
+      text-decoration-line: underline;
+    }
   }
 
   .hhwx-calendar-event-label {
@@ -279,6 +337,7 @@
 
   .hhwx-control:focus-visible,
   .hhwx-text-link:focus-visible,
+  .hhwx-title-link:focus-visible,
   .hhwx-action-accent:focus-visible {
     outline: 2px solid var(--theme-color-focus-ring);
     outline-offset: 3px;

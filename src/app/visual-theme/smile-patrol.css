@@ -97,6 +97,9 @@
     --theme-color-panel-background: var(--smile-patrol-content-surface);
     --theme-color-floating-background: var(--smile-patrol-content-surface);
     --theme-color-panel-border: #dddcd5;
+    --theme-color-table-header-background: color-mix(in srgb, var(--smile-patrol-palette-blue-006699) 6%, var(--theme-color-panel-background));
+    --theme-color-table-row-alternate-background: color-mix(in srgb, var(--smile-patrol-palette-blue-006699) 3%, var(--theme-color-panel-background));
+    --theme-color-table-row-active-background: color-mix(in srgb, var(--smile-patrol-palette-blue-006699) 5%, var(--theme-color-panel-background));
     --theme-color-control-placeholder: var(--theme-color-text-muted);
     --theme-color-action-secondary-background-hover: color-mix(in srgb, var(--theme-color-action-secondary-foreground) 6%, var(--theme-color-control-background));
     --theme-color-control-background-hover: var(--theme-color-action-secondary-background);
@@ -197,6 +200,7 @@
     --theme-color-surface-background: #1c2936;
     --theme-color-control-background: #283947;
     --theme-color-control-background-muted: #22313f;
+    --theme-color-table-header-background: var(--theme-color-control-background);
     --theme-color-control-background-hover: #304250;
     --theme-color-control-background-pressed: var(--theme-color-control-background-hover);
     --theme-color-control-placeholder: var(--theme-color-text-muted);

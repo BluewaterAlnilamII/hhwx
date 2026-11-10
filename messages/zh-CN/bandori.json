@@ -184,6 +184,12 @@
       "rewardCards": "奖励卡牌",
       "noRewardCards": "暂无奖励卡牌",
       "songsTitle": "活动歌曲（{server}）",
+      "songGroups": {
+        "ranking": "活动排行歌曲",
+        "added": "活动期间追加歌曲",
+        "special": "追加新SPECIAL谱面"
+      },
+      "specialAddedAt": "{date} 追加",
       "coverAlt": "{title} 封面",
       "publishedAt": "{date} 发布",
       "noSongs": "暂无歌曲"
@@ -938,6 +944,8 @@
       "meta": "谱面 Meta"
     },
     "meta": {
+      "globalRank": "全谱面排名第 {rank} 名",
+      "compactDifficulty": "难度",
       "parameters": "参数设置",
       "liveSkill": "成员技能",
       "skillLevel": "{skill}等级",

@@ -168,6 +168,17 @@ function getDifficultyLevel(
   return entry.playLevel as number;
 }
 
+export function getBandoriSongDifficultyLevels(
+  record: BandoriMusicMasterRecord,
+  servers: readonly BandoriServer[],
+  now = Date.now(),
+): Partial<Record<BandoriChartDifficulty, number>> {
+  return Object.fromEntries(BANDORI_CHART_DIFFICULTIES.flatMap((difficulty) => {
+    const level = getDifficultyLevel(record, difficulty, servers, now);
+    return level === null ? [] : [[difficulty, level]];
+  }));
+}
+
 export function buildBandoriSongCatalog(
   music: BandoriMusicMasterMap,
   preferredTextServer: BandoriServer,
@@ -192,12 +203,7 @@ export function buildBandoriSongCatalog(
     const availableServers = BANDORI_SERVERS.filter(
       (server) => publishedAtByServer[server] !== null,
     );
-    const difficultyLevels = Object.fromEntries(
-      BANDORI_CHART_DIFFICULTIES.flatMap((difficulty) => {
-        const level = getDifficultyLevel(record, difficulty, availableServers, now);
-        return level === null ? [] : [[difficulty, level]];
-      }),
-    ) as Partial<Record<BandoriChartDifficulty, number>>;
+    const difficultyLevels = getBandoriSongDifficultyLevels(record, availableServers, now);
     if (Object.keys(difficultyLevels).length === 0) return [];
 
     const bandId = record.bandId as number;

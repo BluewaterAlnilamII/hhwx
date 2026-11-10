@@ -72,10 +72,12 @@ Make the interface understandable through layout, hierarchy, grouping, and famil
 | Purpose | Use |
 | --- | --- |
 | Page panel | `hhwx-panel`; nested content uses the panel background with its own geometry |
-| Song Meta table | `hhwx-meta-table` uses `table-*` roles for a quiet header, alternating visible rows, subtle separators, and row feedback on hover-capable input or visible keyboard focus. Light mode darkens these fills; dark mode lightens them. Numeric cells and their headers stay centered. |
+| Song Meta table | Compact and full tables share `hhwx-meta-table` and `table-*` roles: a quiet header, alternating visible rows, subtle separators, and row feedback on hover-capable input or visible keyboard focus. Smile Patrol uses restrained cool-blue fills in light mode and lifted blue surfaces in dark mode. Header labels are smaller and lighter than song titles; numeric cells and their headers stay centered. |
 | Neutral button/input | `hhwx-control`, including selected and disabled states where applicable |
 | Solid blue operation | `hhwx-action-accent`, or the matching `action-accent-background` / `foreground` pair in custom controls |
 | Quiet operation, link or reply/expand button | `action-secondary-*`; neutral or lightly tinted surface, operation text and border |
+| Content-title link in compact song cards and Song Meta tables | `hhwx-title-link` uses default text color, an underline on hover, and an underline plus the standard outline on visible keyboard focus. Compact and catalog Meta titles share this appearance; group headings retain their own color role. |
+| Bandori difficulty badges | Cards, details and Meta use the shared `hhwx-bandori-difficulty` appearance: solid blue / green / yellow / red / magenta for EASY / NORMAL / HARD / EXPERT / SPECIAL, with the existing `rounded-lg` (8 px) corners shared by song play/pause buttons. Meta badges are 22 px on narrow layouts and 24 px on wide layouts. The fills slightly soften the game's color identities while retaining distinct hues and solid color. Green and yellow use dark ink; the other fills use white. These domain colors stay fixed in both schemes. Missing charts retain a pale neutral cross. Other games keep their own presentation. |
 | Solid success or danger action | Matching `action-success-*` or `action-danger-*` background/foreground pair; hover keeps the same fill unless separately configured |
 | Quiet destructive action | Existing `action-destructive-*` roles; these use a quiet surface, distinct from solid danger feedback |
 | Floating menu, help, tooltip or dialog | `hhwx-floating-surface`, or matching floating roles when geometry is specialized |

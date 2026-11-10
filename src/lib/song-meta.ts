@@ -14,11 +14,17 @@ export function formatSongMetaTime(seconds: number): string {
 }
 
 export function rankSongMetaRows<T extends SongMetaRow>(rows: T[], sort: SongMetaSort, direction: "asc" | "desc") {
+  const difficulties = ["easy", "normal", "hard", "expert", "special"];
+  const ranks = (key: "score" | "efficiency") => new Map([...rows]
+    .sort((a, b) => b[key] - a[key] || a.songId - b.songId || difficulties.indexOf(a.difficulty) - difficulties.indexOf(b.difficulty))
+    .map((row, index) => [`${row.songId}:${row.difficulty}`, index + 1]));
   const topCount = Math.ceil(rows.length * 0.05);
   const threshold = (key: "score" | "efficiency") => rows.map((row) => row[key]).sort((a, b) => b - a)[topCount - 1] ?? Infinity;
   const scoreThreshold = threshold("score"), efficiencyThreshold = threshold("efficiency");
-  const difficulties = ["easy", "normal", "hard", "expert", "special"];
-  return rows.map((row) => ({ ...row, topScore: row.score >= scoreThreshold, topEfficiency: row.efficiency >= efficiencyThreshold })).sort((a, b) => {
+  const scoreRanks = ranks("score"), efficiencyRanks = ranks("efficiency");
+  return rows.map((row) => ({ ...row, scoreRank: scoreRanks.get(`${row.songId}:${row.difficulty}`)!,
+    efficiencyRank: efficiencyRanks.get(`${row.songId}:${row.difficulty}`)!,
+    topScore: row.score >= scoreThreshold, topEfficiency: row.efficiency >= efficiencyThreshold })).sort((a, b) => {
     const left = sort === "level" ? a.sortLevel : a[sort], right = sort === "level" ? b.sortLevel : b[sort];
     if (left === null || right === null) return left === right ? a.songId - b.songId : left === null ? 1 : -1;
     const difference = typeof left === "string" && typeof right === "string" ? left.localeCompare(right) : Number(left) - Number(right);

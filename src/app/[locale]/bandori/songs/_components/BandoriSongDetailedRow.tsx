@@ -18,7 +18,7 @@ export default function BandoriSongDetailedRow({ entry, assetIndex, href, artwor
   const releaseDate = new Intl.DateTimeFormat(locale, {
     timeZone: getBandoriServerTimeZone(entry.publishedAtServer), year: "numeric", month: "2-digit", day: "2-digit",
   }).format(entry.publishedAt);
-  return <SongCatalogRow href={href} songId={entry.songId} title={entry.title} bandName={entry.bandName}
+  return <SongCatalogRow game="bandori" href={href} songId={entry.songId} title={entry.title} bandName={entry.bandName}
     typeLabel={t(`filters.types.${entry.type}`)} releaseDate={releaseDate}
     artworkUrl={buildBandoriPublicAssetUrl(assetIndex?.songs[String(entry.songId)]?.files.thumb)} artworkLoading={artworkLoading}
     track={buildBandoriMusicPlayerItem({ musicId: entry.songId, assets: assetIndex?.songs[String(entry.songId)],
