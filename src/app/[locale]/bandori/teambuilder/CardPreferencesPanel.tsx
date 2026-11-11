@@ -261,6 +261,17 @@ export default function TeamBuilderCardPreferencesPanel({
             </select>
           </span>
         </label>
+        <label className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 rounded-xl bg-[var(--theme-color-panel-background)] p-2 text-sm font-semibold text-[var(--theme-color-text-default)] shadow-xs">
+          <input
+            type="checkbox"
+            checked={preferences.ownedCardParameters.zeroMasterRankToOne}
+            onChange={(event) => onUpdateOwnedCardParameters({ zeroMasterRankToOne: event.target.checked })}
+            className="mt-0.5 h-4 w-4 rounded-sm border-[var(--theme-color-border-subtle)] accent-[var(--theme-color-selection-strong-background)] focus:ring-[var(--theme-color-focus-ring)]"
+          />
+          <span className="min-w-0 leading-5">
+            {t("zeroMasterRankToOne")}
+          </span>
+        </label>
       </div>
 
       <div className="space-y-3">

@@ -317,6 +317,8 @@ The general `formatLocalizedInteger` still rounds other numeric values. Power co
 
 The fixed-team verification path and the roster-search path share the same base profile, parameter, skill and chart rules. They then build different normalized inputs: one accepts three already selected teams, while the other constructs the finite roster and area-configuration search space.
 
+For both single-song and medley calculation, owned-card normalization applies maximum level/episodes/training, rarity-limited maximum master rank, and rarity-limited maximum skill level in that order. The final optional step raises any remaining master rank 0 to 1 across all rarities; ranks already raised to 4 stay at 4. This option defaults off, including when reading older saved preferences, and is stored per profile with the other calculator preferences. These steps affect calculation copies only, never the saved profile or temporary cards, including same-ID temporary replacements.
+
 | Stage | Main implementation | What the code does |
 | --- | --- | --- |
 | Versioned contracts | [`contracts.ts`](../../src/lib/bandori/medley-foundation/contracts.ts) and [`bandori-medley-model`](../../crates/bandori-medley-model/src/lib.rs) | Define the TypeScript source requests and the normalized Rust scoring/search records. |

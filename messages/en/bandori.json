@@ -1252,6 +1252,7 @@
       "maxOwnedCards": "Set all cards to max level / max stories / trained",
       "maxMasterRank": "Set cards at or below the selected rarity to max master rank",
       "maxSkillLevel": "Set cards at or below the selected rarity to max skill level",
+      "zeroMasterRankToOne": "Set cards still at master rank 0 to master rank 1",
       "rarityAndBelow": "{rarity} star and below",
       "temporaryCards": "Temporary Cards",
       "addTemporary": "Add temporary card",

@@ -1252,6 +1252,7 @@
       "maxOwnedCards": "将所有卡牌设置为满等级/满故事/满特训状态",
       "maxMasterRank": "将指定稀有度及以下的卡牌设置为满星光等级状态",
       "maxSkillLevel": "将指定稀有度及以下的卡牌设置为满技能等级状态",
+      "zeroMasterRankToOne": "将星光等级仍为 0 的卡牌设置为 1",
       "rarityAndBelow": "{rarity} 星及以下",
       "temporaryCards": "临时卡牌",
       "addTemporary": "添加临时卡牌",
