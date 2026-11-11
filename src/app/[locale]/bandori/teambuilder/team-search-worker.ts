@@ -69,6 +69,7 @@ type OwnedCardParameterPreferences = {
   maxMasterRankRarityThreshold: CardPreferenceRarityThreshold;
   maxSkillLevel: boolean;
   maxSkillLevelRarityThreshold: CardPreferenceRarityThreshold;
+  zeroMasterRankToOne: boolean;
 };
 
 export type TeamSearchWorkerMessages = {
@@ -569,6 +570,10 @@ function applyOwnedCardParameterPreferences(
 
   if (preferences.maxSkillLevel && rarity > 0 && rarity <= preferences.maxSkillLevelRarityThreshold) {
     nextCard.skillLevel = 5;
+  }
+
+  if (preferences.zeroMasterRankToOne && nextCard.masterRank === 0) {
+    nextCard.masterRank = 1;
   }
 
   return nextCard;

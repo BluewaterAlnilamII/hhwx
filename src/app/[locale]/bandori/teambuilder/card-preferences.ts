@@ -12,6 +12,7 @@ export type OwnedCardParameterPreferences = {
   maxMasterRankRarityThreshold: CardPreferenceRarityThreshold;
   maxSkillLevel: boolean;
   maxSkillLevelRarityThreshold: CardPreferenceRarityThreshold;
+  zeroMasterRankToOne: boolean;
 };
 
 export type TeamBuilderCardPreferences = {
@@ -28,6 +29,7 @@ export const DEFAULT_OWNED_CARD_PARAMETER_PREFERENCES: OwnedCardParameterPrefere
   maxMasterRankRarityThreshold: 4,
   maxSkillLevel: false,
   maxSkillLevelRarityThreshold: 3,
+  zeroMasterRankToOne: false,
 };
 
 export const CARD_PARAMETER_RARITY_THRESHOLD_OPTIONS: CardPreferenceRarityThreshold[] = [3, 4, 5];
@@ -70,6 +72,7 @@ export function normalizeOwnedCardParameterPreferences(value: unknown): OwnedCar
       record.maxSkillLevelRarityThreshold,
       DEFAULT_OWNED_CARD_PARAMETER_PREFERENCES.maxSkillLevelRarityThreshold,
     ),
+    zeroMasterRankToOne: record.zeroMasterRankToOne === true,
   };
 }
 

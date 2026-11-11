@@ -7,7 +7,8 @@ import * as cardFilters from "../src/lib/bandori/cards/filter.ts";
 import * as cardCollection from "../src/lib/bandori/cards/profile-card-collection.ts";
 
 import { encodeBestdoriProfile } from "../src/lib/bestdori-profile-codec.ts";
-import { areGameProfileCardsEqual } from "../src/lib/bandori/cards/game-profile-card.ts";
+import { areGameProfileCardsEqual, getGameProfileCardMaxEpisodeCount } from "../src/lib/bandori/cards/game-profile-card.ts";
+import { hasTrainedCardArt } from "../src/lib/bandori/cards/training.ts";
 import { BANDORI_CHARACTER_GROUPS } from "../src/lib/bandori-character-groups.ts";
 import {
   buildDefaultBandoriProfileCardFilter,
@@ -34,12 +35,27 @@ import {
   reduceGameProfileCardDraft,
 } from "../src/app/[locale]/bandori/game-profiles/[profileId]/cards/useGameProfileCardDraft.ts";
 import {
+  DEFAULT_OWNED_CARD_PARAMETER_PREFERENCES,
   normalizeCardPreferences,
   readCardPreferences,
   writeCardPreferences,
 } from "../src/app/[locale]/bandori/teambuilder/card-preferences.ts";
 
 const readSource = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
+
+async function loadOwnedCardParameterNormalizer() {
+  const source = await readSource("src/app/[locale]/bandori/teambuilder/team-search-worker.ts");
+  const syntax = ts.createSourceFile("worker.ts", source, ts.ScriptTarget.Latest, true);
+  const names = ["readPositiveInteger", "getMasterCardRarity", "getMasterCardMaxLevel", "applyOwnedCardParameterPreferences"];
+  const declarations = syntax.statements.filter((node) => ts.isFunctionDeclaration(node) && names.includes(node.name?.text));
+  assert.equal(declarations.length, names.length);
+  const { outputText } = ts.transpileModule(declarations.map((node) => node.getText(syntax)).join("\n"), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  });
+  return runInNewContext(`${outputText}\napplyOwnedCardParameterPreferences`, {
+    hasTrainedCardArt, getGameProfileCardMaxEpisodeCount,
+  });
+}
 
 test("page retry requests only failed dependencies without resetting the card draft", async () => {
   const source = await readSource("src/app/[locale]/bandori/game-profiles/[profileId]/cards/page.tsx");
@@ -140,6 +156,7 @@ test("team builder keeps temporary cards out of browser storage", () => {
       maxMasterRankRarityThreshold: 4,
       maxSkillLevel: false,
       maxSkillLevelRarityThreshold: 3,
+      zeroMasterRankToOne: true,
     };
     writeCardPreferences("profile-1", {
       excludedCardIds: [1],
@@ -165,12 +182,57 @@ test("team builder keeps temporary cards out of browser storage", () => {
       temporaryCards: [],
       ownedCardParameters,
     });
+
+    writeCardPreferences("profile-2", {
+      excludedCardIds: [], temporaryCards: [],
+      ownedCardParameters: { ...ownedCardParameters, zeroMasterRankToOne: false },
+    });
+    assert.equal(readCardPreferences("profile-1").ownedCardParameters.zeroMasterRankToOne, true);
+    assert.equal(readCardPreferences("profile-2").ownedCardParameters.zeroMasterRankToOne, false);
+
+    const legacy = JSON.parse(storedValues.get(storageKey));
+    delete legacy["profile-1"].ownedCardParameters.zeroMasterRankToOne;
+    storedValues.set(storageKey, JSON.stringify(legacy));
+    assert.deepEqual(readCardPreferences("profile-1").ownedCardParameters, {
+      ...ownedCardParameters, zeroMasterRankToOne: false,
+    });
+    assert.equal(readCardPreferences("new-profile").ownedCardParameters.zeroMasterRankToOne, false);
   } finally {
     if (previousWindow === undefined) {
       delete globalThis.window;
     } else {
       globalThis.window = previousWindow;
     }
+  }
+});
+
+test("owned normalization promotes only remaining zero master ranks after existing overrides", async () => {
+  const apply = await loadOwnedCardParameterNormalizer();
+  for (const rarity of [1, 2, 3, 4, 5]) {
+    for (const masterRank of [0, 1, 2, 3, 4]) {
+      for (const maxMasterRank of [false, true]) {
+        for (const zeroMasterRankToOne of [false, true]) {
+          const original = card(1, { level: 1, episodeCount: 0, masterRank, isTrained: false, hasTrainedArt: false });
+          const master = { rarity, levelLimit: 50, stat: { training: { levelLimit: 10 }, episodes: [{}, {}] } };
+          const preferences = {
+            ...DEFAULT_OWNED_CARD_PARAMETER_PREFERENCES,
+            maxLevelEpisodeTraining: true, maxSkillLevel: true, maxMasterRank, zeroMasterRankToOne,
+          };
+          const normalized = apply(Object.freeze(original), master, preferences);
+          const expectedRank = maxMasterRank && rarity <= 4 ? 4
+            : zeroMasterRankToOne && masterRank === 0 ? 1 : masterRank;
+          assert.deepEqual({ ...normalized }, {
+            ...original, level: 60, episodeCount: 2, isTrained: true, hasTrainedArt: true,
+            masterRank: expectedRank, skillLevel: rarity <= 3 ? 5 : 1,
+          });
+          assert.equal(original.masterRank, masterRank);
+        }
+      }
+    }
+  }
+  for (const value of [undefined, null, 1, "true", false]) {
+    assert.equal(normalizeCardPreferences({ ownedCardParameters: { zeroMasterRankToOne: value } })
+      .ownedCardParameters.zeroMasterRankToOne, false);
   }
 });
 
@@ -198,6 +260,7 @@ test("team builder keeps one non-excluded temporary override per card", async ()
 });
 
 test("team builder uses only calculator exclusions without changing saved profile flags", async () => {
+  const applyOwnedCardParameterPreferences = await loadOwnedCardParameterNormalizer();
   const source = await readSource("src/app/[locale]/bandori/teambuilder/team-search-worker.ts");
   const syntax = ts.createSourceFile("worker.ts", source, ts.ScriptTarget.Latest, true);
   const runSearch = syntax.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "runSearchAttempt");
@@ -218,17 +281,22 @@ test("team builder uses only calculator exclusions without changing saved profil
     const actual = runInNewContext(`${code}\nuserCards`, {
       request: {
         profilePayload,
-        cards: { excludedCardIds, temporaryCards: [{ ...card(3, { isExcluded: true }), instanceId: "override-3" }] },
+        cards: {
+          excludedCardIds,
+          ownedCardParameters: { ...DEFAULT_OWNED_CARD_PARAMETER_PREFERENCES, zeroMasterRankToOne: true },
+          temporaryCards: [{ ...card(3, { isExcluded: true }), instanceId: "override-3" }],
+        },
       },
       getGameProfileCards,
-      cardsById: {},
-      applyOwnedCardParameterPreferences: (ownedCard) => ownedCard,
+      cardsById: { 1: { rarity: 4 }, 2: { rarity: 5 }, 3: { rarity: 5 } },
+      applyOwnedCardParameterPreferences,
     });
     assert.deepEqual(Array.from(actual, (item) => [item.cardId, item.isExcluded, item.cardInstanceKey]), [
       [1, excludedCardIds.includes(1), "profile:1"],
       [2, excludedCardIds.includes(2), "profile:2"],
       [3, false, "temporary:override-3"],
     ]);
+    assert.deepEqual(Array.from(actual, (item) => item.masterRank), [1, 1, 0]);
     assert.equal(JSON.stringify(profilePayload), savedPayload);
     assert.deepEqual(getGameProfileCards(profilePayload).toSorted((left, right) => left.cardId - right.cardId), savedCards);
   }
