@@ -245,15 +245,6 @@
       "unsupported": "当前技能组合暂无可用的 Meta 数据",
       "tableLabel": "歌曲 Meta 排名",
       "rank": "排名",
-      "helpLabel": "{column}说明",
-      "help": {
-        "score": "出分相对于综合力的比率",
-        "efficiency": "每分钟平均出分相对于综合力的比率",
-        "bpm": "每分钟节拍数",
-        "notes": "谱面音符总数",
-        "nps": "每秒平均音符数",
-        "sr": "技能覆盖率"
-      },
       "columns": {
         "title": "歌曲",
         "level": "难度",
@@ -261,9 +252,9 @@
         "score": "分数",
         "efficiency": "效率",
         "bpm": "BPM",
-        "notes": "N",
-        "nps": "NPS",
-        "sr": "SR"
+        "notes": "音符数",
+        "nps": "每秒音符",
+        "sr": "技能覆盖率"
       }
     }
   }

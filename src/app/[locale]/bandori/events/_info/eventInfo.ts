@@ -352,10 +352,11 @@ export function buildEventSongMetaRows(
   meta: BandoriSongMetaDataset,
   skills: Record<string, BandoriSkillLabelMaster | null | undefined>,
   server: BandoriServer,
+  fever: boolean,
 ) {
   const defaults = BANDORI_META_DEFAULT_PREFERENCES;
   const skill = bandoriMetaSkillOptions(skills, server).find(({ id }) => id === defaults.liveSkill)?.levels[defaults.liveLevel - 1];
   if (!skill) return [];
   return buildBandoriMetaRows(music, meta, server, parseBandoriSongsPageFilter(new URLSearchParams()),
-    skill, false, defaults.perfect / 100, defaults.downtime, "score", "desc");
+    skill, fever, defaults.perfect / 100, defaults.downtime, "score", "desc");
 }

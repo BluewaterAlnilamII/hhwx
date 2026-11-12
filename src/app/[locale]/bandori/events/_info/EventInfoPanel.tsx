@@ -1,7 +1,7 @@
 "use client";
 import LoadingError from "@/components/LoadingError";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
   ClipboardList,
@@ -203,6 +203,7 @@ export default function EventInfoPanel({
   const t = useTranslations("bandori.events.info");
   const commonT = useTranslations("common");
   const eventTypesT = useTranslations("bandori.teamBuilder.eventTypes");
+  const [feverByGroup, setFeverByGroup] = useState({ added: true, special: true });
   const model = useMemo(
     () => eventRecord ? buildEventInfoModel(eventRecord, server) : null,
     [eventRecord, server],
@@ -411,6 +412,7 @@ export default function EventInfoPanel({
       </section>
 
       <EventSongs music={musicMaster} event={eventRecord} server={server} meta={metaRequest.data}
+        feverByGroup={feverByGroup} onFeverChange={(group, checked) => setFeverByGroup((previous) => ({ ...previous, [group]: checked }))}
         skills={skills} assets={musicAssetIndex} assetsLoading={musicAssets.loading && !musicAssetIndex} />
     </article>
   );

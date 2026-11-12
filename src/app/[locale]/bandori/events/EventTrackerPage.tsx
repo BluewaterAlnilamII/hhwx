@@ -270,7 +270,6 @@ function EventTrackerPageContent({ initialEventId, initialServer }: EventTracker
   const [calculator, setCalculator] = useState<{ key: string; open: boolean; autoOpened: boolean; baselineAt: number; draft: CalculatorDraft } | null>(null);
   const [hasAppliedInitialUrlState, setHasAppliedInitialUrlState] = useState(false);
   const [routeUrlStateKey, setRouteUrlStateKey] = useState<string | null>(null);
-  const routeReady = hasAppliedInitialUrlState && currentEventId === initialEventId;
   const monthlyRankingOptions = useMemo(
     () => getMonthlyRankingOptions(selectedServer, locale),
     [locale, selectedServer],
@@ -315,6 +314,9 @@ function EventTrackerPageContent({ initialEventId, initialServer }: EventTracker
     hasAppliedInitialUrlState && !isTop10Selected,
     !trackerVisible,
   );
+  // The entry route remounts at the resolved event URL; keep that transition in the initial loading phase.
+  const routeReady = hasAppliedInitialUrlState && currentEventId === initialEventId
+    && (initialEventId !== null || resolvedCurrentEventId === null);
   const { music: masterMusic, loading: musicLoading, error: musicError, refresh: refreshMusic } = useBandoriMusicMaster(
     hasAppliedInitialUrlState && eventMeta !== null && (activeView === "info" || previewView === "info"
       || (trackingMode === "song" && eventMeta?.eventType === "challenge")),
@@ -1323,6 +1325,7 @@ function EventTrackerPageContent({ initialEventId, initialServer }: EventTracker
           </>
         ) : (
           <EventInfoPanel
+            key={`${resolvedCurrentEventId}:${selectedServer}`}
             eventId={resolvedCurrentEventId}
             server={selectedServer}
             eventRecord={eventDetail.data}

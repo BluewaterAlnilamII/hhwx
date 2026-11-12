@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useTranslations } from "next-intl";
 import { BandoriStampArtwork } from "@/components/bandori/BandoriStampArtwork";
 import { useCommentStampAnimation } from "@/hooks/useCommentStamps";
 import type { BandoriStampCatalogItem } from "@/lib/bandori-stamp-assets";
@@ -20,6 +21,7 @@ export default function BandoriStampView({
   label: string;
   variant?: "comment" | "reward";
 }) {
+  const t = useTranslations("bandori.stamps");
   const [imageFailed, setImageFailed] = useState(false);
   const [animationFailed, setAnimationFailed] = useState(false);
   const animationSummary = stamp.animation;
@@ -54,10 +56,10 @@ export default function BandoriStampView({
       }}
       className={cn(
         className,
-        "rounded-lg transition hover:bg-[var(--theme-color-control-background-hover)] focus:outline-hidden focus:ring-2 focus:ring-[var(--theme-color-focus-ring)]",
+        "rounded-lg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]",
       )}
-      aria-label={`Play ${label}`}
-      title={`Play ${label}`}
+      aria-label={t("playVoice", { stamp: label })}
+      title={t("playVoice", { stamp: label })}
     >
       {image}
     </button>

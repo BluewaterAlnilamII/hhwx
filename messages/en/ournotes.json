@@ -245,15 +245,6 @@
       "unsupported": "Meta data is unavailable for this skill combination",
       "tableLabel": "Song Meta ranking",
       "rank": "Rank",
-      "helpLabel": "{column} explanation",
-      "help": {
-        "score": "Score relative to total power",
-        "efficiency": "Average score per minute relative to total power",
-        "bpm": "Beats per minute",
-        "notes": "Total notes in the chart",
-        "nps": "Average notes per second",
-        "sr": "Skill coverage"
-      },
       "columns": {
         "title": "Song",
         "level": "Difficulty",
@@ -261,9 +252,9 @@
         "score": "Score",
         "efficiency": "Efficiency",
         "bpm": "BPM",
-        "notes": "N",
-        "nps": "NPS",
-        "sr": "SR"
+        "notes": "Notes",
+        "nps": "Notes/s",
+        "sr": "Skill coverage"
       }
     }
   }

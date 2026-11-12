@@ -216,25 +216,29 @@ function rankingFixture(count = 40) {
   return { music, meta, rows };
 }
 const chartKey = (row) => `${row.songId}:${row.difficulty}`;
-const highlighted = (rows, key) => rows.filter((row) => row[key]).map(chartKey).sort();
+const leaders = (rows, key) => rows.filter((row) => row[key] === 100).map(chartKey).sort();
 
-test("top five percent is per chart and metric, includes cutoff ties and ignores rounded display values and missing data", () => {
+test("percentages are per chart and metric, preserve ties and ignore rounded display values and missing data", () => {
   const { music, meta, rows } = rankingFixture();
-  meta.songs[100019][3].total = 39;
-  meta.songs[100019][0].total = 38.999999;
+  meta.songs[100019][3].total = 40;
+  meta.songs[100019][0].total = 39.999999;
   for (const id of [100021, 100022, 100023]) music[id] = structuredClone(music[100020]);
   music[100022].length = 0;
   meta.songs[100022] = structuredClone(meta.songs[100020]);
   meta.songs[100023] = { 0: { total: 100, covered: { 9: 0 } }, 3: { total: 100, covered: { 9: 0 } } };
   const all = rows();
   assert.equal(all.length, 40);
-  assert.deepEqual(highlighted(all, "topScore"), ["100019:expert", "100020:easy", "100020:expert"]);
-  assert.deepEqual(highlighted(all, "topEfficiency"), ["100001:easy", "100001:expert"]);
-  assert.equal(all.find((row) => chartKey(row) === "100019:easy").score.toFixed(2), "3900.00");
-  assert.equal(all.find((row) => chartKey(row) === "100019:easy").topScore, false);
+  assert.deepEqual(leaders(all, "scorePercent"), ["100019:expert", "100020:expert"]);
+  assert.deepEqual(leaders(all, "efficiencyPercent"), ["100001:expert"]);
+  const nearLeader = all.find((row) => chartKey(row) === "100019:easy");
+  assert.equal(nearLeader.scorePercent.toFixed(2), "100.00");
+  assert.ok(nearLeader.scorePercent < 100);
+  assert.equal(all.find((row) => chartKey(row) === "100020:easy").scorePercent, 97.5);
+  assert.equal(all.find((row) => chartKey(row) === "100001:easy").efficiencyPercent, 50);
+  assert.deepEqual(all.slice(0, 3).map(chartKey), ["100019:expert", "100020:expert", "100019:easy"]);
 });
 
-test("catalog filters and sort never redefine the highlight population", () => {
+test("catalog filters and sort never redefine percentage baselines", () => {
   const { rows } = rankingFixture(), all = new Map(rows().map((row) => [chartKey(row), row]));
   for (const query of ["q=%23100002", "available=cn", "bands=1", "types=1", "attributes=1", "gekisou=mix", "attributes=2&gekisou=mix", "difficulty=easy", "minLevel=20", "maxLevel=10"]) {
     const filtered = rows({ query, sort: "efficiency", direction: "asc" });
@@ -246,26 +250,32 @@ test("catalog filters and sort never redefine the highlight population", () => {
   for (const row of rows({ sort: "title", direction: "asc" })) assert.deepEqual(row, all.get(chartKey(row)));
 });
 
-test("top-five-percent count rounds upward and handles small or empty populations", () => {
-  assert.deepEqual(highlighted(rankingFixture(21).rows(), "topScore"), ["100010:expert", "100011:easy"]);
+test("percentages handle single and empty populations", () => {
   const single = rankingFixture(1).rows();
-  assert.equal(single[0].topScore, true);
-  assert.equal(single[0].topEfficiency, true);
+  assert.equal(single[0].scorePercent, 100);
+  assert.equal(single[0].efficiencyPercent, 100);
   assert.deepEqual(rankingFixture(0).rows(), []);
 });
 
-test("highlights follow skill strength, extension, Perfect rate and downtime independently", () => {
+test("percentages follow skill strength, extension, Perfect rate and downtime independently", () => {
   const { music, meta, rows } = rankingFixture(20);
   for (const song of Object.values(meta.songs)) for (const chart of Object.values(song)) chart.total = 0.5;
   music[100001].length = 120;
   music[100002].length = 60;
   meta.songs[100001][0] = { total: 4, covered: { 5: 0.1, 9: 0.1 } };
   meta.songs[100002][0] = { total: 1, covered: { 5: 2, 9: 5 } };
-  assert.deepEqual(highlighted(rows(), "topScore"), ["100001:easy"]);
-  assert.deepEqual(highlighted(rows(), "topEfficiency"), ["100002:easy"]);
-  assert.deepEqual(highlighted(rows({ boost: 2 }), "topScore"), ["100002:easy"]);
-  assert.deepEqual(highlighted(rows({ extension: 4000 }), "topScore"), ["100002:easy"]);
-  assert.deepEqual(highlighted(rows({ boost: 2, perfect: 0 }), "topScore"), ["100001:easy"]);
-  assert.deepEqual(highlighted(rows({ downtime: 3600 }), "topEfficiency"), ["100001:easy"]);
-  assert.deepEqual(rows({ downtime: 3600 }).map((row) => [chartKey(row), row.score, row.topScore]), rows().map((row) => [chartKey(row), row.score, row.topScore]));
+  assert.deepEqual(leaders(rows(), "scorePercent"), ["100001:easy"]);
+  assert.deepEqual(leaders(rows(), "efficiencyPercent"), ["100002:easy"]);
+  assert.deepEqual(leaders(rows({ boost: 2 }), "scorePercent"), ["100002:easy"]);
+  assert.deepEqual(leaders(rows({ extension: 4000 }), "scorePercent"), ["100002:easy"]);
+  assert.deepEqual(leaders(rows({ boost: 2, perfect: 0 }), "scorePercent"), ["100001:easy"]);
+  assert.deepEqual(leaders(rows({ downtime: 3600 }), "efficiencyPercent"), ["100001:easy"]);
+  assert.deepEqual(rows({ downtime: 3600 }).map((row) => [chartKey(row), row.score, row.scorePercent]), rows().map((row) => [chartKey(row), row.score, row.scorePercent]));
+  for (const settings of [{}, { boost: 2 }, { extension: 4000 }, { boost: 2, perfect: 0 }, { downtime: 3600 }]) {
+    const all = rows(settings), maxScore = Math.max(...all.map((row) => row.score)), maxEfficiency = Math.max(...all.map((row) => row.efficiency));
+    for (const row of all) {
+      assert.equal(row.scorePercent, row.score / maxScore * 100);
+      assert.equal(row.efficiencyPercent, row.efficiency / maxEfficiency * 100);
+    }
+  }
 });
