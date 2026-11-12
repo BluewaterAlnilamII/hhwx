@@ -159,6 +159,12 @@ OurNotes catalog tabs touch their filter panel with zero gap; Meta filters likew
 
 When changing these shared components, check complete loaded filters in both games, the OurNotes tabs and detail skill controls, and the card picker/profile consumers when accessible. Cover narrow phones, both sides of `sm`, desktop, both locales and color schemes, wrapping, focus and touch activation. A compact screenshot alone does not prove touch usability or accessibility compliance. Record login-gated or real-device checks that were not performed in the page's verification notes.
 
+## Binary switches
+
+The shared [Switch](../src/components/Switch.tsx) uses a 36 × 20px track and 16px thumb below `sm`, and a 40 × 22px track and 18px thumb at and above `sm`. Uniform 2px track padding keeps the thumb equally inset at either endpoint; avoid asymmetric inset highlights or thumb shadows. Labels use 13px text on mobile and 14px at `sm`. The button retains a minimum 44px touch height, visible keyboard focus, switch semantics and reduced-motion support. Event-song Fever controls reuse this geometry without visible On/Off text.
+
+The off track uses `--theme-color-switch-off-background`, separate from disabled controls, to keep the white thumb and track visible in both color schemes. Keep the accessible name stable when toggling; `aria-checked` conveys the state.
+
 ## Account forms
 
 Login, registration, password recovery, password changes, and email changes share `AccountFormPage`: one panel, a `max-w-lg` container, and a lightweight back link naming the actual destination. Panel padding is 16 px on mobile and 40 px on desktop. Account overview and game-profile pages retain their wider layouts.

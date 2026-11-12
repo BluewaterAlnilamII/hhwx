@@ -167,6 +167,7 @@
   --theme-color-control-background-disabled: var(--theme-color-semantic-neutral-background);
   --theme-color-control-border-disabled: var(--theme-color-semantic-neutral-border);
   --theme-color-control-foreground-disabled: var(--theme-color-semantic-neutral-foreground);
+  --theme-color-switch-off-background: color-mix(in srgb, var(--theme-color-text-muted) 70%, var(--theme-color-control-background));
   --theme-color-focus-ring: var(--theme-color-semantic-info-border);
   --theme-color-focus-ring-on-dark: var(--theme-color-semantic-info-foreground-on-dark);
   --theme-color-control-ring-pressed: var(--theme-color-selection-subtle-ring);

@@ -77,13 +77,13 @@ function ranking() {
   return { music, songs, rows };
 }
 
-test("event Meta fixes no fever defaults and ranks every difficulty before event filtering", () => {
+test("event Meta uses the selected Fever mode and ranks every difficulty before event filtering", () => {
   const { music, songs } = ranking();
   music[1].difficulty[1] = { playLevel: 12 };
   songs[1][0] = { total: [100, 1], covered: { 7: [1, 1] } };
   songs[1][1] = { total: [90, 1], covered: { 7: [1, 1] } };
   const meta = { durations: [7], songs }, skills = { 69: rawSkill() };
-  const rows = buildEventSongMetaRows(music, meta, skills, 3);
+  const rows = buildEventSongMetaRows(music, meta, skills, 3, false);
   const expected = buildBandoriMetaRows(music, meta, 3, filter(), level(rawSkill()), false, 1, 30, "score", "desc");
   assert.deepEqual(rows, expected);
   assert.deepEqual(rows.slice(0, 2).map((row) => row.difficulty), ["easy", "normal"]);
@@ -93,6 +93,16 @@ test("event Meta fixes no fever defaults and ranks every difficulty before event
   const filtered = buildBandoriMetaRows(music, meta, 3, filter("difficulty=expert&q=%2320"), level(rawSkill()), false, 1, 30, "score", "desc");
   assert.equal(filtered[0].scoreRank, expert[0].scoreRank);
   assert.equal(filtered[0].efficiencyRank, expert[0].efficiencyRank);
+  assert.equal(filtered[0].scorePercent, expert[0].scorePercent);
+  assert.equal(filtered[0].efficiencyPercent, expert[0].efficiencyPercent);
+  assert.equal(rows[0].scorePercent, 100);
+  assert.ok(filtered[0].scorePercent < 100);
+  const withFever = buildEventSongMetaRows(music, meta, skills, 3, true);
+  assert.deepEqual(withFever, buildBandoriMetaRows(music, meta, 3, filter(), level(rawSkill()), true, 1, 30, "score", "desc"));
+  assert.notEqual(withFever[0].songId, rows[0].songId);
+  const feverExpert = withFever.find((row) => row.songId === expert[0].songId && row.difficulty === "expert");
+  assert.notEqual(feverExpert.scorePercent, expert[0].scorePercent);
+  assert.notEqual(feverExpert.efficiencyPercent, expert[0].efficiencyPercent);
 });
 
 test("ranking applies filters to each chart and uses regional names, official notes and the longest single BPM segment", () => {
@@ -109,14 +119,50 @@ test("ranking applies filters to each chart and uses regional names, official no
   assert.equal(formatSongMetaTime(59.9996), "1:00.000");
 });
 
-test("score and efficiency highlights are independently global and retain cutoff ties after filters", () => {
+test("score and efficiency percentages use independent global leaders before filtering", () => {
   const { songs, rows } = ranking();
-  songs[18][3].covered[7] = songs[19][3].covered[7];
-  assert.deepEqual(rows().filter((r) => r.topScore).map((r) => r.songId), [20, 18, 19]);
-  assert.ok(!rows().find((r) => r.songId === 20 && r.difficulty === "expert").topEfficiency);
-  assert.equal(rows("q=%231").filter((r) => r.topScore).length, 0);
-  const subset = rows("q=%2318");
-  assert.equal(subset.find((r) => r.difficulty === "expert").topScore, true);
+  songs[18][3].covered[7] = songs[20][3].covered[7];
+  const all = rows();
+  assert.deepEqual(all.filter((r) => r.scorePercent === 100).map((r) => r.songId), [18, 20]);
+  assert.deepEqual(all.filter((r) => r.efficiencyPercent === 100).map((r) => r.songId), [18]);
+  const longest = all.find((r) => r.songId === 20 && r.difficulty === "expert");
+  close(longest.efficiencyPercent, 130 / 230 * 100);
+  const byChart = new Map(all.map((r) => [`${r.songId}:${r.difficulty}`, r]));
+  for (const query of ["q=%231", "q=%2318", "difficulty=easy", "available=cn", "bands=1", "minLevel=26"]) {
+    for (const row of rows(query, "efficiency", "asc")) assert.deepEqual(row, byChart.get(`${row.songId}:${row.difficulty}`));
+  }
+  assert.ok(rows("q=%231").every((r) => r.scorePercent < 100 && r.efficiencyPercent < 100));
+});
+
+test("percentages follow Fever and Perfect settings while sorting keeps raw scores", () => {
+  const { music, songs } = ranking();
+  songs[1][0].total = [100, 1];
+  const build = (fever, perfect) => buildBandoriMetaRows(music, { durations: [7], songs }, 3, filter(),
+    level(rawSkill()), fever, perfect, 30, "score", "desc");
+  for (const [fever, perfect] of [[true, 1], [false, 1], [true, 0]]) {
+    const rows = build(fever, perfect);
+    const maxEfficiency = Math.max(...rows.map((row) => row.efficiency));
+    assert.equal(rows[0].scorePercent, 100);
+    for (const row of rows) {
+      close(row.scorePercent, row.score / rows[0].score * 100);
+      close(row.efficiencyPercent, row.efficiency / maxEfficiency * 100);
+    }
+    assert.deepEqual(rows.map((row) => row.score), rows.map((row) => row.score).sort((a, b) => b - a));
+  }
+  assert.equal(build(false, 1)[0].songId, 1);
+  assert.equal(build(true, 1)[0].songId, 20);
+});
+
+test("zero-score charts have unavailable ratios with no positive leader and zero percent otherwise", () => {
+  const { music, songs } = ranking();
+  for (const song of Object.values(songs)) for (const chart of Object.values(song)) chart.covered[7] = [...chart.total];
+  const rows = () => buildBandoriMetaRows(music, { durations: [7], songs }, 3, filter(),
+    level(rawSkill("score_only_perfect", 150, "none")), false, 0, 30, "score", "desc");
+  assert.ok(rows().every((row) => row.score === 0 && row.scorePercent === null && row.efficiencyPercent === null));
+  songs[1][3].covered[7] = [0, 0];
+  assert.equal(rows()[0].scorePercent, 100);
+  assert.equal(rows()[0].efficiencyPercent, 100);
+  assert.ok(rows().slice(1).every((row) => row.scorePercent === 0 && row.efficiencyPercent === 0));
 });
 
 test("preferences validate independently, resolve URL over saved over defaults, and clear only catalog filters", () => {

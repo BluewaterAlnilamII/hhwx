@@ -147,15 +147,38 @@ try {
   console.log('PASS: successful empty data keeps its own state');
   await emptyPage.close();
 
-  const entry=await browser.newPage();
-  let catalogReads=0;
-  await entry.route('**/api/bandori/master/events',route=>{catalogReads++;return route.fulfill({json:catalog});});
-  await entry.route('**/api/bandori/tracker/data?*',route=>route.fulfill({json:{result:false,cutoffs:[]}}));
-  await entry.goto(`${base}/bandori/events?server=cn&tier=1000`,{waitUntil:'domcontentloaded'});
-  await entry.waitForURL('**/bandori/events/328?*');
-  await entry.getByTestId('tracker-chart-empty').waitFor();
-  assert.equal(catalogReads,1,'canonical navigation reuses the browser overview cache');
-  await entry.close();
+  for(const width of [393,1440]) {
+    const entry=await browser.newPage({viewport:{width,height:950}});
+    let catalogReads=0;
+    await entry.addInitScript(()=>{
+      window.eventPageFrames=[];
+      let previous;
+      const sample=()=>{
+        const state={path:location.pathname,content:!!document.querySelector('.event-view-tabs'),loading:!!document.querySelector('.event-switcher-summary [role=status]')};
+        const signature=JSON.stringify(state);
+        if(signature!==previous){window.eventPageFrames.push(state);previous=signature;}
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+    await entry.route('**/bandori/events/328?*',async route=>{
+      if(new URL(route.request().url()).searchParams.has('_rsc')) await new Promise(resolve=>setTimeout(resolve,350));
+      await route.continue();
+    });
+    await entry.route('**/api/bandori/master/events',route=>{catalogReads++;return route.fulfill({json:catalog});});
+    await entry.route('**/api/bandori/tracker/data?*',route=>route.fulfill({json:{result:false,cutoffs:[]}}));
+    await entry.goto(`${base}/bandori/events?server=cn&tier=1000`,{waitUntil:'domcontentloaded'});
+    await entry.waitForURL('**/bandori/events/328?*');
+    await entry.getByTestId('tracker-chart-empty').waitFor();
+    const frames=await entry.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>resolve(window.eventPageFrames))));
+    const firstContent=frames.findIndex(frame=>frame.content);
+    assert.ok(firstContent>=0,'the resolved event content becomes visible');
+    assert.ok(frames.slice(firstContent).every(frame=>frame.content&&!frame.loading),
+      `entry navigation must not replace visible event content with full-page loading: ${JSON.stringify(frames)}`);
+    assert.equal(catalogReads,1,'canonical navigation reuses the browser overview cache');
+    await entry.close();
+    console.log(`PASS ${width}: entry navigation never returns visible content to full-page loading`);
+  }
   const noEvents=await browser.newPage();
   await noEvents.route('**/api/bandori/master/events',route=>route.fulfill({json:{success:true,data:{}}}));
   await noEvents.goto(`${base}/bandori/events`,{waitUntil:'domcontentloaded'});
