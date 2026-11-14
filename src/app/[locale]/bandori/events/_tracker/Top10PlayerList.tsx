@@ -12,6 +12,7 @@ import { useBandoriCharactersMaster } from "@/hooks/useBandoriCharactersMaster";
 import { resolveBandoriCardBandId } from "@/lib/bandori/cards/master";
 import { getBandoriServerCode, type BandoriServer } from "@/lib/bandori-server";
 import type { BandoriTop10Player } from "@/lib/bandori/event-tracker/top10-view";
+import { TrackerScore } from "./TrackerScore";
 
 type Top10PlayerListProps = {
   players: BandoriTop10Player[];
@@ -32,10 +33,10 @@ export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
 
   return (
     <section className="mt-7" aria-label={t("ranking")}>
-      <div className="grid grid-cols-[2.25rem_4rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-[var(--theme-color-border-subtle)] px-2 pb-2 text-xs font-bold tracking-[0.08em] text-[var(--theme-color-text-muted)] sm:grid-cols-[3rem_5rem_minmax(0,1fr)_minmax(9rem,auto)] sm:px-3">
+      <div className="grid grid-cols-[1.75rem_3.5rem_minmax(0,1fr)_auto] items-center gap-2 border-b border-[var(--theme-color-border-subtle)] px-2 pb-2 text-xs font-bold tracking-[0.08em] text-[var(--theme-color-text-muted)] sm:grid-cols-[3rem_5rem_minmax(0,1fr)_minmax(9rem,auto)] sm:gap-3 sm:px-3">
         <span className="text-center">{t("rank")}</span>
         <span className="sr-only">{t("avatar")}</span>
-        <span>{t("player")}</span>
+        <span className="col-start-3">{t("player")}</span>
         <span className="text-right">{t("score")}</span>
       </div>
 
@@ -47,7 +48,7 @@ export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
           return (
             <div
               key={player.uid}
-              className="grid grid-cols-[2.25rem_4rem_minmax(0,1fr)_auto] items-center gap-3 px-2 py-3 sm:grid-cols-[3rem_5rem_minmax(0,1fr)_minmax(9rem,auto)] sm:px-3 sm:py-4"
+              className="grid grid-cols-[1.75rem_3.5rem_minmax(0,1fr)_auto] items-center gap-2 px-2 py-3 sm:grid-cols-[3rem_5rem_minmax(0,1fr)_minmax(9rem,auto)] sm:gap-3 sm:px-3 sm:py-4"
             >
               <div className="flex items-center justify-center">
                 <span className="text-lg font-black tabular-nums text-[var(--theme-color-text-default)]">
@@ -101,10 +102,10 @@ export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
               </div>
 
               <div className="text-right">
-                <span className="block text-sm font-black tabular-nums text-[var(--theme-color-text-default)] sm:text-lg">
+                <TrackerScore value={player.score} className="text-sm font-black tabular-nums text-[var(--theme-color-text-default)] sm:text-lg">
                   {scoreFormatter.format(player.score)}
-                </span>
-                <span className="text-[10px] font-semibold text-[var(--theme-color-text-muted)] opacity-70 sm:text-xs">P</span>
+                </TrackerScore>
+                <span className="block text-[10px] font-semibold text-[var(--theme-color-text-muted)] opacity-70 sm:text-xs">P</span>
               </div>
             </div>
           );

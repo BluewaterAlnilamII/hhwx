@@ -7,6 +7,7 @@ import { LoadingSpinner } from "@/components/LoadingIndicator";
 import type { BandoriEventStatus } from "@/lib/bandori/events/status";
 import { formatBandoriTrackerUpdateAge } from "@/lib/bandori/event-tracker/time";
 import { BESTDORI_PREDICTION_COLOR } from "./constants";
+import { TrackerScore } from "./TrackerScore";
 import type { TrackingMode } from "./types";
 
 export type TrackerScoreSummary = {
@@ -28,18 +29,6 @@ type TrackerStatusSummaryProps = {
   status: BandoriEventStatus;
   trackingMode: TrackingMode;
 };
-
-function getStatusColorClass(status: BandoriEventStatus): string {
-  if (status === "ongoing") {
-    return "text-[var(--theme-color-status-ongoing-foreground)]";
-  }
-
-  if (status === "ended") {
-    return "text-[var(--theme-color-status-ended-foreground)]";
-  }
-
-  return "text-[var(--theme-color-status-upcoming-foreground)]";
-}
 
 function TimeAgo({ timestamp }: { timestamp: number }) {
   const t = useTranslations("bandori.events.tracker.summary");
@@ -79,27 +68,20 @@ export const TrackerStatusSummary = memo(function TrackerStatusSummary({
 }: TrackerStatusSummaryProps) {
   const locale = useLocale();
   const t = useTranslations("bandori.events.tracker.summary");
-  const statusT = useTranslations("bandori.events.status");
   const numberFormatter = useMemo(() => new Intl.NumberFormat(locale), [locale]);
+  if (status !== "ongoing" && (status !== "ended" || !showScoreValues)) return null;
 
   return (
-    <div className="event-chart-summary mb-4 flex flex-col gap-2 px-0.5 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-      <div className="flex items-center gap-1.5 px-0.5 text-[13px] leading-5 sm:gap-2 sm:px-0 sm:text-sm">
-        <span className="font-medium text-[var(--theme-color-text-muted)]">{t("eventStatus")}</span>
-        <span className={`font-bold ${getStatusColorClass(status)}`}>
-          {statusT(status)}
-        </span>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] leading-5 sm:gap-x-5 sm:text-sm">
+    <div className="event-chart-summary mb-4 px-0.5 text-sm">
+      <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1.5 text-[13px] leading-5 sm:gap-x-5 sm:text-sm">
         {status === "ongoing" && (
           <>
             {showScoreValues ? (
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <span className="font-medium text-[var(--theme-color-text-muted)]">{t("latestScore")}</span>
-                <span className="font-bold text-[var(--theme-color-semantic-info-foreground)]">
+                <TrackerScore value={scoreSummary.latestScore} className="font-bold text-[var(--theme-color-semantic-info-foreground)]">
                   {scoreSummary.latestScore !== null ? numberFormatter.format(scoreSummary.latestScore) : "-"}
-                </span>
+                </TrackerScore>
               </div>
             ) : null}
             <div className="flex items-center gap-1.5 sm:gap-2">

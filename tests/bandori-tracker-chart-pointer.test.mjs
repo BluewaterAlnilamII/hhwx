@@ -217,14 +217,18 @@ test("dragging, long presses and cancellation cannot prime a double tap", contex
   assert.equal(steps,0);
 });
 
-test("wheel requires activation, normalizes units, and releases on Escape or leaving", context => {
+test("wheel zooms without clicking, normalizes units, and preserves browser shortcuts", context => {
   const moves=[];const c=chart(context,{canZoom:()=>true,onWheel:(x,d)=>moves.push([x,d])});
   const wheel=extra=>c.layer.emit('wheel',{deltaY:-3,deltaMode:1,...extra});
-  assert.ok(!wheel().defaultPrevented);
-  c.layer.emit('pointerdown',{pointerType:'mouse'});c.layer.emit('pointerup',{pointerType:'mouse'});
   assert.ok(wheel().defaultPrevented);assert.deepEqual(moves,[[50,-48]]);
   assert.ok(!wheel({ctrlKey:true}).defaultPrevented);
-  c.document.emit('keydown',{key:'Escape'});assert.ok(!wheel().defaultPrevented);
-  c.layer.emit('pointerdown',{pointerType:'mouse'});c.layer.emit('pointerup',{pointerType:'mouse'});
-  c.layer.emit('pointerleave',{pointerType:'mouse'});assert.ok(!wheel().defaultPrevented);
+  assert.ok(!wheel({deltaY:0,deltaX:100}).defaultPrevented);
+  c.document.emit('keydown',{key:'Escape'});assert.ok(wheel().defaultPrevented);
+  c.layer.emit('pointerleave',{pointerType:'mouse'});assert.ok(wheel().defaultPrevented);
+  c.layer.emit('pointerdown');assert.ok(!wheel().defaultPrevented);
+});
+
+test("charts without zoom do not consume wheel scrolling", context => {
+  const c=chart(context,{canZoom:()=>false,onWheel:()=>assert.fail('no zoom')});
+  assert.ok(!c.layer.emit('wheel',{deltaY:90}).defaultPrevented);
 });

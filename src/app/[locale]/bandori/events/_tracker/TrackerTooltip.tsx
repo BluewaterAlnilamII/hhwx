@@ -41,9 +41,9 @@ function ComparisonPointRows({
   if (points.length === 0) return null;
 
   return (
-    <div className="mt-3 border-t border-[var(--theme-color-border-subtle)] pt-2">
+    <div className="mt-2 border-t border-[var(--theme-color-border-subtle)] pt-1.5">
       {points.map((point) => (
-        <div key={`${point.targetType}-${point.targetId}-${point.tier}-${point.shiftedTime}`} className="mt-1.5">
+        <div key={`${point.targetType}-${point.targetId}-${point.tier}-${point.shiftedTime}`} className="mt-1.5 first:mt-0">
           <div className="flex items-center justify-between gap-5">
             <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-bold" style={{ color: point.color }}>
               <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: point.color }} />
@@ -111,7 +111,7 @@ export function TrackerTooltip({
     if (projectionLabelTime === undefined) return null;
 
     return (
-      <div className="min-w-[210px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-floating-background)] p-4 shadow-[var(--theme-shadow-floating)]">
+      <div className="min-w-[210px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-floating-background)] p-3 sm:p-4 shadow-[var(--theme-shadow-floating)]">
         <p className="mb-2 text-xs font-semibold text-[var(--theme-color-text-muted)]">
           {dateFormatter.format(projectionLabelTime)}
         </p>
@@ -159,7 +159,7 @@ export function TrackerTooltip({
     if (comparisonPoints.length === 0) return null;
 
     return (
-      <div className="min-w-[220px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-floating-background)] p-4 shadow-[var(--theme-shadow-floating)]">
+      <div className="min-w-[220px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-floating-background)] p-3 sm:p-4 shadow-[var(--theme-shadow-floating)]">
         <p className="text-xs font-semibold text-[var(--theme-color-text-muted)]">
           {dateFormatter.format(label)}
         </p>
@@ -183,7 +183,7 @@ export function TrackerTooltip({
 
   if (currentPoint.speed !== undefined) {
     speedRender = (
-      <div className="mt-2 flex items-center justify-between border-t border-[var(--theme-color-border-subtle)] pt-2">
+      <div className="mt-2 flex items-center justify-between gap-2 border-t border-[var(--theme-color-border-subtle)] pt-2">
         <span className="text-xs font-bold text-[var(--theme-color-text-muted)]">{t("instantSpeed")}</span>
         <span className="text-[#f43f5e] font-bold text-sm">
           +{numberFormatter.format(currentPoint.speed)} {unit}/h
@@ -208,7 +208,7 @@ export function TrackerTooltip({
 
     speed24Render = (
       <div>
-        <div className="mt-1 flex justify-between items-center">
+        <div className="mt-1 flex justify-between items-center gap-2">
           <span className="text-xs font-bold text-[var(--theme-color-text-muted)]">{t("daySpeed")}</span>
           <span className="text-blue-500 font-bold text-sm">
             +{numberFormatter.format(currentPoint.speed24)} {unit}/d
@@ -220,12 +220,12 @@ export function TrackerTooltip({
   }
 
   return (
-    <div className="min-w-[180px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-floating-background)] p-4 shadow-[var(--theme-shadow-floating)]">
+    <div className="min-w-[180px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-floating-background)] p-3 sm:p-4 shadow-[var(--theme-shadow-floating)]">
       <p className="mb-2 text-xs font-semibold text-[var(--theme-color-text-muted)]">
         {dateFormatter.format(label)}
       </p>
       <div className="flex items-end gap-2">
-        <span className="text-blue-500 font-extrabold text-2xl leading-none">
+        <span className="text-blue-500 font-extrabold text-[22px] sm:text-2xl leading-none">
           {numberFormatter.format(currentPoint.ep)}
         </span>
         <span className="text-sm font-bold text-blue-500/70 mb-0.5">{unit}</span>

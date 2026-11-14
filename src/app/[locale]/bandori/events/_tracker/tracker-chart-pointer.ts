@@ -4,10 +4,8 @@ type ChartPointerCallbacks = {
   isControlTarget?: (target: EventTarget | null) => boolean;
   canPan?: () => boolean;
   canZoom?: () => boolean;
-  interactionRoot?: HTMLElement;
   onDoubleTap?: (x: number) => void;
   onWheel?: (x: number, delta: number) => void;
-  onWheelActive?: (active: boolean) => void;
   onGestureStart?: (centerX: number) => void;
   onGesture?: (centerX: number, ratio: number) => void;
   onGestureEnd?: () => void;
@@ -22,12 +20,6 @@ export function bindTrackerChartPointer(layer: HTMLElement, callbacks: ChartPoin
   let mouse: { id: number; x: number; dragging: boolean } | null = null;
   let lastTap: { x: number; y: number; time: number } | null = null;
   let tap: { x: number; y: number; time: number; second: boolean; moved: boolean; dragging: boolean } | null = null;
-  let wheelActive = false;
-  const root = callbacks.interactionRoot ?? layer;
-  const armWheel = (active: boolean) => {
-    wheelActive = active;
-    callbacks.onWheelActive?.(active);
-  };
 
   const clear = (reason: Parameters<ChartPointerCallbacks["onClear"]>[0]) => {
     activePointer = null;
@@ -45,7 +37,6 @@ export function bindTrackerChartPointer(layer: HTMLElement, callbacks: ChartPoin
   const down = (event: PointerEvent) => {
     if (event.button !== 0) return;
     if (event.pointerType === "mouse") {
-      armWheel(true);
       point(event, true);
       if (callbacks.canPan?.()) {
         mouse = { id: event.pointerId, x: event.clientX, dragging: false };
@@ -139,28 +130,24 @@ export function bindTrackerChartPointer(layer: HTMLElement, callbacks: ChartPoin
     if (event.pointerType === "mouse" && !mouse) clear("leave");
   };
   const outside = (event: PointerEvent) => {
-    if (callbacks.isControlTarget?.(event.target)) {
-      if (event.pointerType === "mouse") armWheel(true);
-    } else if (!layer.contains(event.target as Node | null)) {
+    if (callbacks.isControlTarget?.(event.target)) return;
+    if (!layer.contains(event.target as Node | null)) {
       clear("outside");
-      armWheel(false);
       lastTap = null;
     }
   };
   const wheel = (event: WheelEvent) => {
-    if (!wheelActive || !callbacks.canZoom?.() || !callbacks.onWheel || contacts.size || mouse
+    if (!event.deltaY || !callbacks.canZoom?.() || !callbacks.onWheel || contacts.size || mouse
       || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || !event.cancelable) return;
     event.preventDefault();
     clear("gesture");
     const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? layer.clientHeight : 1;
     callbacks.onWheel(localX(event.clientX), Math.max(-240, Math.min(240, event.deltaY * unit)));
   };
-  const leaveRoot = () => armWheel(false);
   const escape = (event: KeyboardEvent) => {
     if (event.key === "Escape") blur();
   };
   const blur = () => {
-    armWheel(false);
     tap = lastTap = null;
     clear("cancel");
     pinch = null;
@@ -181,7 +168,6 @@ export function bindTrackerChartPointer(layer: HTMLElement, callbacks: ChartPoin
   layer.addEventListener("lostpointercapture", end);
   layer.addEventListener("pointerleave", leave);
   layer.addEventListener("wheel", wheel, { passive: false });
-  root.addEventListener("pointerleave", leaveRoot);
   document.addEventListener("pointerdown", outside, true);
   document.addEventListener("keydown", escape);
   document.defaultView?.addEventListener("blur", blur);
@@ -193,8 +179,6 @@ export function bindTrackerChartPointer(layer: HTMLElement, callbacks: ChartPoin
     layer.removeEventListener("lostpointercapture", end);
     layer.removeEventListener("pointerleave", leave);
     layer.removeEventListener("wheel", wheel);
-    root.removeEventListener("pointerleave", leaveRoot);
-    armWheel(false);
     document.removeEventListener("pointerdown", outside, true);
     document.removeEventListener("keydown", escape);
     document.defaultView?.removeEventListener("blur", blur);

@@ -34,12 +34,7 @@ function normalizeNumericBoundary(value: number | string, fallback: number): num
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-/**
- * 固定纵坐标组件。
- *
- * 设计原因：主图已经承担了刻度与网格线计算，左侧固定坐标只需要复用同一套刻度结果，
- * 无需再额外渲染一张图表，从而减少不必要的重绘和布局计算。
- */
+// Reuse the plot's ticks instead of rendering another chart for the fixed axis.
 export default function FixedYAxis({
   ticks,
   domain,
@@ -57,13 +52,13 @@ export default function FixedYAxis({
 
   return (
     <div
-      className="relative h-full shrink-0 border-r border-[var(--theme-color-border-subtle)] select-none"
+      className="relative z-0 h-full shrink-0 select-none"
       style={{ width: `${axisWidth}px`, touchAction: "pan-y pinch-zoom" }}
       data-testid="tracker-y-axis"
       aria-hidden="true"
     >
       <div
-        className="absolute right-0 w-px bg-[var(--theme-color-border-subtle)]"
+        className="absolute left-0 w-px bg-[var(--theme-color-border-subtle)]"
         style={{
           top: `${topMargin}px`,
           height: `${usableHeight}px`,
@@ -77,7 +72,7 @@ export default function FixedYAxis({
         return (
           <span
             key={tickValue}
-            className="absolute right-2 -translate-y-1/2 text-[11px] leading-none text-[var(--theme-color-text-muted)]"
+            className="absolute left-2 -translate-y-1/2 text-[11px] leading-none text-[var(--theme-color-text-muted)]"
             style={{ top: `${top}px` }}
           >
             {formatTrackerYAxisTick(tickValue)}

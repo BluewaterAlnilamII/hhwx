@@ -20,11 +20,11 @@
   --event-tabs-compact-height: max(44px, 2.75rem);
   --event-tab-normal-font: 1rem;
   --event-tab-compact-font: 0.8125rem;
-  --event-tabs-visual-progress: var(--event-tabs-progress, 0);
 }
 .event-view-sentinel { position: absolute; top: 0; width: 1px; height: 1px; pointer-events: none; }
 .event-view-tabs { position: sticky; top: var(--event-tabs-top, 59px); z-index: 30; height: var(--event-tabs-normal-height); }
 .event-view-tabs-bar {
+  --event-tabs-visual-progress: var(--event-tabs-progress, 0);
   position: absolute;
   inset: 0 0 auto;
   display: grid;
@@ -89,8 +89,8 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .event-view-section { --event-tabs-visual-progress: 0; }
-  .event-view-section[data-stuck] { --event-tabs-visual-progress: 1; }
+  .event-view-tabs-bar { --event-tabs-visual-progress: 0; }
+  .event-view-section[data-stuck] .event-view-tabs-bar { --event-tabs-visual-progress: 1; }
   .event-view-tabs-bar, .event-view-tabs .event-view-tabs-bar button,
   .event-view-section[data-settling] .event-view-panel, .event-view-section[data-settling] .event-view-indicator { transition: none; }
 }
@@ -101,7 +101,8 @@
 .event-mode-controls [role="tablist"] { box-shadow: none; }
 .event-mode-controls button[aria-pressed="false"] { box-shadow: none; }
 .event-mode-controls button[aria-pressed] { font-variant-numeric: tabular-nums; }
-.event-chart-summary { font-variant-numeric: tabular-nums; }
+.event-chart-summary, .event-chart-tooltip { font-variant-numeric: tabular-nums; }
+.event-score-update { position: absolute; inset: -2px -4px; z-index: -1; pointer-events: none; border-radius: 4px; background: var(--theme-color-event-score-update-background); opacity: 0; }
 .event-chart-tooltip > div { min-width: 0; max-width: 100%; }
 .event-comparison-controls { padding: 1rem 0 0; }
 .event-comparison-controls button { min-height: 2.5rem; }
@@ -342,17 +343,12 @@
 .event-chart-zoom > span { width: 2.5rem; text-align: center; font-size: 11px; line-height: 1rem; }
 .event-chart-zoom button { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; min-height: 24px; padding: 0; border: 0; border-radius: 5px; box-shadow: none; background: transparent; color: inherit; }
 .event-chart-zoom button:disabled { opacity: 0.45; }
-[data-wheel-active="true"] .event-chart-zoom { border-color: var(--theme-color-semantic-info-foreground); }
-.event-chart-zoom-feedback { position: absolute; top: 26px; left: 46px; z-index: 16; pointer-events: none; padding: 3px 7px; border: 1px solid var(--theme-color-border-subtle); border-radius: 5px; background: var(--theme-color-chart-background); color: var(--theme-color-text-muted); font-size: 12px; line-height: 16px; opacity: 0; transition: opacity 180ms ease-out; }
-.event-chart-zoom-feedback[data-visible="true"] { opacity: 1; }
-@media (hover: hover) and (pointer: fine) {
-  .event-chart-zoom-feedback { display: none; }
-  [data-zoom-enabled="true"] .recharts-xAxis-tick-labels { transform: translateY(-12px); }
-  [data-zoom-enabled="true"] .event-chart-time-tick { bottom: 28px; }
+@media (hover: hover) {
+  .event-chart-zoom button:hover:not(:disabled) { background: var(--theme-color-control-background-hover); color: var(--theme-color-text-default); }
 }
-@media (hover: none), (pointer: coarse) {
-  .event-chart-zoom:not(:focus-within) { width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-}
+.event-chart-zoom button:active:not(:disabled) { background: var(--theme-color-control-background-pressed); }
+[data-zoom-enabled="true"] .recharts-xAxis-tick-labels { transform: translateY(-12px); }
+[data-zoom-enabled="true"] .event-chart-time-tick { bottom: 28px; }
 /* Transform cached SVG geometry; keep labels and point markers at their native size. */
 .event-chart-canvas :is(.recharts-line-curve, .recharts-reference-area-rect, .recharts-reference-line-line) {
   transform: translateX(var(--tracker-x-offset, 0px)) scaleX(var(--tracker-x-scale, 1));
@@ -360,9 +356,9 @@
   vector-effect: non-scaling-stroke;
 }
 .event-chart-canvas[data-zoomed="true"] .recharts-xAxis-tick-labels { opacity: 0; }
+.event-chart-canvas[data-zoomed="true"] .event-chart-midnight { visibility: hidden; }
 
 @media (prefers-reduced-motion: reduce) {
-  .event-chart-zoom-feedback { transition: none; }
   .event-page button, .event-search-dialog button, .event-pt-calculator button {
     transition-property: color, background-color, border-color, box-shadow;
   }

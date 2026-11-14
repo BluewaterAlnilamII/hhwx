@@ -23,6 +23,7 @@ type ChartMargin = {
 
 type TrackerActiveMarkerOverlayProps = {
   markers: ActiveChartMarker[];
+  sampleMarkers: ActiveChartMarker[];
   domainEnd: number | "auto";
   domainStart: number | "auto";
   margin: ChartMargin;
@@ -37,6 +38,34 @@ export type TrackerActiveMarkerOverlayHandle = {
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
+}
+
+// Keep dense samples in the curve; reveal individual dots only when their neighbours fit.
+export function selectChartSampleMarkers(points: ActiveChartMarker[], start: number, end: number, width: number): ActiveChartMarker[] {
+  if (width <= 0 || end <= start) return [];
+  const spacing = (end - start) * 8 / width;
+  const lowerBound = (time: number) => {
+    let low = 0, high = points.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (points[middle].x < time) low = middle + 1;
+      else high = middle;
+    }
+    return low;
+  };
+  const visible: ActiveChartMarker[] = [];
+  for (let index = lowerBound(start); index < points.length && points[index].x <= end;) {
+    const point = points[index];
+    const previous = points[index - 1], next = points[index + 1];
+    if ((!previous || point.x - previous.x >= spacing) && (!next || next.x - point.x >= spacing)) visible.push(point);
+    index = Math.max(index + 1, lowerBound(point.x + spacing));
+  }
+  const latest = points.at(-1);
+  if (latest && latest.x >= start && latest.x <= end && visible.at(-1) !== latest) {
+    if (visible.length && latest.x - visible[visible.length - 1].x < spacing) visible.pop();
+    visible.push(latest);
+  }
+  return visible;
 }
 
 function toAxisPosition(
@@ -60,6 +89,7 @@ export const TrackerActiveMarkerOverlay = memo(forwardRef<
   TrackerActiveMarkerOverlayProps
 >(function TrackerActiveMarkerOverlay({
   markers,
+  sampleMarkers,
   domainEnd,
   domainStart,
   margin,
@@ -199,6 +229,11 @@ export const TrackerActiveMarkerOverlay = memo(forwardRef<
       data-testid="tracker-active-marker-overlay"
     >
       {markerElements}
+      {sampleMarkers.map(marker => {
+        const style = getMarkerStyle(marker);
+        return style ? <span key={marker.key} data-tracker-sample-marker={marker.key} className="absolute border"
+          style={{ ...style, borderColor: marker.color, backgroundColor: "var(--theme-color-chart-background)" }} /> : null;
+      })}
       {Array.from({ length: BANDORI_TOPDATA_MAX_SAMPLE_SIZE }, (_, index) => (
         <span
           key={`active-marker-slot-${index}`}

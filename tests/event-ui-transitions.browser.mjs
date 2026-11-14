@@ -330,6 +330,40 @@ try {
     await page.emulateMedia({reducedMotion: "no-preference"});
 
     await page.goto(`${base}/scroll-tabs`);
+    const collapse = await page.evaluate(async () => {
+      const root = document.querySelector('.event-view-section');
+      const strip = root.querySelector('.event-view-tabs-bar');
+      const button = strip.querySelector('button');
+      const marker = root.querySelector('.event-view-sentinel');
+      const header = document.querySelector('header').getBoundingClientRect().bottom;
+      const origin = marker.getBoundingClientRect().top + scrollY - header;
+      const normal = root.querySelector('.event-view-tabs').getBoundingClientRect().height;
+      const compact = parseFloat(getComputedStyle(button).minHeight);
+      const frames = [];
+      for (const ratio of [0, 0.25, 0.5, 0.75, 1, 0.75, 0.5, 0.25, 0]) {
+        scrollTo({top: origin + ratio * (normal - compact), behavior: 'instant'});
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const bounds = strip.getBoundingClientRect();
+        frames.push({height: bounds.height, bottom: bounds.bottom,
+          contentTop: root.querySelector('.event-view-viewport').getBoundingClientRect().top,
+          font: parseFloat(getComputedStyle(button).fontSize)});
+      }
+      return {origin, normal, compact, frames};
+    });
+    assert.ok(new Set(collapse.frames.map(frame => frame.height)).size >= 5, 'scrolling renders intermediate tab sizes in both directions');
+    assert.ok(collapse.frames.every(frame => Math.abs(frame.bottom - frame.contentTop) < 1), 'shrinking tabs stay aligned with their content');
+    assert.equal(collapse.frames[0].height, collapse.normal);
+    assert.equal(collapse.frames[4].height, collapse.compact);
+    assert.equal(collapse.frames[8].height, collapse.normal);
+    assert.equal(collapse.frames[0].font, 16);
+    assert.equal(collapse.frames[4].font, width < 640 ? 13 : 14);
+    await page.emulateMedia({reducedMotion:'reduce'});
+    for (const [offset, expected] of [[3, collapse.compact], [-3, collapse.normal]]) {
+      await page.evaluate(top => scrollTo({top, behavior:'instant'}), collapse.origin + offset);
+      await page.waitForFunction(expected => document.querySelector('.event-view-tabs-bar').getBoundingClientRect().height === expected, expected);
+    }
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    await page.evaluate(() => scrollTo({top:0, behavior:'instant'}));
     await page.evaluate(() => {
       window.samplePendingSelection = next => {
         window.pendingPanelTop = document.querySelector('[data-view=' + next + ']').getBoundingClientRect().top;

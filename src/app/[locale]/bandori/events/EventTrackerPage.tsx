@@ -1072,6 +1072,7 @@ function EventTrackerPageContent({ initialEventId, initialServer }: EventTracker
     [displayedChartData],
   );
   const comparisonChartKey = comparisonConfigs.map((config) => `${config.targetType}:${config.targetId}:${config.tier}`).join(",");
+  const trackerSelectionKey = `${selectedServer}-${resolvedCurrentEventId}-${trackingMode}-${selectedMonthlyMonthId}-${selectedTier}-${resolvedSelectedSongId}`;
   const chartContainerKey = `${selectedServer}-${resolvedCurrentEventId ?? "none"}-${trackingMode}-${selectedMonthlyMonthId}-${selectedTier}-${resolvedSelectedSongId}-${comparisonChartKey}-${comparisonAlignment}-${showBestdoriPrediction}-${bestdoriPrediction.status}-${chartRenderRevision}`;
   const chartTitle = trackerT(trackingMode === "song" && resolvedSelectedSongId > 0 ? "chart.songTitle" : "chart.title", {
     server: getBandoriServerCode(selectedServer).toUpperCase(),
@@ -1242,6 +1243,7 @@ function EventTrackerPageContent({ initialEventId, initialServer }: EventTracker
                 <div hidden={Boolean(trackerError && !hasTrackerData)}>
                 <Activity mode={trackerVisible ? "visible" : "hidden"}>
                 <TrackerStatusSummary
+                  key={trackerSelectionKey}
                   bestdoriPrediction={bestdoriPrediction}
                   scoreSummary={scoreSummary}
                   isRefreshing={refreshing}
@@ -1252,7 +1254,7 @@ function EventTrackerPageContent({ initialEventId, initialServer }: EventTracker
                 </Activity>
 
                 <TrackerChartPanel
-                  zoomKey={`${selectedServer}-${resolvedCurrentEventId}-${trackingMode}-${selectedMonthlyMonthId}-${selectedTier}-${resolvedSelectedSongId}`}
+                  zoomKey={trackerSelectionKey}
                   chartAnchorRef={chartAnchorRef}
                   calculatorProjection={calculatorProjection}
                   bestdoriPredictionPointCount={bestdoriPrediction.predictionPoints.length}
