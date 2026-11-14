@@ -231,7 +231,7 @@ export function Top10Panel({
               </div>
             ))}
           </div>
-          <Top10PlayerList players={view.players} server={server} />
+          <Top10PlayerList key={`${server}-${trackingMode}-${targetId}-${songId}`} players={view.players} server={server} />
         </>
       ) : null}
       </div>

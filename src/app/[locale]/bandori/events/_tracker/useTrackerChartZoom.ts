@@ -18,13 +18,23 @@ export function nextChartZoom(scale: number, direction: -1 | 1): number {
     : CHART_ZOOM_LEVELS.findLast(level => level < scale - 0.001) ?? 1;
 }
 
-export function chartZoomTicks(start: number, end: number, midnight: number): number[] {
+export function chartZoomTicks(start: number, end: number, midnight: number, width: number, labelWidth: number): Array<{ time: number; labeled: boolean }> {
+  if (width <= 0 || labelWidth <= 0 || end <= start) return [];
   const hour = 3600000;
-  const step = [0.25, 0.5, 1, 2, 3, 6, 12, 24, 48, 96, 168].map(hours => hours * hour)
-    .find(step => step >= (end - start) / 4) ?? 168 * hour;
-  const padding = (end - start) * 0.12;
-  const ticks: number[] = [];
-  for (let time = midnight + Math.ceil((start + padding - midnight) / step) * step; time < end - padding; time += step) ticks.push(time);
+  const span = end - start;
+  const dateOnly = span >= 72 * hour;
+  const steps = [0.25, 0.5, 1, 1.5, 2, 3, 4, 6, 8, 12, 24, 48, 96, 168].map(hours => hours * hour);
+  const gridStep = steps.find(step => step >= span * 32 / width) ?? 168 * hour;
+  const padding = span * (labelWidth / 2 + 2) / width;
+  const labelSpacing = span * (labelWidth + 8) / width;
+  let nextLabelTime = start + padding;
+  const ticks: Array<{ time: number; labeled: boolean }> = [];
+  for (let time = midnight + (Math.floor((start - midnight) / gridStep) + 1) * gridStep; time < end; time += gridStep) {
+    const labeled = time >= nextLabelTime && time <= end - padding
+      && (!dateOnly || (time - midnight) % (24 * hour) === 0);
+    ticks.push({ time, labeled });
+    if (labeled) nextLabelTime = time + labelSpacing;
+  }
   return ticks;
 }
 

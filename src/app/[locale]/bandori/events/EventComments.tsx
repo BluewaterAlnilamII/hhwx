@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { memo, useCallback } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import CommentThread from "@/components/comments/CommentThread";
 import LoadingIndicator from "@/components/LoadingIndicator";
@@ -13,7 +13,7 @@ import {
   replaceEventTrackerUrlQuery,
 } from "./urlQuery";
 
-export default function EventComments({
+export default memo(function EventComments({
   eventId,
   server,
   loading = false,
@@ -80,4 +80,4 @@ export default function EventComments({
       emptyMessage={t("emptyMessage")}
     />
   );
-}
+});

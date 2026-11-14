@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, type Dispatch, type SetStateAction } from "react";
+import { memo, useMemo, type Dispatch, type SetStateAction } from "react";
 import { useTranslations } from "next-intl";
 import { AlignEndVertical, AlignStartVertical, Plus, Trash2, X } from "lucide-react";
 
@@ -77,6 +77,12 @@ export const ComparisonControls = memo(function ComparisonControls({
   trackingMode,
 }: ComparisonControlsProps) {
   const t = useTranslations("bandori.events.tracker.comparison");
+  const targetOptions = useMemo(() => comparisonTargetOptions.map(option => (
+    <option key={option.id} value={option.id}
+      className={option.isSameEventType ? "font-semibold text-[var(--theme-color-selection-subtle-foreground)]" : undefined}>
+      {option.label}
+    </option>
+  )), [comparisonTargetOptions]);
 
   if (trackingMode !== "event" && trackingMode !== "monthly") {
     return null;
@@ -222,15 +228,7 @@ export const ComparisonControls = memo(function ComparisonControls({
                   onUpdateComparison(config.id, { targetId: nextTargetId });
                 }}
               >
-                {comparisonTargetOptions.map((option) => (
-                  <option
-                    key={option.id}
-                    value={option.id}
-                    className={option.isSameEventType ? "font-semibold text-[var(--theme-color-selection-subtle-foreground)]" : undefined}
-                  >
-                    {option.label}
-                  </option>
-                ))}
+                {targetOptions}
               </select>
               </span>
 

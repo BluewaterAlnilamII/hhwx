@@ -3,7 +3,7 @@ import LoadingError from "@/components/LoadingError";
 import LoadingIndicator from "@/components/LoadingIndicator";
 
 import type { ReactNode } from "react";
-import { useId, useMemo, useState } from "react";
+import { memo, useId, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import * as Dialog from "@radix-ui/react-dialog";
 import { History, ImageOff, Search, X } from "lucide-react";
@@ -62,7 +62,7 @@ type BandoriEventSwitcherProps = {
   onServerChange?: (server: BandoriServer) => void;
 };
 
-export default function BandoriEventSwitcher({
+export default memo(function BandoriEventSwitcher({
   className,
   pickerClassName,
   title,
@@ -364,4 +364,4 @@ export default function BandoriEventSwitcher({
       </div>
     </div>
   );
-}
+});

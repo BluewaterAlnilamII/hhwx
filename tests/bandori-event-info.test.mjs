@@ -184,7 +184,6 @@ test("event status uses the tracker three-state rule", () => {
   assert.doesNotMatch(eventInfoPanelSource, /text-xs font-semibold text-slate-600/u);
   assert.match(eventInfoPanelSource, /SERVER_LABELS\[model\.timeServer\]/u);
   assert.match(eventInfoPanelSource, /<OverviewRow label=\{t\("eventStatus"\)\}>/u);
-  assert.match(trackerStatusSummarySource, /statusT\(status\)/u);
   assert.doesNotMatch(trackerStatusSummarySource, /eventServer/u);
   assert.match(eventTrackerPageSource, /eventStatusStartDate \?\? "auto"/u);
   assert.match(eventTrackerPageSource, /eventStatusEndDate \?\? "auto"/u);

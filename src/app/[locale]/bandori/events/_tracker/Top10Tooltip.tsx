@@ -46,18 +46,18 @@ export function Top10Tooltip({ players, server, tooltip }: Top10TooltipProps) {
   }
 
   return (
-    <div className="min-w-[220px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-floating-background)] p-4 shadow-[var(--theme-shadow-floating)]">
+    <div className="min-w-[220px] rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-floating-background)] p-3 sm:p-4 text-[var(--theme-color-text-default)] shadow-[var(--theme-shadow-floating)]">
       <p className="mb-2 text-xs font-semibold text-[var(--theme-color-text-muted)]">
         {dateFormatter.format(tooltip.label)}
       </p>
-      <div className="space-y-1.5">
+      <div className="space-y-0.5">
         {rows.map(({ player, score }) => (
-          <div key={player.uid} className="flex items-center justify-between gap-5">
-            <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-bold" style={{ color: player.color }}>
+          <div key={player.uid} className="flex items-center justify-between gap-3">
+            <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-bold">
               <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: player.color }} />
-              <span className="max-w-40 whitespace-pre-line break-words">{player.name || String(player.uid)}</span>
+              <span className="max-w-40 truncate">{player.name || String(player.uid)}</span>
             </span>
-            <span className="shrink-0 text-sm font-bold" style={{ color: player.color }}>
+            <span className="shrink-0 text-sm font-bold">
               {scoreFormatter.format(score)} P
             </span>
           </div>

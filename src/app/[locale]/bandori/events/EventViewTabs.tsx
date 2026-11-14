@@ -146,9 +146,10 @@ export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, s
   useLayoutEffect(() => {
     const root = section.current;
     const marker = sentinel.current;
-    const tabs = bar.current?.parentElement;
-    const button = bar.current?.querySelector("button");
-    if (!root || !marker || !tabs || !button) return;
+    const strip = bar.current;
+    const tabs = strip?.parentElement;
+    const button = strip?.querySelector("button");
+    if (!root || !marker || !strip || !tabs || !button) return;
     const header = document.querySelector("header");
     let frame = 0;
     const update = () => {
@@ -160,7 +161,8 @@ export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, s
         tabs.getBoundingClientRect().height,
         parseFloat(getComputedStyle(button).minHeight));
       root.style.setProperty("--event-tabs-top", `${top}px`);
-      root.style.setProperty("--event-tabs-progress", String(progress));
+      // Scroll progress must not invalidate styles in the chart and information panels.
+      strip.style.setProperty("--event-tabs-progress", String(progress));
       root.toggleAttribute("data-stuck", markerTop <= top);
     };
     const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
