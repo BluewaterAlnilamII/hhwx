@@ -606,7 +606,7 @@ try {
     await area.press("ArrowDown");await page.getByRole("button",{name:"保存",exact:true}).click();await area.waitFor({state:"detached"});assert.equal(preferences.cover.y,before.y+2);
     await page.getByLabel("封面选项",{exact:true}).click();await page.getByRole("button",{name:"选择卡面",exact:true}).click();
     await page.getByRole("dialog").waitFor();await page.getByRole("dialog").getByRole("button",{name:"取消",exact:true}).click();await page.getByRole("dialog").waitFor({state:"detached"});
-    assert.equal(await page.getByLabel("封面选项",{exact:true}).evaluate(el=>el===document.activeElement),true);
+    await page.getByLabel("封面选项",{exact:true}).and(page.locator(":focus")).waitFor({timeout:3000});
     await page.getByRole("button",{name:"选择展示称号",exact:true}).click();await page.getByRole("dialog").waitFor();
     await page.getByRole("dialog").getByRole("button",{name:/1000001234/}).waitFor();await page.setViewportSize({width:390,height:900});await shot("title-picker-mobile");await page.keyboard.press("Escape");await page.getByRole("dialog").waitFor({state:"detached"});await page.setViewportSize({width:1440,height:1000});
     await page.getByRole("button",{name:"选择头像",exact:true}).click();await page.getByRole("dialog").waitFor();await page.keyboard.press("Escape");await page.getByRole("dialog").waitFor({state:"detached"});
@@ -634,7 +634,7 @@ try {
       await page.setViewportSize({width,height:900});
       await page.getByRole("button",{name:"选择头像",exact:true}).click();const a=await measure();await shot(`avatar-picker-${width}`);
       await page.keyboard.press("Escape");await page.getByRole("dialog").waitFor({state:"detached"});
-      assert.equal(await page.getByRole("button",{name:"选择头像",exact:true}).evaluate(el=>el===document.activeElement),true);
+      await page.getByRole("button",{name:"选择头像",exact:true}).and(page.locator(":focus")).waitFor({timeout:3000});
       await openCover();const c=await measure();await shot(`cover-picker-${width}`);
       for(const key of ["width","headerHeight","padding","buttonHeight","buttonBackground","buttonColor","buttonRadius"]) assert.equal(c[key],a[key],`shared enabled-control ${key} at ${width}px`);
       for(const metrics of [a,c]) {
@@ -695,7 +695,7 @@ try {
     await page.goto(`${origin}/zh-CN/account/profile`,{waitUntil:"domcontentloaded"});
     await page.getByTestId("account-avatar-card-trigger").click();await page.getByTestId("account-avatar-card-dialog").waitFor();
     await page.keyboard.press("Escape");await page.getByRole("dialog").waitFor({state:"detached"});
-    assert.equal(await page.getByTestId("account-avatar-card-trigger").evaluate(el=>el===document.activeElement),true);
+    await page.getByTestId("account-avatar-card-trigger").and(page.locator(":focus")).waitFor({timeout:3000});
     await page.goto(`${origin}/zh-CN/bandori/game-profiles/picker-fixture/cards`,{waitUntil:"domcontentloaded"});
     await page.getByRole("button",{name:"添加卡牌",exact:true}).click();
     const picker=page.getByRole("dialog",{name:"添加卡牌",exact:true});await picker.locator("[data-card-id]").first().waitFor({timeout:60000});
