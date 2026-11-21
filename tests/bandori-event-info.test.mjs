@@ -242,7 +242,7 @@ test("event title stays on one line with bounded adaptive sizing", () => {
   assert.match(eventSwitcherSource, /if \(visualLength > 16\) return "text-\[22px\] sm:text-\[26px\]"/u);
   assert.match(eventSwitcherSource, /return "text-2xl sm:text-3xl"/u);
   assert.match(eventSwitcherSource, /title=\{title\}/u);
-  assert.match(eventSwitcherSource, /h-10 min-w-0 w-full truncate whitespace-nowrap/u);
+  assert.match(eventSwitcherSource, /h-10 min-w-0 max-w-full truncate whitespace-nowrap/u);
   assert.doesNotMatch(eventSwitcherSource, /min-h-21 max-h-21|md:min-h-14 md:max-h-14/u);
 });
 

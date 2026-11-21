@@ -42,6 +42,18 @@ export type MusicPlayerQueueSnapshot = {
   updatedAt: number;
 };
 
+export function musicPlayerAlbum(provider: MusicPlayerItem["provider"]) {
+  if (provider === "bandori") return "BanG Dream In-Game Version";
+  if (provider === "ournotes") return "Our Notes In-Game Version";
+  return null;
+}
+
+export function formatPlaybackTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+  const wholeSeconds = Math.floor(seconds);
+  return `${Math.floor(wholeSeconds / 60)}:${String(wholeSeconds % 60).padStart(2, "0")}`;
+}
+
 export type MusicPlayerPreferencesSnapshot = {
   version: typeof MUSIC_PLAYER_STORAGE_VERSION;
   volume: number;
@@ -159,7 +171,7 @@ function parseMusicPlayerItem(value: unknown): MusicPlayerItem | null {
 }
 
 export function parseMusicPlayerQueueSnapshot(rawValue: string | null): MusicPlayerQueueSnapshot | null {
-  if (!rawValue) {
+  if (!rawValue || rawValue.length > 5 * 1024 * 1024) {
     return null;
   }
 
@@ -178,7 +190,6 @@ export function parseMusicPlayerQueueSnapshot(rawValue: string | null): MusicPla
       value.version !== MUSIC_PLAYER_STORAGE_VERSION
       || !isSafeIdentifier(value.queueId)
       || !Array.isArray(value.items)
-      || value.items.length > 500
       || typeof value.updatedAt !== "number"
       || !Number.isSafeInteger(value.updatedAt)
       || value.updatedAt < 0
@@ -307,10 +318,11 @@ export function createMusicPlayerQueueSnapshot(
   items: MusicPlayerItem[],
   currentIndex: number | null,
   updatedAt = Date.now(),
+  queueId = MUSIC_PLAYER_TEMPORARY_QUEUE_ID,
 ): MusicPlayerQueueSnapshot {
   return {
     version: MUSIC_PLAYER_STORAGE_VERSION,
-    queueId: MUSIC_PLAYER_TEMPORARY_QUEUE_ID,
+    queueId,
     items,
     currentIndex,
     updatedAt,

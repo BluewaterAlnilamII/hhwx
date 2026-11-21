@@ -13,7 +13,7 @@ import tailwindcss from "@tailwindcss/postcss";
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
 const root = fileURLToPath(new URL("../", import.meta.url));
-const messages = Object.fromEntries(await Promise.all(["bandori", "common"].map(async (name) => (
+const messages = Object.fromEntries(await Promise.all(["bandori", "common", "account"].map(async (name) => (
   [name, JSON.parse(await readFile(resolve(root, `messages/en/${name}.json`), "utf8"))]
 ))));
 
@@ -59,12 +59,18 @@ const mocks = {
   "@/hooks/useBandoriPublicAssetIndex": `import {assetIndex, noop} from 'picker-test-data';
     export const useBandoriCardsAssetIndex = () => ({value: assetIndex, loading: false, refresh: noop});`,
   "@/store/useBandoriPreferencesStore": "export const useBandoriPreferredServer = () => 0;",
+  "@/hooks/useBandoriFavorites": `import {useState} from 'react';
+    export function useBandoriFavorite() {
+      const [selected, setSelected] = useState(false);
+      return {viewer:'test', ready:true, selected, toggle:async () => setSelected(!selected)};
+    }`,
   "@/i18n/navigation": `import {createElement} from 'react';
     export const Link = (props) => createElement('a', props);
     const router = {push() {}};
     export const useRouter = () => router;`,
 };
 const bundle = await build({
+  outfile: "app.js",
   absWorkingDir: root, bundle: true, write: false, platform: "browser", format: "esm", jsx: "automatic",
   define: { "process.env": '{"NODE_ENV":"development"}' },
   stdin: {resolveDir: root, loader: "tsx", contents: `
@@ -90,7 +96,7 @@ const server = createServer((request, response) => {
     response.end(bundle.outputFiles[0].text);
   } else if (request.url === "/app.css") {
     response.setHeader("Content-Type", "text/css");
-    response.end(css.css);
+    response.end(css.css + bundle.outputFiles.find(file => file.path.endsWith(".css")).text);
   } else if (request.url === "/") {
     response.setHeader("Content-Type", "text/html");
     response.end('<!doctype html><html lang="en" data-visual-theme="smile-patrol"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Card picker regression</title><link rel="stylesheet" href="/app.css"><div id="root"></div><script type="module" src="/app.js"></script></html>');
@@ -131,6 +137,14 @@ try {
     assert.ok(Number(cardId) < 121, 'Selection comes from expanded results');
     const target = picker.locator(`[data-card-id="${cardId}"]`);
     await target.scrollIntoViewIfNeeded();
+    if (viewport.width >= 640) {
+      await target.hover();
+      const preview = picker.locator('[popover][role="dialog"]:popover-open');
+      await preview.locator('button[aria-pressed=false]').click();
+      await preview.locator('button[aria-pressed=true]').waitFor();
+      assert.equal(await picker.locator('[data-state="open"][role="dialog"]').count(), 0, "Saving a card does not open its editor");
+      await page.keyboard.press("Escape");
+    }
     const snapshot = await picker.evaluate((element) => {
       window.pickerBefore = element;
       window.pickerScrollerBefore = element.querySelector('.overflow-y-auto');

@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { Music2 } from "lucide-react";
 import Heading from "@/components/Heading";
 import SongCatalogRow from "@/components/SongCatalogRow";
+import BandoriFavoriteButton from "@/components/bandori/BandoriFavoriteButton";
 import SongMetaTable from "@/components/SongMetaTable";
 import Switch from "@/components/Switch";
 import { BANDORI_CHART_DIFFICULTIES } from "@/lib/bandori-master-contract";
@@ -50,6 +51,7 @@ export default function EventSongs({ music, event, server, meta, skills, assets,
           <Heading as="h3" visualRole="subsection" className="mb-3 @[48rem]:col-start-1 @[48rem]:row-start-1 @[48rem]:self-center">{t(`songGroups.${group.kind}`)}</Heading>
           <div className="min-w-0 space-y-2 @[48rem]:col-start-1 @[48rem]:row-start-2">
             {group.songs.map((song) => <SongCatalogRow key={song.id} compact game="bandori" href={`/bandori/songs/${song.id}`} songId={song.id}
+              action={<BandoriFavoriteButton kind="songs" id={song.id} />}
               title={song.title} bandName={song.bandName ?? ""} typeLabel=""
               releaseDate={song.publishedAt === null ? t("unannounced") : t(group.kind === "special" ? "specialAddedAt" : "publishedAt", { date: dateFormat.format(song.publishedAt) })}
               artworkUrl={buildBandoriPublicAssetUrl(assets?.songs[String(song.id)]?.files.thumb)} artworkLoading={assetsLoading}

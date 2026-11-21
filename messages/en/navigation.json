@@ -28,6 +28,7 @@
     "currentLanguage": "Current language",
     "openAccountMenu": "Open account menu",
     "openLogin": "Open login entry",
+    "personalHomepage": "My profile",
     "accountCenter": "Account Center",
     "accountCenterUnverified": "Account center (setup incomplete)",
     "notifications": "Notifications",
@@ -37,6 +38,8 @@
     "bandoriPreferredServer": "Bandori preferred server",
     "ournotesPreferredServer": "OurNotes preferred server",
     "player": {
+      "songDetails": "View details for {title}",
+      "playTrack": "Play {title}",
       "openPlayer": "Open music player",
       "openEmptyPlayer": "Open empty music player",
       "panelLabel": "Music player",

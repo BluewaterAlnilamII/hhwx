@@ -20,6 +20,7 @@ import {
   Trash2,
 } from "lucide-react";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
+import { PublicProfileLink } from "@/components/account/PublicProfileLink";
 import BandoriDegreeView from "@/components/bandori/BandoriDegreeView";
 import { useAutoResizeTextarea } from "@/hooks/useAutoResizeTextarea";
 import type { CommentReactionParticipantPageLoader } from "@/hooks/useCommentReactionParticipants";
@@ -302,20 +303,22 @@ export const CommentItem = memo(function CommentItem({
       )}
     >
       <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-x-3">
-        <AccountCardAvatar
-          username={comment.username}
-          cardId={comment.avatar.cardId}
-          entityServer={comment.avatar.entityServer}
-          trainType={comment.avatar.trainType}
-          size="comment"
-          className="ring-1 ring-[var(--theme-color-action-secondary-border)]"
-        />
+        <PublicProfileLink publicUid={comment.publicUid} avatarLabel={comment.username ?? t("states.anonymous")}>
+          <AccountCardAvatar
+            username={comment.username}
+            cardId={comment.avatar.cardId}
+            entityServer={comment.avatar.entityServer}
+            trainType={comment.avatar.trainType}
+            size="comment"
+            className="ring-1 ring-[var(--theme-color-action-secondary-border)]"
+          />
+        </PublicProfileLink>
         <div className="flex min-h-11 min-w-0 flex-col items-start justify-center">
           <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-2 gap-y-0.5">
             <div className="flex min-w-0 max-w-full items-center gap-2">
-              <span className="truncate text-sm font-semibold text-[var(--theme-color-text-default)]">
+              <PublicProfileLink publicUid={comment.publicUid} className="truncate text-sm font-semibold text-[var(--theme-color-text-default)]">
                 {comment.username ?? t("states.anonymous")}
-              </span>
+              </PublicProfileLink>
               <CommentPublicUid publicUid={comment.publicUid} />
             </div>
             <span className="whitespace-nowrap text-xs text-[var(--theme-color-text-muted)]">

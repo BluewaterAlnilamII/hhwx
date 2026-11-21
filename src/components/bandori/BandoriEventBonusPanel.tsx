@@ -10,6 +10,7 @@ import {
   buildBandoriLegacyRarityCompositeUrl,
 } from "@/lib/bandori-builtin-resources";
 import { isBandoriCardAttribute, type BandoriCardAttribute } from "@/lib/bandori/cards/filter";
+import { readAttributeBonusItems } from "@/lib/bandori/events/summary";
 import {
   pickBandoriRegionalText,
   type BandoriServer,
@@ -112,14 +113,6 @@ function pickCharacterDisplayName(
     }
   }
   return `Character #${characterId}`;
-}
-
-function readAttributeBonusItems(eventBonus: BandoriEventBonus | null) {
-  return (eventBonus?.attributes ?? []).flatMap((item) => {
-    if (!isRecord(item) || !isBandoriCardAttribute(item.attribute)) return [];
-    const percent = toFiniteNumber(item.percent);
-    return percent === null ? [] : [{ attribute: item.attribute, percent }];
-  });
 }
 
 function readCharacterBonusItems(

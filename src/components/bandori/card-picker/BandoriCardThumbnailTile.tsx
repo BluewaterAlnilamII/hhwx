@@ -8,6 +8,7 @@ import SharedBandoriCardThumbnail, {
   type BandoriCardThumbnailMetadata,
 } from "@/components/bandori/BandoriCardThumbnail";
 import { BandoriCardHoverPopover } from "@/components/bandori/BandoriCardHoverTooltip";
+import BandoriFavoriteButton from "@/components/bandori/BandoriFavoriteButton";
 import { useBandoriCardHoverTooltip } from "@/hooks/useBandoriCardHoverTooltip";
 import {
   getBandoriServerCode,
@@ -125,6 +126,7 @@ export default function BandoriCardThumbnailTile({
           anchorRef={anchorRef}
           open={isHoverTooltipOpen}
           cardName={card.displayName}
+          action={<BandoriFavoriteButton kind="cards" id={card.cardId} server={detailServer} compact />}
           characterName={card.characterName}
           detailLanguageTag={skillEffectLanguageTag}
           detailHref={`/bandori/cards/${card.cardId}?server=${getBandoriServerCode(detailServer)}`}

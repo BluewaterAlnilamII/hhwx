@@ -20,6 +20,7 @@ import { ChatReactions } from "./ChatReactions";
 import { ChatReplyPreview } from "./ChatReplyPreview";
 import type { ChatSession } from "@/lib/chat/chat-session";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
+import { PublicProfileLink } from "@/components/account/PublicProfileLink";
 import { ChatPresenceIndicator } from "./ChatPresence";
 import { CommentPublicUid } from "@/components/comments/CommentPublicUid";
 import { resolveStoredAccountAvatarCardIdentity } from "@/lib/account-avatar-card";
@@ -31,7 +32,7 @@ export const itemClass = "flex min-h-10 cursor-default select-none items-center 
 function hasIndependentAction(target: EventTarget) {
   if (!(target instanceof Element)) return false;
   const control = target.closest('button, a, input, textarea, select, [contenteditable="true"], [role="dialog"], [popover]');
-  return !!control?.closest('[data-chat-message-row]') && !control.matches('[data-chat-reply], [data-chat-image]');
+  return !!control?.closest('[data-chat-message-row]') && !control.closest('[data-chat-author]') && !control.matches('[data-chat-reply], [data-chat-image]');
 }
 
 function stopIndependentAction(event: SyntheticEvent) {
@@ -120,19 +121,19 @@ export function ChatMessageRow({ message, online = null, quickReactions, own, me
           own ? "flex-row-reverse" : "justify-start", showAuthor && !showTime && "[--chat-row-gap:1rem]")}
         onPointerDownCapture={() => { suppressClick.current = false; }}
         onClickCapture={event => {
-          // A long-press release must not also open the image or follow the quote.
+          // Releasing the message menu must not also activate the tapped content.
           if (suppressClick.current && !hasIndependentAction(event.target)) {
             suppressClick.current = false; event.preventDefault(); event.stopPropagation();
           }
         }}>
         {highlightSequence !== undefined && <span key={highlightSequence} data-chat-locate-feedback aria-hidden="true" className="chat-message-locate-feedback" />}
-        <div className="w-9 shrink-0 pt-0.5 sm:w-10" onPointerDown={stopIndependentAction} onContextMenu={stopIndependentAction}>
-          {showAuthor && <span className="relative block"><AccountCardAvatar username={author.username} cardId={avatar.cardId} entityServer={avatar.entityServer} trainType={author.avatarCardTrainType} size="comment" className="size-9! sm:size-10!" /><ChatPresenceIndicator online={online} size="md" /></span>}
+        <div data-chat-author className="w-9 shrink-0 pt-0.5 sm:w-10" onPointerDown={stopIndependentAction} onContextMenu={stopIndependentAction}>
+          {showAuthor && <PublicProfileLink publicUid={author.publicUid} avatarLabel={author.username}><AccountCardAvatar username={author.username} cardId={avatar.cardId} entityServer={avatar.entityServer} trainType={author.avatarCardTrainType} size="comment" className="size-9! sm:size-10!" /><ChatPresenceIndicator online={online} size="md" /></PublicProfileLink>}
         </div>
         <div className={cn("flex min-w-0 max-w-[82%] flex-col sm:max-w-[78%]", own ? "items-end" : "items-start")}
           onPointerDown={stopIndependentAction} onContextMenu={stopIndependentAction}>
-          {!own && showAuthor && <div className="mb-1.5 flex max-w-full items-center gap-2 px-0.5">
-            <span className="min-w-0 truncate text-[13px] font-semibold text-[var(--theme-color-text-muted)]">{author.username}</span>
+          {!own && showAuthor && <div data-chat-author className="mb-1.5 flex max-w-full items-center gap-2 px-0.5">
+            <PublicProfileLink publicUid={author.publicUid} className="min-w-0 truncate text-[13px] font-semibold text-[var(--theme-color-text-muted)]">{author.username}</PublicProfileLink>
             <CommentPublicUid publicUid={author.publicUid} />
           </div>}
           <div className={cn("flex min-w-0 max-w-full flex-col", own ? "items-end" : "items-start")}>

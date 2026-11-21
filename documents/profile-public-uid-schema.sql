@@ -1,6 +1,6 @@
 -- Public numeric profile UID for personal homepage links.
 -- Keep auth.users.id as the private authorization identifier; public_uid is
--- only for public profile routing such as /u/10001.
+-- only for public profile routing such as /user/10001.
 
 create sequence if not exists public.profile_public_uid_seq
   start with 10001

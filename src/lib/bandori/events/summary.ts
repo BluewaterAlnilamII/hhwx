@@ -1,4 +1,5 @@
 import { parseApiSuccessData } from "@/lib/api-contracts";
+import { isBandoriCardAttribute } from "@/lib/bandori/cards/filter";
 import type {
   BandoriEventBonus,
 } from "@/lib/bandori-team-calculator";
@@ -142,6 +143,14 @@ function regionalMusicIds(value: unknown, server: 0 | 1 | 2 | 3): number[] {
     }
     const musicId = toPositiveInteger(music.musicId);
     return musicId === null ? [] : [musicId];
+  });
+}
+
+export function readAttributeBonusItems(eventBonus: BandoriEventBonus | null) {
+  return (eventBonus?.attributes ?? []).flatMap((item) => {
+    if (!isRecord(item) || !isBandoriCardAttribute(item.attribute)) return [];
+    const percent = Number(item.percent);
+    return Number.isFinite(percent) ? [{ attribute: item.attribute, percent }] : [];
   });
 }
 

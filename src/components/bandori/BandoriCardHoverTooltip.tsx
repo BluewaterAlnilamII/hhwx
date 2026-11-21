@@ -23,6 +23,7 @@ export type BandoriCardHoverTooltipProps = {
   detailLanguageTag?: BandoriServerLanguageTag;
   detailHref?: string;
   placement?: TooltipPosition["placement"];
+  action?: ReactNode;
   children?: ReactNode;
   className?: string;
   style?: CSSProperties;
@@ -35,6 +36,7 @@ export type BandoriCardHoverTooltipProps = {
 export type BandoriCardHoverPopoverProps = {
   id: string;
   anchorRef: RefObject<HTMLElement | null>;
+  action?: ReactNode;
   open: boolean;
   cardName: string;
   characterName: string;
@@ -56,6 +58,7 @@ const BandoriCardHoverTooltip = forwardRef<HTMLDivElement, BandoriCardHoverToolt
   detailLanguageTag,
   detailHref,
   placement,
+  action,
   children,
   className,
   style,
@@ -94,12 +97,15 @@ const BandoriCardHoverTooltip = forwardRef<HTMLDivElement, BandoriCardHoverToolt
         />
       ) : null}
       <div className="hhwx-floating-surface max-h-[calc(100vh-24px)] overflow-y-auto rounded-[18px] border p-3 text-center">
-        <div className="whitespace-normal wrap-break-word text-sm font-black leading-snug text-[var(--theme-color-text-default)]">{cardName}</div>
+        <div className={cn(action && "-mx-1 -mt-1 grid grid-cols-[1.75rem_minmax(0,1fr)_1.75rem] items-start")}>
+          <div className={cn("whitespace-normal wrap-break-word text-sm font-bold leading-5 text-[var(--theme-color-text-default)]", action && "col-start-2 pt-1")}>{cardName}</div>
+          {action && <div className="flex justify-end">{action}</div>}
+        </div>
         <div className="mt-1 whitespace-normal wrap-break-word text-xs font-semibold leading-snug text-[var(--theme-color-text-muted)]">
           {characterName}
         </div>
         {children ? (
-          <div lang={detailLanguageTag} className="mt-2 flex flex-wrap justify-center gap-2 text-[11px] font-black">
+          <div lang={detailLanguageTag} className="mt-2 flex flex-wrap justify-center gap-2 text-[13px] font-normal leading-5">
             {children}
           </div>
         ) : null}
@@ -108,7 +114,7 @@ const BandoriCardHoverTooltip = forwardRef<HTMLDivElement, BandoriCardHoverToolt
             href={detailHref}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-2 inline-flex rounded-sm text-xs font-black text-[var(--theme-color-action-secondary-foreground)] underline decoration-current underline-offset-4 transition hover:text-[var(--theme-color-action-secondary-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--theme-color-focus-ring)]"
+            className="mt-2 inline-flex rounded-sm text-xs font-semibold text-[var(--theme-color-action-secondary-foreground)] underline decoration-current underline-offset-4 transition hover:text-[var(--theme-color-action-secondary-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--theme-color-focus-ring)]"
           >
             {t("cardDetails")}
           </Link>
@@ -123,6 +129,7 @@ export default BandoriCardHoverTooltip;
 export function BandoriCardHoverPopover({
   id,
   anchorRef,
+  action,
   open,
   cardName,
   characterName,
@@ -228,6 +235,7 @@ export function BandoriCardHoverPopover({
       detailLanguageTag={detailLanguageTag}
       detailHref={detailHref}
       placement={position?.placement}
+      action={action}
       className={cn(
         "fixed inset-auto z-1000",
         !position && "invisible",

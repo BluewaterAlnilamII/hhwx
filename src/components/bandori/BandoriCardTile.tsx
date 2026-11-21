@@ -6,6 +6,7 @@ import BandoriCardThumbnail, {
   type BandoriCardThumbnailMetadata,
 } from "@/components/bandori/BandoriCardThumbnail";
 import { BandoriCardHoverPopover } from "@/components/bandori/BandoriCardHoverTooltip";
+import BandoriFavoriteButton from "@/components/bandori/BandoriFavoriteButton";
 import { useBandoriCardHoverTooltip } from "@/hooks/useBandoriCardHoverTooltip";
 import { cn } from "@/lib/utils";
 import {
@@ -194,6 +195,7 @@ function InteractiveBandoriCardTile(props: BandoriCardTileInteractiveProps) {
           anchorRef={anchorRef}
           open={isHoverTooltipOpen}
           cardName={cardName}
+          action={<BandoriFavoriteButton kind="cards" id={props.card.cardId} server={props.server} compact />}
           characterName={characterName}
           detailLanguageTag={skillEffectLanguageTag}
           detailHref={`/bandori/cards/${props.card.cardId}?server=${getBandoriServerCode(props.server)}`}

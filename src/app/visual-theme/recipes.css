@@ -60,6 +60,7 @@
   --theme-color-panel-border: var(--theme-color-border-default);
   --theme-shadow-panel: var(--theme-shadow-surface-raised);
   --theme-color-text-default: var(--theme-seed-text-primary);
+  --theme-color-favorite-background: color-mix(in srgb, var(--theme-color-stamp-favorite) 11%, var(--theme-color-panel-background));
   --theme-color-text-muted: var(--theme-seed-text-secondary);
   --theme-color-text-muted-on-dark: var(--theme-seed-neutral);
   --theme-color-border-subtle: var(--theme-seed-neutral);
@@ -278,4 +279,17 @@
 @media (min-width: 640px) {
   .chat-stamp-name { width: 144px; height: 28px; font-size: 11.5px; }
   .chat-stamp-name::before { mask-size: auto 100%, calc(100% - 28px) 100%, auto 100%; }
+}
+
+/* Profile pickers share a short opacity transition without moving the dialog. */
+.hhwx-profile-overlay[data-state="open"], .hhwx-profile-dialog[data-state="open"] {
+  animation: hhwx-profile-enter 160ms ease-out;
+}
+.hhwx-profile-overlay[data-state="closed"], .hhwx-profile-dialog[data-state="closed"] {
+  animation: hhwx-profile-leave 100ms ease-in;
+}
+@keyframes hhwx-profile-enter { from { opacity: 0; } to { opacity: 1; } }
+@keyframes hhwx-profile-leave { from { opacity: 1; } to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .hhwx-profile-overlay, .hhwx-profile-dialog { animation: none !important; }
 }

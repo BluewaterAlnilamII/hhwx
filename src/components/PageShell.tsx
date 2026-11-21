@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-export const PAGE_MAX_WIDTH_CLASS = "max-w-5xl";
+export const PAGE_MAX_WIDTH_CLASS = "max-w-6xl";
 export const ACCOUNT_PAGE_MAX_WIDTH_CLASS = "max-w-full sm:max-w-5xl";
 export const PAGE_SPACING_CLASS = "space-y-4 lg:space-y-8";
 

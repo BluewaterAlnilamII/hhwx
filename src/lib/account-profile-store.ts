@@ -19,6 +19,9 @@ export type AccountProfile = {
   roles: string[];
 };
 
+export type AccountAvatarFields = Pick<AccountProfile, "avatarCardId" | "avatarCardServer" | "avatarCardTrainType">;
+export type AccountDegreeFields = Pick<AccountProfile, "displayDegreeServer" | "displayDegreeId" | "displayDegreeEffectId">;
+
 export class AccountProfileRequestError extends Error {
   readonly status: number | null;
   readonly payload: unknown;

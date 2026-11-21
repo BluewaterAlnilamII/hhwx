@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import {
   AccountProfileRequestError,
+  type AccountAvatarFields,
+  type AccountDegreeFields,
   type AccountProfile,
 } from "@/lib/account-profile-store";
 import { getApiErrorMessage } from "@/lib/api-contracts";
@@ -13,7 +15,7 @@ import {
   readAuthProfileSummary,
   writeAuthProfileSummaryCache,
 } from "@/lib/supabase";
-import { useAccountProfileStore } from "@/store/useAccountProfileStore";
+import { accountProfileStore, useAccountProfileStore } from "@/store/useAccountProfileStore";
 import { useGameStore } from "@/store/useGameStore";
 
 export type { AccountProfile } from "@/lib/account-profile-store";
@@ -63,7 +65,7 @@ function getProfileErrorMessage(
   return error.message || messages.loadFailed;
 }
 
-export function useAccountProfile(messages: AccountProfileMessages = defaultAccountProfileMessages) {
+export function useAccountProfile(messages: AccountProfileMessages = defaultAccountProfileMessages, enabled = true) {
   const {
     userId,
     username,
@@ -116,8 +118,12 @@ export function useAccountProfile(messages: AccountProfileMessages = defaultAcco
     return loadStoredProfile(userId, { force: true });
   }, [authReady, loadStoredProfile, userId]);
 
-  const setProfile = useCallback((nextProfile: AccountProfile) => {
+  const updateProfile = useCallback((fields: AccountAvatarFields | AccountDegreeFields | Pick<AccountProfile, "username">) => {
+    const current = accountProfileStore.getState().profile;
+    if (!current || current.userId !== userId || useGameStore.getState().userId !== userId) return;
+    const nextProfile = { ...current, ...fields };
     setStoredProfile(nextProfile);
+    if (!("username" in fields)) return;
     writeAuthProfileSummaryCache({
       userId: nextProfile.userId,
       username: nextProfile.username,
@@ -130,10 +136,10 @@ export function useAccountProfile(messages: AccountProfileMessages = defaultAcco
       userEmail: nextProfile.email,
       emailVerified: nextProfile.emailVerified,
     });
-  }, [setAuth, setStoredProfile]);
+  }, [setAuth, setStoredProfile, userId]);
 
   useEffect(() => {
-    if (!authReady) {
+    if (!authReady || !enabled) {
       return;
     }
     if (!userId) {
@@ -141,7 +147,7 @@ export function useAccountProfile(messages: AccountProfileMessages = defaultAcco
       return;
     }
     void loadStoredProfile(userId).catch(() => undefined);
-  }, [authReady, clearStoredProfile, loadStoredProfile, userId]);
+  }, [authReady, clearStoredProfile, enabled, loadStoredProfile, userId]);
 
   return {
     userId,
@@ -149,7 +155,7 @@ export function useAccountProfile(messages: AccountProfileMessages = defaultAcco
     userEmail,
     authReady,
     profile,
-    setProfile,
+    updateProfile,
     loadingProfile,
     profileError,
     syncStoreSummary,

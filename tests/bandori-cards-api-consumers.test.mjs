@@ -233,7 +233,8 @@ test("card consumers share the canonical Cards dataset without the sparse route"
   assert.match(worker, /resolvedCardsBySource/u);
   assert.doesNotMatch(comments, /readBandoriCardsApiDataset\(\)/u);
   assert.doesNotMatch(comments, /fetchBestdoriMasterDataset\("cards"\)/u);
-  assert.match(profile, /readBandoriCardsApiDataset\(\)/u);
+  assert.match(profile, /readBandoriCardApiDetail\(String\(cardId\)\)/u);
+  assert.doesNotMatch(profile, /readBandoriCardsApiDataset/u);
   assert.match(profile, /ACCOUNT_AVATAR_CARD_SERVER_REQUIRED/u);
   assert.match(profile, /materializeBandoriCardForServer/u);
   assert.match(profile, /avatar_card_server: avatarCardServer/u);

@@ -18,7 +18,7 @@ English version: [bandori-master-asset-contract.md](bandori-master-asset-contrac
 | 数据集 | Master API | 详情 API | 公开 asset index | 主要关联键 | 区服结构 | 缓存档位 |
 | --- | --- | --- | --- | --- | --- | --- |
 | Events | `/api/bandori/master/events` | `/api/bandori/master/events/{eventId}` | `/bandori/events/index.json` | 数字 event ID | Master 四槽字段及本地 `stampRewardId`；标量 `stampCharacterId`；banner/team image 四槽 | fast-mutable API；snapshot index |
-| Cards | `/api/bandori/master/cards` | `/api/bandori/master/cards/{cardId}` | `/bandori/cards/index.json` | `resourceSetName` | 四槽文本和显式 `serverExtensions`；图片按内容 hash 跨服共享 | snapshot API 与 index |
+| Cards | `/api/bandori/master/cards` | `/api/bandori/master/cards/{cardId}`（已弃用） | `/bandori/cards/index.json` | `resourceSetName` | 四槽文本和显式 `serverExtensions`；图片按内容 hash 跨服共享 | snapshot API 与 index |
 | Costumes | `/api/bandori/master/costumes` | `/api/bandori/master/costumes/{costumeId}` | `/bandori/costumes/index.json`; `/bandori/costumes/livesd/index.json` | `assetBundleName`; 各记录自己的 `sdResourceName` | 四字符串槽及显式存在性；详情可覆盖 `cards` | snapshot API 与 schema 1 index |
 | Degrees | `/api/bandori/master/degrees` | 无 | `/bandori/degrees/index.json` | 元数据使用数字 degree ID；资源使用派生资源名 | 八个固定四槽 Master 字段及可选四槽 `serverExtensions`，缺服 `null`、有服无扩展 `{}`、仅 CN 可含 `degreeEffect`；独立选择 base、rank、icon 与 effect 资源 | snapshot API 与 schema 2 index |
 | Stamps | `/api/bandori/master/stamps` | 无 | `/bandori/stamps/index.json` | 数字 stamp ID | 四槽 `imageName`、`characterId`、图片、语音与 Changed variant | snapshot API 与 index |
@@ -26,6 +26,8 @@ English version: [bandori-master-asset-contract.md](bandori-master-asset-contrac
 | Music 计分 meta | `/api/bandori/master/music/meta` | 无 | `/bandori/music/meta.json` | music ID、难度、技能时长 | 无区服槽；每个难度为 `{total: [普通, FEVER], covered: {时长: [普通, FEVER]}}` | snapshot API 与 index |
 
 Cards 与 Music 列表都采用一次下载、整个 SPA 会话复用的完整 map；Cards 与 Costumes 的列表/详情均支持可选的 `server=0|1|2|3` 物化查询。Event 的 `cnSchedule` 保持为可选 overlay，因为它可能独立于 immutable event snapshot 变化。Music 的 `difficulty`、`notes` 与 `bpm` 键表示谱面难度，而不是服务器槽位。Music 计分 meta 是供前端实时计算分数与排名使用的独立最小数据集，不含歌曲展示字段、预计算分数、排名或内部发布元数据。
+
+为单张 Bandori 卡牌单独发起 HTTP 读取请求不符合前端数据规范。站内组件（包括主页头像、封面和收藏卡墙）在共享卡牌目录中按 ID 查找。建议在后续版本删除公开单卡端点，移除前核实外部使用情况并告知迁移方式。服务端校验仍可直接从快照读取单条记录。
 
 Event `stampRewardId` 固定为 `[jp, en, tw, cn]` 四槽，因为它是服务器本地外键；该服不存在活动时保留 `null`，不得用其他服 ID 补位。历史来源中的十进制字符串 ID 会规范化为整数。`stampCharacterId` 使用单个标量，因为所有已存在区服的奖励必须通过 Stamps API 解析成相同的语义图片和角色；出现分歧时拒绝发布 snapshot。
 

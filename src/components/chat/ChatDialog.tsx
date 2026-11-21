@@ -1,5 +1,7 @@
 "use client";
 
+import { ProfileNavigationContext } from "@/components/account/PublicProfileLink";
+
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import dynamic from "next/dynamic";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -377,7 +379,7 @@ export default function ChatDialog({ open, onOpenChange, trigger, userId, sessio
     };
   }, [open]);
   // The session survives panel closure; Radix releases focus and scroll locks on unmount.
-  return <Dialog.Root open={open} onOpenChange={onOpenChange}>
+  return <ProfileNavigationContext.Provider value={() => onOpenChange(false)}><Dialog.Root open={open} onOpenChange={onOpenChange}>
     <Dialog.Portal>
       <Dialog.Overlay className="fixed inset-0 z-1000 bg-[var(--theme-color-panel-background)] data-[state=closed]:hidden sm:bg-[var(--theme-color-overlay-background)]" />
       <Dialog.Content ref={panel} data-chat-panel aria-describedby={undefined} onCloseAutoFocus={(event) => { event.preventDefault(); trigger.current?.focus(); }}
@@ -401,5 +403,5 @@ export default function ChatDialog({ open, onOpenChange, trigger, userId, sessio
         </div>
       </Dialog.Content>
     </Dialog.Portal>
-  </Dialog.Root>;
+  </Dialog.Root></ProfileNavigationContext.Provider>;
 }

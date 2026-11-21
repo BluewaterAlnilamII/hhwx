@@ -25,7 +25,7 @@ export default function AccountProfilePage() {
     userEmail,
     authReady,
     profile,
-    setProfile,
+    updateProfile,
     loadingProfile,
     profileError,
   } = useLocalizedAccountProfile();
@@ -94,12 +94,12 @@ export default function AccountProfilePage() {
       }
 
       const updatedProfile = parseApiSuccessData<AccountProfile>(payload);
-      if (!updatedProfile) {
+      if (!updatedProfile || updatedProfile.userId !== userId) {
         setMessage(t("invalidResponse"));
         return;
       }
 
-      setProfile(updatedProfile);
+      updateProfile({ username: updatedProfile.username });
       setMessage(t("saveSuccess"));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : t("saveFailed"));
@@ -123,7 +123,7 @@ export default function AccountProfilePage() {
         <div className="space-y-6">
           <div className="rounded-3xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-profile-banner-background)] p-6 text-[var(--theme-color-profile-banner-foreground)] shadow-lg">
             <div className="flex flex-wrap items-center gap-4">
-              <AccountAvatarCardControl profile={profile} onProfileChange={setProfile} />
+              <AccountAvatarCardControl profile={profile} onProfileChange={updateProfile} />
               <div>
                 <div className="text-2xl font-bold">{profile.username}</div>
                 <div className="mt-1 text-sm text-[var(--theme-color-profile-banner-foreground)]/80">{profile.email || userEmail || "-"}</div>

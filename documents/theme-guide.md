@@ -19,6 +19,10 @@ Components use `--theme-color-*`, `--theme-shadow-*` and shared appearance class
 
 The shared appearance classes are in Tailwind's `components` layer. Utilities can override that layer: remove competing local background, foreground, border or shadow utilities when a shared class owns them. Use explicit color hints such as `outline-[color:var(--theme-color-selection-subtle-ring)]` when Tailwind could confuse a color with a width.
 
+## Default content width
+
+Use the Bandori event score tracker as the width reference for new general content pages. Center the content in the space available beside the site navigation, fill that space up to `max-w-6xl` (72rem), and inherit the responsive horizontal padding from `SectionSidebarShell`. At the same viewport width and sidebar state, the outer content edges should line up when navigating between pages. Page-specific columns and panel padding belong inside those edges. Focused forms can use a narrower measure.
+
 ## Palette responsibilities
 
 Smile Patrol paints its page canvas in a fixed viewport layer, not with `background-attachment: fixed`. The layer uses the large viewport height so document growth and mobile browser chrome changes do not resize the pattern; the existing fixed logo decorations stay above it.

@@ -7,6 +7,7 @@ import { createMusicPlaybackBrowserAudioSession } from "@/lib/browser-audio-sess
 import {
   MUSIC_PLAYER_PREFERENCES_STORAGE_KEY,
   MUSIC_PLAYER_QUEUE_STORAGE_KEY,
+  musicPlayerAlbum,
   parseMusicPlayerPreferencesSnapshot,
   parseMusicPlayerQueueSnapshot,
   type MusicPlayerItem,
@@ -60,6 +61,7 @@ function updateMediaSessionMetadata(track: MusicPlayerItem | null): void {
     ? new MediaMetadata({
         title: track.title,
         artist: track.artist ?? undefined,
+        album: musicPlayerAlbum(track.provider) ?? undefined,
         // Keep a durable network URL here: iOS may consume Media Session
         // artwork outside the page context where blob URLs are valid.
         artwork: track.artworkUrl

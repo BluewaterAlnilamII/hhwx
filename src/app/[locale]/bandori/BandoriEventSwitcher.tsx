@@ -39,6 +39,7 @@ export type BandoriEventSwitcherEvent = {
 };
 
 type BandoriEventSwitcherProps = {
+  action?: React.ReactNode;
   className?: string;
   pickerClassName?: string;
   title: string;
@@ -66,6 +67,7 @@ export default memo(function BandoriEventSwitcher({
   className,
   pickerClassName,
   title,
+  action,
   events,
   selectedEventId,
   onSelectedEventIdChange,
@@ -301,39 +303,35 @@ export default memo(function BandoriEventSwitcher({
               : <LoadingIndicator compact label={commonT("states.loading")} />}
           </div>
         ) : <>
-        <h1
-          title={title}
-          className={cn(
-            "block h-10 min-w-0 w-full truncate whitespace-nowrap font-extrabold leading-10 tracking-[-0.02em] text-[var(--theme-color-heading-page-foreground)]",
-            getEventTitleSizeClass(title),
-            server !== undefined && "sm:col-span-2 sm:row-start-2",
-          )}
-        >
-          {title}
-        </h1>
+        <div className={cn("flex min-w-0 items-center gap-2", server !== undefined && "sm:col-span-2 sm:row-start-2")}>
+          <h1
+            title={title}
+            className={cn(
+              "block h-10 min-w-0 max-w-full truncate whitespace-nowrap font-extrabold leading-10 tracking-[-0.02em] text-[var(--theme-color-heading-page-foreground)]",
+              getEventTitleSizeClass(title),
+            )}
+          >
+            {title}
+          </h1>
+          {action}
+        </div>
 
-        <div className={cn("min-h-12 text-sm font-medium text-[var(--theme-color-text-muted)]", server !== undefined && "sm:col-span-2 sm:row-start-3")}>
-          {startText || endText ? (
-            <div className="grid gap-1">
-              {startText ? (
-                <p className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 leading-5 sm:block">
-                  <span>{t("startLabel")}</span>
-                  <span className="min-w-0 text-right tabular-nums sm:ml-1 sm:text-left">{startText}</span>
-                </p>
-              ) : null}
-              {endText ? (
-                <p className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 leading-5 sm:block">
-                  <span>{t("endLabel")}</span>
-                  <span className="min-w-0 text-right tabular-nums sm:ml-1 sm:text-left">{endText}</span>
-                </p>
-              ) : null}
-            </div>
-          ) : (
-            <>
+        <div className={cn("event-switcher-dates flex min-h-12 items-center gap-3 text-sm font-medium text-[var(--theme-color-text-muted)]", server !== undefined && "sm:col-span-2 sm:row-start-3")}>
+          <div className="grid min-w-0 flex-1 gap-1">
+            {startText || endText ? <>
+              {startText && <p className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 leading-5 sm:block">
+                <span>{t("startLabel")}</span>
+                <span className="min-w-0 text-right tabular-nums sm:ml-1 sm:text-left">{startText}</span>
+              </p>}
+              {endText && <p className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 leading-5 sm:block">
+                <span>{t("endLabel")}</span>
+                <span className="min-w-0 text-right tabular-nums sm:ml-1 sm:text-left">{endText}</span>
+              </p>}
+            </> : <>
               <p>{t("startLabel")} -</p>
               <p>{t("endLabel")} -</p>
-            </>
-          )}
+            </>}
+          </div>
         </div>
         </>}
       </div>

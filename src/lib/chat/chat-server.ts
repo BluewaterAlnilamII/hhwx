@@ -1,6 +1,7 @@
 import "server-only";
 import { SignJWT } from "jose";
 import { ApiRouteError } from "@/lib/api-contracts";
+import { readBoundedRequestBody } from "@/lib/api-request";
 import { NO_STORE_HTTP_CACHE_POLICY, withHttpCachePolicy } from "@/lib/api-cache";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { CHAT_DEFAULT_ROOM_ID, chatChannel, chatActivityChannel, chatMentionChannel, isChatMentions, CHAT_MAX_LENGTH, CHAT_UUID, type ChatConnection, type ChatCursor, type ChatEvent, type ChatViewer, type ChatMentionUser, type ChatPresenceConnection } from "./chat-contract";
@@ -145,28 +146,15 @@ export function parseChatCursor(value: string | null): ChatCursor | null {
 }
 
 export async function readChatBody(request: Request, maxBytes = 16384): Promise<Record<string, unknown>> {
-  const reader = request.body?.getReader();
-  if (!reader) throw new ApiRouteError(400, "INVALID_JSON", "请求内容无效");
-  let size = 0;
-  const chunks: Uint8Array[] = [];
   try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > maxBytes) {
-        await reader.cancel();
-        throw new ApiRouteError(413, "CHAT_BODY_TOO_LARGE", "请求内容过长");
-      }
-      chunks.push(value);
-    }
-    const body: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    const bytes = await readBoundedRequestBody(request, maxBytes, { code: "CHAT_BODY_TOO_LARGE", message: "请求内容过长" });
+    const body: unknown = JSON.parse(bytes.toString("utf8"));
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("object required");
     return body as Record<string, unknown>;
   } catch (error) {
     if (error instanceof ApiRouteError) throw error;
     throw new ApiRouteError(400, "INVALID_JSON", "请求内容无效");
-  } finally { reader.releaseLock(); }
+  }
 }
 
 export async function issueChatConnection(identity: { userId: string; expiresAt: number }, roomId = CHAT_DEFAULT_ROOM_ID, activity = true): Promise<ChatConnection> {

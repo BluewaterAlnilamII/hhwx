@@ -18,12 +18,13 @@ const mocks = {
   "@/app/[locale]/account/useAccountProfile": `
     import {createContext, createElement, useContext, useState} from 'react';
     const Context = createContext(null);
-    const initial = {username: 'First user', email: 'first@example.test', emailVerified: true,
+    const initial = {userId: 'fixture', username: 'First user', email: 'first@example.test', emailVerified: true,
       avatarCardId: 1, avatarCardServer: 0, avatarCardTrainType: 'normal',
       displayDegreeServer: 0, displayDegreeId: 100, displayDegreeEffectId: null};
     export function Fixture({children}) {
       const [profile, setProfile] = useState(initial);
-      return createElement(Context.Provider, {value: {profile, setProfile, userId: 'fixture',
+      const updateProfile = fields => setProfile(current => ({...current, ...fields}));
+      return createElement(Context.Provider, {value: {profile, updateProfile, userId: 'fixture',
         authReady: true, loadingProfile: false, profileError: ''}},
         createElement('button', {onClick: () => setProfile({...initial, username: 'Second user',
           email: 'second@example.test', avatarCardId: 3})}, 'Refresh profile'), children);
@@ -37,7 +38,11 @@ const mocks = {
     export const AccountSignInState = () => 'Sign in';`,
   "@/hooks/useTurnstileAvailability": "export const useTurnstileAvailability = () => ({isTurnstileEnabled: false, isTurnstileLoading: false});",
   "@/components/TurnstileChallenge": "export default () => null;",
-  "@/lib/supabase": "export const getSafeSession = async () => null; export const buildEmailVerificationCallbackUrl = () => '';",
+  "@/lib/supabase": `export const getSafeSession = async () => ({user: {id: 'fixture'}, access_token: 'fixture-token'});
+    export const createEmailFlowClient = () => ({auth: {signInWithOtp: async () => ({error: null})}});
+    export const supabase = {}, clearAuthProfileSummaryCache = () => {}, readAuthProfileSummary = async () => null;`,
+  "@/i18n/navigation": `import {createElement} from 'react'; export const Link = props => createElement('a', props);
+    export const useRouter = () => ({});`,
   "@/hooks/useBandoriCardsMaster": "export const useBandoriCardsMaster = () => ({data: {}});",
   "@/hooks/useBandoriPublicAssetIndex": "export const useBandoriCardsAssetIndex = () => ({});",
   "@/hooks/useBandoriDegrees": "export const useBandoriDegreeCatalog = () => ({catalog: null, loading: false});",
@@ -62,7 +67,7 @@ const bundle = await build({
     import ProfilePage from './src/app/[locale]/account/profile/page';
     import EmailPage from './src/app/[locale]/account/email/page';
     import Avatar from './src/app/[locale]/account/AccountAvatarCardControl';
-    import Degree from './src/app/[locale]/account/AccountDisplayDegreeControl';
+    import Degree from './src/components/account/AccountDisplayDegreeControl';
     import {useCommentReactionParticipants} from './src/hooks/useCommentReactionParticipants';
     const reactions = [{emojiKey: 'one', users: [], remainingUserCount: 3},
       {emojiKey: 'two', users: [], remainingUserCount: 1}];
@@ -84,12 +89,12 @@ const bundle = await build({
         <Participants key={commentId} commentId={commentId} /></>;
     }
     function AvatarFixture() {
-      const {profile, setProfile} = useLocalizedAccountProfile();
-      return <Avatar profile={profile} onProfileChange={setProfile} />;
+      const {profile, updateProfile} = useLocalizedAccountProfile();
+      return <Avatar profile={profile} onProfileChange={updateProfile} />;
     }
     function DegreeFixture() {
-      const {profile, setProfile} = useLocalizedAccountProfile();
-      return <Degree profile={profile} onProfileChange={setProfile} />;
+      const {profile, updateProfile} = useLocalizedAccountProfile();
+      return <Degree profile={profile} onProfileChange={updateProfile} trigger={<button type="button">Open titles</button>} />;
     }
     const path = window.location.pathname;
     createRoot(document.getElementById('root')).render(<StrictMode>
@@ -123,21 +128,27 @@ try {
   page.on("pageerror", error => errors.push(error.message));
   page.on("console", message => { if (["error", "warning"].includes(message.type())) errors.push(message.text()); });
   const base = `http://localhost:${server.address().port}`;
-  for (const [path, type, first, second] of [
-    ["profile", "text", "First user", "Second user"],
-    ["email", "email", "first@example.test", "second@example.test"],
-  ]) {
-    await page.goto(`${base}/${path}`);
-    const input = page.locator(`input[type="${type}"]`);
+  await page.goto(`${base}/profile`);
+  {
+    const input = page.locator('input[type="text"]');
     await input.waitFor();
-    assert.equal(await input.inputValue(), first);
+    assert.equal(await input.inputValue(), "First user");
     await input.fill("draft@example.test");
     await page.getByRole("button", {name: "Refresh profile", exact: true}).click();
-    assert.equal(await input.inputValue(), second, "Changed profile replaces the old draft before painting");
+    assert.equal(await input.inputValue(), "Second user", "Changed profile replaces the old draft before painting");
     await input.fill("new-draft@example.test");
     await page.getByRole("button", {name: "Refresh profile", exact: true}).click();
     assert.equal(await input.inputValue(), "new-draft@example.test", "Equivalent profile refresh preserves editing");
   }
+  await page.goto(`${base}/email`);
+  await page.getByText("first@example.test", {exact:true}).waitFor();
+  await page.getByRole("button", {name:"Refresh profile", exact:true}).click();
+  await page.getByText("second@example.test", {exact:true}).waitFor();
+  await page.getByRole("button", {name:"Send code", exact:true}).click();
+  const code = page.getByLabel("Verification code", {exact:true});
+  await code.fill("123456");
+  await page.getByRole("button", {name:"Refresh profile", exact:true}).click();
+  assert.equal(await code.inputValue(), "123456", "Equivalent profile refresh preserves the verification draft");
   await page.goto(`${base}/avatar`);
   const trigger = page.getByTestId("account-avatar-card-trigger");
   await trigger.click();
@@ -158,16 +169,16 @@ try {
     accounts: [{server: 0, gameUid, ownedDegreeIds: [], ownedDegreeEffectIds: []}],
   }}});
   await page.goto(`${base}/degree`);
-  const degreeTrigger = page.getByTitle(messages.account.displayDegree.chooseTitle);
+  const degreeTrigger = page.getByRole("button", {name: "Open titles", exact: true});
   await Promise.all([page.waitForRequest("**/api/account/display-degree"), degreeTrigger.click()]);
   await page.keyboard.press("Escape");
   await Promise.all([page.waitForRequest("**/api/account/display-degree"), degreeTrigger.click()]);
   assert.equal(degreeRequests.length, 2, "Exactly one options request per open");
   await degreeRequests[1].fulfill(degreeResponse("2222"));
-  await page.getByText("UID 2222", {exact: true}).waitFor();
+  await page.getByText("2222", {exact: true}).waitFor();
   await degreeRequests[0].fulfill(degreeResponse("1111"));
-  assert.equal(await page.getByText("UID 1111", {exact: true}).count(), 0, "Closed session cannot replace current options");
-  assert.equal(await page.getByText("UID 2222", {exact: true}).count(), 1);
+  assert.equal(await page.getByText("1111", {exact: true}).count(), 0, "Closed session cannot replace current options");
+  assert.equal(await page.getByText("2222", {exact: true}).count(), 1);
 
   await page.goto(`${base}/reactions`);
   await page.waitForFunction(() => window.requests.length === 2);

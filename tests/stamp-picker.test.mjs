@@ -106,13 +106,13 @@ test("favorite edits use the latest stored list and preserve the user's visible 
   const { state, local } = setup(context);
   state().hydrate();
   local.set(STAMP_FAVORITES_STORAGE_KEY, JSON.stringify([":stamp-cn-1:"]));
-  state().toggleFavorite(stamp(2, 6));
+  assert.equal(state().toggleFavorite(stamp(2, 6)), true);
   assert.deepEqual(JSON.parse(local.get(STAMP_FAVORITES_STORAGE_KEY)), [":stamp-cn-1:", ":stamp-cn-2:"]);
   local.set(STAMP_FAVORITES_STORAGE_KEY, JSON.stringify([":stamp-cn-2:", ":stamp-cn-3:"]));
   state().toggleFavorite(stamp(3, 1));
   assert.deepEqual(state().favorites, [":stamp-cn-2:", ":stamp-cn-3:"], "adding an externally added favorite must not toggle it off or resurrect removed favorites");
   local.set(STAMP_FAVORITES_STORAGE_KEY, JSON.stringify([":stamp-cn-2:"]));
-  state().toggleFavorite(stamp(3, 1));
+  assert.equal(state().toggleFavorite(stamp(3, 1)), false);
   assert.deepEqual(JSON.parse(local.get(STAMP_FAVORITES_STORAGE_KEY)), [":stamp-cn-2:"], "removing an externally removed favorite must not toggle it on");
 });
 
@@ -121,7 +121,8 @@ test("failed favorite writes remain usable and merge with external changes befor
   state().hydrate();
   const save = window.localStorage.setItem;
   window.localStorage.setItem = () => { throw new Error("Quota exceeded"); };
-  state().toggleFavorite(stamp(1, 1)); state().toggleFavorite(stamp(2, 6));
+  assert.equal(state().toggleFavorite(stamp(1, 1)), false);
+  state().toggleFavorite(stamp(2, 6));
   local.set(STAMP_FAVORITES_STORAGE_KEY, JSON.stringify([":stamp-cn-3:"]));
   state().hydrate();
   assert.deepEqual(state().favorites, [":stamp-cn-3:", ":stamp-cn-1:", ":stamp-cn-2:"]);

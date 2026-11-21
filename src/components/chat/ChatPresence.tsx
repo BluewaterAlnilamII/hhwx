@@ -5,6 +5,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { Users, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
+import { PublicProfileLink } from "@/components/account/PublicProfileLink";
 import { CommentPublicUid } from "@/components/comments/CommentPublicUid";
 import { LoadingSpinner } from "@/components/LoadingIndicator";
 import { resolveStoredAccountAvatarCardIdentity } from "@/lib/account-avatar-card";
@@ -42,8 +43,8 @@ export function ChatPresence({ users, failed, onRefresh }: { users: ChatMentionU
           {users.map(user => {
             const avatar = resolveStoredAccountAvatarCardIdentity(user.avatarCardId, user.avatarCardServer);
             return <li key={user.userId} className="flex min-h-12 items-center gap-3 px-1 py-2">
-              <span className="relative shrink-0"><AccountCardAvatar username={user.username} cardId={avatar.cardId} entityServer={avatar.entityServer} trainType={user.avatarCardTrainType} size="toolbar" /><ChatPresenceIndicator online /></span>
-              <span className="min-w-0 truncate text-sm font-semibold">{user.username}</span>
+              <PublicProfileLink publicUid={user.publicUid} avatarLabel={user.username}><AccountCardAvatar username={user.username} cardId={avatar.cardId} entityServer={avatar.entityServer} trainType={user.avatarCardTrainType} size="toolbar" /><ChatPresenceIndicator online /></PublicProfileLink>
+              <PublicProfileLink publicUid={user.publicUid} className="min-w-0 truncate text-sm font-semibold">{user.username}</PublicProfileLink>
               <CommentPublicUid publicUid={user.publicUid} />
             </li>;
           })}

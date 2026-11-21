@@ -73,7 +73,7 @@ const node=(id,content,extra={})=>({id,userId:'author',username:'测试用户',p
   avatar:{cardId:null,entityServer:null,trainType:'normal'},createdAt:'2026-11-09T00:00:00Z',updatedAt:'2026-11-09T00:00:00Z',
   editedAt:null,deletedAt:null,depth:0,moderationStatus:'visible',canEdit:true,canDelete:true,replyToCommentId:null,replyToUsername:null,
   replyCount:0,previewReplies:[],reactions:[],...extra});
-const replies=[1,2,3].map(i=>node('reply'+i,'回复内容'+i,{depth:1,parentId:'root'}));
+const replies=[1,2,3].map(i=>node('reply'+i,'回复内容'+i,{depth:1,parentId:'root',publicUid:i===1?null:i,username:'回复者'+i}));
 const existing=node('root','原有评论',{replyCount:3,previewReplies:[replies[0]]});
 const posted=node('posted','发布的新评论');
 const success=(route,data)=>route.fulfill({status:200,json:{success:true,data}});
@@ -102,6 +102,8 @@ try {
     });
     await page.goto(base+'/thread?page=2');
     await page.getByText('原有评论',{exact:true}).waitFor();
+    assert.equal(await page.locator('#comment-root a[href="/user/1"]').count(),2,'Only the author avatar and name link to their profile');
+    assert.equal(await page.locator('#comment-reply1 a[href*="/user/"]').count(),0,'Missing public UID stays plain');
     const originalLocation=await page.evaluate(()=>({url:location.href,length:history.length}));
     const copyLink=page.locator('#comment-root').getByRole('button',{name:messages.comments.actions.copyLink,exact:true}).first();
     await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.copied=text;}}}));
@@ -146,6 +148,7 @@ try {
     replyMode='success';
     await article.getByRole('button',{name:'重试',exact:true}).click();
     await article.getByText('回复内容2',{exact:true}).waitFor();
+    assert.equal(await page.locator('#comment-reply2 a[href="/user/2"]').count(),2);
     replyMode='fail';
     await article.getByRole('button',{name:/再展开/}).click();
     await article.getByRole('button',{name:'重试',exact:true}).waitFor();
@@ -270,6 +273,7 @@ try {
     await participants.goto(base+'/participants');
     const participantList=participants.getByTestId('reaction-participant-list');
     await participants.getByTestId('reaction-participant-row').nth(49).waitFor();
+    assert.equal(await participants.getByTestId('reaction-participant-row').first().locator('a[href="/user/1"]').count(),2);
     await participantList.evaluate(el=>{el.scrollTop=el.scrollHeight;});
     await until(()=>moreRoute);
     // Compare the same scroll position after content-visibility has measured the visible rows.
