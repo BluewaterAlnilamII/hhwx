@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { ChevronRight } from "lucide-react";
 import { useTranslations } from "next-intl";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
+import { PublicProfileLink } from "@/components/account/PublicProfileLink";
 import type { CommentReactionSummary } from "@/lib/comments/comment-contract";
 import { getCommentPopoverHorizontalPosition, getCommentPopoverVerticalPosition } from "@/lib/comments/comment-popover-position";
 import { cn } from "@/lib/utils";
@@ -222,18 +223,20 @@ export function ReactionChip({ reaction, disabled, onToggle, onViewAll, onPrevie
           <div className="space-y-1.5">
             {tooltipReaction.users.map((user) => (
               <div key={`${tooltipReaction.emojiKey}-${user.userId}`} className="flex items-center gap-2">
-                <AccountCardAvatar
-                  username={user.username}
-                  cardId={user.avatar.cardId}
-                  entityServer={user.avatar.entityServer}
-                  trainType={user.avatar.trainType}
-                  size="toolbar"
-                  className="ring-1 ring-[var(--theme-color-border-subtle)]"
-                />
+                <PublicProfileLink publicUid={user.publicUid} avatarLabel={user.username ?? t("states.anonymous")}>
+                  <AccountCardAvatar
+                    username={user.username}
+                    cardId={user.avatar.cardId}
+                    entityServer={user.avatar.entityServer}
+                    trainType={user.avatar.trainType}
+                    size="toolbar"
+                    className="ring-1 ring-[var(--theme-color-border-subtle)]"
+                  />
+                </PublicProfileLink>
                 <div className="flex min-w-0 items-center gap-2">
-                  <span className="truncate font-semibold text-[var(--theme-color-text-default)]">
+                  <PublicProfileLink publicUid={user.publicUid} className="truncate font-semibold text-[var(--theme-color-text-default)]">
                     {user.username ?? t("states.anonymous")}
-                  </span>
+                  </PublicProfileLink>
                   <CommentPublicUid publicUid={user.publicUid} />
                 </div>
               </div>

@@ -8,8 +8,8 @@ import MusicArtwork from "@/components/music-player/MusicArtwork";
 import { cn } from "@/lib/utils";
 import SongDifficultyStrip, { type SongDifficultyStripProps } from "@/components/SongDifficultyStrip";
 
-export function SongDetailHeader({ game, title, bandName, idLabel, artworkUrl, artworkLoading = false, labels, difficulties, track, playbackLoading }: {
-  title: string; bandName: string; idLabel: string; artworkUrl: string | null; artworkLoading?: boolean;
+export function SongDetailHeader({ game, title, action, bandName, idLabel, artworkUrl, artworkLoading = false, labels, difficulties, track, playbackLoading }: {
+  title: string; action?: React.ReactNode; bandName: string; idLabel: string; artworkUrl: string | null; artworkLoading?: boolean;
   labels: { artwork: string; unavailable: string; loading: string };
 } & SongDifficultyStripProps) {
   return <article className="hhwx-panel border p-4 sm:p-6">
@@ -21,8 +21,11 @@ export function SongDetailHeader({ game, title, bandName, idLabel, artworkUrl, a
             : <Music2 className="h-8 w-8" aria-label={labels.unavailable} />}
       </div>
       <div className="min-w-0 space-y-4"><div>
-        <p className="mb-1 text-sm font-semibold text-[var(--theme-color-text-muted)]">{idLabel}</p>
-        <Heading as="h1" visualRole="page" className="break-words text-xl sm:text-3xl">{title}</Heading>
+        <div className="mb-1 flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-[var(--theme-color-text-muted)]">{idLabel}</p>
+          {action}
+        </div>
+        <Heading as="h1" visualRole="page" className="min-w-0 break-words text-xl sm:text-3xl">{title}</Heading>
         <p className="mt-2 text-sm font-medium text-[var(--theme-color-text-muted)] sm:text-base">{bandName}</p>
         <SongDifficultyStrip game={game} difficulties={difficulties} track={track} playbackLoading={playbackLoading} />
       </div></div>

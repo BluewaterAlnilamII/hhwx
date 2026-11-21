@@ -5,8 +5,6 @@ import {
   Music2,
   Pause,
   Play,
-  Repeat,
-  Repeat1,
   SkipBack,
   SkipForward,
   Volume2,
@@ -22,6 +20,7 @@ import {
   type PointerEvent,
 } from "react";
 import MusicArtwork from "@/components/music-player/MusicArtwork";
+import MusicPlayerRepeatButton from "@/components/music-player/MusicPlayerRepeatButton";
 import OverflowMarqueeText from "@/components/music-player/OverflowMarqueeText";
 import {
   MUSIC_PLAYER_PLAYBACK_BUTTON_CLASS_NAME,
@@ -39,6 +38,8 @@ import {
   useMusicPlayerStore,
 } from "@/store/useMusicPlayerStore";
 import { cn } from "@/lib/utils";
+import { Link } from "@/i18n/navigation";
+import { formatPlaybackTime, musicPlayerAlbum } from "@/lib/music-player-contract";
 
 interface ToolbarMusicPlayerProps {
   isOpen: boolean;
@@ -57,15 +58,6 @@ const SEEK_COMMIT_KEYS = new Set([
   "PageDown",
   "PageUp",
 ]);
-
-function formatPlaybackTime(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) {
-    return "0:00";
-  }
-  const wholeSeconds = Math.floor(seconds);
-  const minutes = Math.floor(wholeSeconds / 60);
-  return `${minutes}:${String(wholeSeconds % 60).padStart(2, "0")}`;
-}
 
 function ToolbarMusicPlayerButton({ isOpen, onToggle }: Pick<ToolbarMusicPlayerProps, "isOpen" | "onToggle">) {
   const t = useTranslations("navigation.toolbar.player");
@@ -153,12 +145,10 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
   const duration = useMusicPlayerStore((state) => state.duration);
   const volume = useMusicPlayerStore((state) => state.volume);
   const muted = useMusicPlayerStore((state) => state.muted);
-  const repeatMode = useMusicPlayerStore((state) => state.repeatMode);
   const requestTogglePlayback = useMusicPlayerStore((state) => state.requestTogglePlayback);
   const requestSeek = useMusicPlayerStore((state) => state.requestSeek);
   const requestPrevious = useMusicPlayerStore((state) => state.requestPrevious);
   const requestNext = useMusicPlayerStore((state) => state.requestNext);
-  const cycleRepeatMode = useMusicPlayerStore((state) => state.cycleRepeatMode);
   const setVolume = useMusicPlayerStore((state) => state.setVolume);
   const toggleMuted = useMusicPlayerStore((state) => state.toggleMuted);
   const clear = useMusicPlayerStore((state) => state.clear);
@@ -180,11 +170,6 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
     : null;
   const loopStartPercent = loop ? (loop.startSeconds / safeDuration) * 100 : null;
   const loopEndPercent = loop ? (loop.endSeconds / safeDuration) * 100 : null;
-  const repeatModeLabel = repeatMode === "one"
-    ? t("repeatOne")
-    : repeatMode === "all"
-      ? t("repeatAll")
-      : t("repeatOff");
   const playbackLabel = isError
     ? t("retry")
     : isPlaying
@@ -218,10 +203,14 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
     }
   };
 
+  const album = musicPlayerAlbum(currentTrack.provider);
+  const detailHref = currentTrack.provider !== "falcom" && /^\d+$/u.test(currentTrack.providerTrackId)
+    ? `/${currentTrack.provider}/songs/${currentTrack.providerTrackId}` : null;
+  const trackTitle = <OverflowMarqueeText text={currentTrack.title} className="text-base font-semibold text-[var(--theme-color-text-default)]" />;
   return (
     <>
       <div className="grid grid-cols-[5.125rem_minmax(0,1fr)] gap-4 px-[18px] pb-3 pt-[18px]">
-        <div className={`flex aspect-square w-[5.125rem] items-center justify-center overflow-hidden rounded-[18px] bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-action-secondary-foreground)] shadow-[var(--theme-shadow-surface-raised)] ${isError ? "ring-2 ring-[var(--theme-color-semantic-danger-border)]" : ""}`}>
+        <div className={`relative flex aspect-square w-[5.125rem] items-center justify-center overflow-hidden rounded-[18px] bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-action-secondary-foreground)] shadow-[var(--theme-shadow-surface-raised)] ${isError ? "ring-2 ring-[var(--theme-color-semantic-danger-border)]" : ""}`}>
           {currentTrack.artworkUrl ? (
             <MusicArtwork
               src={currentTrack.artworkUrl}
@@ -232,18 +221,18 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
           ) : (
             <Music2 className="h-7 w-7" aria-hidden="true" />
           )}
+          {detailHref && <Link href={detailHref} prefetch={false} tabIndex={-1} onClick={onRequestClose} className="absolute inset-0" aria-label={t("songDetails", { title: currentTrack.title })} />}
         </div>
         <div className="flex min-w-0 flex-col justify-center gap-1.5">
-          <OverflowMarqueeText
-            text={currentTrack.title}
-            className="text-base font-semibold text-[var(--theme-color-text-default)]"
-          />
+          {detailHref ? <Link href={detailHref} prefetch={false} onClick={onRequestClose} className="block w-fit max-w-full hover:underline"
+            aria-label={t("songDetails", { title: currentTrack.title })}>{trackTitle}</Link> : trackTitle}
           {currentTrack.artist ? (
             <OverflowMarqueeText
               text={currentTrack.artist}
               className="text-sm text-[var(--theme-color-text-muted)]"
             />
           ) : null}
+          {album && <span className="text-xs text-[var(--theme-color-text-muted)]">{album}</span>}
         </div>
       </div>
 
@@ -314,20 +303,7 @@ function MusicPlayerPanel({ onRequestClose }: Pick<ToolbarMusicPlayerProps, "onR
 
       <div className="relative flex items-center justify-center px-[18px] pb-4 pt-1">
         <div className="absolute left-[18px] flex items-center">
-          <button
-            type="button"
-            onClick={cycleRepeatMode}
-            aria-label={repeatModeLabel}
-            aria-pressed={repeatMode !== "off"}
-            data-repeat-mode={repeatMode}
-            className={`flex h-9 w-9 items-center justify-center rounded-[14px] outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)] ${repeatMode !== "off" ? "bg-[var(--theme-color-control-background-pressed)] text-[var(--theme-color-selection-subtle-foreground)]" : "text-[var(--theme-color-action-secondary-foreground)] hover:bg-[var(--theme-color-control-background-pressed)]"}`}
-          >
-            {repeatMode === "one" ? (
-              <Repeat1 className="h-4 w-4" aria-hidden="true" />
-            ) : (
-              <Repeat className="h-4 w-4" aria-hidden="true" />
-            )}
-          </button>
+          <MusicPlayerRepeatButton />
         </div>
 
         <div className="flex items-center gap-1.5">

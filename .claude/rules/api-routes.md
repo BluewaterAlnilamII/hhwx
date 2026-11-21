@@ -4,6 +4,7 @@ paths:
   - "src/lib/api-cache.ts"
   - "src/lib/api-contracts.ts"
   - "src/lib/api-response.ts"
+  - "src/lib/api-request.ts"
   - "src/lib/auth-server.ts"
   - "src/lib/bandori/cards/api-query.ts"
   - "src/lib/bandori/master-api-query.ts"

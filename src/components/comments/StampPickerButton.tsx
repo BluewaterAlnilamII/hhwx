@@ -44,12 +44,13 @@ const StampPickerOption = memo(function StampPickerOption({
   onSelect: (stamp: CommentStamp) => void;
   onPreview?: (stamp: CommentStamp) => void;
   favorite: boolean;
-  onFavorite: (stamp: CommentStamp) => void;
+  onFavorite: (stamp: CommentStamp) => boolean;
 }) {
   const t = useTranslations("comments");
   const shortcode = buildStampShortcode(stamp);
   const hasVoice = Boolean(stamp.voiceUrl);
   const [previewActive, setPreviewActive] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [animationFailed, setAnimationFailed] = useState(false);
   const shouldLoadAnimation = previewActive && Boolean(stamp.animation) && !animationFailed;
   const { animation } = useCommentStampAnimation(
@@ -88,16 +89,16 @@ const StampPickerOption = memo(function StampPickerOption({
         aria-pressed={favorite}
         aria-label={t(favorite ? "pickers.stampRemoveFavorite" : "pickers.stampAddFavorite", { stamp: shortcode })}
         title={t(favorite ? "pickers.stampRemoveFavorite" : "pickers.stampAddFavorite", { stamp: shortcode })}
-        onClick={() => onFavorite(stamp)}
+        onClick={() => setSaved(onFavorite(stamp) && window.matchMedia("(prefers-reduced-motion: no-preference)").matches)}
         className={cn(
-          "group/favorite absolute right-0 top-0 inline-flex size-8 items-center justify-center rounded-full transition focus-visible:outline-2 focus-visible:outline-[var(--theme-color-focus-ring)] sm:size-7",
+          "group/favorite absolute right-0 top-0 inline-flex size-8 items-center justify-center rounded-full transition-opacity focus-visible:outline-2 focus-visible:outline-[var(--theme-color-focus-ring)] sm:size-7",
           favorite
             ? "text-[var(--theme-color-stamp-favorite)]"
             : "text-[var(--theme-color-text-muted)] sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 [@media(pointer:coarse)]:opacity-100",
         )}
       >
-        <span className="inline-flex size-5 items-center justify-center rounded-full bg-[var(--theme-color-floating-background)] shadow-xs transition group-hover/favorite:bg-[var(--theme-color-control-background-hover)]">
-          <Star size={14} fill={favorite ? "currentColor" : "none"} aria-hidden="true" />
+        <span data-saved={saved && favorite || undefined} className="hhwx-favorite-motion relative inline-flex size-5 items-center justify-center rounded-full bg-[var(--theme-color-floating-background)] shadow-xs [--favorite-ring-size:20px] group-hover/favorite:bg-[var(--theme-color-control-background-hover)]">
+          <Star size={14} fill={favorite ? "currentColor" : "none"} aria-hidden="true" onAnimationEnd={() => setSaved(false)} />
         </span>
       </button>
     </div>
@@ -145,12 +146,13 @@ export const StampPickerButton = memo(function StampPickerButton({
 
   const toggleFavorite = useCallback((stamp: CommentStamp) => {
     const index = visibleStamps.indexOf(stamp);
-    useStampPickerStore.getState().toggleFavorite(stamp);
+    const added = useStampPickerStore.getState().toggleFavorite(stamp);
     if (category === "favorites") window.requestAnimationFrame(() => {
       const items = gridRef.current?.querySelectorAll<HTMLElement>("[data-stamp-key]");
       const next = items?.[Math.min(index, items.length - 1)]?.querySelector<HTMLButtonElement>("[data-stamp-favorite]");
       (next ?? containerRef.current?.querySelector<HTMLButtonElement>('[data-stamp-category="favorites"]'))?.focus({ preventScroll: true });
     });
+    return added;
   }, [category, visibleStamps]);
 
   const updatePopoverPosition = useCallback(() => {

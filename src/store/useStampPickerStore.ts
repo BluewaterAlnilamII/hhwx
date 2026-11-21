@@ -79,7 +79,7 @@ type StampPickerStore = PickerSession & {
   syncFavorites: () => void;
   setRegion: (region: CommentStampRegion) => void;
   setCategory: (category: string) => void;
-  toggleFavorite: (stamp: CommentStamp) => void;
+  toggleFavorite: (stamp: CommentStamp) => boolean;
   rememberPosition: (key: string, position: StampPickerPosition) => void;
   rememberCategoryScroll: (axis: "horizontal" | "vertical", offset: number) => void;
   persistSession: () => void;
@@ -118,6 +118,7 @@ export const useStampPickerStore = create<StampPickerStore>((set, get) => ({
     const favorites = [...keys];
     const saved = writeStorage("localStorage", STAMP_FAVORITES_STORAGE_KEY, favorites);
     set({ favorites, pendingFavorites: saved ? {} : { ...get().pendingFavorites, [key]: favorite } });
+    return saved && favorite;
   },
   rememberPosition: (key, position) => set((state) => ({ positions: { ...state.positions, [key]: position } })),
   rememberCategoryScroll: (axis, offset) => set((state) => ({ categoryScroll: { ...state.categoryScroll, [axis]: offset } })),

@@ -102,6 +102,10 @@ export async function readBandoriPublicEventApiDataset(
   return addBandoriCnSchedules(records, await readBandoriCnScheduleSources());
 }
 
+export async function hasBandoriCatalogEvent(eventId: string): Promise<boolean> {
+  return Object.hasOwn(await readBandoriEventApiDataset("events"), eventId);
+}
+
 export async function readBandoriEventApiDetail(
   eventId: string,
 ): Promise<BandoriSnapshotRecord | null> {

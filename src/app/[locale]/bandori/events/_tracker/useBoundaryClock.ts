@@ -36,7 +36,7 @@ export function useBoundaryClock(boundaries: ReadonlyArray<number | null | undef
           const nextNow = Date.now();
           setNow(nextNow);
           scheduleNextTick(nextNow);
-        }, Math.max(0, nextBoundary - referenceNow + BOUNDARY_TIMER_GRACE_MS));
+        }, Math.min(2_147_483_647, nextBoundary - referenceNow + BOUNDARY_TIMER_GRACE_MS));
       }
     };
 

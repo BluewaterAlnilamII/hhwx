@@ -28,11 +28,12 @@ export function writeMusicPlayerQueueSnapshot(
   storage: MusicPlayerStorage,
   items: MusicPlayerItem[],
   currentIndex: number | null,
+  queueId?: string,
 ): void {
   try {
     storage.setItem(
       MUSIC_PLAYER_QUEUE_STORAGE_KEY,
-      JSON.stringify(createMusicPlayerQueueSnapshot(items, currentIndex)),
+      JSON.stringify(createMusicPlayerQueueSnapshot(items, currentIndex, Date.now(), queueId)),
     );
   } catch {
     // Persistence is optional; the in-memory player remains usable when storage is unavailable.

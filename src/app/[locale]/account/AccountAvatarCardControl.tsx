@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { type ReactElement, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
-import { Image as ImageIcon, Save, X } from "lucide-react";
+import { Image as ImageIcon, Save } from "lucide-react";
 import { LoadingSpinner } from "@/components/LoadingIndicator";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
-import BandoriCardPicker from "@/components/bandori/card-picker/BandoriCardPicker";
+import { BandoriCardPickerDialogContent } from "@/components/bandori/card-picker/BandoriCardPickerDialog";
+import ActionFeedback from "@/components/ActionFeedback";
 import { type BandoriCardPickerValue } from "@/components/bandori/card-picker/types";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
@@ -18,7 +19,8 @@ import {
   DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE,
 } from "@/lib/account-avatar-defaults";
 import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
-import { type AccountProfile, getAccessToken } from "./useAccountProfile";
+import type { AccountAvatarFields, AccountProfile } from "@/lib/account-profile-store";
+import { getSafeSession } from "@/lib/supabase";
 
 function profileToPickerValue(profile: AccountProfile): BandoriCardPickerValue | null {
   return {
@@ -31,10 +33,12 @@ function profileToPickerValue(profile: AccountProfile): BandoriCardPickerValue |
 export default function AccountAvatarCardControl({
   profile,
   onProfileChange,
+  trigger,
   size = "default",
 }: {
+  trigger?: ReactElement;
   profile: AccountProfile;
-  onProfileChange: (profile: AccountProfile) => void;
+  onProfileChange: (fields: AccountAvatarFields) => void;
   size?: "default" | "large";
 }) {
   const t = useTranslations("account.avatar");
@@ -52,9 +56,10 @@ export default function AccountAvatarCardControl({
   const [draftValue, setDraftValue] = useState<BandoriCardPickerValue | null>(() => profileToPickerValue(profile));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const pickerScrollRef = useRef<HTMLDivElement | null>(null);
+  const dialogSession = useRef(0);
 
   const handleOpenChange = (nextOpen: boolean) => {
+    dialogSession.current += 1;
     if (nextOpen) {
       setDraftValue(profileToPickerValue(profile));
       setMessage("");
@@ -70,13 +75,16 @@ export default function AccountAvatarCardControl({
   }, [draftValue, profile]);
 
   const saveAvatar = async () => {
+    const sessionId = dialogSession.current;
+    const isCurrent = () => sessionId === dialogSession.current;
     setSaving(true);
     setMessage("");
 
     try {
-      const accessToken = await getAccessToken();
+      const session = await getSafeSession();
+      const accessToken = session?.user.id === profile.userId ? session.access_token : null;
       if (!accessToken) {
-        setMessage(t("notSignedIn"));
+        if (isCurrent()) setMessage(t("notSignedIn"));
         return;
       }
 
@@ -95,20 +103,21 @@ export default function AccountAvatarCardControl({
       const payload = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        setMessage(getLocalizedApiErrorMessage(payload, errorT) || t("httpSaveFailed", { status: response.status }));
+        if (isCurrent()) setMessage(getLocalizedApiErrorMessage(payload, errorT) || t("saveFailed"));
         return;
       }
 
       const updatedProfile = parseApiSuccessData<AccountProfile>(payload);
-      if (!updatedProfile) {
-        setMessage(t("invalidResponse"));
+      if (!updatedProfile || updatedProfile.userId !== profile.userId) {
+        if (isCurrent()) setMessage(t("invalidResponse"));
         return;
       }
 
-      onProfileChange(updatedProfile);
-      setOpen(false);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : t("saveFailed"));
+      const { avatarCardId, avatarCardServer, avatarCardTrainType } = updatedProfile;
+      onProfileChange({ avatarCardId, avatarCardServer, avatarCardTrainType });
+      if (isCurrent()) handleOpenChange(false);
+    } catch {
+      if (isCurrent()) setMessage(t("saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -117,7 +126,7 @@ export default function AccountAvatarCardControl({
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Trigger asChild>
-        <button
+        {trigger ?? <button
           type="button"
           data-testid="account-avatar-card-trigger"
           className="group relative rounded-full outline-hidden transition focus-visible:ring-4 focus-visible:ring-white/40"
@@ -135,69 +144,41 @@ export default function AccountAvatarCardControl({
           <span className="absolute -bottom-1 -right-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] text-[var(--theme-color-action-secondary-foreground)] shadow-xs transition group-hover:scale-105">
             <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
           </span>
-        </button>
+        </button>}
       </Dialog.Trigger>
 
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-1000 bg-[var(--theme-color-overlay-background)]" />
-        <Dialog.Content data-testid="account-avatar-card-dialog" aria-describedby={undefined} className="hhwx-floating-surface fixed left-1/2 top-1/2 z-1000 flex max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-6xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl outline-hidden sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100%-3rem)]">
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-3 sm:px-5">
-            <div className="min-w-0">
-              <Dialog.Title className="text-lg font-bold text-[var(--theme-color-text-default)]">{t("dialogTitle")}</Dialog.Title>
-            </div>
-            <Dialog.Close asChild>
-              <button
-                type="button"
-                className="hhwx-control inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition"
-                title={t("close")}
-              >
-                <X className="h-5 w-5" aria-hidden="true" />
-              </button>
-            </Dialog.Close>
+      <BandoriCardPickerDialogContent testId="account-avatar-card-dialog" title={t("dialogTitle")} closeLabel={t("close")}
+        value={draftValue} onValueChange={setDraftValue}
+        footer={<div className="flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setDraftValue({
+              cardId: DEFAULT_ACCOUNT_AVATAR_CARD_ID,
+              entityServer: null,
+              trainType: DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE,
+            })}
+            className="hhwx-control inline-flex h-10 items-center rounded-xl border px-4 text-sm font-semibold transition"
+          >
+            {t("useDefault")}
+          </button>
+          <Dialog.Close asChild>
+            <button type="button" className="hhwx-control inline-flex h-10 items-center rounded-xl border px-4 text-sm font-semibold transition">
+              {t("cancel")}
+            </button>
+          </Dialog.Close>
+          <div className="relative">
+            <ActionFeedback feedback={message ? { type: "error", message } : null} className="bottom-full right-0 mb-2" />
+            <button
+              type="button"
+              disabled={saving || !hasChanges}
+              onClick={saveAvatar}
+              className="hhwx-action-accent inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold transition"
+            >
+              {saving ? <LoadingSpinner className="text-current" /> : <Save className="h-4 w-4" aria-hidden="true" />}
+              {t("save")}
+            </button>
           </div>
-
-          <div ref={pickerScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-5">
-            <BandoriCardPicker
-              value={draftValue}
-              onValueChange={setDraftValue}
-              scrollElementRef={pickerScrollRef}
-            />
-          </div>
-
-          <div className="flex shrink-0 flex-col gap-3 border-t border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-            <div className="min-h-5 text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)]">
-              {message}
-            </div>
-            <div className="flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setDraftValue({
-                  cardId: DEFAULT_ACCOUNT_AVATAR_CARD_ID,
-                  entityServer: null,
-                  trainType: DEFAULT_ACCOUNT_AVATAR_CARD_TRAIN_TYPE,
-                })}
-                className="hhwx-control inline-flex h-10 items-center rounded-xl border px-4 text-sm font-semibold transition"
-              >
-                {t("useDefault")}
-              </button>
-              <Dialog.Close asChild>
-                <button type="button" className="hhwx-control inline-flex h-10 items-center rounded-xl border px-4 text-sm font-semibold transition">
-                  {t("cancel")}
-                </button>
-              </Dialog.Close>
-              <button
-                type="button"
-                disabled={saving || !hasChanges}
-                onClick={saveAvatar}
-                className="hhwx-action-accent inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold transition "
-              >
-                {saving ? <LoadingSpinner className="text-current" /> : <Save className="h-4 w-4" aria-hidden="true" />}
-                {t("save")}
-              </button>
-            </div>
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
+        </div>} />
     </Dialog.Root>
   );
 }

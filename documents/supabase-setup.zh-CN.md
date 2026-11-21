@@ -47,7 +47,49 @@ English version: [supabase-setup.md](supabase-setup.md)
 - `documents/game-account-binding-schema.sql`：游戏账号绑定验证码和绑定关系。
 - `supabase/maintenance/bandori_tracker_maintenance.sql`：仅用于手动观察和维护查询，不要当作迁移执行。
 
+## 本地个人主页开发
+
+2026-11-17 建立的主页开发环境使用独立本地项目 `hhwx-profile-dev`，配置目录为 `temp/profile-dev/supabase`。配置、迁移和邮件模板均复制自仓库。原 `hhwx` 数据卷已保留：其表结构与迁移记录不一致，因此没有清空或修复。新库从头应用了仓库全部 47 条迁移，最新为 `20261116105541_profile_homepage.sql`。
+
+先启动 Docker Desktop，再从仓库根目录运行：
+
+```powershell
+npx --no-install supabase start --workdir temp/profile-dev -x realtime,storage-api,imgproxy,edge-runtime,logflare,vector,supavisor
+npm run dev -- --hostname localhost
+```
+
+打开 `http://localhost:3000/auth?next=%2Fuser%2F10001`。本地测试凭据保存在 Git 忽略的 `temp/profile-dev/test-account.json`，不能用于远端登录。测试账号包含 24 个英文/空格字符的用户名和两个示例 CN 绑定：一个具有十个汉字的游戏名，另一个没有保存游戏档案。数据库管理界面为 `http://localhost:54323`，测试邮箱为 `http://localhost:54324`。
+
+Git 忽略的 `.env.development.local` 同时覆盖开发环境的两个 Supabase URL 和 publishable/secret key，原 `.env.local` 保持不变。本地连接值来自 `supabase status --workdir temp/profile-dev -o json`，不提交到仓库。该覆盖文件还把应用邮件导向 Mailpit，并关闭真实邮件发送、聊天发布和私有游戏同步；目录读取与 CDN 图片继续沿用原数据源。本地 Auth CAPTCHA 和应用 Turnstile 已关闭，原因是 Docker 请求外部验证服务失败。正常登录、账号已验证检查与数据库权限仍执行；该环境用于主页开发，不代表验证码和更换邮箱流程已完整验收。
+
+国服预计排期来自当前环境的日历表。本地主页开发库已于 2026-11-19 导入当时公开的 20 条国服排期及其关联活动。核对后续排期变更时，可对照本地和线上 `/api/bandori/calendar/cn/schedules` 的结果。
+
+数据持久保存在 Docker 数据卷。停止时运行 `npx --no-install supabase stop --project-id hhwx-profile-dev`，不要加 `--no-backup`；重启开发不需要重置数据库。仓库新增迁移后，把规范 SQL 文件复制到 `temp/profile-dev/supabase/migrations`，再运行 `npx --no-install supabase migration up --local --workdir temp/profile-dev`。主页数据权限变化时，在这个本地工作目录重跑 `supabase/tests/profile_homepage.sql`。凭据与生成的夹具不要提交 Git。需要恢复开发环境的原连接时，移开 `.env.development.local` 并重启 Next；远端配置没有修改。
+
 ## 迁移工作流
+
+在个人主页迁移之后、收藏功能发布之前应用 `20261118121214_bandori_favorites.sql`。每位用户对同一内容只占一行，新增顺序由数据库序列决定。统计以这些记录为准，包含私密收藏。只有服务端角色能读取明细或调用 `read_bandori_favorites`，该函数按主页模块顺序和可见性返回条目。单项收藏接口只接受写入。本地回归使用 `supabase/tests/bandori_favorites.sql`。回滚应用版本时保留新增表，以保留用户收藏。
+
+发布收藏卡牌编辑功能前应用 `20261118181306_favorite_card_layout.sql`。它为现有收藏保留加入顺序，为卡牌增加可选的个人排列，并将预览数量默认设为 6。本人经验证后通过 `PATCH /api/bandori/favorites` 原子保存排序和展示数。收藏成员有增删时返回 409，客户端重新读取。
+
+随后应用 `20261118183905_grow_favorite_card_preview.sql`。展示上限 6 表示跟随末尾；迁移将已展示全部卡牌的旧设置转换为此状态。新增卡牌只插入收藏。保存布局或取消收藏时，数据库会将已到末尾的分界线归入自动状态。
+
+上线歌单编辑控件前应用 `20261120022240_favorite_song_order.sql`。已有歌曲沿用收藏顺序，直至本人首次调整排序。
+
+发布本轮优化前，依次应用 `20261121115452_streamline_profile_favorites.sql` 和 `20261121120352_compact_favorite_song_move.sql`。第一份迁移合并两列自定义排序并重建收藏主键，转换期间需要锁表。回滚应用时保留两份迁移。旧版分组读取和完整列表排序接口继续可用。
+
+将 `20261121124240_simplify_favorite_layout_saves.sql` 与对应 Web 版本配套发布。迁移移除卡牌布局版本列，并替换仅服务端可调用的排序函数。升级前已打开的编辑器需刷新。新 Web 接口也接受旧的歌曲排序请求格式。若回滚到检查卡牌版本号的旧 Web 版本，数据库结构也需与之配套。
+
+| 表 | 字段与约束 | 用途 |
+| --- | --- | --- |
+| `profile_homepages` | `user_id uuid` 为主键，外键指向 `profiles.id` 并级联删除。`preferences jsonb` 为非空对象，默认 `{}`。`card_preview_count smallint` 默认 6，范围 1–6。 | 每位用户至多一行。偏好存签名、封面及焦点、栏目与绑定账号的顺序和隐私设置。没有记录时使用默认值。展示数为 6 时，随收藏自然增长，最多显示六张。 |
+| `bandori_favorites` | 唯一索引是复合主键 `(user_id uuid, kind text, target text)`。`user_id` 外键指向 `profiles.id` 并级联删除。`position bigint generated always as identity` 记录加入顺序。`display_order bigint` 是卡牌和歌曲可选的正整数排序值。`normal_art boolean not null default false` 记录卡牌是否选择特训前卡面。 | 每位用户对同一内容一行。歌曲与普通卡牌使用数字 ID 的文本形式，撞号卡牌用 `en:id` 或 `cn:id`，活动使用区服码加 ID。取消后重新收藏会获得新的加入序号。 |
+
+编辑器用目标 ID 数组提交展示顺序。数据库中每项收藏占一行，单项增删、卡面选择和跨用户按目标计数共用这条记录，小范围调序通常只需更新移动的条目。
+
+两表均启用 RLS，原始数据只允许服务端角色访问。离线统计按 `(kind, target)` 汇总所有收藏记录，私密主页也计入。网页不读取全站收藏数。登录后的 `GET /api/bandori/favorites?view=keys` 只返回无序的收藏标识数组。本人主页每次读取完整收藏后会更新当前账号的星标缓存，同时保留读取期间已确认的增删。卡牌和歌曲均提交排好序的目标 ID 数组。同一账号、同一栏目的排序按数据库实际保存顺序生效，两页仅排列不同时都能保存。收藏成员有增删时返回 409 并刷新。使用默认分界线时，单纯调整卡牌顺序无需创建主页设置记录。
+
+个人主页版本新增 `20261116105541_profile_homepage.sql`，必须先迁移、后部署应用。`profile_homepages` 保存签名、封面焦点、模块/账号顺序与隐私设置；启用 RLS，浏览器角色没有表或 RPC 权限。经验证的 Web API 通过仅 service role 可执行的 invoker 函数 `update_profile_homepage` 原子合并修改字段；公开读取按账号/称号层级过滤，不返回私有设置。Advisor 的 `rls_enabled_no_policy` 信息级提示符合这张服务端专用表的设计。保留的 `supabase/tests/profile_homepage.sql` 验证客户端拒绝访问、不同用户隔离、局部合并和删除清理。旧版应用仍兼容；回滚应用时保留新增表，避免丢失已保存的设置。
 
 聊天房间版本在此前四份聊天迁移后增加 `20261024162353_chat_rooms_and_bounded_retention.sql`。先应用迁移，再部署对应应用：旧记录及省略房间参数的调用仍使用 `main`，仅服务端可调用的 RPC 签名和分页索引增加房间范围，同时修正清理批次。回滚应用时保留新结构。范围见[聊天接入文档](realtime-message-board.zh-CN.md)，本地升级、权限及查询计划证据见[验证记录](realtime-message-board-validation.zh-CN.md)。
 

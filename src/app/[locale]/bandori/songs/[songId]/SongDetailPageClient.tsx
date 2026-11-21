@@ -1,5 +1,7 @@
 "use client";
 
+import BandoriFavoriteButton from "@/components/bandori/BandoriFavoriteButton";
+
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -134,7 +136,7 @@ export default function SongDetailPageClient({
 
   return (
     <BandoriPageShell contentClassName="max-w-6xl">
-      <SongDetailHeader game="bandori" title={title} bandName={bandName} idLabel={t("songId", { songId })} artworkUrl={artworkUrl}
+      <SongDetailHeader action={<BandoriFavoriteButton detail kind="songs" id={songId} />} game="bandori" title={title} bandName={bandName} idLabel={t("songId", { songId })} artworkUrl={artworkUrl}
         difficulties={difficulties.map((option) => ({ difficulty: option.difficulty, label: t(`difficulties.${option.difficulty}`),
           level: option.playLevels.find((value) => value !== null) ?? null }))}
         track={simulator.audioUrl ? {

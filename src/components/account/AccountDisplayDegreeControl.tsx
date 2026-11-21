@@ -1,7 +1,9 @@
 "use client";
-import RetryButton from "@/components/RetryButton";
+import LoadingError from "@/components/LoadingError";
+import ActionFeedback from "@/components/ActionFeedback";
+import { groupProfileDegrees } from "@/lib/profile-homepage";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
 import { BadgeCheck, Save, X } from "lucide-react";
@@ -11,7 +13,6 @@ import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
 import { useBandoriDegreeCatalog } from "@/hooks/useBandoriDegrees";
 import {
   compareDisplayDegreeSelections,
-  getAccountDisplayDegreeVariants,
   parseAccountDisplayDegreeOptions,
   parseDisplayDegreeRequest,
   type AccountDisplayDegreeBinding,
@@ -23,7 +24,8 @@ import { getBandoriDegreeCatalogItemsForRegion, type BandoriDegreeCatalogItem } 
 import { getBandoriServerCode } from "@/lib/bandori-server";
 import { getLocalizedApiErrorMessage } from "@/lib/localized-api-errors";
 import { cn } from "@/lib/utils";
-import { type AccountProfile, getAccessToken } from "./useAccountProfile";
+import type { AccountDegreeFields, AccountProfile } from "@/lib/account-profile-store";
+import { getSafeSession } from "@/lib/supabase";
 
 function toSelection(profile: AccountProfile): AccountDisplayDegreeSelection {
   return {
@@ -74,10 +76,10 @@ function DegreeOption({
       onBlur={() => setInteractive(false)}
       aria-pressed={selected}
       className={cn(
-        "flex min-h-14 w-full items-center justify-center rounded-2xl border bg-[var(--theme-color-control-background)] p-2 text-[var(--theme-color-text-muted)] shadow-xs outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]",
+        "inline-flex h-9 w-[127px] shrink-0 items-center justify-center rounded border bg-[var(--theme-color-control-background)] px-1.5 text-[var(--theme-color-text-muted)] outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)]",
         selected
-          ? "border-[var(--theme-color-selection-subtle-ring)] ring-2 ring-[var(--theme-color-selection-subtle-ring)]"
-          : "border-[var(--theme-color-border-subtle)] hover:border-[var(--theme-color-action-secondary-border)] hover:shadow-md",
+          ? "border-[var(--theme-color-selection-subtle-ring)] ring-1 ring-inset ring-[var(--theme-color-selection-subtle-ring)]"
+          : "border-[var(--theme-color-border-subtle)] hover:border-[var(--theme-color-action-secondary-border)]",
       )}
     >
       <BandoriDegreeView
@@ -92,9 +94,11 @@ function DegreeOption({
 export default function AccountDisplayDegreeControl({
   profile,
   onProfileChange,
+  trigger,
 }: {
+  trigger: ReactElement;
   profile: AccountProfile;
-  onProfileChange: (profile: AccountProfile) => void;
+  onProfileChange: (fields: AccountDegreeFields) => void;
 }) {
   const t = useTranslations("account.displayDegree");
   const errorT = useTranslations("errors");
@@ -106,6 +110,7 @@ export default function AccountDisplayDegreeControl({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const optionsRequestRef = useRef(0);
+  const dialogSession = useRef(0);
   const { catalog, loading: loadingCatalog, error: catalogError, refresh: refreshCatalog } = useBandoriDegreeCatalog(true);
 
   const catalogByServer = useMemo(() => {
@@ -119,16 +124,12 @@ export default function AccountDisplayDegreeControl({
     }
     return result;
   }, [catalog]);
-  const currentDegree = catalogByServer.get(profile.displayDegreeServer)?.get(profile.displayDegreeId) ?? null;
   const selectedAccount = options?.accounts.find(
     (account) => getAccountKey(account) === selectedAccountKey,
   ) ?? null;
   const availableDegreeVariants = useMemo(() => {
     if (!selectedAccount) return [];
-    return getAccountDisplayDegreeVariants(
-      selectedAccount,
-      catalogByServer.get(selectedAccount.server),
-    );
+    return groupProfileDegrees(selectedAccount, catalogByServer.get(selectedAccount.server) ?? new Map()).filter(group => group.length);
   }, [catalogByServer, selectedAccount]);
   const hasChanges = !compareDisplayDegreeSelections(toSelection(profile), draft);
 
@@ -137,7 +138,8 @@ export default function AccountDisplayDegreeControl({
     setLoadingOptions(true);
     setMessage("");
     try {
-      const accessToken = await getAccessToken();
+      const session = await getSafeSession();
+      const accessToken = session?.user.id === profile.userId ? session.access_token : null;
       if (requestId !== optionsRequestRef.current) return;
       if (!accessToken) {
         setMessage(t("notSignedIn"));
@@ -150,7 +152,7 @@ export default function AccountDisplayDegreeControl({
       const payload = await response.json().catch(() => ({}));
       if (requestId !== optionsRequestRef.current) return;
       if (!response.ok) {
-        setMessage(getLocalizedApiErrorMessage(payload, errorT) || t("httpLoadFailed", { status: response.status }));
+        setMessage(getLocalizedApiErrorMessage(payload, errorT) || t("loadFailed"));
         return;
       }
       const parsed = parseAccountDisplayDegreeOptions(
@@ -168,15 +170,14 @@ export default function AccountDisplayDegreeControl({
       setSelectedAccountKey(initialAccount ? getAccountKey(initialAccount) : null);
       if (!compareDisplayDegreeSelections(toSelection(profile), parsed.selected)) {
         onProfileChange({
-          ...profile,
           displayDegreeServer: parsed.selected.server,
           displayDegreeId: parsed.selected.degreeId,
           displayDegreeEffectId: parsed.selected.degreeEffectId,
         });
       }
-    } catch (error) {
+    } catch {
       if (requestId !== optionsRequestRef.current) return;
-      setMessage(error instanceof Error ? error.message : t("loadFailed"));
+      setMessage(t("loadFailed"));
     } finally {
       if (requestId === optionsRequestRef.current) setLoadingOptions(false);
     }
@@ -185,6 +186,7 @@ export default function AccountDisplayDegreeControl({
   useEffect(() => () => { optionsRequestRef.current += 1; }, []);
 
   const handleOpenChange = (nextOpen: boolean) => {
+    dialogSession.current += 1;
     optionsRequestRef.current += 1;
     setOpen(nextOpen);
     setDraft(toSelection(profile));
@@ -198,12 +200,15 @@ export default function AccountDisplayDegreeControl({
   };
 
   const saveDegree = async () => {
+    const sessionId = dialogSession.current;
+    const isCurrent = () => sessionId === dialogSession.current;
     setSaving(true);
     setMessage("");
     try {
-      const accessToken = await getAccessToken();
+      const session = await getSafeSession();
+      const accessToken = session?.user.id === profile.userId ? session.access_token : null;
       if (!accessToken) {
-        setMessage(t("notSignedIn"));
+        if (isCurrent()) setMessage(t("notSignedIn"));
         return;
       }
       const response = await fetch("/api/account/display-degree", {
@@ -216,28 +221,28 @@ export default function AccountDisplayDegreeControl({
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
+        if (!isCurrent()) return;
         if (getApiErrorCode(payload) === "DISPLAY_DEGREE_NOT_OWNED") {
           await loadOptions({ preserveDraft: true });
-          setMessage(t("ownershipChanged"));
+          if (isCurrent()) setMessage(t("ownershipChanged"));
           return;
         }
-        setMessage(getLocalizedApiErrorMessage(payload, errorT) || t("httpSaveFailed", { status: response.status }));
+        setMessage(getLocalizedApiErrorMessage(payload, errorT) || t("saveFailed"));
         return;
       }
       const saved = parseDisplayDegreeSelection(payload);
       if (!saved) {
-        setMessage(t("invalidResponse"));
+        if (isCurrent()) setMessage(t("invalidResponse"));
         return;
       }
       onProfileChange({
-        ...profile,
         displayDegreeServer: saved.server,
         displayDegreeId: saved.degreeId,
         displayDegreeEffectId: saved.degreeEffectId,
       });
-      handleOpenChange(false);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : t("saveFailed"));
+      if (isCurrent()) handleOpenChange(false);
+    } catch {
+      if (isCurrent()) setMessage(t("saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -245,55 +250,32 @@ export default function AccountDisplayDegreeControl({
 
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
-      <Dialog.Trigger asChild>
-        <button
-          type="button"
-          title={t("chooseTitle")}
-          className="mt-3 flex max-w-full rounded-lg text-[var(--theme-color-profile-banner-foreground)]/90 outline-hidden transition hover:bg-[var(--theme-color-profile-banner-foreground)]/8 focus-visible:ring-2 focus-visible:ring-[var(--theme-color-profile-banner-foreground)]/60"
-        >
-          {currentDegree ? (
-            <BandoriDegreeView
-              degree={currentDegree}
-              degreeEffectId={profile.displayDegreeEffectId}
-              active
-              className="w-[115px]"
-            />
-          ) : (
-            <span className="inline-flex h-[25px] w-[115px] max-w-full items-center justify-center rounded-lg border border-dashed border-[var(--theme-color-profile-banner-foreground)]/35 px-2 text-xs font-semibold">
-              {loadingCatalog ? <LoadingSpinner /> : t("resourceUnavailable")}
-            </span>
-          )}
-        </button>
-      </Dialog.Trigger>
+      <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
 
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-1000 bg-[var(--theme-color-overlay-background)]" />
-        <Dialog.Content className="hhwx-floating-surface fixed left-1/2 top-1/2 z-1000 flex max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-5xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl outline-hidden sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100%-3rem)] sm:rounded-3xl">
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-4 sm:px-6">
+        <Dialog.Overlay className="hhwx-profile-overlay fixed inset-0 z-1000 bg-[var(--theme-color-overlay-background)]" />
+        <Dialog.Content aria-describedby={undefined} className="hhwx-profile-dialog hhwx-floating-surface fixed left-1/2 top-1/2 z-1000 flex max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-3xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl outline-hidden sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100%-3rem)]">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-3">
               <div className="min-w-0">
                 <Dialog.Title asChild>
                   <h2 className="text-lg font-bold text-[var(--theme-color-text-default)]">{t("dialogTitle")}</h2>
                 </Dialog.Title>
-                <Dialog.Description asChild>
-                  <p className="mt-1 text-sm leading-6 text-[var(--theme-color-text-muted)]">{t("dialogDescription")}</p>
-                </Dialog.Description>
               </div>
               <Dialog.Close asChild>
-                <button type="button" title={t("close")} aria-label={t("close")} className="hhwx-control inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition">
-                  <X className="h-5 w-5" aria-hidden="true" />
+                <button type="button" title={t("close")} aria-label={t("close")} className="hhwx-control inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition">
+                  <X className="h-4 w-4" aria-hidden="true" />
                 </button>
               </Dialog.Close>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
               {loadingOptions ? (
                 <LoadingIndicator label={t("loading")} className="min-h-48" />
               ) : options ? (
-                <div className="space-y-6">
+                <div className="space-y-4">
                   <section>
-                    <h3 className="mb-3 text-sm font-bold text-[var(--theme-color-text-default)]">{t("accountsLabel")}</h3>
                     {options.accounts.length > 0 ? (
-                      <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="flex flex-wrap gap-2">
                         {options.accounts.map((account) => {
                           const accountKey = getAccountKey(account);
                           const selected = selectedAccountKey === accountKey;
@@ -305,17 +287,17 @@ export default function AccountDisplayDegreeControl({
                               onClick={() => setSelectedAccountKey(accountKey)}
                               aria-pressed={selected}
                               className={cn(
-                                "flex min-h-20 items-center gap-3 rounded-2xl border bg-[var(--theme-color-control-background)] px-4 py-3 text-left shadow-xs outline-hidden transition focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]",
-                                selected ? "border-[var(--theme-color-selection-subtle-ring)] ring-2 ring-[var(--theme-color-selection-subtle-ring)]" : "border-[var(--theme-color-border-subtle)] hover:border-[var(--theme-color-action-secondary-border)]",
+                                "inline-flex min-h-9 items-center gap-2 rounded border bg-[var(--theme-color-control-background)] px-2 py-1 text-left outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-color-focus-ring)]",
+                                selected ? "border-[var(--theme-color-selection-subtle-ring)] ring-1 ring-inset ring-[var(--theme-color-selection-subtle-ring)]" : "border-[var(--theme-color-border-subtle)] hover:border-[var(--theme-color-action-secondary-border)]",
                                 empty && "bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)]",
                               )}
                             >
-                              <BandoriServerIcon server={account.server} size={22} />
+                              <BandoriServerIcon server={account.server} size={20} />
                               <span className="min-w-0 flex-1">
-                                <span className={cn("block truncate text-base font-bold", empty ? "text-[var(--theme-color-text-muted)]" : "text-[var(--theme-color-text-default)]")}>UID {account.gameUid}</span>
+                                <span className={cn("block text-sm font-semibold", empty ? "text-[var(--theme-color-text-muted)]" : "text-[var(--theme-color-text-default)]")}>{account.gameUid}</span>
                                 {empty && <span className="mt-1 block text-xs font-medium text-[var(--theme-color-text-muted)]">{t("empty")}</span>}
                               </span>
-                              {selected && <BadgeCheck className="h-5 w-5 shrink-0 text-[var(--theme-color-selection-subtle-foreground)]" aria-hidden="true" />}
+                              {selected && <BadgeCheck className="h-4 w-4 shrink-0 text-[var(--theme-color-selection-subtle-foreground)]" aria-hidden="true" />}
                             </button>
                           );
                         })}
@@ -326,18 +308,11 @@ export default function AccountDisplayDegreeControl({
                   </section>
 
                   <section>
-                    <h3 className="mb-3 text-sm font-bold text-[var(--theme-color-text-default)]">{t("degreesLabel")}</h3>
-                    {catalogError ? (
-                      <div role="alert" className="mb-3 flex flex-col items-center gap-3 py-6 text-center text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)]">
-                        <span>{t("resourceUnavailable")}</span>
-                        <RetryButton onClick={refreshCatalog} />
-                      </div>
-                    ) : null}
-                    {loadingCatalog ? (
+                    {catalogError ? <LoadingError className="min-h-32" onRetry={refreshCatalog} /> : loadingCatalog ? (
                       <LoadingIndicator label={t("loading")} className="min-h-32" />
                     ) : availableDegreeVariants.length > 0 ? (
-                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                        {availableDegreeVariants.map(({ degree, degreeEffectId }) => (
+                      <div className="space-y-5">
+                        {availableDegreeVariants.map((group, index) => <div key={index} className="flex flex-wrap gap-2">{group.map(({ degree, degreeEffectId }) => (
                           <DegreeOption
                             key={`${degree.region}:${degree.id}:${degreeEffectId ?? "plain"}`}
                             degree={degree}
@@ -351,7 +326,7 @@ export default function AccountDisplayDegreeControl({
                               degreeEffectId,
                             })}
                           />
-                        ))}
+                        ))}</div>)}
                       </div>
                     ) : !catalogError ? (
                       <div className="rounded-2xl border border-dashed border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-10 text-center text-sm font-semibold text-[var(--theme-color-text-muted)]">{t("empty")}</div>
@@ -359,20 +334,17 @@ export default function AccountDisplayDegreeControl({
                   </section>
                 </div>
               ) : (
-                <div className="flex min-h-48 flex-col items-center justify-center gap-3 text-center text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)]">
-                  <span>{message || t("loadFailed")}</span>
-                  <RetryButton onClick={() => void loadOptions()} />
-                </div>
+                <LoadingError className="min-h-40" onRetry={() => void loadOptions()} />
               )}
             </div>
 
-            <div className="flex shrink-0 flex-col gap-3 border-t border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-              <div className="min-h-5 text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)]">{options ? message : ""}</div>
+            <div className="relative flex shrink-0 justify-end border-t border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-3">
+              <ActionFeedback feedback={options && message ? { type: "error", message } : null} className="right-4 bottom-full mb-1" />
               <div className="flex justify-end gap-2">
                 <Dialog.Close asChild>
-                  <button type="button" className="hhwx-control inline-flex h-10 items-center rounded-xl border px-4 text-sm font-semibold transition">{t("cancel")}</button>
+                  <button type="button" className="hhwx-control inline-flex h-8 items-center rounded border px-3 text-sm font-semibold transition">{t("cancel")}</button>
                 </Dialog.Close>
-                <button type="button" disabled={saving || !hasChanges} onClick={saveDegree} className="hhwx-action-accent inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold transition ">
+                <button type="button" disabled={saving || !hasChanges} onClick={saveDegree} className="hhwx-action-accent inline-flex h-8 items-center gap-2 rounded px-3 text-sm font-semibold transition ">
                   {saving ? <LoadingSpinner className="text-current" /> : <Save className="h-4 w-4" aria-hidden="true" />}
                   {saving ? t("saving") : t("save")}
                 </button>

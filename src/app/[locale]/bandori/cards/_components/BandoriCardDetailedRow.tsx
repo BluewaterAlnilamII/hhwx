@@ -1,5 +1,7 @@
 "use client";
 
+import BandoriFavoriteButton from "@/components/bandori/BandoriFavoriteButton";
+
 import { CalendarDays } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import BandoriCardThumbnail from "@/components/bandori/BandoriCardThumbnail";
@@ -74,10 +76,12 @@ export default function BandoriCardDetailedRow({
     ? indexedVariants
     : ["normal"];
 
-  return <CardCatalogRow href={href} id={entry.cardId} title={entry.displayName} subtitle={entry.characterName}
+  return <div className="relative"><CardCatalogRow href={href} id={entry.cardId} title={entry.displayName} subtitle={entry.characterName}
     preview={variants.map((variant) => <CardPreview key={variant} entry={entry} variant={variant} />)}
     metadata={<><span>{typeLabel}</span><span className="inline-flex items-center gap-1 tabular-nums">
       <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />{releaseDate}
     </span></>}
-    description={entry.skillEffectLabel || t("common.noInformation")} />;
+    description={entry.skillEffectLabel || t("common.noInformation")} />
+    <div className="absolute top-0 right-0"><BandoriFavoriteButton kind="cards" id={entry.cardId} server={entry.displayServer} /></div>
+  </div>;
 }

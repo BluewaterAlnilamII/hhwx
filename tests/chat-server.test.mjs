@@ -8,6 +8,7 @@ import * as contracts from "../src/lib/api-contracts.ts";
 import * as cache from "../src/lib/api-cache.ts";
 import * as chatContract from "../src/lib/chat/chat-contract.ts";
 import * as responses from "../src/lib/api-response.ts";
+import * as requests from "../src/lib/api-request.ts";
 import { execFileSync } from "node:child_process";
 
 const userId = "10000000-0000-4000-8000-000000000001";
@@ -31,7 +32,7 @@ function harness() {
   let rpcData = { userId, canModerate: false, mutedUntil: null, nextSendAt: null };
   const calls = [], publications = [], warnings = [];
   const server = compile("../src/lib/chat/chat-server.ts", {
-    "server-only": {}, jose, "@/lib/api-contracts": contracts, "@/lib/api-cache": cache, "./chat-contract": chatContract,
+    "server-only": {}, jose, "@/lib/api-contracts": contracts, "@/lib/api-request": requests, "@/lib/api-cache": cache, "./chat-contract": chatContract,
     "@/lib/supabase-server": { createServerSupabaseClient: () => ({
       auth: {
         getClaims: async () => { calls.push("claims"); return { data: { claims }, error: null }; },

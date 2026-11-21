@@ -110,10 +110,10 @@ test("selector variants keep each owned effect immediately after its standard De
   ]);
 });
 
-test("account center exposes the grouped picker without a reset control", async () => {
+test("profile header exposes the grouped picker without a reset control", async () => {
   const [pageSource, pickerSource, degreeViewSource, zhMessages] = await Promise.all([
-    readFile(new URL("../src/app/[locale]/account/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../src/app/[locale]/account/AccountDisplayDegreeControl.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/account/ProfileHeader.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/account/AccountDisplayDegreeControl.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/components/bandori/BandoriDegreeView.tsx", import.meta.url), "utf8"),
     readFile(new URL("../messages/zh-CN/account.json", import.meta.url), "utf8"),
   ]);
@@ -141,7 +141,7 @@ test("account center exposes the grouped picker without a reset control", async 
   assert.match(degreeViewSource, /src=\{iconImageUrl\}[\s\S]*?isDecorativeOverlay/u);
   assert.doesNotMatch(degreeViewSource, /className=\{cn\("pointer-events-none select-none object-contain"/u);
   assert.doesNotMatch(degreeViewSource, /aspect-\[23\/5\]/u);
-  assert.match(pickerSource, /h-\[25px\] w-\[115px\]/u);
+  assert.match(pageSource, /<BandoriDegreeView\b[^>]*size="comment"/u);
   assert.doesNotMatch(`${degreeViewSource}\n${pickerSource}`, /w-\[230px\]|h-\[50px\]/u);
   assert.doesNotMatch(pickerSource, /useDefault|reset|DEFAULT_DISPLAY_DEGREE/u);
   assert.equal(JSON.parse(zhMessages).displayDegree.empty, "暂无可用称号");

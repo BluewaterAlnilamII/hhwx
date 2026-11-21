@@ -8,6 +8,7 @@ import {
   parseMusicPlayerPlaybackClaim,
   parseMusicPlayerPreferencesSnapshot,
   parseMusicPlayerQueueSnapshot,
+  musicPlayerAlbum,
 } from "../src/lib/music-player-contract.ts";
 import {
   readMusicPlayerPreferencesSnapshot,
@@ -31,6 +32,12 @@ const ITEM = {
   artworkUrl: "https://cdn.hhwx.org/bandori/music/jackets/595.png",
   durationSeconds: 289,
 };
+
+test("game versions share the same album name across playlists and media sessions", () => {
+  assert.equal(musicPlayerAlbum("bandori"), "BanG Dream In-Game Version");
+  assert.equal(musicPlayerAlbum("ournotes"), "Our Notes In-Game Version");
+  assert.equal(musicPlayerAlbum("falcom"), null);
+});
 
 function createMemoryStorage() {
   const values = new Map();

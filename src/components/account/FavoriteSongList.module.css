@@ -1,0 +1,85 @@
+.list {
+  --song-number-width: 2rem;
+  --song-gap: 10px;
+  --song-inset: 4px;
+}
+.row {
+  display: grid;
+  grid-template-columns: var(--song-number-width) minmax(0, 1fr) minmax(9rem, 25%) 3rem 2.25rem;
+  gap: var(--song-gap);
+  align-items: center;
+  padding-inline: var(--song-inset);
+}
+.row { position: relative; min-height: 58px; border-radius: 4px; user-select: none; -webkit-touch-callout: none; }
+.row[data-dragging] { z-index: 2; background: var(--theme-color-panel-background); box-shadow: var(--theme-shadow-surface-raised); }
+.handle { position: relative; display: grid; place-items: center; width: 100%; height: 44px; color: var(--theme-color-text-muted); touch-action: none; }
+.row .handle { cursor: grab; }
+.row .handle:active { cursor: grabbing; }
+.handle[aria-disabled=true] { opacity: .45; }
+.handle::before { content: ""; position: absolute; inset-block: 0; right: 0; width: max(100%, 44px); }
+.row button[data-favorite-remove] { width: 100%; }
+@media (prefers-reduced-motion: no-preference) {
+  .list :is(.handle svg, [data-favorite-remove] svg) { animation: song-control-in 150ms ease-out; }
+  @keyframes song-control-in { from { opacity: 0; translate: 0 2px; } to { opacity: 1; translate: 0 0; } }
+}
+.number, .album, .time, .meta small, .more { color: var(--theme-color-text-muted); }
+.meta small { font-size: 12px; }
+.time { justify-self: end; }
+.number, .time, .mobileTime { font-variant-numeric: tabular-nums; }
+.number { position: relative; display: grid; place-items: center; font-size: 13px; }
+.number button { position: absolute; display: none; place-items: center; width: 32px; height: 36px; }
+.row[data-current] .title, .row[data-current] .number { color: var(--theme-color-action-secondary-foreground); }
+.row:is([data-current], :has(:focus-visible), :hover) .number:has(button) span { visibility: hidden; }
+.row:is([data-current], :has(:focus-visible), :hover) .number button { display: grid; }
+.track { display: flex; min-width: 0; align-items: center; gap: 11px; }
+.art { display: grid; place-items: center; position: relative; flex: none; width: 44px; height: 44px; overflow: hidden; border-radius: 4px; background: var(--theme-color-control-background-muted); color: var(--theme-color-text-muted); }
+.art img { width: 100%; height: 100%; object-fit: cover; }
+.mobileTime { display: none; }
+.meta { min-width: 0; }
+.title, .album, .meta small span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.title { display: block; max-width: 100%; font-size: 15px; font-weight: 650; text-align: start; }
+.meta .title:enabled { cursor: inherit; }
+.title:disabled { color: var(--theme-color-text-muted); }
+.list[data-sortable] .title:disabled { pointer-events: none; }
+.meta small { display: flex; align-items: baseline; }
+.album, .time { font-size: 13px; }
+.more { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 5px; }
+.more:hover, .menu > button:enabled:hover { background: var(--theme-color-control-background-hover); }
+.menu button:disabled, .menu button[aria-disabled=true] { opacity: .5; }
+.list button:focus-visible, .menu button:focus-visible { outline: 2px solid var(--theme-color-focus-ring); outline-offset: -2px; }
+@media (hover: hover) and (pointer: fine) {
+  .row[data-edit-draggable] { cursor: grab; }
+  .row[data-edit-draggable][data-dragging] { cursor: grabbing; }
+  .more { opacity: 0; pointer-events: none; }
+  .row:hover, .row:has(:focus-visible) { background: var(--theme-color-control-background-muted); }
+  .row:hover .more, .row:has(:focus-visible) .more, .more[aria-expanded=true] { opacity: 1; pointer-events: auto; }
+}
+@container (max-width: 619px) {
+  .list { --song-number-width: 1.4rem; --song-gap: 6px; --song-inset: 0px; }
+  .album, .time { display: none; }
+  .row { grid-template-columns: var(--song-number-width) minmax(0, 1fr) 44px; }
+  .row:is([data-current], :has(:focus-visible), :hover) .number:has(button) span { visibility: visible; }
+  .row .number button, .row:is([data-current], :has(:focus-visible), :hover) .number button { display: none; }
+  .row[data-current] .number:has(button) span { visibility: hidden; }
+  .row[data-current] .number button { display: grid; width: 44px; height: 44px; right: -3px; padding-inline-start: calc(38px - var(--song-number-width)); }
+  .track { gap: 9px; }
+  .more { width: 44px; height: 44px; opacity: 1; pointer-events: auto; }
+  .mobileTime { display: inline; flex: none; }
+  .meta small span:not(:empty) + .mobileTime::before { content: "·"; margin-inline: 5px; }
+}
+.overlay { position: fixed; inset: 0; z-index: 260; pointer-events: auto; touch-action: pinch-zoom; background: var(--theme-color-overlay-background); }
+.menu { position: fixed; z-index: 261; left: var(--menu-left); top: var(--menu-top); width: min(18rem, calc(100vw - 16px)); max-height: calc(100dvh - 24px); overflow: auto; padding: 6px; background: var(--theme-color-floating-background); color: var(--theme-color-text-default); border: 1px solid var(--theme-color-border-subtle); border-radius: 9px; box-shadow: var(--theme-shadow-surface-raised); }
+.menuHeading { display: flex; align-items: center; gap: 10px; padding: 7px 5px 13px; margin-bottom: 4px; border-bottom: 1px solid var(--theme-color-border-subtle); }
+.menuHeading > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.menuHeading h2 { font-size: 14px; font-weight: 650; line-height: 1.4; }
+.menuHeading small { color: var(--theme-color-text-muted); font-size: 12px; }
+.menu > button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 40px; padding-inline: 10px; text-align: start; border-radius: 4px; font-size: 14px; }
+.menu > button svg { width: 18px; height: 18px; color: var(--theme-color-text-muted); }
+.menu .remove { border-top: 1px solid var(--theme-color-border-subtle); margin-top: 4px; border-radius: 0; }
+.menu[aria-modal=true] {
+  inset: auto 0 0; width: min(100%, 40rem); margin-inline: auto; max-height: 85dvh; overscroll-behavior: contain;
+  padding: 12px 14px max(12px, env(safe-area-inset-bottom)); border-radius: 18px 18px 0 0;
+  .menuHeading { padding: 4px 6px 14px; }
+  .menuHeading h2, & > button { font-size: 15px; }
+  & > button { min-height: 48px; }
+}

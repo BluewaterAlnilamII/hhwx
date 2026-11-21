@@ -748,7 +748,7 @@ test("profile cards and team builder use one shared collection implementation", 
   assert.match(picker, /buildBandoriCardSortValues/u);
   assert.match(picker, /contextServer: server/u);
   assert.doesNotMatch(picker, /contextServer: server \?\? preferredServer/u);
-  assert.match(pickerDialog, /import BandoriCardPicker from/u);
+  assert.match(pickerDialog, /import\s+BandoriCardPicker(?:,\s*\{[^}]*\})?\s+from\s+"@\/components\/bandori\/card-picker\/BandoriCardPicker"/u);
   assert.doesNotMatch(pickerDialog, /next\/dynamic/u);
   assert.doesNotMatch(pickerDialog, /forceMount/u);
   assert.match(page, /cardMetadata=\{cardMetadata\}/u);

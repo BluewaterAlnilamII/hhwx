@@ -93,7 +93,38 @@ test("catalog play hydrates, preserves a mixed queue and toggles the active trac
   assert.equal(useMusicPlayerStore.getState().status, "paused");
 });
 
-test("catalog play respects the persisted queue limit without removing existing tracks", () => {
+test("favorite playlist restores its source, order and selected track beyond 500 songs", () => {
+  const storage = resetStore();
+  const queue = Array.from({ length: 503 }, (_, i) => ({ ...FIRST_ITEM, id: "bandori:" + i, providerTrackId: String(i) }));
+  useMusicPlayerStore.getState().playQueueFromStart(queue, 501, "favorites:10001");
+  resetStore(storage);
+  useMusicPlayerStore.getState().hydrate();
+  const { queueId, queue: restored, currentIndex } = useMusicPlayerStore.getState();
+  assert.equal(queueId, "favorites:10001");
+  assert.deepEqual(restored, queue);
+  assert.equal(currentIndex, 501);
+});
+
+test("play next and add to queue keep the active track and do not start an empty player", () => {
+  resetStore();
+  const store = useMusicPlayerStore.getState();
+  store.enqueue(FIRST_ITEM, "end");
+  assert.equal(useMusicPlayerStore.getState().status, "paused");
+  store.playQueueFromStart([FIRST_ITEM, SECOND_ITEM], 0, "favorites:10001");
+  store.setPlaybackStatus("playing");
+  store.setPlaybackTime(42, 100);
+  const originalCommand = useMusicPlayerStore.getState().command;
+  store.enqueue(SECOND_ITEM, "end");
+  store.enqueue(FIRST_ITEM, "next");
+  const state = useMusicPlayerStore.getState();
+  assert.deepEqual(state.queue, [FIRST_ITEM, FIRST_ITEM, SECOND_ITEM, SECOND_ITEM]);
+  assert.equal(state.currentIndex, 0);
+  assert.equal(state.currentTime, 42);
+  assert.equal(state.status, "playing");
+  assert.equal(state.command, originalCommand);
+});
+
+test("catalog play respects the 500-song append limit without removing existing tracks", () => {
   resetStore();
   useMusicPlayerStore.getState().hydrate();
   const queue = Array.from({ length: 500 }, (_, i) => ({ ...FIRST_ITEM, id: `bandori:${i + 1}` }));

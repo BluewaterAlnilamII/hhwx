@@ -1,5 +1,7 @@
 "use client";
 
+import BandoriFavoriteButton from "@/components/bandori/BandoriFavoriteButton";
+
 import { useLocale, useTranslations } from "next-intl";
 import SongCatalogRow from "@/components/SongCatalogRow";
 import type { BandoriChartDifficulty } from "@/lib/bandori-master-contract";
@@ -18,7 +20,7 @@ export default function BandoriSongDetailedRow({ entry, assetIndex, href, artwor
   const releaseDate = new Intl.DateTimeFormat(locale, {
     timeZone: getBandoriServerTimeZone(entry.publishedAtServer), year: "numeric", month: "2-digit", day: "2-digit",
   }).format(entry.publishedAt);
-  return <SongCatalogRow game="bandori" href={href} songId={entry.songId} title={entry.title} bandName={entry.bandName}
+  return <SongCatalogRow action={<BandoriFavoriteButton kind="songs" id={entry.songId} compact />} game="bandori" href={href} songId={entry.songId} title={entry.title} bandName={entry.bandName}
     typeLabel={t(`filters.types.${entry.type}`)} releaseDate={releaseDate}
     artworkUrl={buildBandoriPublicAssetUrl(assetIndex?.songs[String(entry.songId)]?.files.thumb)} artworkLoading={artworkLoading}
     track={buildBandoriMusicPlayerItem({ musicId: entry.songId, assets: assetIndex?.songs[String(entry.songId)],

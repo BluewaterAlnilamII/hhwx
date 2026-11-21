@@ -1,4 +1,6 @@
 "use client";
+
+import BandoriFavoriteButton from "@/components/bandori/BandoriFavoriteButton";
 import RetryButton from "@/components/RetryButton";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -281,6 +283,7 @@ export default function CardDetailPageClient({
     <BandoriPageShell contentClassName="max-w-6xl">
       <article className="hhwx-panel border p-4 sm:p-6">
         <DetailHeader backHref={cardsListHref} backLabel={t("detail.back")} id={cardId} reference={jpReferenceName}
+          action={<BandoriFavoriteButton detail kind="cards" id={cardId} server={entityServer} />}
           title={charactersMaster.loading ? <LoadingPlaceholder label={commonT("states.loading")} className="h-9 w-full min-w-48 max-w-xl" /> : <>{characterName} - {cardName}</>}
           serverSwitcher={<BandoriCardServerSwitcher selectedServer={selectedServer} availableServers={availableServers}
             label={t("detail.server")} onChange={handleServerChange} />} />

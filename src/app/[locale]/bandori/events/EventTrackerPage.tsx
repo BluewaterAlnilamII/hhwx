@@ -1,5 +1,7 @@
 "use client";
 
+import BandoriFavoriteButton from "@/components/bandori/BandoriFavoriteButton";
+
 import LoadingIndicator from "@/components/LoadingIndicator";
 
 import { Activity, Suspense, useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
@@ -1119,7 +1121,7 @@ function EventTrackerPageContent({ initialEventId, initialServer }: EventTracker
   if (routeReady && initialEventId !== null && catalogLoaded && !eventMeta) notFound();
 
   return (
-    <BandoriPageShell className="event-page" contentClassName="max-w-6xl space-y-5 lg:space-y-6">
+    <BandoriPageShell className="event-page" contentClassName="space-y-5 lg:space-y-6">
         <EventDocumentTitle event={eventMeta} server={selectedServer} />
         <Suspense fallback={null}>
           <EventTrackerRouteStateSync
@@ -1136,6 +1138,7 @@ function EventTrackerPageContent({ initialEventId, initialServer }: EventTracker
         ) : (
         <BandoriEventSwitcher
           className="event-heading"
+          action={routeReady && eventMeta ? <BandoriFavoriteButton detail kind="events" id={eventMeta.eventId} server={selectedServer} /> : undefined}
           pickerClassName="event-search-dialog"
           title={routeReady ? selectedEventName : ""}
           events={routeReady ? allEvents : []}

@@ -7,7 +7,7 @@ import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { requireAuthenticatedUser, requireVerifiedAccount } from "@/lib/auth-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { PROFILES_TABLE, USER_ROLES_TABLE } from "@/lib/supabase-table-names";
-import { readBandoriCardsApiDataset } from "@/lib/bandori/cards/api-server";
+import { readBandoriCardApiDetail } from "@/lib/bandori/cards/api-server";
 import {
   isKnownBandoriCardEntityCollision,
   materializeBandoriCardForServer,
@@ -65,10 +65,6 @@ function normalizeUsername(value: unknown): string {
   }
 
   return username;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function normalizeStoredAvatarCardId(value: number | null | undefined): number {
@@ -134,12 +130,11 @@ async function readAvatarCard(
   cardId: number,
   server: BandoriServer | null,
 ): Promise<{ hasTrainedArt: boolean }> {
-  const payload = await readBandoriCardsApiDataset();
-  const canonicalCard = isRecord(payload) ? payload[String(cardId)] : null;
-  const card = isRecord(canonicalCard) && server !== null
+  const canonicalCard = await readBandoriCardApiDetail(String(cardId));
+  const card = canonicalCard && server !== null
     ? materializeBandoriCardForServer(canonicalCard, server)
     : canonicalCard;
-  if (!isRecord(card) || typeof card.resourceSetName !== "string" || !card.resourceSetName.trim()) {
+  if (!card || typeof card.resourceSetName !== "string" || !card.resourceSetName.trim()) {
     throw new ApiRouteError(400, "AVATAR_CARD_NOT_FOUND", "所选卡牌不存在或缺少卡面资源");
   }
 

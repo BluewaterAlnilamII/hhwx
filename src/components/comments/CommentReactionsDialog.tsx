@@ -8,6 +8,7 @@ import LoadingError from "@/components/LoadingError";
 import RetryButton from "@/components/RetryButton";
 import { useTranslations } from "next-intl";
 import AccountCardAvatar from "@/components/account/AccountCardAvatar";
+import { PublicProfileLink } from "@/components/account/PublicProfileLink";
 import { useCommentReactionParticipants } from "@/hooks/useCommentReactionParticipants";
 import type { CommentReactionParticipantPageLoader } from "@/hooks/useCommentReactionParticipants";
 import type { CommentReactionSummary } from "@/lib/comments/comment-contract";
@@ -173,20 +174,22 @@ export function CommentReactionsDialog({
                 <div
                   key={`${selectedEmojiKey}-${user.userId}`}
                   data-testid="reaction-participant-row"
-                  className="flex min-h-13 items-center gap-3 rounded-xl px-2.5 py-2 text-sm [contain-intrinsic-size:auto_52px] [content-visibility:auto] hover:bg-[var(--theme-color-control-background-hover)]"
+                  className="flex min-h-13 items-center gap-3 px-2.5 py-2 text-sm [contain-intrinsic-size:auto_52px] [content-visibility:auto]"
                 >
-                  <AccountCardAvatar
-                    username={user.username}
-                    cardId={user.avatar.cardId}
-                    entityServer={user.avatar.entityServer}
-                    trainType={user.avatar.trainType}
-                    size="toolbar"
-                    className="h-9 w-9 ring-1 ring-[var(--theme-color-border-subtle)]"
-                  />
+                  <PublicProfileLink publicUid={user.publicUid} avatarLabel={user.username ?? t("states.anonymous")}>
+                    <AccountCardAvatar
+                      username={user.username}
+                      cardId={user.avatar.cardId}
+                      entityServer={user.avatar.entityServer}
+                      trainType={user.avatar.trainType}
+                      size="toolbar"
+                      className="h-9 w-9 ring-1 ring-[var(--theme-color-border-subtle)]"
+                    />
+                  </PublicProfileLink>
                   <div className="flex min-w-0 items-center gap-2">
-                    <span className="truncate font-semibold text-[var(--theme-color-text-default)]">
+                    <PublicProfileLink publicUid={user.publicUid} className="truncate font-semibold text-[var(--theme-color-text-default)]">
                       {user.username ?? t("states.anonymous")}
-                    </span>
+                    </PublicProfileLink>
                     <CommentPublicUid publicUid={user.publicUid} />
                   </div>
                 </div>

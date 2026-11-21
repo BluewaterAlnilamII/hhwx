@@ -22,10 +22,11 @@ export type SongDifficultyStripProps = {
   difficulties: { difficulty: keyof typeof SONG_DIFFICULTY_CLASSES; label: string; level: number | null }[];
   track: MusicPlayerItem | null;
   playbackLoading?: boolean;
+  action?: React.ReactNode;
   compact?: boolean;
 };
 
-export default function SongDifficultyStrip({ game, difficulties, track, playbackLoading = false, compact = false }: SongDifficultyStripProps) {
+export default function SongDifficultyStrip({ game, difficulties, track, action, playbackLoading = false, compact = false }: SongDifficultyStripProps) {
   const t = useTranslations("navigation.toolbar.player");
   const commonT = useTranslations("common");
   const playing = useMusicPlayerStore((state) => track !== null && state.currentIndex !== null
@@ -40,7 +41,8 @@ export default function SongDifficultyStrip({ game, difficulties, track, playbac
       {playing ? <Pause className="h-3.5 w-3.5" aria-hidden="true" /> : <Play className="ml-px h-3.5 w-3.5" aria-hidden="true" />}
     </span>
   </button>;
-  if (compact) return <div className="relative z-10 flex items-center justify-between gap-1">
+  const controls = action ? <span className={`inline-flex shrink-0 items-center ${compact ? "ml-auto" : "gap-1"}`}>{action}{playback}</span> : playback;
+  if (compact) return <div className="relative z-10 flex flex-wrap items-center justify-between gap-x-1">
     <div className="flex items-center gap-1">
       {(Object.keys(SONG_DIFFICULTY_CLASSES) as (keyof typeof SONG_DIFFICULTY_CLASSES)[]).map((difficulty) => {
         const entry = difficulties.find((item) => item.difficulty === difficulty);
@@ -49,13 +51,13 @@ export default function SongDifficultyStrip({ game, difficulties, track, playbac
           : <span key={difficulty} aria-hidden="true" className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-[var(--theme-color-border-subtle)] text-[var(--theme-color-text-muted)] opacity-35"><X className="h-4 w-4" /></span>;
       })}
     </div>
-    {playback}
+    {controls}
   </div>;
   return <div className="relative z-10 mt-2 flex flex-wrap items-center gap-1.5">
     {difficulties.map(({ difficulty, label, level }) => <span key={difficulty} title={`${label} ${level ?? "—"}`}
       className={`inline-flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-lg border px-1.5 text-[11px] tabular-nums sm:px-2 ${game === "bandori" ? "font-bold" : "font-black sm:rounded-full"} ${getSongDifficultyClassName(game, difficulty)}`}>
       <span className="sr-only sm:not-sr-only">{label}</span><span>{level ?? "—"}</span>
     </span>)}
-    {playback}
+    {controls}
   </div>;
 }

@@ -4,7 +4,6 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInState } from "./AccountShell";
 import AccountAvatarCardControl from "./AccountAvatarCardControl";
-import AccountDisplayDegreeControl from "./AccountDisplayDegreeControl";
 import { useLocalizedAccountProfile } from "./useAccountProfile";
 
 type AccountEntry = {
@@ -59,7 +58,7 @@ function AccountEntryLink({ href, titleKey, descriptionKey }: AccountEntry) {
 export default function AccountPage() {
   const t = useTranslations("account");
   const commonT = useTranslations("common");
-  const { userId, userEmail, authReady, profile, setProfile, loadingProfile, profileError } = useLocalizedAccountProfile();
+  const { userId, userEmail, authReady, profile, updateProfile, loadingProfile, profileError } = useLocalizedAccountProfile();
 
   return (
     <AccountShell
@@ -78,17 +77,16 @@ export default function AccountPage() {
         <div className="space-y-4 sm:space-y-6">
           <section className="rounded-2xl bg-[var(--theme-color-profile-banner-background)] p-4 text-[var(--theme-color-profile-banner-foreground)] shadow-lg sm:rounded-3xl sm:p-6">
             <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-              <AccountAvatarCardControl profile={profile} onProfileChange={setProfile} />
+              <AccountAvatarCardControl profile={profile} onProfileChange={updateProfile} />
               <div className="min-w-0 flex-1">
                 <div className="wrap-break-word text-xl font-bold sm:text-2xl">{profile.username}</div>
                 <div className="mt-1 break-all text-sm text-[var(--theme-color-profile-banner-foreground)]/80">{profile.email || userEmail || "-"}</div>
                 <Link
-                  href={`/u/${profile.publicUid}`}
+                  href={`/user/${profile.publicUid}`}
                   className="mt-2 inline-flex rounded-full bg-[var(--theme-color-control-background)] px-3 py-1 text-xs font-semibold text-[var(--theme-color-action-secondary-foreground)] transition hover:bg-[var(--theme-color-control-background-hover)]"
                 >
                   UID {profile.publicUid}
                 </Link>
-                <AccountDisplayDegreeControl profile={profile} onProfileChange={setProfile} />
               </div>
               <span className={`rounded-full px-3 py-1 text-xs font-semibold sm:ml-auto ${profile.emailVerified ? "bg-[var(--theme-color-semantic-success-background)] text-[var(--theme-color-semantic-success-foreground)]" : "bg-[var(--theme-color-semantic-warning-background)] text-[var(--theme-color-semantic-warning-foreground)]"}`}>
                 {profile.emailVerified ? t("home.emailVerified") : t("home.emailUnverified")}

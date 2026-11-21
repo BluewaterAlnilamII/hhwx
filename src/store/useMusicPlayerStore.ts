@@ -43,7 +43,8 @@ type MusicPlayerStore = {
   applyExternalQueueSnapshot: (snapshot: MusicPlayerQueueSnapshot | null) => void;
   applyExternalPreferencesSnapshot: (snapshot: MusicPlayerPreferencesSnapshot | null) => void;
   refreshQueueArtwork: (artworkUrlsByItemId: Readonly<Record<string, string>>) => void;
-  playQueueFromStart: (items: MusicPlayerItem[], currentIndex: number) => void;
+  playQueueFromStart: (items: MusicPlayerItem[], currentIndex: number, queueId?: string) => void;
+  enqueue: (item: MusicPlayerItem, position: "next" | "end") => void;
   playItem: (item: MusicPlayerItem) => void;
   requestTogglePlayback: () => void;
   requestPause: () => void;
@@ -90,10 +91,10 @@ function createCommand(
   };
 }
 
-function persistQueue(state: Pick<MusicPlayerStore, "queue" | "currentIndex">): void {
+function persistQueue(state: Pick<MusicPlayerStore, "queueId" | "queue" | "currentIndex">): void {
   const storage = getBrowserStorage();
   if (storage) {
-    writeMusicPlayerQueueSnapshot(storage, state.queue, state.currentIndex);
+    writeMusicPlayerQueueSnapshot(storage, state.queue, state.currentIndex, state.queueId);
   }
 }
 
@@ -223,10 +224,10 @@ export const useMusicPlayerStore = create<MusicPlayerStore>((set, get) => ({
       return;
     }
     set({ queue });
-    persistQueue({ queue, currentIndex: state.currentIndex });
+    persistQueue(get());
   },
 
-  playQueueFromStart: (items, currentIndex) => {
+  playQueueFromStart: (items, currentIndex, queueId = MUSIC_PLAYER_TEMPORARY_QUEUE_ID) => {
     if (
       items.length === 0
       || currentIndex < 0
@@ -237,7 +238,7 @@ export const useMusicPlayerStore = create<MusicPlayerStore>((set, get) => ({
     }
 
     set((state) => ({
-      queueId: MUSIC_PLAYER_TEMPORARY_QUEUE_ID,
+      queueId,
       queue: [...items],
       currentIndex,
       status: "loading",
@@ -248,10 +249,24 @@ export const useMusicPlayerStore = create<MusicPlayerStore>((set, get) => ({
     persistQueue(get());
   },
 
+  enqueue: (item, position) => {
+    get().hydrate();
+    const { queue, currentIndex } = get();
+    if (currentIndex === null) {
+      set({ queue: [item], currentIndex: 0, status: "paused", currentTime: 0, duration: item.durationSeconds ?? 0, command: null });
+    } else {
+      const updated = [...queue];
+      updated.splice(position === "next" ? currentIndex + 1 : queue.length, 0, item);
+      set({ queue: updated });
+    }
+    persistQueue(get());
+  },
+
   playItem: (item) => {
     get().hydrate();
     const state = get();
-    const index = state.queue.findIndex((queued) => queued.id === item.id);
+    const index = state.currentIndex !== null && state.queue[state.currentIndex]?.id === item.id
+      ? state.currentIndex : state.queue.findIndex((queued) => queued.id === item.id);
     if (index === state.currentIndex && state.queue[index]?.sourceUrl === item.sourceUrl) {
       state.requestTogglePlayback();
       return;

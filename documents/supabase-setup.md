@@ -34,7 +34,49 @@ This document describes HHWX's Supabase schema workflow. New schema changes shou
 - `documents/game-account-binding-schema.sql`: game-account binding challenges and bindings.
 - `supabase/maintenance/bandori_tracker_maintenance.sql`: manual observation and maintenance queries only. Do not treat this as a migration.
 
+## Local profile development
+
+The 2026-11-17 profile environment uses the separate local project `hhwx-profile-dev` in `temp/profile-dev/supabase`. Its config, migrations and email templates are copies of the repository sources. The older `hhwx` volume was retained: its schema and recorded migrations disagree, so it was not reset or repaired. The new database replayed all 47 repository migrations through `20261116105541_profile_homepage.sql`.
+
+Start Docker Desktop, then run from the repository root:
+
+```powershell
+npx --no-install supabase start --workdir temp/profile-dev -x realtime,storage-api,imgproxy,edge-runtime,logflare,vector,supavisor
+npm run dev -- --hostname localhost
+```
+
+Open `http://localhost:3000/auth?next=%2Fuser%2F10001`. The local test credentials are in ignored `temp/profile-dev/test-account.json`; they do not authenticate against the hosted project. The account has a 24-character display name and two synthetic CN bindings, one with a ten-Chinese-character game name and one without a saved game profile. Studio is at `http://localhost:54323`, and captured email is at `http://localhost:54324`.
+
+Ignored `.env.development.local` overrides both Supabase URLs and the publishable/secret keys for development, leaving `.env.local` intact. Local values came from `supabase status --workdir temp/profile-dev -o json` and are never committed. This override also routes application email to Mailpit and disables hosted email delivery, chat publication and private game synchronization. Existing catalog reads and CDN images retain their normal sources. Local Auth CAPTCHA and application Turnstile are disabled: Docker's request to the external verification service failed. Normal authentication, verified-account checks and database permissions remain active. This environment is for profile development, not complete CAPTCHA/email-change integration verification.
+
+CN event estimates come from this environment's calendar tables. On 2026-11-19, the local profile database was populated with the 20 published CN schedules and their associated event records. This is a snapshot. Compare `/api/bandori/calendar/cn/schedules` on localhost and the public site when checking newer estimates.
+
+The database persists in its Docker volume. Stop it with `npx --no-install supabase stop --project-id hhwx-profile-dev`, without `--no-backup`. Do not reset it to restart development. For a new repository migration, copy the canonical SQL files into `temp/profile-dev/supabase/migrations`, then run `npx --no-install supabase migration up --local --workdir temp/profile-dev`. Re-run `supabase/tests/profile_homepage.sql` against this local workdir when changing homepage data permissions. Keep credentials and generated fixtures out of Git. To return development to the previous connection, move `.env.development.local` aside and restart Next; no hosted configuration was changed.
+
 ## Migration Workflow
+
+Apply `20261118121214_bandori_favorites.sql` after the profile homepage migration and before the favorites app release. Each user has one row per content identity. These rows include private favorites and are the source for statistics. A database sequence orders additions. Only the server role can read rows or call `read_bandori_favorites`, which applies the owner’s module order and visibility. The per-item API accepts writes only. Run `supabase/tests/bandori_favorites.sql` locally. Keep the additive table on app rollback to preserve collections.
+
+Apply `20261118181306_favorite_card_layout.sql` before releasing the favorite card editor. It retains addition order, supports a separate personal card order, and defaults the home preview to six. A verified owner saves order and preview count together via `PATCH /api/bandori/favorites`. A changed set of favorites returns 409 and the client reloads the collection.
+
+Next apply `20261118183905_grow_favorite_card_preview.sql`. A preview limit of six follows the end. The migration converts older settings that already show every card. Adding a card only inserts the favorite. Layout saves and card removals restore the automatic state when the divider reaches the end.
+
+Apply `20261120022240_favorite_song_order.sql` before deploying the playlist editing controls. Existing songs keep their collection order until the owner reorders them.
+
+Apply `20261121115452_streamline_profile_favorites.sql`, then `20261121120352_compact_favorite_song_move.sql`, before deploying the updated app. The first migration merges the two custom order columns and rebuilds the favorite primary key. It takes a table lock during conversion. Keep both migrations on an application rollback. The previous grouped read and full-list reorder API remain available.
+
+Apply `20261121124240_simplify_favorite_layout_saves.sql` together with the matching web release. It removes the card layout version and replaces the service-only reorder functions. Refresh an editor opened before this upgrade. The new web handler also accepts the previous song request forms. Rolling the web app back to versioned card saves requires its matching database schema.
+
+| Table | Fields and constraints | Access and lifecycle |
+| --- | --- | --- |
+| `profile_homepages` | `user_id uuid` primary key and FK to `profiles.id` with cascading delete. `preferences jsonb` is a non-null object, default `{}`. `card_preview_count smallint` defaults to 6, range 1–6. | One optional settings row per account. Preferences hold signature, cover and focus, ordered modules and bindings, and privacy choices. A missing row uses defaults. A limit of 6 shows up to six cards as the collection grows. |
+| `bandori_favorites` | Primary key `(user_id uuid, kind text, target text)` is the only index. `user_id` references `profiles.id` with cascading delete. `position bigint generated always as identity` records insertion order. `display_order bigint` is an optional positive override for cards and songs. `normal_art boolean not null default false` selects the pre-training art on cards. | One row per user and content identity. Songs and ordinary cards use the numeric ID as text, colliding regional cards use `en:id` or `cn:id`, and events use `jp/en/tw/cn:id`. A removed and re-added item receives a new insertion position. |
+
+The editor sends target IDs in display order. Membership stays one row per favorite so that adding a single item, selecting its card art, and counting a target across users all use the same record. A short reorder can update just the items that changed position.
+
+Both tables enable RLS and expose their data to the server role only. Offline statistics group the membership rows by `(kind, target)` across all profile visibility settings. The website does not read those totals. The authenticated `GET /api/bandori/favorites?view=keys` returns an unordered array of identity keys. Reading the owner's full collection refreshes the star cache, including additions and removals confirmed during that read. Card and song editors submit an array of target IDs in their final order. Saves for the same account and collection run in database order. Both succeed if only their order differs. A change in membership returns 409 and the editor reloads. Reordering cards with the default divider needs no settings row.
+
+The public profile release adds `20261116105541_profile_homepage.sql`. Apply it before the new app: `profile_homepages` stores signature, cover focus, ordered modules/accounts and privacy preferences. RLS is enabled and browser roles have no table/RPC grants; the verified web API uses the service-only, invoker `update_profile_homepage` RPC for atomic partial-field merges. Public reads project the account/title hierarchy without returning private preferences. The Advisor's `rls_enabled_no_policy` informational finding is intentional for this service-only table. Run `supabase/tests/profile_homepage.sql` for client-role denials, independent owners, partial merges and deletion cleanup. Old app versions remain compatible; keep the additive table when rolling back the app so saved preferences are retained.
 
 The chat room release adds `20261024162353_chat_rooms_and_bounded_retention.sql` after the four earlier chat migrations. Apply migrations before the matching app: old rows and omitted room arguments keep `main`; service-only RPC signatures and the visible-history index become room-aware. The migration also fixes bounded retention cleanup. Keep the new schema when rolling the app back. See [chat integration](realtime-message-board.md#room-scope-and-bounded-resources-2026-10-25) for scope and [validation](realtime-message-board-validation.md) for local upgrade, permission and query-plan evidence.
 

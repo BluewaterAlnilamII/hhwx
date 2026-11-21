@@ -471,7 +471,7 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                     </button>
                 </div>
 
-                <div ref={toolbarMenusRef} className="flex items-center gap-2.5">
+                <div ref={toolbarMenusRef} className="flex shrink-0 items-center gap-2.5">
                     {shouldShowDebugButton && (
                         <button
                             onClick={toggleDebugMode}
@@ -565,6 +565,15 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
                             <div className={toolbarMenuClassName}>
                                 {userId ? (
                                     <div className="py-2">
+                                        {toolbarProfile && (
+                                            <Link
+                                                href={`/user/${toolbarProfile.publicUid}`}
+                                                onNavigate={() => setOpenToolbarMenu(null)}
+                                                className="block px-5 py-3 text-sm font-medium text-[var(--theme-color-text-default)] transition hover:bg-[var(--theme-color-control-background-hover)]"
+                                            >
+                                                {t("personalHomepage")}
+                                            </Link>
+                                        )}
                                         <Link
                                             href="/account"
                                             onClick={() => setOpenToolbarMenu(null)}

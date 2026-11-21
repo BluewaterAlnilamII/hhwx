@@ -1,18 +1,20 @@
 "use client";
 
 import { CheckCircle2, CircleX } from "lucide-react";
+import type { Ref } from "react";
 import type { ActionFeedbackState } from "@/hooks/useActionFeedback";
 import { cn } from "@/lib/utils";
 
-export default function ActionFeedback({ feedback, className }: {
+export default function ActionFeedback({ feedback, className, ref }: {
   feedback: ActionFeedbackState | null;
   className?: string;
+  ref?: Ref<HTMLDivElement>;
 }) {
   if (!feedback) return null;
   const succeeded = feedback.type === "success";
   const Icon = succeeded ? CheckCircle2 : CircleX;
   return (
-    <div role={succeeded ? "status" : "alert"} data-action-feedback={feedback.type} className={cn(
+    <div ref={ref} role={succeeded ? "status" : "alert"} data-action-feedback={feedback.type} className={cn(
       "pointer-events-none absolute z-20 inline-flex max-w-[calc(100vw-3rem)] items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold shadow-md",
       succeeded
         ? "border-[var(--theme-color-semantic-success-border)] bg-[var(--theme-color-semantic-success-background)] text-[var(--theme-color-semantic-success-foreground)]"

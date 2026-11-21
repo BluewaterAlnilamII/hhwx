@@ -6,7 +6,7 @@ import MusicArtwork from "@/components/music-player/MusicArtwork";
 import LoadingPlaceholder from "@/components/LoadingPlaceholder";
 import SongDifficultyStrip, { type SongDifficultyStripProps } from "@/components/SongDifficultyStrip";
 
-export default function SongCatalogRow({ game, href, songId, title, bandName, attribute, missions, typeLabel, releaseDate, artworkUrl, artworkLoading = false, labels, difficulties, track, playbackLoading, compact = false }: {
+export default function SongCatalogRow({ game, href, songId, action, title, bandName, attribute, missions, typeLabel, releaseDate, artworkUrl, artworkLoading = false, labels, difficulties, track, playbackLoading, compact = false }: {
   href: string; songId: number; title: string; bandName: string; typeLabel: string; releaseDate: string;
   attribute?: { src: string; label: string }; missions?: { text: string; label: string };
   artworkUrl: string | null; artworkLoading?: boolean;
@@ -24,7 +24,7 @@ export default function SongCatalogRow({ game, href, songId, title, bandName, at
         <span className="tabular-nums">#{songId}</span><span className="min-w-0 wrap-anywhere">{bandName}</span><span className="tabular-nums">{releaseDate}</span>
       </div>
     </div>
-    <div className="col-start-2 min-w-0"><SongDifficultyStrip compact game={game} difficulties={difficulties} track={track} playbackLoading={playbackLoading} /></div>
+    <div className="col-start-2 min-w-0"><SongDifficultyStrip compact game={game} difficulties={difficulties} track={track} playbackLoading={playbackLoading} action={action} /></div>
   </article>;
   return <article className="hhwx-panel hhwx-catalog-row group relative block border p-3 transition sm:p-4">
     <div className="grid min-h-24 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-5">
@@ -53,7 +53,7 @@ export default function SongCatalogRow({ game, href, songId, title, bandName, at
           <span>{typeLabel}</span>
           <span className="inline-flex items-center gap-1 tabular-nums"><CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />{releaseDate}</span>
         </div>
-        <SongDifficultyStrip game={game} difficulties={difficulties} track={track} playbackLoading={playbackLoading} />
+        <SongDifficultyStrip game={game} difficulties={difficulties} track={track} playbackLoading={playbackLoading} action={action} />
       </div>
       <ChevronRight className="hidden h-5 w-5 shrink-0 text-[var(--theme-color-text-muted)] transition group-hover:translate-x-0.5 group-hover:text-[var(--theme-color-action-secondary-foreground)] sm:block" aria-hidden="true" />
     </div>

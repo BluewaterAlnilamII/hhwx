@@ -21,6 +21,7 @@ const bundle=await build({absWorkingDir:root,bundle:true,write:false,platform:'b
 import {useEffect,useRef,useState,useSyncExternalStore} from 'react';import {createRoot} from 'react-dom/client';import {NextIntlClientProvider} from 'next-intl';
 import ChatDialog from './src/components/chat/ChatDialog';import {ChatSession,ChatRequestError} from './src/lib/chat/chat-session';
 import {CommentContent} from './src/components/comments/CommentContent';
+import {RouterContext} from 'next/dist/shared/lib/router-context.shared-runtime';
 const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0'),actor=uuid(1),start=Date.now()-100000;
 const rows=Array.from({length:60},(_,i)=>({id:uuid(i+100),clientRequestId:uuid(i+1000),content:'Message '+i,createdAt:new Date(start+i*100).toISOString().replace('Z','000Z'),reactions:[],reactionsVersion:0,reactionsViewerId:actor,author:{userId:uuid(2),username:'Fixture',publicUid:2,avatarCardId:1,avatarCardServer:null,avatarCardTrainType:'normal'}}));
 const summary=m=>({id:m.id,deleted:false,username:m.author.username,content:m.content,image:false,createdAt:m.createdAt});
@@ -57,7 +58,8 @@ const session=new ChatSession(actor,{transport(_c,_r,h){handlers=h;return{connec
 const locale=new URLSearchParams(location.search).get('locale')||'en';
 function App(){const [open,setOpen]=useState(false),trigger=useRef(null),state=useSyncExternalStore(session.subscribe,session.getSnapshot,session.getSnapshot);
  useEffect(()=>{session.setOpen(open);session.setReadingAllowed(open);session.setMembersVisible(open);if(open)void session.activate();},[open]);return <NextIntlClientProvider locale={locale} messages={${JSON.stringify(locales)}[locale]}>{mediaMode==='comments'?<main className="mx-auto max-w-xl p-4">{mediaContents.map((content,i)=><div key={i} data-media-case={i} className="mb-4"><CommentContent content={content} isDeleted={false}/></div>)}</main>:<><button ref={trigger} onClick={()=>setOpen(true)}>Open fixture</button><ChatDialog open={open} onOpenChange={setOpen} trigger={trigger} userId={actor} session={session} state={state}/></>}</NextIntlClientProvider>;}
-createRoot(document.getElementById('root')).render(<App/>);`},plugins:[{name:'fixture',setup(b){b.onResolve({filter:/.*/},({path})=>Object.hasOwn(mocks,path)?{path,namespace:'fixture'}:undefined);b.onLoad({filter:/.*/,namespace:'fixture'},({path})=>({contents:mocks[path],resolveDir:root}));}}]});
+const router={pathname:'/',asPath:'/',prefetch:async()=>{},push:href=>history.pushState({},'',href)};
+createRoot(document.getElementById('root')).render(<RouterContext.Provider value={router}><App/></RouterContext.Provider>);`},plugins:[{name:'fixture',setup(b){b.onResolve({filter:/.*/},({path})=>Object.hasOwn(mocks,path)?{path,namespace:'fixture'}:undefined);b.onLoad({filter:/.*/,namespace:'fixture'},({path})=>({contents:mocks[path],resolveDir:root}));}}]});
 const css=(await postcss([tailwind()]).process(await readFile('src/app/globals.css','utf8'),{from:resolve('src/app/globals.css')})).css;
 const server=createServer(async(req,res)=>{if(req.url==='/app.js'){res.setHeader('Content-Type','text/javascript');res.end(bundle.outputFiles[0].text);}else if(req.url==='/app.css'){res.setHeader('Content-Type','text/css');res.end(css);}else if(req.url.startsWith('/res/emoji/')){try{res.setHeader('Content-Type',req.url.endsWith('.webp')?'image/webp':'image/png');res.end(await readFile(resolve('public'+req.url)));}catch{res.writeHead(404);res.end();}}else{res.setHeader('Content-Type','text/html');res.end('<!doctype html><html data-visual-theme="smile-patrol"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chat interactions</title><link rel="stylesheet" href="/app.css"><div id="root"></div><script type="module" src="/app.js"></script></html>');}});
 await new Promise(done=>server.listen(0,'localhost',done));
@@ -114,6 +116,7 @@ async function checkReactionPreview(page, locale, touch) {
   assert.equal(await preview.getByRole('status').count(),0,'Preview adds no loading indicator');
   await page.evaluate(()=>{window.releaseParticipants();window.participantGate=null;});await preview.getByText('Participant',{exact:true}).waitFor();
   assert.equal(await preview.getByText(/^Participant(?: \d+)?$/).count(),Math.min(count,8),'Preview matches the comment limit of eight');
+  assert.equal(await preview.locator(`a[href="${locale==='en'?'/en':''}/user/1"]`).count(),2);
   assert.equal(await viewAll().count(),count>8?1:0);
   if(output&&count===8)await preview.screenshot({path:resolve(output,`reaction-preview-eight-${locale}.png`)});
   await close();
@@ -276,6 +279,7 @@ try{
   assert.equal(await row.getByRole('button',{name:t.reply,exact:true}).count(),0);assert.equal(await row.getByRole('button',{name:t.addReaction,exact:true}).count(),0);
   await bubble.scrollIntoViewIfNeeded();
   const messageRow=row.locator('[data-chat-message-row]');await page.mouse.move(0,0);await page.waitForTimeout(160);
+  assert.equal(await messageRow.locator(`[data-chat-author] a[href="${locale==='en'?'/en':''}/user/2"]`).count(),2);
   const restColor=await messageRow.evaluate(e=>getComputedStyle(e).backgroundColor),restBounds=await messageRow.boundingBox();
   await bubble.hover();await page.waitForTimeout(160);
   assert.equal(await messageRow.evaluate((e,color)=>getComputedStyle(e).backgroundColor!==color,restColor),width>=500,'Only a fine hover pointer highlights a row');
@@ -533,6 +537,15 @@ try{
   await previewPage.goto(page.url());await previewPage.getByText('Open fixture',{exact:true}).click();
   await previewPage.waitForFunction(()=>window.session.getSnapshot().onlineUsers?.length===14);
   await checkReactionPreview(previewPage,locale,width<500);
+  const profilePath=(locale==='en'?'/en':'')+'/user/10001';
+  await previewPage.locator('[data-chat-presence-trigger]').click();
+  const memberLinks=previewPage.locator('[data-chat-members] li').filter({has:previewPage.getByText('User1',{exact:true})}).locator('a');
+  assert.deepEqual(await memberLinks.evaluateAll(els=>els.map(el=>el.getAttribute('href'))),[profilePath,profilePath]);
+  if(width<500) await memberLinks.first().tap(); else await memberLinks.last().press('Enter');
+  await previewPage.waitForURL('**'+profilePath);
+  await previewPage.locator('[data-chat-panel]').waitFor({state:'detached'});
+  assert.equal(await previewPage.locator('[role=dialog]').count(),0,'No stacked dialog covers the destination');
+  assert.ok(await previewPage.evaluate(()=>!!window.session),'Normal profile navigation preserves the app session');
   assert.deepEqual(errors,[]);
   cases.push({width,locale,presence:true,presenceFailure:true,fullMemberList:true,localDirectory:true,stableMentionSelection:true,stableEmptyAndKeywordResults:true,participantFirstPageReuse:true,stableOpenParticipantDialog:true,reply:true,continuation:true,ownAvatar:true,ownNameAndUidHidden:true,reactions:true,earlyReaction:true,recentReactions:true,mentions:true,participants:true,context:true,deletion:true,inlinePicker:true,fixedPickerHeight:true,backgroundScrollLocked:true,internalGridScroll:true,scrollRestoredOnClose:true,errors});await context.close();
  }

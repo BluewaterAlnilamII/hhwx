@@ -4,17 +4,20 @@ import { ArrowLeft } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import Heading from "@/components/Heading";
 
-export function DetailHeader({ backHref, backLabel, title, id, reference, serverSwitcher }: {
+export function DetailHeader({ backHref, backLabel, title, id, reference, serverSwitcher, action }: {
   backHref: string; backLabel: string; title: ReactNode; id: string | number;
-  reference?: ReactNode; serverSwitcher: ReactNode;
+  reference?: ReactNode; serverSwitcher: ReactNode; action?: ReactNode;
 }) {
   return <>
-    <Link href={backHref} className="hhwx-text-link inline-flex items-center gap-2 text-sm font-black transition">
-      <ArrowLeft className="h-4 w-4" aria-hidden="true" />{backLabel}
-    </Link>
+    <div className="flex items-center justify-between gap-3">
+      <Link href={backHref} className="hhwx-text-link inline-flex items-center gap-2 text-sm font-black transition">
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" />{backLabel}
+      </Link>
+      {action}
+    </div>
     <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
-        <Heading as="h1" visualRole="page" className="wrap-break-word tracking-tight">{title}</Heading>
+        <Heading as="h1" visualRole="page" className="min-w-0 wrap-break-word tracking-tight">{title}</Heading>
         <div className="mt-2 flex min-h-5 flex-wrap items-baseline gap-x-3 gap-y-1 text-sm leading-5 text-[var(--theme-color-text-muted)]">
           <span className="font-black uppercase tracking-[0.18em]">#{id}</span>
           {reference ? <span lang="ja" className="font-semibold">{reference}</span> : null}

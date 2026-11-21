@@ -307,16 +307,18 @@ test("overflowing track metadata scrolls and transport controls stay centered", 
 });
 
 test("repeat control exposes off, playlist, and one modes", async () => {
-  const [player, englishMessages, chineseMessages] = await Promise.all([
+  const [player, control, englishMessages, chineseMessages] = await Promise.all([
     readFile(new URL("src/components/music-player/ToolbarMusicPlayer.tsx", ROOT_URL), "utf8"),
+    readFile(new URL("src/components/music-player/MusicPlayerRepeatButton.tsx", ROOT_URL), "utf8"),
     readFile(new URL("messages/en/navigation.json", ROOT_URL), "utf8"),
     readFile(new URL("messages/zh-CN/navigation.json", ROOT_URL), "utf8"),
   ]);
 
-  assert.match(player, /cycleRepeatMode/u);
-  assert.match(player, /data-repeat-mode=\{repeatMode\}/u);
-  assert.match(player, /repeatMode === "one"[\s\S]*?<Repeat1/u);
-  assert.match(player, /<Repeat className=/u);
+  assert.match(player, /<MusicPlayerRepeatButton/u);
+  assert.match(control, /cycleRepeatMode/u);
+  assert.match(control, /data-repeat-mode=\{repeatMode\}/u);
+  assert.match(control, /repeatMode === "one"[\s\S]*?<Repeat1/u);
+  assert.match(control, /<Repeat className=/u);
   assert.match(englishMessages, /"repeatAll": "Repeat playlist"/u);
   assert.match(chineseMessages, /"repeatAll": "列表循环"/u);
 });

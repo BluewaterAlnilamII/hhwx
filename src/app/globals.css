@@ -851,6 +851,38 @@ body {
   }
 }
 
+.hhwx-saved-star {
+  color: var(--theme-color-stamp-favorite);
+  fill: currentColor;
+  stroke-width: 1.6;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hhwx-favorite-motion[data-saved] svg { animation: favorite-pop 360ms ease-out; }
+  .hhwx-favorite-motion[data-saved]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: var(--favorite-ring-size, 36px);
+    height: var(--favorite-ring-size, 36px);
+    border: 2px solid var(--theme-color-stamp-favorite);
+    border-radius: 50%;
+    pointer-events: none;
+    animation: favorite-ring 340ms ease-out both;
+  }
+}
+@keyframes favorite-pop {
+  0% { transform: scale(0.86) rotate(-8deg); }
+  40% { transform: scale(1.2) rotate(5deg); }
+  72% { transform: scale(0.97) rotate(-1deg); }
+  100% { transform: none; }
+}
+@keyframes favorite-ring {
+  from { opacity: 0.75; transform: scale(0.55); }
+  to { opacity: 0; transform: scale(1.08); }
+}
+
 @keyframes music-player-overflow-marquee {
   0%,
   15% {
