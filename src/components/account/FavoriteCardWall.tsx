@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmTouchOnSuccess } from "@/lib/touch-feedback";
 import { useRef, useState } from "react";
 import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
@@ -14,6 +15,7 @@ import { useActionFeedback } from "@/hooks/useActionFeedback";
 import ActionFeedback from "@/components/ActionFeedback";
 import LoadingError from "@/components/LoadingError";
 import FavoriteCardArtwork from "./FavoriteCardArtwork";
+import BandoriFavoriteButton from "@/components/bandori/BandoriFavoriteButton";
 import FavoriteCardEditor, { type CardEditorProps } from "./FavoriteCardEditor";
 import { hasTrainedCardArt } from "@/lib/bandori/cards/training";
 import LoadingIndicator from "@/components/LoadingIndicator";
@@ -51,7 +53,9 @@ function FavoriteCardActions({ item, editor, canFlip, onArt, onRemove, listContr
       if (action === "remove") {
         await setBandoriFavorite(editor, key, false, () => onRemove(item.target));
       } else {
+        const confirm = confirmTouchOnSuccess();
         await favoritesRequest("/api/bandori/favorites/" + key + "?art=" + (item.normalArt ? "after_training" : "normal"), editor, { method: "PATCH" });
+        confirm();
         onArt(item.target, !item.normalArt);
         showFeedback("success", homepage("saved"));
       }
@@ -78,8 +82,8 @@ function FavoriteCardActions({ item, editor, canFlip, onArt, onRemove, listContr
   </>;
 }
 
-export default function FavoriteCardWall({ items, previewCount, editor, layoutEditor, footer, onArt, onRemove }: CardActions & {
-  items: FavoriteItem[]; previewCount: number; editor: string | null; layoutEditor?: CardEditorProps; footer: React.ReactNode;
+export default function FavoriteCardWall({ items, previewCount, editor, visitor, layoutEditor, footer, onArt, onRemove }: CardActions & {
+  items: FavoriteItem[]; previewCount: number; editor: string | null; visitor: boolean; layoutEditor?: CardEditorProps; footer: React.ReactNode;
 }) {
   const cards = useBandoriCardsMaster();
   const assets = useBandoriCardsAssetIndex();
@@ -108,13 +112,14 @@ export default function FavoriteCardWall({ items, previewCount, editor, layoutEd
     const character = characters.data?.[String(card?.characterId)];
     const name = pickBandoriCharacterDisplayName(character, preferred, server) ?? "";
     const href = `/bandori/cards/${entity.id}?server=${getBandoriServerCode(server)}`;
-    const actions = editor && <FavoriteCardActions item={item} editor={editor} onArt={onArt} onRemove={onRemove}
+    const actions = visitor ? <BandoriFavoriteButton kind="cards" id={entity.id} server={entity.server} overlayClassName={styles.cardActions} />
+      : editor && <FavoriteCardActions item={item} editor={editor} onArt={onArt} onRemove={onRemove}
       canFlip={hasTrainedCardArt(card) && listBandoriCardAssetVariants(assets.value, card?.resourceSetName).length === 2} listControls={listControls} />;
     const band = character?.bandId != null ? buildBandoriCardBandIconUrl(character.bandId) : null;
     return { target: item.target, href, actions, title, name, band, art };
   });
   if (layoutEditor && editor) {
-    return <FavoriteCardEditor {...layoutEditor} saving={listSaving} cards={resolved} />;
+    return <><FavoriteCardEditor {...layoutEditor} saving={listSaving} cards={resolved} />{footer}</>;
   }
   const tiles = resolved.map(({ target, href, title, name, band, art, actions }, index) => {
     return <div key={target} className={styles.tile} data-card={target} data-collection-extra={index >= previewCount || undefined} data-revealed={revealed === target}

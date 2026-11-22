@@ -6,7 +6,7 @@ import { ArrowUp, Check, ChevronDown, ChevronRight, EyeOff, Pencil } from "lucid
 import { favoritesRequest, subscribeFavoriteChanges, syncOwnFavoriteKeys } from "@/hooks/useBandoriFavorites";
 import { useActionFeedback } from "@/hooks/useActionFeedback";
 import ActionFeedback from "@/components/ActionFeedback";
-import { CARD_PREVIEW_MAX, applyFavoriteChange, type FavoriteCardLayout, type FavoriteChange, type FavoriteGroup } from "@/lib/bandori/favorites";
+import { applyFavoriteChange, favoritePreviewLimit, type FavoriteCardLayout, type FavoriteChange, type FavoriteGroup } from "@/lib/bandori/favorites";
 import { ApiRouteError } from "@/lib/api-contracts";
 import { useProfileSectionSave } from "@/hooks/useProfileSectionSave";
 import type { ProfileHomepage } from "@/lib/profile-homepage";
@@ -24,7 +24,7 @@ function orderItems(group: FavoriteGroup, targets: string[]) {
 }
 
 export default function ProfileFavorites({ profile, viewerId, homeVisible, editable }: {
-  profile: ProfileHomepage; viewerId: string | null; homeVisible: boolean; editable: boolean;
+  profile: ProfileHomepage; viewerId: string | null; homeVisible: boolean; editable: boolean | undefined;
 }) {
   const t = useTranslations("account.homepage");
   const action = useTranslations("account.favorites");
@@ -35,7 +35,7 @@ export default function ProfileFavorites({ profile, viewerId, homeVisible, edita
   const nextFocus = useRef<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, retry] = useState(0);
-  const { expanded, editing, editingSongs, toggleSongMode, finishEditing, root, start, open, close, rememberDetail, stuck, returnToTop } = useCollectionNavigation(groups, editable);
+  const { expanded, editing, finishEditing, root, start, open, close, rememberDetail, stuck, returnToTop } = useCollectionNavigation(groups, editable);
   function recoverConflict(error: unknown): never {
     if (error instanceof ApiRouteError && error.status === 409) {
       setGroups(null);
@@ -126,25 +126,26 @@ export default function ProfileFavorites({ profile, viewerId, homeVisible, edita
     {ordered?.map(group => {
       const { kind } = group;
       const active = expanded === kind;
-      const inEditor = active && (kind === "songs" ? editingSongs : editing);
+      const inEditor = active && editing;
       const editLabel = inEditor ? action(kind === "songs" ? "finishSongEdit" : "finishEdit")
         : action(kind === "songs" ? "editSongs" : kind === "cards" ? "editCards" : "editEvents");
       const draft = kind === "cards" ? cardSave.pending : null;
       const targets = draft?.targets ?? (kind === "songs" ? songSave.pending : null);
       const items = targets ? orderItems(group, targets) : group.items;
-      const limit = kind === "cards"
-        ? draft?.previewCount ?? group.previewCount ?? CARD_PREVIEW_MAX
-        : kind === "songs" ? 10 : 4;
+      const limit = draft?.previewCount ?? favoritePreviewLimit(group);
       const visible = active ? items : items.slice(0, limit);
-      const footerToggle = (hasMore = items.length > limit) => !inEditor && (active || hasMore) &&
-        <button type="button" className={styles.more} data-heading-part="more-footer" data-more-footer={kind}
+      const footerToggle = (hasMore = items.length > limit) => hasMore && <>
+        {!inEditor && <button type="button" className={styles.more} data-heading-part="more-footer" data-more-footer={kind}
           aria-expanded={active} onClick={active ? close : () => open(kind, "more-footer")}>
           {action(active ? "collapse" : "all")}<ChevronDown className={active ? "rotate-180" : undefined} size={16} aria-hidden="true" />
-        </button>;
+        </button>}
+        {active && stuck.has(kind) && <div className={styles.topAnchor}><button className={styles.toTop} type="button" aria-label={action("top")} title={action("top")}
+          onClick={returnToTop}><ArrowUp size={20} /></button></div>}
+      </>;
       const heading = (controls?: React.ReactNode, hasMore = items.length > limit) => {
         const label = action(active ? "collapseCollection" : "expandCollection", { name: t(kind) });
         return <div data-collection-heading tabIndex={-1} className={styles.heading} data-stuck={stuck.has(kind) || undefined}>
-          {active || hasMore ?
+          {hasMore ?
             <button type="button" className={styles.disclosure} data-heading-part="toggle" data-more={active ? undefined : kind}
               aria-label={label} title={label} aria-expanded={active} onClick={active ? close : () => open(kind)}>
               <ChevronRight size={18} aria-hidden="true" />
@@ -155,7 +156,7 @@ export default function ProfileFavorites({ profile, viewerId, homeVisible, edita
           </div>
           {editable && <button type="button" className={styles.editCollection} data-edit={kind} data-heading-part="edit"
             aria-pressed={inEditor} aria-label={editLabel} title={editLabel}
-            onClick={kind === "songs" ? toggleSongMode : inEditor ? finishEditing : () => open(`${kind}/edit`)}>
+            onClick={() => inEditor ? finishEditing(hasMore) : open(`${kind}/edit`)}>
             {inEditor ? <Check size={16} /> : <Pencil size={16} />}</button>}
           {feedbackHost === kind && <ActionFeedback feedback={feedback} className={styles.headingFeedback} />}
         </div>;
@@ -163,18 +164,16 @@ export default function ProfileFavorites({ profile, viewerId, homeVisible, edita
       return <section key={kind} className={styles.module} data-collection={kind} data-collection-view={active ? kind : undefined}>
         <span data-collection-start={kind} ref={active ? start : undefined} className={styles.scrollStart} aria-hidden="true" />
         {kind !== "events" && heading()}
-        {kind === "cards" && <FavoriteCardWall items={visible} previewCount={limit} footer={footerToggle()} editor={editable ? viewerId : null}
+        {kind === "cards" && <FavoriteCardWall items={visible} previewCount={limit} footer={footerToggle()} visitor={!profile.isOwner} editor={editable ? viewerId : null}
           layoutEditor={inEditor ? { previewCount: limit, saving: Boolean(draft), onLayout: cardSave.save, feedbackFor: cardSave.feedbackFor } : undefined}
           onRemove={target => removeFavorite("cards", target)} onArt={(target, normalArt) => {
           setGroups(current => current?.map(group => group.kind === "cards" ? { ...group, items: group.items.map(item => item.target === target ? { ...item, normalArt } : item) } : group) ?? null);
         }} />}
-        {kind === "events" && <FavoriteTimeline items={items} homeVisible={homeVisible} expanded={active} editing={inEditor} heading={heading} footer={footerToggle}
+        {kind === "events" && <FavoriteTimeline items={items} homeVisible={homeVisible} expanded={active} editing={inEditor} visitor={!profile.isOwner} heading={heading} footer={footerToggle}
           editor={editable ? viewerId : null} onRemove={target => removeFavorite("events", target)} />}
-        {kind === "songs" && <FavoriteSongList items={items} limit={limit} expanded={active} footer={footerToggle()}
-          editing={editingSongs} orderSave={songSave}
+        {kind === "songs" && <FavoriteSongList items={items} limit={limit} expanded={active && items.length > limit} footer={footerToggle()}
+          editing={inEditor} orderSave={songSave}
           queueId={`favorites:${profile.publicUid}`} editor={editable ? viewerId : null} onRemove={(target, keyboardMenu) => removeFavorite("songs", target, keyboardMenu)} />}
-        {active && stuck.has(kind) && <div className={styles.topAnchor}><button className={styles.toTop} type="button" aria-label={action("top")} title={action("top")}
-          onClick={returnToTop}><ArrowUp size={20} /></button></div>}
       </section>;
     })}
   </div>;

@@ -157,6 +157,8 @@
     "previewDivider": "以上展示在首页，当前 {count} 张",
     "finishEdit": "完成编辑",
     "add": "收藏",
+    "addToFavorites": "添加收藏",
+    "goToSong": "转到歌曲详情",
     "remove": "取消收藏",
     "added": "已收藏",
     "removed": "已取消收藏",

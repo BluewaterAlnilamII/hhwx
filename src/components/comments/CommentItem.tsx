@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmTouchOnSuccess } from "@/lib/touch-feedback";
 import { LoadingSpinner } from "@/components/LoadingIndicator";
 import ActionFeedback from "@/components/ActionFeedback";
 import RetryButton from "@/components/RetryButton";
@@ -185,6 +186,7 @@ export const CommentItem = memo(function CommentItem({
   };
 
   const handleEdit = async () => {
+    const confirm = confirmTouchOnSuccess();
     if (editSaveInFlightRef.current) {
       return;
     }
@@ -198,6 +200,7 @@ export const CommentItem = memo(function CommentItem({
     clearFeedback();
     try {
       await onUpdate(comment.id, editValue);
+      confirm();
       setEditing(false);
       showFeedback("success", t("states.updateSuccess"));
     } catch (err) {
@@ -212,6 +215,7 @@ export const CommentItem = memo(function CommentItem({
   };
 
   const handleDelete = async () => {
+    const confirm = confirmTouchOnSuccess();
     if (deleting) {
       return;
     }
@@ -220,6 +224,7 @@ export const CommentItem = memo(function CommentItem({
     setDeleting(true);
     try {
       await onDelete(comment.id);
+      confirm();
       setDeleteDialogOpen(false);
       showFeedback("success", t("states.deleteSuccess"));
     } catch (err) {
@@ -233,6 +238,7 @@ export const CommentItem = memo(function CommentItem({
   };
 
   const handleToggleReaction = async (emojiKey: string, reactedByViewer: boolean) => {
+    const confirm = confirmTouchOnSuccess();
     if (reactingEmojiKey || isDeleted) return;
     clearFeedback();
     if (!canReact) {
@@ -243,6 +249,7 @@ export const CommentItem = memo(function CommentItem({
     setReactingEmojiKey(emojiKey);
     try {
       await onToggleReaction(comment.id, emojiKey, reactedByViewer);
+      confirm();
       setReactionPickerOpen(false);
       showFeedback("success", t(reactedByViewer ? "states.reactionRemoved" : "states.reactionSuccess"));
     } catch (err) {

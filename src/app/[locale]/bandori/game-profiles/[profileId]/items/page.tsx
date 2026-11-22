@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmTouchOnSuccess } from "@/lib/touch-feedback";
 import { Link } from "@/i18n/navigation";
 import { use, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
@@ -675,6 +676,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
   }
 
   async function saveItems() {
+    const confirm = confirmTouchOnSuccess();
     if (!profilePayload || !isEditableProfile || !hasChanges || saving) {
       return;
     }
@@ -724,6 +726,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
       setItems(savedItems);
       setBaselineItems(savedItems);
       setEditing(false);
+      confirm();
       setSaveMessage(t("messages.saved"));
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : t("errors.saveItemsFailed"));

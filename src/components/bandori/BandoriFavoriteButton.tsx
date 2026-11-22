@@ -1,21 +1,17 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useState } from "react";
 import { Star } from "lucide-react";
-import { useRouter } from "@/i18n/navigation";
-import { useBandoriFavorite } from "@/hooks/useBandoriFavorites";
-import { ApiRouteError } from "@/lib/api-contracts";
+import useBandoriFavoriteAction from "@/hooks/useBandoriFavoriteAction";
 import { favoriteKey } from "@/lib/bandori/favorites";
 import type { ProfileModuleId } from "@/lib/profile-homepage";
 import type { BandoriServer } from "@/lib/bandori-server";
 import ActionFeedback from "@/components/ActionFeedback";
-import { useActionFeedback } from "@/hooks/useActionFeedback";
 import { getTooltipPosition } from "@/lib/tooltip-position";
 import styles from "./FavoriteButton.module.css";
 
 function alignFeedback(badge: HTMLDivElement | null) {
-  const anchor = badge?.parentElement;
+  const anchor = badge?.previousElementSibling;
   if (!badge || !(anchor instanceof HTMLElement)) return;
   // Table scrollports and card previews can clip an ordinary positioned badge.
   badge.popover = "manual";
@@ -42,43 +38,23 @@ function alignFeedback(badge: HTMLDivElement | null) {
   };
 }
 
-export default function BandoriFavoriteButton({ kind, id, server, detail = false, compact = false }: {
-  kind: ProfileModuleId; id: number | string; server?: BandoriServer | null; detail?: boolean; compact?: boolean;
+export default function BandoriFavoriteButton({ kind, id, server, detail = false, compact = false, overlayClassName }: {
+  kind: ProfileModuleId; id: number | string; server?: BandoriServer | null; detail?: boolean; compact?: boolean; overlayClassName?: string;
 }) {
   const target = favoriteKey(kind, id, server);
-  return <FavoriteControl key={target} target={target} detail={detail} compact={compact} />;
+  return <FavoriteControl key={target} target={target} detail={detail} compact={compact} overlayClassName={overlayClassName} />;
 }
 
-function FavoriteControl({ target, detail, compact }: { target: string; detail: boolean; compact: boolean }) {
-  const t = useTranslations("account.favorites");
-  const router = useRouter();
-  const state = useBandoriFavorite(target);
-  const writing = useRef(false);
-  const [busy, setBusy] = useState(false);
+function FavoriteControl({ target, detail, compact, overlayClassName }: { target: string; detail: boolean; compact: boolean; overlayClassName?: string }) {
+  const { selected, label, pending, activate, feedback } = useBandoriFavoriteAction(target);
   const [added, setAdded] = useState(false);
-  const { feedback, showFeedback } = useActionFeedback(target + state.viewer);
-  const label = state.failed ? t("retry") : state.viewer ? t(state.selected ? "remove" : "add") : t("login");
-  const pending = busy || (!state.ready && !state.failed);
-  async function click() {
-    if (writing.current || pending) return;
-    if (state.failed) { void state.retry(); return; }
-    if (!state.viewer) { router.push("/auth?mode=login&next=" + encodeURIComponent(location.pathname + location.search + location.hash)); return; }
-    writing.current = true;
-    setBusy(true);
-    try {
-      await state.toggle();
-      setAdded(!state.selected);
-      showFeedback("success", t(state.selected ? "removed" : "added"));
-    } catch (error) {
-      showFeedback("error", t(error instanceof ApiRouteError && error.status === 403 ? "verify" : "failed"));
-    } finally { writing.current = false; setBusy(false); }
-  }
-  return <span className={styles.control}>
-    <button type="button" className={`${styles.star} hhwx-favorite-motion`} data-detail={detail} data-compact={compact || undefined} aria-pressed={state.selected}
+  const star = <Star size={overlayClassName ? 16 : 22} className={selected ? "hhwx-saved-star" : undefined} aria-hidden="true" onAnimationEnd={() => setAdded(false)} />;
+  return <span className={overlayClassName ?? styles.control}>
+    <button type="button" className={overlayClassName ? "hhwx-favorite-motion" : `${styles.star} hhwx-favorite-motion`} data-detail={detail} data-compact={compact || undefined} aria-pressed={selected}
       title={label} aria-label={label}
-      aria-disabled={pending} aria-busy={pending} onClick={click}
-      data-saved={added && feedback?.type === "success" && state.selected && !pending || undefined}>
-      <Star className={state.selected ? "hhwx-saved-star" : undefined} aria-hidden="true" onAnimationEnd={() => setAdded(false)} />
+      aria-disabled={pending} aria-busy={pending} onClick={() => void activate(setAdded)}
+      data-saved={added && feedback?.type === "success" && selected && !pending || undefined}>
+      {overlayClassName ? <span>{star}</span> : star}
     </button>
     <ActionFeedback feedback={feedback} ref={alignFeedback} className="fixed inset-auto m-0 w-max" />
   </span>;

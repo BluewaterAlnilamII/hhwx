@@ -5,12 +5,92 @@ import { mkdir } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { createClient } from "@supabase/supabase-js";
 
+async function checkEventEntry(page, url) {
+  await page.waitForURL(url);
+  await page.locator(".event-view-tabs-bar").waitFor();
+  assert.ok(await page.evaluate(async () => {
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return Math.abs(window.scrollY) <= 1;
+  }), "opening an event from favorites starts at the top after its content loads");
+}
 const require = createRequire(import.meta.url);
 // Keep repeated detail/back gestures independent of CDN image latency.
 const eventBannerFixture = route => route.fulfill({
   contentType: "image/svg+xml",
   body: '<svg xmlns="http://www.w3.org/2000/svg" width="420" height="140"><rect width="420" height="140" fill="#4787bd"/></svg>',
 });
+
+async function checkVisitorFavorites(page, phone, hostUid, api) {
+  const url = origin + "/user/" + hostUid;
+  const projection = "?profile=" + hostUid;
+  const original = await api(projection);
+  const seenKeys = [];
+  const countKeys = request => { if (request.url().endsWith("/favorites?view=keys")) seenKeys.push(request); };
+  page.on("request", countKeys);
+  try {
+    await page.goto(url, {waitUntil:"domcontentloaded"});
+    const card = page.locator('[data-card="en:10001"]');
+    const region = page.getByRole("button", {name:"国服",exact:true});
+    await region.click();
+    const event = page.locator('[data-event="cn:325"]');
+    const song = page.locator('[data-song="4"]');
+    const menu = page.getByRole("dialog").filter({has:page.getByText("转到歌曲详情", {exact:true})});
+    const trigger = song.locator('button[aria-haspopup="dialog"]');
+    const openMenu = async () => {
+      if (phone) await trigger.tap(); else { await song.hover(); await trigger.click(); }
+      await menu.waitFor();
+    };
+    assert.equal(await page.locator("[data-edit]").count(), 0);
+    for (const [row, target] of [[card,"cards:en:10001"],[event,"events:cn:325"]]) {
+      const art = row.locator("a").first();
+      if (phone) await (row === event ? art.locator("img") : art).tap(); else await art.hover();
+      const star = row.getByRole("button", {name:"收藏",exact:true});
+      await star.click();
+      await row.getByRole("button", {name:"取消收藏",exact:true}).waitFor();
+      assert.ok((await api("?view=keys")).includes(target));
+      assert.equal(new URL(page.url()).pathname, "/user/" + hostUid);
+    }
+    await page.getByRole("button", {name:"日服", exact:true}).click();
+    const jp = page.locator('[data-event="jp:325"]');
+    assert.equal(await jp.locator("button[aria-pressed]").getAttribute("aria-pressed"), "false");
+    await region.click();
+    await openMenu();
+    assert.deepEqual(await menu.locator(":scope > :is(button,a)").allTextContents(), ["添加收藏","转到歌曲详情","下一首播放","加入播放队列"]);
+    await page.route("**/api/bandori/favorites/songs:4", r => r.fulfill({status:503,json:{success:false}}), {times:1});
+    const add = menu.getByRole("button", {name:"添加收藏"});
+    await add.click();
+    await menu.getByRole("alert").waitFor();
+    await add.click();
+    await menu.waitFor({state:"hidden"});
+    assert.ok((await api("?view=keys")).includes("songs:4"));
+    assert.equal(seenKeys.length, 1, "all visitor controls share one membership read per session");
+    for (const selector of ["a:has(img)", "h2 a", ":scope > a"]) {
+      await openMenu();
+      const detail = menu.locator(selector);
+      assert.equal(await detail.getAttribute("href"), "/bandori/songs/4");
+      if (phone) await detail.tap(); else await detail.click();
+      await page.waitForURL("**/bandori/songs/4");
+      await page.goBack({waitUntil:"domcontentloaded"});
+      await trigger.waitFor({state:"attached"});
+      await page.waitForFunction(() => document.activeElement?.closest('[data-song="4"]'));
+    }
+    await openMenu();
+    await menu.getByRole("button", {name:"取消收藏"}).click();
+    await menu.waitFor({state:"hidden"});
+    for (const row of [card,event]) {
+      if (phone) {
+        const art = row.locator("a").first();
+        await (row === event ? art.locator("img") : art).tap();
+      } else await row.locator("a").first().hover();
+      await row.getByRole("button", {name:"取消收藏"}).click();
+      await row.getByRole("button", {name:"收藏",exact:true}).waitFor();
+    }
+    const keys = await api("?view=keys");
+    assert.ok(["songs:4","events:cn:325","cards:en:10001"].every(key => !keys.includes(key)));
+    assert.deepEqual(await api(projection), original, "the host's favorites and order survive every visitor operation");
+    console.log("PASS visitor-only writes, shared keys, regional stars and all three song detail links", phone ? "touch" : "desktop");
+  } finally { page.off("request", countKeys); }
+}
 
 async function checkEventSongFavorites(page, phone) {
   await page.goto(origin + "/bandori/events/329?server=cn&view=info", { waitUntil: "domcontentloaded" });
@@ -56,7 +136,7 @@ async function checkPendingEvents(page, api, profilePath) {
   }
   await page.route("**" + catalogPath, route => route.fulfill({ json: catalog }));
   const key = "/events:cn:349";
-  await page.goto(origin + "/bandori/events/349?server=cn");
+  await page.goto(origin + "/bandori/events/349?server=cn", {waitUntil:"domcontentloaded"});
   const star = page.locator("button[data-detail=true]");
   const viewport = page.viewportSize();
   await page.setViewportSize({ width: 390, height: 850 });
@@ -85,7 +165,7 @@ async function checkPendingEvents(page, api, profilePath) {
   for (const code of ["en", "tw"]) {
     for (const id of [1, 349, 347, 348]) await api(`/events:${code}:${id}`, "PUT");
   }
-  await page.goto(origin + profilePath);
+  await page.goto(origin + profilePath, {waitUntil:"domcontentloaded"});
   const flags = page.getByRole("group", { name: "活动区服" });
   const stations = page.getByRole("tabpanel").locator('li:has(a[href*="/bandori/events/"])');
   const stationIds = () => stations.getByRole("link").evaluateAll(links => links.map(link => Number(new URL(link.href).pathname.split("/").pop())));
@@ -103,7 +183,7 @@ async function checkPendingEvents(page, api, profilePath) {
   catalog.data[349].startAt[1] = start;
   catalog.data[349].endAt[1] = start + 7 * 86400000;
   catalog.data[349].cnSchedule = { startAt: start, endAt: start + 7 * 86400000 };
-  await page.reload();
+  await page.reload({waitUntil:"domcontentloaded"});
   await flags.getByRole("button", { name: "国服", exact: true }).click();
   await cnEvent.getByText("未开始", { exact: true }).waitFor();
   assert.equal(await cnEvent.getByText("—", { exact: true }).count(), 0);
@@ -113,7 +193,7 @@ async function checkPendingEvents(page, api, profilePath) {
   assert.equal(await stations.getByText("—", { exact: true }).count(), 2);
   await api("/events:en:346", "PUT"); // A fourth upcoming event is outside the preview.
   await api("/events:tw:2", "PUT"); // Only an older event is outside this preview.
-  await page.reload();
+  await page.reload({waitUntil:"domcontentloaded"});
   const lastRail = stations.last().locator("i");
   const railStyle = property => lastRail.evaluate((rail, name) => getComputedStyle(rail, "::before").getPropertyValue(name), property);
   await flags.getByRole("button", { name: "国际服", exact: true }).click();
@@ -398,7 +478,8 @@ async function checkEventEditor(page, panel, phone, api) {
   })));
   await page.getByRole("button", { name: "编辑收藏活动" }).click();
   await page.waitForURL("**#collection/events/edit");
-  await checkCollectionHeader(page, panel, heading, phone);
+  await section.getByRole("heading", {name:heading, exact:true}).waitFor();
+  assert.equal(await section.locator("[data-heading-part=toggle]").count(), 0, "both JP events already fit in the preview");
   assert.equal(await flags.getByRole("button", { name: "日服" }).getAttribute("aria-pressed"), "true");
   assert.deepEqual(await rows.evaluateAll(items => items.map(row => ({
     href: row.querySelector("a").getAttribute("href"),
@@ -422,7 +503,7 @@ async function checkEventEditor(page, panel, phone, api) {
     assert.ok(Math.abs(starBox.x - titleBox.x - titleBox.width - 12) < 1);
     await name.click();
   }
-  await page.waitForURL(detail.href);
+  await checkEventEntry(page, detail.href);
   await page.goBack();
   await row.getByText(id + "期", { exact: true }).waitFor();
   await flags.getByRole("button", { name: "国服" }).click();
@@ -441,6 +522,9 @@ async function checkEventEditor(page, panel, phone, api) {
   assert.ok(saved.some(item => item.target === "jp:" + id) && !saved.some(item => item.target === "cn:" + id));
   await api(key, "PUT");
   await page.reload();
+  await page.waitForFunction(() => !location.hash);
+  await panel.locator("[data-more=events]").click();
+  await section.locator("[data-edit=events]").click();
   await cnRow.waitFor();
   await page.getByRole("button", { name: "完成编辑", exact: true }).click();
   await page.waitForURL("**#collection/events");
@@ -527,6 +611,8 @@ async function checkCardEditor(page, panel, cards, phone, api, trainedArt) {
   assert.notEqual(trainedThumb, normalThumb);
   assert.equal(page.url(), editorUrl);
   await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForFunction(() => !location.hash);
+  await panel.locator("[data-edit=cards]").click();
   await showNormal.waitFor();
   assert.equal(await thumbnail.getAttribute("src"), trainedThumb);
   await thumbnail.evaluate(image => image.decode());
@@ -607,6 +693,8 @@ async function checkCardEditor(page, panel, cards, phone, api, trainedArt) {
   assert.equal(await rows.first().getAttribute("data-sort-id"), String(cards[0]));
   assert.equal(await dragCardByName(), 200);
   await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForFunction(() => !location.hash);
+  await panel.locator("[data-edit=cards]").click();
   await divider.waitFor();
   assert.equal(await rows.first().getAttribute("data-sort-id"), String(cards[1]));
   assert.equal(await dragCardByName(), 200);
@@ -642,6 +730,60 @@ async function checkSongListHeading(panel) {
   assert.ok(await heading.evaluate(el => el.nextElementSibling?.matches("ol")));
 }
 
+async function checkCompletePreviews(page, url, cards, events, songs) {
+  for (const size of ["short", "exact"]) {
+    const groups = Object.entries({cards:cards.slice(0,6), events:events.slice(0,4), songs:songs.slice(0,10)})
+      .map(([kind, targets]) => ({kind, items:(size === "short" ? targets.slice(0,2) : targets)
+        .map(target => ({target:String(target), normalArt:false}))}));
+    const route = "**/api/bandori/favorites?profile=*";
+    await page.route(route, request => request.fulfill({json:{success:true, data:groups}}));
+    try {
+      await page.goto(url, {waitUntil:"domcontentloaded"});
+      for (const {kind, items} of groups) {
+        const section = page.locator(`[data-collection="${kind}"]`);
+        const rows = section.locator(`[data-${kind.slice(0,-1)}]`);
+        const edit = section.locator("[data-edit]");
+        const disclosure = section.locator("[data-heading-part=toggle], [data-more-footer]");
+        await rows.last().waitFor();
+        await edit.click();
+        await section.locator("[data-edit][aria-pressed=true]").waitFor();
+        await rows.nth(items.length-1).waitFor();
+        assert.equal(await disclosure.count(), 0);
+        assert.equal(await rows.count(), items.length, kind);
+        if (kind === "songs") assert.equal(await section.locator("ol[data-sortable]").count(), 1);
+        await edit.click();
+        await page.waitForFunction(() => !location.hash);
+        await section.locator("[data-edit][aria-pressed=false]").waitFor();
+        assert.equal(await disclosure.count(), 0);
+        assert.equal(await section.getAttribute("data-collection-view"), null);
+        if (kind === "songs") assert.equal(await section.locator("ol[data-sortable]").count(), 1);
+      }
+      await page.reload({waitUntil:"domcontentloaded"});
+      await page.locator("li[data-song]").first().waitFor();
+      assert.equal(await page.evaluate(() => Boolean(document.activeElement?.closest("[data-collection]"))), false);
+    } finally { await page.unroute(route); }
+  }
+  console.log("PASS editing and refreshing complete card, event and song previews", page.viewportSize().width);
+}
+
+async function checkCatalogStarBounds(page) {
+  await page.goto(origin + "/bandori/cards", {waitUntil:"domcontentloaded"});
+  const card = page.locator("a.hhwx-catalog-row").first();
+  const star = card.locator("..").getByRole("button");
+  await star.scrollIntoViewIfNeeded();
+  await star.focus();
+  const frame = await card.boundingBox(), hit = await star.boundingBox();
+  const top = hit.y - frame.y, right = frame.x + frame.width - hit.x - hit.width;
+  assert.ok(top >= 2 && Math.abs(top - right) <= 1);
+  assert.deepEqual([hit.width,hit.height], [44,44]);
+  assert.ok(await star.evaluate(el => {
+    const r = el.getBoundingClientRect();
+    return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))
+      && !el.contains(document.elementFromPoint(r.right+1,r.y+r.height/2))
+      && !el.contains(document.elementFromPoint(r.x+r.width/2,r.top-1));
+  }));
+}
+
 async function checkSongEditMode(page, panel, songs, phone, api) {
   const rows = panel.locator("li[data-song]");
   const ids = () => rows.evaluateAll(elements => elements.map(el => Number(el.dataset.song)));
@@ -658,10 +800,18 @@ async function checkSongEditMode(page, panel, songs, phone, api) {
     await page.mouse.down();
     await page.mouse.move(x,to.y+to.height*.35,{steps:12});
     await page.mouse.up();
+    // dnd-kit consumes clicks for 50ms after dropping; the next action is a separate gesture.
+    await page.waitForTimeout(60);
   }
   if (!phone) {
-    await mouseDragUp(rows.nth(1).locator("img"));
-    assert.deepEqual(await ids(), songs.slice(0,10));
+    for (const expected of [[songs[1],songs[0],...songs.slice(2)], songs]) {
+      const saved = page.waitForResponse(r => r.url().endsWith("/api/bandori/favorites") && r.request().method() === "PATCH");
+      await mouseDragUp(rows.nth(1).locator("img"));
+      const response = await saved;
+      assert.equal(response.status(), 200);
+      assert.deepEqual(response.request().postDataJSON().targets, expected.map(String));
+      assert.deepEqual(await ids(), expected.slice(0,10));
+    }
   }
   await edit.click();
   await rows.last().locator("[data-favorite-remove]").waitFor();
@@ -687,15 +837,25 @@ async function checkSongEditMode(page, panel, songs, phone, api) {
   const before = await geometry();
   assert.equal(await handle(rows.first()).locator("svg").evaluate(el => getComputedStyle(el).animationName), "none");
   await done.click();
+  await page.waitForFunction(() => !location.hash);
+  assert.deepEqual(await ids(), songs.slice(0,10));
   await rows.first().locator("[data-song-play]").waitFor({state:"attached"});
   if (!phone) assert.ok((await cursors()).every(cursor => cursor !== "grab" && cursor !== "grabbing"));
   assert.deepEqual(await geometry(), before);
   await page.emulateMedia({reducedMotion:"no-preference"});
+  await panel.locator("[data-more=songs]").click();
+  await rows.nth(songs.length - 1).waitFor();
   await edit.click();
   const icon = handle(rows.first()).locator("svg");
   await icon.waitFor();
   assert.notEqual(await icon.evaluate(el => getComputedStyle(el).animationName), "none");
   assert.deepEqual(await geometry(), before);
+  await done.click();
+  await panel.locator("[data-edit=songs][aria-pressed=false]").waitFor();
+  assert.deepEqual(await ids(), songs);
+  assert.equal(new URL(page.url()).hash, "#collection/songs");
+  await edit.click();
+  await icon.waitFor();
   await page.emulateMedia({reducedMotion:"reduce"});
   const out = process.env.SONG_TEST_OUTPUT;
   if (out) {
@@ -791,12 +951,19 @@ async function checkSongEditMode(page, panel, songs, phone, api) {
     assert.equal(await moveSecondUp(true), 200);
     await rows.locator("[data-action-feedback=success]").waitFor();
     await page.reload({waitUntil:"domcontentloaded"});
+    await page.waitForFunction(() => !location.hash);
+    await panel.locator("[data-more=songs]").click();
     await rows.nth(songs.length-1).waitFor();
     assert.deepEqual(await ids(), songs);
     assert.equal(await moveSecondUp(true), 200);
   }
   await edit.click();
   await page.reload({waitUntil:"domcontentloaded"});
+  await edit.waitFor();
+  assert.equal(await page.evaluate(() => Boolean(document.activeElement?.closest("[data-collection]"))), false);
+  assert.equal(new URL(page.url()).hash, "");
+  assert.deepEqual(await ids(), reordered.slice(0, 10));
+  await edit.click();
   await handle(rows.first()).waitFor();
   assert.deepEqual(await ids(), reordered);
   const track = rows.nth(2).locator("[data-song-title]");
@@ -811,7 +978,8 @@ async function checkSongEditMode(page, panel, songs, phone, api) {
   await panel.locator('li[data-song="' + lastId + '"]').waitFor({state:"detached"});
   assert.deepEqual(await ids(), songs.slice(0,-1));
   await api("/songs:" + lastId,"PUT");
-  await back.click();
+  assert.equal(await back.count(), 0);
+  await done.click();
   await page.waitForFunction(() => !location.hash);
   await page.reload({waitUntil:"domcontentloaded"});
   await rows.nth(9).waitFor();
@@ -972,8 +1140,9 @@ async function checkSongPlaylist(page, panel, songs, phone, api) {
     await landscapeRow.locator('[aria-haspopup="dialog"]').tap();
     await songMenu.waitFor();
     assert.equal(await songMenu.getAttribute("aria-modal"), "true");
+    await songMenu.evaluate(el => Promise.all(el.getAnimations().map(a => a.finished)));
     const sheet = await songMenu.boundingBox(), behind = await landscapeRow.boundingBox();
-    assert.ok(behind.x + 3 < sheet.x && Math.abs(sheet.y + sheet.height - 390) < 1);
+    assert.ok(behind.x + 3 < sheet.x && sheet.y + sheet.height <= 382 && sheet.y + sheet.height >= 374);
     await page.touchscreen.tap(behind.x + 3, behind.y + behind.height / 2);
     await songMenu.waitFor({state:"detached"});
     assert.equal((await snapshot()).currentIndex, 2);
@@ -983,6 +1152,7 @@ async function checkSongPlaylist(page, panel, songs, phone, api) {
     await songMenu.getByRole("heading", { name: await title.textContent(), exact: true }).waitFor();
     assert.equal(await songMenu.getByRole("button", {name:"关闭"}).count(), 0);
     assert.deepEqual(await pageWidth(), beforeMenu);
+    await songMenu.evaluate(el => Promise.all(el.getAnimations().map(a => a.finished)));
     const menuBox = await songMenu.boundingBox();
     const scroll = await page.evaluate(() => window.scrollY);
     await page.mouse.move(15, 200);
@@ -1067,8 +1237,8 @@ async function checkSongPlaylist(page, panel, songs, phone, api) {
   await page.getByRole("heading", { name: `收藏的歌曲（${songs.length - 1}）`, exact: true }).waitFor();
   await panel.locator(`li[data-song="${lastId}"]`).waitFor({ state: "detached" });
   assert.deepEqual(await readIds(), songs.slice(0, -1));
-  await page.getByRole("button",{name:"收起收藏的歌曲",exact:true}).click();
   await page.waitForFunction(() => !location.hash);
+  assert.equal(await page.getByRole("button",{name:"收起收藏的歌曲",exact:true}).count(), 0);
   await rows.nth(9).waitFor();
   assert.equal(await panel.locator('[data-more=songs]').count(), 0);
   assert.equal(await footer.count(), 0);
@@ -1112,6 +1282,7 @@ const created = await admin.auth.admin.createUser({ email, password, email_confi
 assert.ifError(created.error);
 const uid = created.data.user.id;
 let browser;
+let hostId;
 try {
   const registered = await admin.auth.admin.updateUserById(uid, { app_metadata: { hhwx_registration: { id: randomUUID(), username } } });
   assert.ifError(registered.error);
@@ -1189,6 +1360,16 @@ try {
   console.log("PASS local route identity, idempotency, private collection and write-only item endpoint");
 
   const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
+  const hostName = "Host " + randomUUID().slice(0,8);
+  const host = await admin.auth.admin.createUser({email:"favorites-host-" + randomUUID() + "@example.test", password:randomUUID()+"aA1!", email_confirm:true,
+    user_metadata:{username:hostName}});
+  assert.ifError(host.error);
+  hostId = host.data.user.id;
+  assert.ifError((await admin.auth.admin.updateUserById(hostId, {app_metadata:{hhwx_registration:{id:randomUUID(),username:hostName}}})).error);
+  const hostProfile = await admin.from("profiles").select("public_uid").eq("id", hostId).single();
+  assert.ifError(hostProfile.error);
+  assert.ifError((await admin.from("bandori_favorites").insert([["cards","en:10001"],["events","cn:325"],["events","jp:325"],["songs","4"]]
+    .map(([kind,target])=>({user_id:hostId,kind,target})))).error);
   browser = await chromium.launch({ headless:true, ignoreDefaultArgs:["--hide-scrollbars"], ...(process.env.CHROME_PATH ? {executablePath:process.env.CHROME_PATH} : {}) });
   for (const width of [1440,390]) {
     const phone = width === 390;
@@ -1202,6 +1383,9 @@ try {
       if (["GET", "HEAD"].includes(request.method()) && path.startsWith("/api/bandori/favorites/")) itemReads.push(path);
     });
     page.on("pageerror", e=>errors.push(e.message));
+    await checkVisitorFavorites(page, phone, hostProfile.data.public_uid, api);
+    await checkCatalogStarBounds(page);
+    await checkCompletePreviews(page, origin+path, cards, events, songs);
     await checkEventSongFavorites(page, phone);
     await page.goto(origin+path,{waitUntil:"domcontentloaded",timeout:120000});
     const panel = page.getByRole("tabpanel");
@@ -1388,7 +1572,7 @@ try {
     const titleText = eventLink.locator("strong > span");
     const titlePoint = { position: { x: 3, y: 5 } };
     if (phone) await titleText.tap(titlePoint); else await titleText.click(titlePoint);
-    await page.waitForURL(eventUrl);
+    await checkEventEntry(page, eventUrl);
     await page.goBack();
     await eventLink.waitFor();
     assert.equal(await flags.getByRole("button", { name: "日服" }).getAttribute("aria-pressed"), "true");
@@ -1431,7 +1615,7 @@ try {
       await eventRow.locator("small:last-child span").hover();
       assert.equal(await starOpacity(), "0");
       await page.mouse.click(bridge.x, bridge.y);
-      await page.waitForURL(eventUrl);
+      await checkEventEntry(page, eventUrl);
       await page.goBack();
       await waitForBanner();
       await flags.getByRole("button").first().hover();
@@ -1442,7 +1626,7 @@ try {
       assert.equal(await starOpacity(), "1");
       await eventImage.click();
     }
-    await page.waitForURL(eventUrl);
+    await checkEventEntry(page, eventUrl);
     await page.goBack();
     await waitForBanner();
     await revealEvent();
@@ -1460,6 +1644,7 @@ try {
     await page.unroute(bannerUrl, eventBannerFixture);
     await page.reload();
     await flags.getByRole("button", { name: "国服" }).click();
+    await panel.locator("[data-more=events]").click();
     await page.getByRole("button",{name:"收起收藏的活动", exact:true}).click();
     await flags.getByRole("button",{name:"国服"}).waitFor();
     assert.equal(await flags.getByRole("button",{name:"国服"}).getAttribute("aria-pressed"),"true");
@@ -1519,22 +1704,29 @@ try {
     } else {
       const visitor = await browser.newContext({ viewport: { width, height: 850 }, isMobile: true, hasTouch: true });
       const publicPage = await visitor.newPage();
-      await publicPage.goto(origin + path + "#collection/songs");
+      await publicPage.goto(origin + path + "#collection/songs", {waitUntil:"domcontentloaded"});
       await publicPage.locator('li[data-song] button[aria-haspopup="dialog"]').first().tap();
       assert.equal(await publicPage.locator("[data-edit=songs], [data-favorite-remove]").count(), 0);
       const songActions = publicPage.getByRole("dialog").filter({ has: publicPage.getByRole("button", { name: "加入播放队列" }) });
       await songActions.getByRole("button", { name: "下一首播放" }).waitFor();
       assert.equal(await songActions.getByRole("button", { name: "取消收藏" }).count(), 0);
+      const returnTo = new URL(publicPage.url());
+      await songActions.getByRole("button", {name:"登录后收藏"}).tap();
+      await publicPage.waitForURL("**/auth?**");
+      assert.equal(new URL(publicPage.url()).searchParams.get("next"), returnTo.pathname + returnTo.search + returnTo.hash);
       await publicPage.route("**/events/images/*.png", eventBannerFixture);
-      await publicPage.goto(origin + path + "#collection/events/edit");
+      await publicPage.goto(origin + path + "#collection/events/edit", {waitUntil:"domcontentloaded"});
       await songActions.waitFor({state:"hidden"});
       const publicEvent = publicPage.getByRole("tabpanel").locator('li:has(a[href*="/bandori/events/"])').first();
       await publicEvent.scrollIntoViewIfNeeded();
       await publicEvent.locator("a img").waitFor({ timeout: 90000 });
       await publicEvent.locator("a img").evaluate(image => image.decode());
       assert.equal(await publicPage.getByRole("button", { name: "编辑收藏活动" }).count(), 0);
-      assert.equal(await publicEvent.getByRole("button").count(), 0);
+      const login = publicEvent.getByRole("button", {name:"登录后收藏"});
+      await login.waitFor({state:"attached"});
       const publicDetail = new URL(await publicEvent.locator("a").getAttribute("href"), origin).href;
+      await publicEvent.locator("a img").tap();
+      await publicPage.waitForFunction(el => getComputedStyle(el).opacity === "1", await login.elementHandle());
       await publicEvent.locator("a img").tap();
       await publicPage.waitForURL(publicDetail);
       await visitor.close();
@@ -1549,6 +1741,8 @@ try {
       assert.ifError((await admin.from("bandori_favorites").delete().eq("user_id", uid).eq("kind", "cards").neq("target", "1")).error);
       await page.goto(origin + path + "#collection/cards/edit", { waitUntil: "domcontentloaded" });
       await page.reload({ waitUntil: "domcontentloaded" });
+      await page.waitForFunction(() => !location.hash);
+      await panel.locator("[data-edit=cards]").click();
       const last = panel.locator('[data-sort-id="1"]');
       await last.getByRole("button", { name: "取消收藏" }).tap();
       await page.waitForURL(origin + path);
@@ -1564,6 +1758,7 @@ try {
   }
 } finally {
   await browser?.close();
+  if (hostId) assert.ifError((await admin.auth.admin.deleteUser(hostId)).error);
   const removed = await admin.auth.admin.deleteUser(uid);
   assert.ifError(removed.error);
 }

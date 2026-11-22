@@ -2,6 +2,7 @@
 
 import { Activity, useCallback, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
+import { bindTabSwipe } from "@/lib/bind-tab-swipe";
 import type { EventTrackerView } from "./urlQuery";
 
 const views = ["tracker", "info"] as const;
@@ -26,84 +27,9 @@ export function bindEventViewTabsSwipe(bar: HTMLElement, value: EventTrackerView
   onProgress: (position: number) => void;
   onEnd: (view: EventTrackerView) => void;
 }) {
-  let pointer: { id: number; x: number; y: number; horizontal: boolean; origin: number } | null = null;
-  let suppressClick = false;
-  const clear = () => {
-    const id = pointer?.id;
-    pointer = null;
-    if (id !== undefined && bar.hasPointerCapture(id)) bar.releasePointerCapture(id);
-  };
-  const cancel = () => {
-    const horizontal = pointer?.horizontal;
-    clear();
-    if (horizontal) callbacks.onEnd(value);
-  };
-  const lostCapture = (event: PointerEvent) => {
-    // Taking capture from the touched child also bubbles its lost-capture event here.
-    if (event.target === bar) cancel();
-  };
-  const down = (event: PointerEvent) => {
-    if (!event.isPrimary) { cancel(); suppressClick = true; return; }
-    suppressClick = false;
-    const view = bar.ownerDocument.defaultView;
-    if (event.pointerType === "mouse" || !view?.matchMedia("(max-width: 1279px)").matches
-      || (view.visualViewport?.scale ?? 1) > 1) return;
-    if (typeof Element !== "undefined" && event.target instanceof Element && ownsSwipe(event.target, bar)) return;
-    pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, horizontal: false, origin: views.indexOf(value) };
-  };
-  const move = (event: PointerEvent) => {
-    if (!pointer || pointer.id !== event.pointerId) return;
-    const x = event.clientX - pointer.x;
-    const y = event.clientY - pointer.y;
-    if (!pointer.horizontal) {
-      if (Math.max(Math.abs(x), Math.abs(y)) < 8) return;
-      if (Math.abs(x) <= Math.abs(y) * 1.2) { clear(); return; }
-      pointer.horizontal = true;
-      suppressClick = true;
-      bar.setPointerCapture(event.pointerId);
-      pointer.origin = callbacks.onStart();
-    }
-    callbacks.onProgress(Math.max(0, Math.min(1, pointer.origin - x / bar.getBoundingClientRect().width)));
-  };
-  const end = (event: PointerEvent) => {
-    if (!pointer || pointer.id !== event.pointerId) return;
-    const x = event.clientX - pointer.x;
-    const y = event.clientY - pointer.y;
-    const horizontal = pointer.horizontal;
-    const change = event.type === "pointerup" && horizontal
-      && Math.abs(x) >= Math.min(64, bar.getBoundingClientRect().width * 0.2)
-      && Math.abs(x) > Math.abs(y) * 1.2;
-    clear();
-    if (horizontal) callbacks.onEnd(change ? x < 0 ? "info" : "tracker" : value);
-  };
-  const click = (event: MouseEvent) => {
-    if (suppressClick && event.detail > 0) { event.preventDefault(); event.stopPropagation(); }
-    suppressClick = false;
-  };
-  // Cancel only a claimed horizontal gesture; descendants retain native scrolling and pinch zoom.
-  const touchMove = (event: TouchEvent) => {
-    if (!pointer || event.touches.length !== 1) return;
-    const x = Math.abs(event.touches[0].clientX - pointer.x);
-    const y = Math.abs(event.touches[0].clientY - pointer.y);
-    if (event.cancelable && (pointer.horizontal || (x >= 8 && x > y * 1.2))) event.preventDefault();
-  };
-  bar.addEventListener("pointerdown", down);
-  bar.addEventListener("pointermove", move);
-  bar.addEventListener("pointerup", end);
-  bar.addEventListener("pointercancel", end);
-  bar.addEventListener("lostpointercapture", lostCapture);
-  bar.addEventListener("click", click, true);
-  bar.addEventListener("touchmove", touchMove, { passive: false });
-  return () => {
-    clear();
-    bar.removeEventListener("pointerdown", down);
-    bar.removeEventListener("pointermove", move);
-    bar.removeEventListener("pointerup", end);
-    bar.removeEventListener("pointercancel", end);
-    bar.removeEventListener("lostpointercapture", lostCapture);
-    bar.removeEventListener("click", click, true);
-    bar.removeEventListener("touchmove", touchMove);
-  };
+  return bindTabSwipe(bar, views.indexOf(value), views.length, {
+    ...callbacks, ignore: ownsSwipe, onEnd: index => callbacks.onEnd(views[index]),
+  });
 }
 
 export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, scrollKey, children }: {
@@ -147,27 +73,26 @@ export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, s
     const root = section.current;
     const marker = sentinel.current;
     const strip = bar.current;
-    const tabs = strip?.parentElement;
     const button = strip?.querySelector("button");
-    if (!root || !marker || !strip || !tabs || !button) return;
+    if (!root || !marker || !strip || !button) return;
     const header = document.querySelector("header");
     let frame = 0;
     const update = () => {
       frame = 0;
       const top = header?.getBoundingClientRect().height ?? 0;
-      const markerTop = marker.getBoundingClientRect().top;
+      const markerBounds = marker.getBoundingClientRect();
       // Keep the shrinking bar's bottom aligned with its original position until fully compact.
-      const progress = getEventTabsCollapseProgress(markerTop, top,
-        tabs.getBoundingClientRect().height,
+      const progress = getEventTabsCollapseProgress(markerBounds.top, top,
+        markerBounds.height,
         parseFloat(getComputedStyle(button).minHeight));
       root.style.setProperty("--event-tabs-top", `${top}px`);
       // Scroll progress must not invalidate styles in the chart and information panels.
       strip.style.setProperty("--event-tabs-progress", String(progress));
-      root.toggleAttribute("data-stuck", markerTop <= top);
+      root.toggleAttribute("data-stuck", markerBounds.top <= top);
     };
     const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
     const resize = new ResizeObserver(schedule);
-    resize.observe(tabs);
+    resize.observe(marker);
     if (header) resize.observe(header);
     if (root.parentElement) resize.observe(root.parentElement);
     window.addEventListener("scroll", schedule, { passive: true });
@@ -249,21 +174,19 @@ export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, s
 
   return <div ref={section} className="event-view-section hhwx-panel border" data-planner-open={plannerOpen || undefined}>
     <span ref={sentinel} className="event-view-sentinel" aria-hidden />
-    <div className="event-view-tabs">
-      <div ref={bar} role="tablist" aria-label={t("label")} className="event-view-tabs-bar">
-        <span className="event-view-indicator" style={{ transform: `translateX(${views.indexOf(value) * 100}%)` }} aria-hidden />
-        {views.map((view, index) => <button key={view} type="button" role="tab" id={`${id}-${view}`}
-          aria-selected={value === view} aria-controls={`${id}-${view}-panel`} tabIndex={value === view ? 0 : -1}
-          onClick={() => selectView.current(view)}
-          onKeyDown={event => {
-            const next = event.key === "ArrowLeft" || event.key === "ArrowRight" ? 1 - index
-              : event.key === "Home" ? 0 : event.key === "End" ? 1 : null;
-            if (next === null) return;
-            event.preventDefault();
-            selectView.current(views[next]);
-            bar.current?.querySelectorAll<HTMLButtonElement>("button")[next]?.focus({ preventScroll: true });
-          }}>{t(view)}</button>)}
-      </div>
+    <div ref={bar} role="tablist" aria-label={t("label")} className="event-view-tabs-bar">
+      <span className="event-view-indicator" style={{ transform: `translateX(${views.indexOf(value) * 100}%)` }} aria-hidden />
+      {views.map((view, index) => <button key={view} type="button" role="tab" id={`${id}-${view}`}
+        aria-selected={value === view} aria-controls={`${id}-${view}-panel`} tabIndex={value === view ? 0 : -1}
+        onClick={() => selectView.current(view)}
+        onKeyDown={event => {
+          const next = event.key === "ArrowLeft" || event.key === "ArrowRight" ? 1 - index
+            : event.key === "Home" ? 0 : event.key === "End" ? 1 : null;
+          if (next === null) return;
+          event.preventDefault();
+          selectView.current(views[next]);
+          bar.current?.querySelectorAll<HTMLButtonElement>("button")[next]?.focus({ preventScroll: true });
+        }}>{t(view)}</button>)}
     </div>
     <div ref={viewport} className="event-view-viewport">
       {/* Keep chart layout/effects intact; the tracker pauses its data work separately. */}

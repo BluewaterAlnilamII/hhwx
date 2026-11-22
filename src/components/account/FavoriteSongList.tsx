@@ -1,12 +1,14 @@
 "use client";
 
+import { pulseTouch } from "@/lib/touch-feedback";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Ellipsis, ListEnd, ListPlus, Music2, Pause, Play, StarOff } from "lucide-react";
+import { Ellipsis, FileMusic, ListEnd, ListPlus, Music2, Pause, Play, Star, StarOff } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useBandoriMusicMaster } from "@/hooks/useBandoriMusicMaster";
 import { useBandoriMusicAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
-import { setBandoriFavorite } from "@/hooks/useBandoriFavorites";
+import useBandoriFavoriteAction from "@/hooks/useBandoriFavoriteAction";
+import { Link } from "@/i18n/navigation";
 import { useActionFeedback } from "@/hooks/useActionFeedback";
 import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 import { useMusicPlayerStore } from "@/store/useMusicPlayerStore";
@@ -27,7 +29,7 @@ import SortableSongRow, { type SongSortControls } from "./SortableSongRow";
 import styles from "./FavoriteSongList.module.css";
 
 type Song = { target: string; title: string; artist: string; thumb: string | null; duration: string; track: MusicPlayerItem | null };
-type OpenMenu = { song: Song; trigger: HTMLButtonElement; anchor: DOMRect; atPointer: boolean };
+type OpenMenu = { song: Song; trigger: HTMLButtonElement; anchor: DOMRect; atPointer: boolean; closing?: boolean };
 
 const sheetQuery = "(max-width: 639px), (hover: none) and (pointer: coarse)";
 function subscribeSheet(callback: () => void) {
@@ -45,15 +47,17 @@ function Cover({ song }: { song: Song }) {
   return song.thumb ? <MusicArtwork src={song.thumb} alt="" draggable={false} width={44} height={44} loading="lazy" decoding="async" fallback={fallback} /> : fallback;
 }
 
-function SongActions({ menu, editor, onClose, onRemove, onQueued }: {
-  menu: OpenMenu; editor: string | null; onClose: () => void; onRemove: (target: string, keyboardMenu?: boolean) => void; onQueued: (message: string) => void;
+function SongActions({ menu, editor, onClose, onClosed, onRemove, onFeedback }: {
+  menu: OpenMenu; editor: string | null; onClose: () => void; onClosed: () => void; onRemove: (target: string, keyboardMenu?: boolean) => void; onFeedback: (message: string) => void;
 }) {
   const { song, trigger } = menu;
   const t = useTranslations("account.favorites");
   const sheet = useSyncExternalStore(subscribeSheet, () => matchMedia(sheetQuery).matches);
-  const [saving, setSaving] = useState(false);
-  const { feedback, showFeedback } = useActionFeedback(song.target);
+  const favorite = useBandoriFavoriteAction("songs:" + song.target, "addToFavorites");
+  const href = "/bandori/songs/" + song.target;
   const returnFocus = useRef<HTMLElement | null>(trigger);
+  const grip = useRef<{ id: number; startY: number } | null>(null);
+  const backdropTouch = useRef<Pick<Touch, "identifier" | "clientX" | "clientY"> | null>(null);
   function place(panel: HTMLDivElement | null) {
     if (!panel || sheet) return;
     function position() {
@@ -76,32 +80,41 @@ function SongActions({ menu, editor, onClose, onRemove, onQueued }: {
   function enqueue(position: "next" | "end") {
     if (!song.track) return;
     useMusicPlayerStore.getState().enqueue(song.track, position);
-    onQueued(t(position === "next" ? "queuedNext" : "queuedEnd"));
+    onFeedback(t(position === "next" ? "queuedNext" : "queuedEnd"));
     onClose();
   }
-  async function remove(event: MouseEvent<HTMLButtonElement>) {
-    if (!editor || saving) return;
+  function toggleFavorite(event: MouseEvent<HTMLButtonElement>) {
     const viaKeyboard = event.detail === 0;
     const dialog = event.currentTarget.closest('[role="dialog"]');
-    setSaving(true);
-    try {
-      await setBandoriFavorite(editor, "songs:" + song.target, false, () => {
+    void favorite.activate((selected, message) => {
+      if (editor && !selected) {
         const row = trigger.closest("li");
         returnFocus.current = (row?.nextElementSibling ?? row?.previousElementSibling)?.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')
           ?? trigger.closest("section")?.querySelector("button") ?? trigger;
-        onClose();
         onRemove(song.target, viaKeyboard && Boolean(dialog?.isConnected && dialog.contains(document.activeElement)));
-      });
-    } catch {
-      showFeedback("error", t("removeFailed"));
-      setSaving(false);
-    }
+      } else onFeedback(message);
+      onClose();
+    });
   }
-  return <Dialog.Root open modal={sheet} onOpenChange={open => { if (!open) onClose(); }}>
+  return <Dialog.Root open={!menu.closing} modal={sheet} onOpenChange={open => { if (!open) onClose(); }}>
     <Dialog.Portal>
-      {sheet && <div className={styles.overlay} aria-hidden="true" />}
-      <Dialog.Content ref={place} className={styles.menu} aria-describedby={undefined}
+      {sheet && <div className={styles.overlay} data-state={menu.closing ? "closed" : "open"} aria-hidden="true"
+        onTouchStart={e => { backdropTouch.current = e.touches.length === 1 ? e.touches[0] : null; }}
+        onTouchCancel={() => { backdropTouch.current = null; }}
+        onTouchEnd={e => {
+          const start = backdropTouch.current;
+          backdropTouch.current = null;
+          const end = e.changedTouches[0];
+          if (!start || start.identifier !== end.identifier || Math.hypot(end.clientX - start.clientX, end.clientY - start.clientY) > 8) return;
+          e.preventDefault();
+          onClose();
+        }} />}
+      <Dialog.Content ref={place} className={styles.menu} data-song-menu={song.target} aria-describedby={undefined}
         aria-modal={sheet || undefined}
+        onOpenAutoFocus={e => {
+          e.preventDefault();
+          (e.currentTarget as HTMLElement).querySelector("button")?.focus({preventScroll: true});
+        }}
         onInteractOutside={e => {
           if (sheet) return;
           const pointer = e.detail.originalEvent;
@@ -114,14 +127,42 @@ function SongActions({ menu, editor, onClose, onRemove, onQueued }: {
         onCloseAutoFocus={e => {
           e.preventDefault();
           if (document.activeElement === document.body) returnFocus.current?.focus({ preventScroll: true });
+          onClosed();
         }}>
-        <div className={styles.menuHeading}><span className={styles.art}><Cover song={song} /></span>
-          <div><Dialog.Title>{song.title}</Dialog.Title><small>{song.artist}</small></div>
+        {sheet && <div className={styles.sheetGrip} aria-hidden="true"
+          onPointerDown={e => {
+            if (!e.isPrimary || e.button !== 0) return;
+            grip.current = { id: e.pointerId, startY: e.clientY };
+            e.currentTarget.setPointerCapture(e.pointerId);
+            e.currentTarget.parentElement!.dataset.gripped = "true";
+            e.currentTarget.parentElement!.dataset.dragging = "true";
+          }}
+          onPointerMove={e => {
+            if (grip.current?.id !== e.pointerId) return;
+            e.currentTarget.parentElement!.style.setProperty("--sheet-drag", Math.max(0, e.clientY - grip.current.startY) + "px");
+          }}
+          onPointerUp={e => {
+            if (grip.current?.id !== e.pointerId) return;
+            if (e.clientY - grip.current.startY >= 56) { grip.current = null; onClose(); }
+          }}
+          onLostPointerCapture={e => {
+            if (grip.current?.id !== e.pointerId) return;
+            grip.current = null;
+            const panel = e.currentTarget.parentElement!;
+            delete panel.dataset.dragging;
+            panel.style.removeProperty("--sheet-drag");
+          }}
+        />}
+        <div className={styles.menuHeading}><Link className={styles.art} href={href} prefetch={false} onNavigate={onClose} aria-label={song.title} tabIndex={-1}><Cover song={song} /></Link>
+          <div><Dialog.Title><Link href={href} prefetch={false} onNavigate={onClose}>{song.title}</Link></Dialog.Title><small>{song.artist}</small></div>
         </div>
-        <button type="button" disabled={!song.track} onClick={() => enqueue("next")}><ListPlus />{t("playNext")}</button>
+        <button type="button" aria-pressed={favorite.selected} aria-disabled={favorite.pending} aria-busy={favorite.pending} onClick={toggleFavorite}>
+          {favorite.selected ? <StarOff /> : <Star />}{favorite.label}
+        </button>
+        <Link href={href} prefetch={false} onNavigate={onClose}><FileMusic />{t("goToSong")}</Link>
+        <button type="button" className={styles.queueStart} disabled={!song.track} onClick={() => enqueue("next")}><ListPlus />{t("playNext")}</button>
         <button type="button" disabled={!song.track} onClick={() => enqueue("end")}><ListEnd />{t("addToQueue")}</button>
-        {editor && <button type="button" className={styles.remove} aria-disabled={saving} onClick={remove}><StarOff />{t("remove")}</button>}
-        <ActionFeedback feedback={feedback} className="bottom-2 right-2" />
+        <ActionFeedback feedback={favorite.feedback} className="bottom-2 right-2" />
       </Dialog.Content>
     </Dialog.Portal>
   </Dialog.Root>;
@@ -154,7 +195,7 @@ export default function FavoriteSongList({ items, limit, expanded, editing, orde
     return () => window.removeEventListener("hashchange", dismiss);
   }, [menu]);
   if (editing && menu) setMenu(null);
-  const [queuedTarget, setQueuedTarget] = useState<string | null>(null);
+  const [feedbackTarget, setFeedbackTarget] = useState<string | null>(null);
   const { feedback, showFeedback } = useActionFeedback(queueId);
   const currentId = useMusicPlayerStore(s => s.queueId === queueId && s.currentIndex !== null ? s.queue[s.currentIndex]?.id : null);
   const status = useMusicPlayerStore(s => s.status);
@@ -179,11 +220,14 @@ export default function FavoriteSongList({ items, limit, expanded, editing, orde
       state.playQueueFromStart(queue, queue.indexOf(track), queueId);
     }
   }
-  const sortable = Boolean(editor && expanded);
   const visibleSongs = expanded ? songs : songs.slice(0, limit);
-  const list = <ol className={styles.list} data-sortable={sortable || undefined}
+  const list = <ol className={styles.list} data-sortable={editor ? true : undefined}
         onPointerMove={e => { if (hold.current && Math.hypot(e.clientX - hold.current.x, e.clientY - hold.current.y) > 8) cancelHold(); }}
         onPointerUp={cancelHold} onPointerCancel={cancelHold}
+        onTouchEnd={e => {
+          // Lifting the opening finger can otherwise click the action now beneath it.
+          if (held.current && e.cancelable) e.preventDefault();
+        }}
         onClickCapture={e => {
           if (held.current && e.detail) { held.current = false; e.preventDefault(); e.stopPropagation(); }
         }}>{visibleSongs.map((song, index) => {
@@ -194,12 +238,19 @@ export default function FavoriteSongList({ items, limit, expanded, editing, orde
         function playFromRow(event: MouseEvent<HTMLLIElement>) {
           if (!event.detail || !isRowContent(event.target)) return;
           if (event.type !== (touch.current ? "click" : "dblclick")) return;
+          if (song.track) pulseTouch(event.nativeEvent);
           start();
         }
-        function openRowMenu(row: HTMLLIElement, point?: DOMRect) {
+        function openRowMenu(row: HTMLLIElement, source: Event, point?: DOMRect) {
           const trigger = row.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]');
           if (!trigger) return;
+          pulseTouch(source, 10);
           setMenu({ song, trigger, anchor: point ?? trigger.getBoundingClientRect(), atPointer: Boolean(point) });
+        }
+        function activateMore(trigger: HTMLButtonElement, toggle: boolean) {
+          const anchor = trigger.getBoundingClientRect();
+          setMenu(current => current?.trigger === trigger && !current.closing
+            ? (toggle ? { ...current, closing: true } : current) : { song, trigger, anchor, atPointer: false });
         }
         const renderRow = (sort?: SongSortControls) => <li key={song.target} ref={sort?.rowRef} style={sort?.style} className={styles.row}
           data-song={song.target} data-collection-extra={index >= limit || undefined} data-current={active || undefined} data-dragging={sort?.dragging || undefined}
@@ -212,23 +263,22 @@ export default function FavoriteSongList({ items, limit, expanded, editing, orde
             if (e.pointerType === "mouse" || (editing && e.pointerType === "pen")) {
               if (isRowContent(e.target)) sort?.listeners?.onPointerDown?.(e);
             }
-            if (!touch.current || !e.isPrimary || !(editor || song.track)) return;
+            if (!touch.current || !e.isPrimary) return;
             if (editing && !isRowContent(e.target)) return;
             const row = e.currentTarget;
             const timer = window.setTimeout(() => {
               held.current = true;
-              if (!editing) openRowMenu(row);
+              if (!editing) openRowMenu(row, e.nativeEvent);
             }, 500);
             hold.current = { timer, x: e.clientX, y: e.clientY };
           }}
           onContextMenu={e => {
-            if (!(editor || song.track)) return;
             e.preventDefault();
             cancelHold();
             if (held.current) return;
             held.current = touch.current;
             if (editing) return;
-            openRowMenu(e.currentTarget, e.clientX || e.clientY ? new DOMRect(e.clientX, e.clientY, 0, 0) : undefined);
+            openRowMenu(e.currentTarget, e.nativeEvent, e.clientX || e.clientY ? new DOMRect(e.clientX, e.clientY, 0, 0) : undefined);
           }}
           onClick={playFromRow} onDoubleClick={playFromRow}>
           {sort?.handle || <div className={styles.number}><span>{index + 1}</span>
@@ -240,33 +290,41 @@ export default function FavoriteSongList({ items, limit, expanded, editing, orde
             <span className={styles.art} aria-hidden="true">
               <Cover song={song} />
             </span>
-            <div className={styles.meta}><button type="button" className={styles.title} disabled={!song.track} data-song-title aria-label={label}
+            <div className={styles.meta}><button type="button" className={styles.title} disabled={!song.track} data-haptic="manual" data-song-title aria-label={label}
               onClick={e => { if (!e.detail) start(); }}>{song.title}</button>
               <small><span>{song.artist}</span><span className={styles.mobileTime}>{song.duration}</span></small>
             </div>
           </div>
           <span className={styles.album}>{musicPlayerAlbum("bandori")}</span><span className={styles.time}>{song.duration}</span>
           {editing && editor ? <FavoriteRemoveButton kind="songs" editor={editor} target={song.target} editing onRemove={onRemove} /> :
-            (editor || song.track) && <button type="button" className={styles.more} aria-haspopup="dialog" aria-expanded={menu?.song.target === song.target}
-            aria-label={t("songActions", { title: song.title })} onClick={e => {
-              const trigger = e.currentTarget;
-              const anchor = trigger.getBoundingClientRect();
-              setMenu(current => current?.trigger === trigger ? null : { song, trigger, anchor, atPointer: false });
-            }}><Ellipsis size={19} /></button>}
-          <ActionFeedback feedback={(queuedTarget === song.target ? feedback : null) ?? (sortable ? orderSave.feedbackFor(song.target) : null)} className="right-12 top-1/2 -translate-y-1/2" />
+            <button type="button" className={styles.more} data-haptic="manual" aria-haspopup="dialog" aria-expanded={!menu?.closing && menu?.song.target === song.target}
+            aria-label={t("songActions", { title: song.title })}
+            onPointerUp={e => {
+              // A tap immediately after a sheet drag may have no compatibility click.
+              if (e.pointerType === "touch" && e.isPrimary && hold.current && !held.current) {
+                held.current = true;
+                pulseTouch(e.nativeEvent);
+                activateMore(e.currentTarget, false);
+              }
+            }}
+            onClick={e => activateMore(e.currentTarget, !touch.current || e.detail === 0)}><Ellipsis size={19} /></button>}
+          <ActionFeedback feedback={(feedbackTarget === song.target ? feedback : null) ?? (editor ? orderSave.feedbackFor(song.target) : null)} className="right-12 top-1/2 -translate-y-1/2" />
         </li>;
         return editor ? <SortableSongRow key={song.target} id={song.target} title={song.title} editing={editing}
-          disabled={!sortable || Boolean(orderSave.pending) || songs.length < 2}>{renderRow}</SortableSongRow> : renderRow();
+          disabled={Boolean(orderSave.pending) || songs.length < 2}>{renderRow}</SortableSongRow> : renderRow();
       })}</ol>;
   return <>
     {!catalog.music || !assets.value ? (catalog.error || assets.error ? <LoadingError onRetry={() => {
       if (!catalog.music) catalog.refresh();
       if (!assets.value) assets.refresh();
     }} /> : <LoadingIndicator label={common("states.loading")} />) : <>
-      {editor ? <ProfileSortList ids={visibleSongs.map(song => song.target)} onOrder={orderSave.save} touchHold>{list}</ProfileSortList> : list}
+      {editor ? <ProfileSortList ids={visibleSongs.map(song => song.target)} onOrder={(order, moved, source) =>
+        orderSave.save(order.concat(items.slice(order.length).map(item => item.target)), moved, source)} touchHold>{list}</ProfileSortList> : list}
       {footer}
-      {menu && <SongActions key={menu.song.target} menu={menu} editor={editor} onRemove={onRemove} onClose={() => setMenu(current => current === menu ? null : current)}
-        onQueued={message => { setQueuedTarget(menu.song.target); showFeedback("success", message); }} />}
+      {menu && <SongActions key={menu.song.target} menu={menu} editor={editor} onRemove={onRemove}
+        onClose={() => setMenu(current => current === menu && !current.closing ? { ...current, closing: true } : current)}
+        onClosed={() => setMenu(current => current?.trigger === menu.trigger && current.closing ? null : current)}
+        onFeedback={message => { setFeedbackTarget(menu.song.target); showFeedback("success", message); }} />}
     </>}
   </>;
 }

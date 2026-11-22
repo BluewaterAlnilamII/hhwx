@@ -1,5 +1,6 @@
 // Exercise the real Next page with request-boundary account fixtures. No account writes leave the browser.
 // Start npm run dev first; PLAYWRIGHT_MODULE / CHROME_PATH may point to existing installations.
+import { installProfileSession, user, userId } from "./fixtures/profile-session.mjs";
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -14,11 +15,6 @@ const out = process.env.PROFILE_TEST_OUTPUT;
 require("@next/env").loadEnvConfig(fileURLToPath(new URL("..", import.meta.url)), true);
 const authUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 assert.ok(authUrl, "Local public Supabase URL is required for the isolated browser session");
-const userId = "00000000-0000-0000-0000-000000000042";
-const user = { id: userId, aud: "authenticated", role: "authenticated", email: "profile@example.invalid", email_confirmed_at: "2026-01-01", app_metadata: {}, user_metadata: {} };
-const exp = Math.floor(Date.now() / 1000) + 3600;
-const encode = value => Buffer.from(JSON.stringify(value)).toString("base64url");
-const session = { access_token: `${encode({alg:"HS256",typ:"JWT"})}.${encode({sub:userId,exp,aud:"authenticated",role:"authenticated"})}.fixture`, refresh_token: "fixture", expires_at: exp, expires_in: 3600, token_type: "bearer", user };
 const initial = { signature: "今天也想听到喜欢的歌", cover: {cardId:2254,entityServer:null,trainType:"after_training",x:28,y:26}, publicAccounts:true, allowGameIdSearch:true,
   modules:["cards","events","songs"].map(id=>({id,public:true})), accounts:["1000001234","1234567890123456"].map(gameUid=>({gameUid,public:true,titlesPublic:false})) };
 let preferences = structuredClone(initial), persisted = {}, owner = true, username = "Bluewater Alnilam Player", failSave = false, failLoad = false, failAvatar = false;
@@ -27,8 +23,7 @@ const gameProfileJson = JSON.stringify({bestdoriProfile:{name:"Picker regression
 const writes = [], avatarWrites = [], errors = [];
 const browser = await chromium.launch({headless:true, ...(process.env.CHROME_PATH ? {executablePath:process.env.CHROME_PATH} : {})});
 const context = await browser.newContext({viewport:{width:1440,height:1000}});
-await context.addInitScript(({key,session})=>localStorage.setItem(key,JSON.stringify(session)), {key:`sb-${new URL(authUrl).hostname.split(".")[0]}-auth-token`,session});
-await context.route(`${new URL(authUrl).origin}/**`, route=>route.fulfill({json:user}));
+await installProfileSession(context, authUrl);
 const account = ()=>({userId,publicUid,email:user.email,emailVerified:true,username,...avatar,displayDegreeServer:0,displayDegreeId:100,displayDegreeEffectId:null,createdAt:"2026-01-01T00:00:00Z",updatedAt:null,roles:[]});
 await context.route("**/api/account/**", async route=>{
   const path = new URL(route.request().url()).pathname;

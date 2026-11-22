@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmTouchOnSuccess } from "@/lib/touch-feedback";
 import { LoadingSpinner } from "@/components/LoadingIndicator";
 
 import { useState } from "react";
@@ -50,6 +51,7 @@ export default function AccountProfilePage() {
   }
 
   const handleSubmit = async (event: React.FormEvent) => {
+    const confirm = confirmTouchOnSuccess();
     event.preventDefault();
     setMessage("");
 
@@ -100,6 +102,7 @@ export default function AccountProfilePage() {
       }
 
       updateProfile({ username: updatedProfile.username });
+      confirm();
       setMessage(t("saveSuccess"));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : t("saveFailed"));
