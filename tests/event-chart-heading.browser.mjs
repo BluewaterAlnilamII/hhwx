@@ -98,7 +98,7 @@ try {
   assert.equal(await overview.getByRole('button',{name:'搜索活动',exact:true}).isDisabled(),true);
   assert.equal(await overview.getByRole('button',{name:'最新活动',exact:true}).isDisabled(),true);
   assert.equal(await overview.locator('.event-switcher-servers button:not([disabled])').count(),4);
-  assert.equal(await page.locator('.event-progress, .event-chart-surface, .event-view-tabs').count(),0);
+  assert.equal(await page.locator('.event-progress, .event-chart-surface, .event-view-tabs-bar').count(),0);
   for(const width of [393,1440]) {
     await page.setViewportSize({width,height:950});
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'failed overview keeps the responsive heading layout');
@@ -154,7 +154,7 @@ try {
       window.eventPageFrames=[];
       let previous;
       const sample=()=>{
-        const state={path:location.pathname,content:!!document.querySelector('.event-view-tabs'),loading:!!document.querySelector('.event-switcher-summary [role=status]')};
+        const state={path:location.pathname,content:!!document.querySelector('.event-view-tabs-bar'),loading:!!document.querySelector('.event-switcher-summary [role=status]')};
         const signature=JSON.stringify(state);
         if(signature!==previous){window.eventPageFrames.push(state);previous=signature;}
         requestAnimationFrame(sample);

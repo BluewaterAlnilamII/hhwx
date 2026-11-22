@@ -21,15 +21,17 @@
   --event-tab-normal-font: 1rem;
   --event-tab-compact-font: 0.8125rem;
 }
-.event-view-sentinel { position: absolute; top: 0; width: 1px; height: 1px; pointer-events: none; }
-.event-view-tabs { position: sticky; top: var(--event-tabs-top, 59px); z-index: 30; height: var(--event-tabs-normal-height); }
+.event-view-sentinel { position: absolute; top: 0; width: 1px; height: var(--event-tabs-normal-height); pointer-events: none; }
 .event-view-tabs-bar {
   --event-tabs-visual-progress: var(--event-tabs-progress, 0);
-  position: absolute;
-  inset: 0 0 auto;
+  --event-tabs-shrink: calc((var(--event-tabs-normal-height) - var(--event-tabs-compact-height)) * var(--event-tabs-visual-progress));
+  position: sticky;
+  top: var(--event-tabs-top, 59px);
+  z-index: 30;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  height: calc(var(--event-tabs-normal-height) + (var(--event-tabs-compact-height) - var(--event-tabs-normal-height)) * var(--event-tabs-visual-progress));
+  height: calc(var(--event-tabs-normal-height) - var(--event-tabs-shrink));
+  margin-bottom: var(--event-tabs-shrink);
   background: var(--theme-color-panel-background);
   border-bottom: 1px solid var(--theme-color-border-subtle);
   user-select: none;
@@ -44,7 +46,7 @@
   font-size: calc(var(--event-tab-normal-font) + (var(--event-tab-compact-font) - var(--event-tab-normal-font)) * var(--event-tabs-visual-progress));
   font-weight: calc(700 - 100 * var(--event-tabs-visual-progress));
 }
-.event-view-tabs .event-view-tabs-bar button {
+.event-view-section .event-view-tabs-bar button {
   transition: color 150ms ease-out;
 }
 .event-view-tabs-bar button[aria-selected="true"] { color: var(--theme-color-tab-foreground-selected); }
@@ -91,7 +93,7 @@
 @media (prefers-reduced-motion: reduce) {
   .event-view-tabs-bar { --event-tabs-visual-progress: 0; }
   .event-view-section[data-stuck] .event-view-tabs-bar { --event-tabs-visual-progress: 1; }
-  .event-view-tabs-bar, .event-view-tabs .event-view-tabs-bar button,
+  .event-view-tabs-bar, .event-view-section .event-view-tabs-bar button,
   .event-view-section[data-settling] .event-view-panel, .event-view-section[data-settling] .event-view-indicator { transition: none; }
 }
 .event-progress > div:first-child { flex-wrap: wrap; row-gap: 0.375rem; font-size: 0.8125rem; }

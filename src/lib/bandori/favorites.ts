@@ -8,6 +8,11 @@ export type FavoriteChange = { kind: ProfileModuleId; target: string; selected: 
 export type FavoriteCardLayout = { targets: string[]; previewCount: number };
 export const CARD_PREVIEW_MAX = 6;
 export const CARD_PREVIEW_DIVIDER = "preview-divider";
+const EVENT_PREVIEW_MAX = 4;
+
+export function favoritePreviewLimit(group: FavoriteGroup) {
+  return group.kind === "cards" ? group.previewCount ?? CARD_PREVIEW_MAX : group.kind === "songs" ? 10 : EVENT_PREVIEW_MAX;
+}
 
 export function cardPreviewLimit(visible: number, total: number) {
   return visible >= total ? CARD_PREVIEW_MAX : visible;
@@ -56,6 +61,6 @@ export function parseFavoriteKey(key: string) {
 export function eventPreview<T extends { end: number }>(items: T[], now: number) {
   const past = items.filter(item => item.end < now);
   const upcoming = items.filter(item => item.end >= now);
-  const pastCount = Math.min(past.length, Math.max(1, 4 - upcoming.length));
-  return [...past.slice(past.length - pastCount), ...upcoming.slice(0, 4 - pastCount)];
+  const pastCount = Math.min(past.length, Math.max(1, EVENT_PREVIEW_MAX - upcoming.length));
+  return [...past.slice(past.length - pastCount), ...upcoming.slice(0, EVENT_PREVIEW_MAX - pastCount)];
 }

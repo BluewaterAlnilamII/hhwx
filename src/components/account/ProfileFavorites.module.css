@@ -129,9 +129,9 @@ canvas.art { pointer-events: none; }
 .tile:has(:focus-visible) .caption, .tile[data-revealed=true] .caption, .caption[data-visible=true] { opacity: 1; }
 .cardActions { position: absolute; top: 0; right: 0; display: flex; opacity: 0; pointer-events: none; }
 .cardActions button { width: 44px; height: 44px; display: grid; place-items: center; color: white; }
-.cardActions span { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 5px; background: #101522bf; border: 1px solid #ffffff80; }
+.cardActions button > span { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 5px; background: #101522bf; border: 1px solid #ffffff80; }
 /* Keep a 5px gap between the marks and let the entire shifted star receive its own taps. */
-.cardActions button:first-child span { position: relative; z-index: 1; translate: 14px 0; }
+.cardActions button:has(+ button) > span { position: relative; z-index: 1; translate: 14px 0; }
 .flipIcon { transform: rotate(-45deg); }
 .tile:has(:focus-visible) .cardActions, .tile[data-revealed=true] .cardActions { opacity: 1; pointer-events: auto; }
 .tile > a:focus-visible { outline: 2px solid var(--theme-color-focus-ring); outline-offset: -3px; z-index: 1; }
@@ -177,6 +177,7 @@ canvas.art { pointer-events: none; }
 .eventActions button { position: absolute; top: 0; right: 0; display: grid; place-items: center; width: 36px; height: 36px; max-height: 100%; opacity: 0; pointer-events: none; }
 .eventActions button::before { content: ""; position: absolute; width: 25px; height: 25px; border-radius: 5px; background: #101522bf; border: 1px solid #ffffff80; }
 .eventActions svg { position: relative; }
+.eventActions button[aria-pressed=false] { color: white; }
 .station[data-revealed] .eventActions button, .station:has(:focus-visible) .eventActions button { opacity: 1; pointer-events: auto; }
 @media (hover: hover) {
   .eventLink:hover + .eventActions button, .eventActions button:hover { opacity: 1; pointer-events: auto; }

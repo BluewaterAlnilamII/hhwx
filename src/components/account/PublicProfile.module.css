@@ -51,7 +51,10 @@
 .tabs button::after{content:"";position:absolute;bottom:-1px;left:0;right:0;height:3px;background:var(--theme-color-action-secondary-foreground);transform:scaleX(0);transition:transform 180ms ease-out}
 .tabs button[aria-selected=true]{color:var(--theme-color-action-secondary-foreground);font-weight:600}
 .tabs button[aria-selected=true]::after{transform:scaleX(1)}
-.panel{background:var(--theme-color-panel-background);padding:16px;margin-top:12px;animation:panel-in 150ms ease-out}
+.panels{position:relative;display:flow-root}
+.panels[data-sliding]{overflow:clip;min-height:var(--swipe-visible-height)}
+.panels[data-sliding]>.panel[inert]{position:absolute;inset-inline:0;pointer-events:none}
+.panel{background:var(--theme-color-panel-background);padding:16px;margin-top:12px}
 .panel[data-empty=true]:empty{display:none}
 .sidebar{background:var(--theme-color-panel-background);padding:16px}
 .sidebar h2,.settings h2{font-size:14px;font-weight:600;line-height:24px}
@@ -100,6 +103,5 @@
  .mobileInfo .date::before{content:"·";margin-right:4px}.columns{grid-template-columns:minmax(0,1fr);gap:0;margin-top:12px}.sidebar{display:none}
 }
 @container (max-width:599px){.settings{grid-template-columns:1fr;gap:16px}}
-@keyframes panel-in{from{opacity:.65}to{opacity:1}}
 @keyframes menu-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
 @media(prefers-reduced-motion:reduce){.profile *{transition-duration:0s!important;animation:none!important}.menu{animation:none}}

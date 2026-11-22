@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmTouchOnSuccess } from "@/lib/touch-feedback";
 import { useEffect } from "react";
 import { create } from "zustand";
 import { ApiRouteError, getApiErrorCode, parseApiSuccessData } from "@/lib/api-contracts";
@@ -85,7 +86,9 @@ export function syncOwnFavoriteKeys(viewer: string, groups: FavoriteGroup[]) {
 }
 
 export async function setBandoriFavorite(viewer: string, key: string, selected: boolean, onSaved?: () => void) {
+  const confirm = confirmTouchOnSuccess();
   await favoritesRequest("/api/bandori/favorites/" + key, viewer, { method: selected ? "PUT" : "DELETE" });
+  confirm();
   onSaved?.();
   notifyChange(viewer, key, selected);
   channel?.postMessage({ viewer, key, selected });
@@ -108,9 +111,9 @@ export function useBandoriFavorite(key: string) {
   const selected = useFavorites(s => viewer && s.viewer === viewer ? s.keys?.has(key) : false);
   const failed = useFavorites(s => viewer === s.viewer && s.failed);
   const ready = useFavorites(s => !viewer || (s.viewer === viewer && s.keys !== null));
-  async function toggle() {
+  async function toggle(onSaved?: () => void) {
     if (!viewer || !ready) throw new Error("Favorites unavailable");
-    await setBandoriFavorite(viewer, key, !selected);
+    await setBandoriFavorite(viewer, key, !selected, onSaved);
   }
   return { viewer, selected: Boolean(selected), ready: authReady && ready, failed, toggle, retry: () => viewer && loadKeys(viewer) };
 }

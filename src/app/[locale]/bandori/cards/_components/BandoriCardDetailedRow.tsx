@@ -82,6 +82,6 @@ export default function BandoriCardDetailedRow({
       <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />{releaseDate}
     </span></>}
     description={entry.skillEffectLabel || t("common.noInformation")} />
-    <div className="absolute top-0 right-0"><BandoriFavoriteButton kind="cards" id={entry.cardId} server={entry.displayServer} /></div>
+    <div className="absolute top-1 right-1 flex"><BandoriFavoriteButton kind="cards" id={entry.cardId} server={entry.displayServer} /></div>
   </div>;
 }

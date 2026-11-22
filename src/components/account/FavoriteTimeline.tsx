@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
@@ -9,6 +9,7 @@ import LoadingImage from "@/components/LoadingImage";
 import LoadingIndicator from "@/components/LoadingIndicator";
 import LoadingError from "@/components/LoadingError";
 import FavoriteRemoveButton from "./FavoriteRemoveButton";
+import BandoriFavoriteButton from "@/components/bandori/BandoriFavoriteButton";
 import { useBandoriEventsMaster } from "@/hooks/useBandoriEventsMaster";
 import { useBandoriEventsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { getBandoriServerCode, getBandoriServerTimeZone, getBandoriRegionalDisplayOrder, normalizeBandoriServer, BANDORI_SERVERS, type BandoriServer } from "@/lib/bandori-server";
@@ -23,8 +24,8 @@ import { eventPreview, type FavoriteItem } from "@/lib/bandori/favorites";
 import styles from "./ProfileFavorites.module.css";
 
 
-export default function FavoriteTimeline({ items, homeVisible, expanded, editing, heading, footer, editor, onRemove }: {
-  items: FavoriteItem[]; homeVisible: boolean; expanded: boolean; editing: boolean; heading: (controls: React.ReactNode, hasMore: boolean) => React.ReactNode;
+export default function FavoriteTimeline({ items, homeVisible, expanded, editing, visitor, heading, footer, editor, onRemove }: {
+  items: FavoriteItem[]; homeVisible: boolean; expanded: boolean; editing: boolean; visitor: boolean; heading: (controls: React.ReactNode, hasMore: boolean) => React.ReactNode;
   footer: (hasMore: boolean) => React.ReactNode;
   editor: string | null; onRemove: (target: string) => void;
 }) {
@@ -83,6 +84,18 @@ export default function FavoriteTimeline({ items, homeVisible, expanded, editing
   const hasLaterEvents = !expanded && entries.some(item =>
     (item.schedule.startAt === null || item.schedule.startAt > now) && !shown.includes(item));
   const date = new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", year: "numeric", timeZone: getBandoriServerTimeZone(server) });
+  const leavingForEvent = useRef(false);
+  useLayoutEffect(() => () => {
+    // Reset when leaving the profile so a slow navigation keeps the outgoing timeline still.
+    if (leavingForEvent.current) {
+      window.scrollTo({ top: 0, behavior: "instant" });
+      leavingForEvent.current = false;
+    }
+  }, []);
+  function enterEvent() {
+    if (expanded) history.replaceState({ ...history.state, collectionEventServer: server }, "");
+    leavingForEvent.current = true;
+  }
   return <>
     {heading(<div className={styles.flags} data-heading-part="controls" role="group" aria-label={t("server")}>{regions.map(region => <button type="button" key={region.server}
       aria-label={t("region." + getBandoriServerCode(region.server))} title={t("region." + getBandoriServerCode(region.server))}
@@ -100,7 +113,6 @@ export default function FavoriteTimeline({ items, homeVisible, expanded, editing
       if (bandId !== null) icons.unshift({ src: buildBandoriCardBandIconUrl(bandId), label: getBandDisplayName(event.band) });
       const target = code + ":" + event.eventId;
       const href = `/bandori/events/${event.eventId}?server=${code}`;
-      const rememberServer = expanded ? () => history.replaceState({ ...history.state, collectionEventServer: server }, "") : undefined;
       const eventIcons = icons.map(({ src, label }) => src && <Image key={src} unoptimized src={src} alt={label} title={label} width={18} height={18} />);
       const remove = editor && <FavoriteRemoveButton kind="events" editor={editor} target={target} editing={editing} onRemove={removed => {
         select(current => current ?? server);
@@ -110,7 +122,7 @@ export default function FavoriteTimeline({ items, homeVisible, expanded, editing
       if (editing) return <li key={target} className={styles.editorRow} data-event={target} data-collection-extra={!preview.includes(shown[index]) || undefined}>
         <div className={styles.eventEditorInfo}>
           <span className={styles.eventPeriod} data-has-band={bandId !== null}>{eventIcons}{tChart("eventNumber", { eventId: event.eventId })}</span>
-          <Link className={styles.eventEditorName} href={href} prefetch={false} title={title} onNavigate={rememberServer}>{title}</Link>
+          <Link className={styles.eventEditorName} href={href} prefetch={false} title={title} onNavigate={enterEvent}>{title}</Link>
         </div>
         {remove}
       </li>;
@@ -123,11 +135,11 @@ export default function FavoriteTimeline({ items, homeVisible, expanded, editing
         data-revealed={revealed === target || (!hasBanner && Boolean(assets.value || assets.error)) || undefined}
         ref={revealed === target ? activeStation : undefined}>
         <small className={styles.when}>{schedule.startAt !== null ? date.format(schedule.startAt) : "—"}</small><i className={styles.rail} aria-hidden="true" />
-        <Link className={styles.eventLink} href={href} prefetch={false} aria-label={title} onNavigate={rememberServer}>
+        <Link className={styles.eventLink} href={href} prefetch={false} aria-label={title} onNavigate={enterEvent}>
           <span className={styles.banner}>{hasBanner && <LoadingImage
             onPointerDown={e => { touch.current = e.pointerType === "touch" || e.pointerType === "pen"; }}
             onClick={e => {
-              if (editor && touch.current && e.detail && revealed !== target) {
+              if ((editor || visitor) && touch.current && e.detail && revealed !== target) {
                 e.preventDefault();
                 setRevealed(target);
               }
@@ -135,7 +147,7 @@ export default function FavoriteTimeline({ items, homeVisible, expanded, editing
             onError={() => setFailedBanners(current => new Set(current).add(src))} src={src} loadingLabel={common("states.loading")} alt="" loading="lazy" decoding="async" />}</span>
           <strong><span>{title}</span></strong>
         </Link>
-        {remove}
+        {visitor ? <BandoriFavoriteButton kind="events" id={event.eventId} server={server} overlayClassName={styles.eventActions} /> : remove}
         <small className={styles.status}>
           {eventIcons}
           <span>{tStatus(status)}</span>

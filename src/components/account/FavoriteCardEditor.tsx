@@ -17,7 +17,7 @@ import styles from "./ProfileFavorites.module.css";
 export type CardEditorProps = {
   previewCount: number;
   saving: boolean;
-  onLayout: (layout: FavoriteCardLayout, moved: string) => void;
+  onLayout: (layout: FavoriteCardLayout, moved: string, source: Event) => void;
   feedbackFor: (target: string) => ActionFeedbackState | null;
 };
 
@@ -91,8 +91,8 @@ export default function FavoriteCardEditor({ cards, previewCount, saving, onLayo
           <i key={i} data-filled={i < visible} />)}</span>
       </span>
     </EditorRow>);
-  return <div ref={list}><ProfileSortList touchHold ids={ids} collisionDetection={collision} modifiers={[restrictDrag]} onOrder={(sorted, moved) => {
+  return <div ref={list}><ProfileSortList touchHold ids={ids} collisionDetection={collision} modifiers={[restrictDrag]} onOrder={(sorted, moved, source) => {
       const layout = favoriteCardDrop(sorted, moved);
-      if (layout.previewCount !== previewCount || layout.targets.some((target, i) => target !== targets[i])) onLayout(layout, moved);
+      if (layout.previewCount !== previewCount || layout.targets.some((target, i) => target !== targets[i])) onLayout(layout, moved, source);
   }}>{rows}</ProfileSortList></div>;
 }

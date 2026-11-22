@@ -337,7 +337,7 @@ try {
       const marker = root.querySelector('.event-view-sentinel');
       const header = document.querySelector('header').getBoundingClientRect().bottom;
       const origin = marker.getBoundingClientRect().top + scrollY - header;
-      const normal = root.querySelector('.event-view-tabs').getBoundingClientRect().height;
+      const normal = marker.getBoundingClientRect().height;
       const compact = parseFloat(getComputedStyle(button).minHeight);
       const frames = [];
       for (const ratio of [0, 0.25, 0.5, 0.75, 1, 0.75, 0.5, 0.25, 0]) {
@@ -362,6 +362,12 @@ try {
       await page.evaluate(top => scrollTo({top, behavior:'instant'}), collapse.origin + offset);
       await page.waitForFunction(expected => document.querySelector('.event-view-tabs-bar').getBoundingClientRect().height === expected, expected);
     }
+    await page.evaluate(top => scrollTo({top, behavior:'instant'}), collapse.origin + 50);
+    await page.waitForFunction(expected => document.querySelector('.event-view-tabs-bar').getBoundingClientRect().height === expected, collapse.compact);
+    assert.ok(await page.evaluate(() => {
+      const bar = document.querySelector('.event-view-tabs-bar').getBoundingClientRect();
+      return document.querySelector('.event-view-viewport').contains(document.elementFromPoint(bar.left + bar.width / 2, bar.bottom + 4));
+    }), 'the content directly below the compact tabs is unobstructed');
     await page.emulateMedia({reducedMotion:'no-preference'});
     await page.evaluate(() => scrollTo({top:0, behavior:'instant'}));
     await page.evaluate(() => {

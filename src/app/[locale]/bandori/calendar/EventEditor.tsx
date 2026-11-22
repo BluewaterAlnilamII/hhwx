@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmTouchOnSuccess } from "@/lib/touch-feedback";
 import { useState, useCallback } from "react";
 import { BAND_COLORS, BandoriCalendarRecord, useCalendarEditor } from "./useCalendarData";
 import {
@@ -424,6 +425,7 @@ export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
   }, []);
 
   const handleSave = useCallback(() => {
+    const confirm = confirmTouchOnSuccess();
     setSuccessMessage(null);
 
     const payload = editableEvents
@@ -443,6 +445,7 @@ export default function EventEditor({ allEvents, onSaved }: EventEditorProps) {
     }
 
     void saveEvents(payload).then((success) => {
+      if (success) confirm();
       setSuccessMessage(success ? "提交成功！" : null);
     });
   }, [editableEvents, saveEvents]);

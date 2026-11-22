@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
-import type { FavoriteGroup } from "@/lib/bandori/favorites";
+import { favoritePreviewLimit, type FavoriteGroup } from "@/lib/bandori/favorites";
 import type { ProfileModuleId } from "@/lib/profile-homepage";
 
-type CollectionView = ProfileModuleId | "cards/edit" | "events/edit";
+type CollectionView = ProfileModuleId | `${ProfileModuleId}/edit`;
 type ReturnPosition = { url: string; top: number; selector: string };
 type InlinePosition = { selector: string; edge?: "bottom"; y: number; focus: string; eventServer?: string };
 
@@ -27,13 +27,17 @@ function visibleCollectionParts(root: HTMLElement) {
 
 function subscribe(listener: () => void) {
   window.addEventListener("hashchange", listener);
-  return () => window.removeEventListener("hashchange", listener);
+  window.addEventListener("popstate", listener);
+  return () => {
+    window.removeEventListener("hashchange", listener);
+    window.removeEventListener("popstate", listener);
+  };
 }
 function readHash() {
+  if (location.hash === "#collection/songs" && history.state?.editingSongs) return "songs/edit";
   return (window.location.hash.match(/^#collection\/((?:cards|events)(?:\/edit)?|songs)$/u)?.[1] ?? "") as CollectionView | "";
 }
 const noCollection = () => "" as const;
-const readSongMode = () => readHash() === "songs" && history.state?.editingSongs === true;
 const notify = () => window.dispatchEvent(new HashChangeEvent("hashchange"));
 
 function remember(selector: string) {
@@ -41,15 +45,27 @@ function remember(selector: string) {
   history.replaceState({ ...history.state, collectionPosition: position }, "");
 }
 function leaveSharedView() {
-  history.replaceState({ ...history.state, collectionFromHome: false, collectionDepth: 0, fromCollection: null, fromAllCards: false, collectionPosition: null }, "", location.pathname + location.search);
+  history.replaceState({ ...history.state, collectionFromHome: false, collectionDepth: 0, fromCollection: null, fromAllCards: false, editingSongs: false, collectionPosition: null }, "", location.pathname + location.search);
   notify();
 }
-export default function useCollectionNavigation(groups: FavoriteGroup[] | null, editable: boolean) {
+
+let checkedDocumentLoad = false;
+export function resetCollectionOnReload() {
+  if (checkedDocumentLoad) return;
+  checkedDocumentLoad = true;
+  const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+  if (navigation?.type !== "reload" || new URL(navigation.name).pathname !== location.pathname) return;
+  if (readHash()) leaveSharedView();
+  else if (history.state?.collectionPosition) history.replaceState({ ...history.state, collectionPosition: null }, "");
+}
+
+export default function useCollectionNavigation(groups: FavoriteGroup[] | null, editable: boolean | undefined) {
   const hash = useSyncExternalStore(subscribe, readHash, noCollection);
-  const editingSongs = useSyncExternalStore(subscribe, readSongMode, () => false) && editable;
-  const kind = hash === "cards/edit" ? "cards" : hash === "events/edit" ? "events" : hash;
-  const expanded = kind && (!groups || groups.some(group => group.kind === kind)) ? kind : undefined;
-  const editing = editable && Boolean(expanded) && hash.endsWith("/edit");
+  const kind = hash.split("/")[0];
+  const group = groups?.find(group => group.kind === kind);
+  const editing = Boolean(group) && editable === true && hash.endsWith("/edit");
+  const awaitingEditPermission = editable === undefined && hash.endsWith("/edit");
+  const expanded = group && (editing || group.items.length > favoritePreviewLimit(group)) ? group.kind : undefined;
   const loaded = groups !== null;
   const root = useRef<HTMLDivElement>(null);
   const start = useRef<HTMLSpanElement>(null);
@@ -72,11 +88,16 @@ export default function useCollectionNavigation(groups: FavoriteGroup[] | null, 
 
   useLayoutEffect(() => {
     if (!loaded) return;
-    if (hash && !expanded) { leaveSharedView(); return; }
+    if (hash && !expanded) {
+      if (awaitingEditPermission) return;
+      leaveSharedView();
+      return;
+    }
     const anchor = inlinePosition.current;
     const collections = root.current;
     if (anchor && collections) {
       inlinePosition.current = null;
+      if (history.state?.collectionPosition) history.replaceState({ ...history.state, collectionPosition: null }, "");
       if (anchor.eventServer && history.state?.collectionEventServer !== anchor.eventServer) {
         history.replaceState({ ...history.state, collectionEventServer: anchor.eventServer }, "");
       }
@@ -130,7 +151,7 @@ export default function useCollectionNavigation(groups: FavoriteGroup[] | null, 
     }
     const position: ReturnPosition | undefined = history.state?.collectionPosition;
     if (position?.url !== location.href) {
-      if (expanded) toTop("instant");
+      if (expanded) start.current?.scrollIntoView({ block: "start", behavior: "instant" });
       return;
     }
     // A detail page can return before the catalog has rendered the original link.
@@ -146,7 +167,7 @@ export default function useCollectionNavigation(groups: FavoriteGroup[] | null, 
     const observer = new ResizeObserver(() => { if (restore()) observer.disconnect(); });
     observer.observe(root.current);
     return () => observer.disconnect();
-  }, [expanded, hash, loaded]);
+  }, [expanded, hash, loaded, awaitingEditPermission]);
 
   const sectionCount = groups?.length;
   useEffect(() => {
@@ -237,39 +258,37 @@ export default function useCollectionNavigation(groups: FavoriteGroup[] | null, 
     const depth = history.state?.collectionDepth ?? (history.state?.collectionFromHome ? 1 : 0);
     const state = { collectionFromHome: expanded ? Boolean(history.state?.collectionFromHome) : true,
       collectionDepth: switching ? depth : depth + 1, fromCollection: nested ? kind : null,
-      editingSongs: view === "songs" && source === "edit", collectionEventServer: history.state?.collectionEventServer };
-    if (switching) history.replaceState(state, "", "#collection/" + view);
+      editingSongs: view === "songs/edit", collectionEventServer: history.state?.collectionEventServer };
+    const url = "#collection/" + (state.editingSongs ? "songs" : view);
+    if (switching) history.replaceState(state, "", url);
     else {
       remember(`[data-${source}="${kind}"]`);
-      history.pushState(state, "", "#collection/" + view);
+      history.pushState(state, "", url);
     }
     notify();
   }
   function close() {
     transition(() => closeView(false));
   }
-  function finishEditing() {
-    transition(() => closeView(true));
+  function finishEditing(hasMore: boolean) {
+    transition(() => closeView(true, hasMore));
   }
-  function closeView(finished: boolean) {
+  function closeView(finished: boolean, hasMore = true) {
     if (!expanded) return;
     const state = history.state;
-    const toFull = finished && (state?.fromCollection === expanded || (expanded === "cards" && state?.fromAllCards));
+    const toFull = finished && hasMore && (state?.fromCollection === expanded || (expanded === "cards" && state?.fromAllCards));
     anchorSection(expanded, finished ? "edit" : "more", !toFull);
     if (toFull) history.back();
     else if (state?.collectionFromHome) history.go(-(state.collectionDepth || 1));
     else leaveSharedView();
   }
-  function toggleSongMode() {
-    if (expanded !== "songs") { open("songs", "edit"); return; }
-    history.replaceState({ ...history.state, editingSongs: !editingSongs }, "");
-    notify();
-  }
   function rememberDetail(event: MouseEvent) {
     if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    const href = event.target instanceof Element && event.target.closest("a[href]")?.getAttribute("href");
-    if (href) remember(`a[href="${CSS.escape(href)}"]`);
+    const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
+    if (!link) return;
+    const song = link.closest<HTMLElement>("[data-song-menu]")?.dataset.songMenu;
+    remember(song ? `[data-song="${CSS.escape(song)}"] button[aria-haspopup="dialog"]` : `a[href="${CSS.escape(link.getAttribute("href")!)}"]`);
   }
-  return { expanded, editing, editingSongs, toggleSongMode, finishEditing, root, start, stuck, open, close, rememberDetail,
+  return { expanded, editing, finishEditing, root, start, stuck, open, close, rememberDetail,
     returnToTop: () => toTop(matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth") };
 }

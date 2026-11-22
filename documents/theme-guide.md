@@ -189,6 +189,8 @@ Password fields provide a keyboard-accessible show/hide button without a confirm
 
 ## Loading and interaction feedback
 
+On touch input, enabled buttons, switches, checkboxes and disclosures give one short 8 ms pulse. The initiating save handler can claim the tap with `confirmTouchOnSuccess()` and call its returned function after persistence succeeds for a single 12 ms confirmation. Use the native gesture event for drag-and-drop or long press. Keep continuous gestures, ordinary links, mouse and keyboard input quiet. Respect reduced motion and browser vibration support.
+
 Reuse the loading components below. Block loading follows the event information panel: an orange spinner above muted text. Keep dimensions appropriate to the containing page, panel or dialog rather than making every loader full-screen.
 
 Group required dependencies behind one initial panel loader; do not give each column or field its own spinner. Individual images retain their dimensions with a placeholder. Missing or failed images use an existing icon placeholder, or the shared `common.states.imageUnavailable` message ("Image unavailable") when text is necessary, without per-image retry buttons or media-specific wording.

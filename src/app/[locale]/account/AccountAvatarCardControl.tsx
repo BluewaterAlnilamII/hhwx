@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmTouchOnSuccess } from "@/lib/touch-feedback";
 import { type ReactElement, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
@@ -75,6 +76,7 @@ export default function AccountAvatarCardControl({
   }, [draftValue, profile]);
 
   const saveAvatar = async () => {
+    const confirm = confirmTouchOnSuccess();
     const sessionId = dialogSession.current;
     const isCurrent = () => sessionId === dialogSession.current;
     setSaving(true);
@@ -115,7 +117,7 @@ export default function AccountAvatarCardControl({
 
       const { avatarCardId, avatarCardServer, avatarCardTrainType } = updatedProfile;
       onProfileChange({ avatarCardId, avatarCardServer, avatarCardTrainType });
-      if (isCurrent()) handleOpenChange(false);
+      if (isCurrent()) { confirm(); handleOpenChange(false); }
     } catch {
       if (isCurrent()) setMessage(t("saveFailed"));
     } finally {

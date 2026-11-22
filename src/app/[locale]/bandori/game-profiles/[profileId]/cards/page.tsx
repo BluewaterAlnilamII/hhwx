@@ -1,4 +1,5 @@
 "use client";
+import { confirmTouchOnSuccess } from "@/lib/touch-feedback";
 import RetryButton from "@/components/RetryButton";
 
 import dynamic from "next/dynamic";
@@ -504,6 +505,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
   }, [cardEditorState, removeCard, saveState]);
 
   const handleSaveChanges = useCallback(async () => {
+    const confirm = confirmTouchOnSuccess();
     if (!profilePayload || !canEditProfile || !hasUnsavedChanges || isSavingChanges || saveState === "conflict") return;
     const cardsSnapshot = draftCards;
     setIsSavingChanges(true);
@@ -521,6 +523,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
       setProfilePayload(saved.payload);
       setBaseCardsHash(saved.cardsHash);
       markCardsSaved(cardsSnapshot);
+      confirm();
       setSaveState("success");
       setSaveNotice(t("draftMessages.savedAll"));
     } catch (error) {

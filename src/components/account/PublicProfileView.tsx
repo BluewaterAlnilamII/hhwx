@@ -1,7 +1,9 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { EyeOff } from "lucide-react";
+import { useProfileTabs } from "./useProfileTabs";
+import { resetCollectionOnReload } from "./useCollectionNavigation";
 import ProfileHeader, { ProfileInfo } from "./ProfileHeader";
 import ProfileFavorites from "./ProfileFavorites";
 import ProfileSettings, { type BindingSettings, type ModuleSettings } from "./ProfileSettings";
@@ -34,7 +36,6 @@ function ProfilePage({ publicUid, viewerId }: { publicUid: number; viewerId: str
   const [confirmed, setProfile] = useState<ProfileHomepage | null>(null);
   const [failed, setFailed] = useState(false);
   const [retry, setRetry] = useState(0);
-  const [tab, setTab] = useState("home");
   const mounted = useRef(true);
   const { profile: ownProfile, updateProfile, profileError: ownProfileError, loadProfile: retryOwnProfile } = useAccountProfile(undefined, confirmed?.isOwner === true);
   const { catalog, error: catalogError, refresh: refreshCatalog } = useBandoriDegreeCatalog(Boolean(confirmed));
@@ -97,47 +98,48 @@ function ProfilePage({ publicUid, viewerId }: { publicUid: number; viewerId: str
       : { displayDegree: { server: fields.displayDegreeServer, degreeId: fields.displayDegreeId, degreeEffectId: fields.displayDegreeEffectId } };
     setProfile(current => current && { ...current, ...change });
   };
+  const { root, tabs, selectedTab, preview, selectTab } = useProfileTabs(Boolean(profile?.bindings.length), Boolean(profile?.isOwner));
   if (!profile) return <main className={styles.loading}>{failed ? <LoadingError onRetry={() => { setFailed(false); setRetry(n => n + 1); }} /> : <LoadingIndicator label={commonT("states.loading")} />}</main>;
   const degree = degreesByServer.get(profile.displayDegree.server)?.get(profile.displayDegree.degreeId) ?? null;
-  const tabs = ["home", ...(profile.bindings.length ? ["details"] : []), ...(profile.isOwner ? ["settings"] : [])];
-  const selectedTab = tabs.includes(tab) ? tab : "home";
   const needsTitleCatalog = profile.bindings.some(account =>
     (profile.isOwner || account.titlesPublic) && account.ownedDegreeIds.length > 0);
   return <main className={styles.profile}>
     <ProfileHeader profile={profile} ownProfile={profile.isOwner ? ownProfile : null} degree={degree} onAccountChange={updateAccount} saving={Boolean(cover.pending)} onSave={value => cover.save(value, "cover")} onSaveSignature={saveSignature} feedback={cover.feedbackFor("cover")} />
     <div className={styles.columns}>
-      <div className={styles.main}>
+      <div ref={root} className={styles.main}>
         <div role="tablist" aria-label={t("navigation")} className={styles.tabs}>
           {tabs.map((name, index) => <button key={name} type="button" role="tab" id={`profile-tab-${name}`} aria-selected={selectedTab === name} aria-controls={`profile-panel-${name}`} tabIndex={selectedTab === name ? 0 : -1}
-            onClick={() => setTab(name)} onKeyDown={e => {
+            onClick={() => selectTab(name)} onKeyDown={e => {
               const next = e.key === "ArrowRight" ? (index + 1) % tabs.length : e.key === "ArrowLeft" ? (index - 1 + tabs.length) % tabs.length : e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 : -1;
-              if (next >= 0) { e.preventDefault(); setTab(tabs[next]); document.getElementById(`profile-tab-${tabs[next]}`)?.focus(); }
+              if (next >= 0) { e.preventDefault(); selectTab(tabs[next]); document.getElementById(`profile-tab-${tabs[next]}`)?.focus({preventScroll: true}); }
             }}>{t(name)}</button>)}
         </div>
-        <div id="profile-panel-home" role="tabpanel" aria-labelledby="profile-tab-home" className={styles.panel} data-empty="true" hidden={selectedTab !== "home"}>
-          <ProfileFavorites profile={profile} viewerId={viewerId} homeVisible={selectedTab === "home"} editable={Boolean(profile.isOwner && ownProfile?.emailVerified)} />
+        <div className={styles.panels} data-tab-panels>
+          <div id="profile-panel-home" role="tabpanel" aria-labelledby="profile-tab-home" className={styles.panel} data-empty="true" inert={selectedTab !== "home"} aria-hidden={selectedTab !== "home"} hidden={selectedTab !== "home" && preview !== "home"}>
+            <ProfileFavorites profile={profile} viewerId={viewerId} homeVisible={selectedTab === "home"} editable={profile.isOwner && !ownProfileError && ownProfile?.emailVerified} />
+          </div>
+          {tabs.includes("details") && <div id="profile-panel-details" role="tabpanel" aria-labelledby="profile-tab-details" className={styles.panel} inert={selectedTab !== "details"} aria-hidden={selectedTab !== "details"} hidden={selectedTab !== "details" && preview !== "details"}>
+            {(selectedTab === "details" || preview === "details") && (needsTitleCatalog && !catalog
+              ? (catalogError ? <LoadingError className="min-h-40" onRetry={refreshCatalog} /> : <LoadingIndicator label={commonT("states.loading")} className="min-h-40" />)
+              : profile.bindings.map(account => {
+              const groups = groupProfileDegrees(account, degreesByServer.get(account.server)!);
+              return <section key={`${account.server}:${account.gameUid}`} className={styles.account}>
+                <div className={styles.accountHeading}><BandoriServerIcon server={account.server} size={20} /><h2><span>{account.gameUid}</span>{account.playerName && <span>{account.playerName}</span>}</h2>
+                  {profile.isOwner && !account.public && <EyeOff size={13} aria-label={t("private")} />}</div>
+                {(profile.isOwner || account.titlesPublic) && groups.some(group => group.length > 0) && <div className={styles.titles}>
+                  {profile.isOwner && account.public && !account.titlesPublic && <EyeOff size={13} aria-label={t("private")} />}
+                  {groups.map((variants, index) => variants.length ? <div key={index} className={styles.titleGroup} role="group" aria-label={t(`degreeGroup${index}`)}>
+                    {variants.map(({ degree: item, degreeEffectId }) => <BandoriDegreeView key={`${item.id}:${degreeEffectId}`} degree={item} degreeEffectId={degreeEffectId} size="comment" />)}
+                  </div> : null)}
+                </div>}
+              </section>;
+            }))}
+          </div>}
+          {profile.isOwner && <div id="profile-panel-settings" role="tabpanel" aria-labelledby="profile-tab-settings" className={styles.panel} inert={selectedTab !== "settings"} aria-hidden={selectedTab !== "settings"} hidden={selectedTab !== "settings" && preview !== "settings"}>
+            {(selectedTab === "settings" || preview === "settings") && profile.preferences && (ownProfileError ? <LoadingError onRetry={() => { void retryOwnProfile(); }} /> : !ownProfile ? <LoadingIndicator label={commonT("states.loading")} /> :
+              <ProfileSettings preferences={profile.preferences} readOnly={!ownProfile.emailVerified} modules={modules} accounts={accounts} />)}
+          </div>}
         </div>
-        {tabs.includes("details") && <div id="profile-panel-details" role="tabpanel" aria-labelledby="profile-tab-details" className={styles.panel} hidden={selectedTab !== "details"}>
-          {selectedTab === "details" && (needsTitleCatalog && !catalog
-            ? (catalogError ? <LoadingError className="min-h-40" onRetry={refreshCatalog} /> : <LoadingIndicator label={commonT("states.loading")} className="min-h-40" />)
-            : profile.bindings.map(account => {
-            const groups = groupProfileDegrees(account, degreesByServer.get(account.server)!);
-            return <section key={`${account.server}:${account.gameUid}`} className={styles.account}>
-              <div className={styles.accountHeading}><BandoriServerIcon server={account.server} size={20} /><h2><span>{account.gameUid}</span>{account.playerName && <span>{account.playerName}</span>}</h2>
-                {profile.isOwner && !account.public && <EyeOff size={13} aria-label={t("private")} />}</div>
-              {(profile.isOwner || account.titlesPublic) && groups.some(group => group.length > 0) && <div className={styles.titles}>
-                {profile.isOwner && account.public && !account.titlesPublic && <EyeOff size={13} aria-label={t("private")} />}
-                {groups.map((variants, index) => variants.length ? <div key={index} className={styles.titleGroup} role="group" aria-label={t(`degreeGroup${index}`)}>
-                  {variants.map(({ degree: item, degreeEffectId }) => <BandoriDegreeView key={`${item.id}:${degreeEffectId}`} degree={item} degreeEffectId={degreeEffectId} size="comment" />)}
-                </div> : null)}
-              </div>}
-            </section>;
-          }))}
-        </div>}
-        {profile.isOwner && <div id="profile-panel-settings" role="tabpanel" aria-labelledby="profile-tab-settings" className={styles.panel} hidden={selectedTab !== "settings"}>
-          {selectedTab === "settings" && profile.preferences && (ownProfileError ? <LoadingError onRetry={() => { void retryOwnProfile(); }} /> : !ownProfile ? <LoadingIndicator label={commonT("states.loading")} /> :
-            <ProfileSettings preferences={profile.preferences} readOnly={!ownProfile.emailVerified} modules={modules} accounts={accounts} />)}
-        </div>}
       </div>
       <aside className={styles.sidebar}><h2>{t("personalInfo")}</h2><ProfileInfo profile={profile} /></aside>
     </div>
@@ -145,6 +147,7 @@ function ProfilePage({ publicUid, viewerId }: { publicUid: number; viewerId: str
 }
 
 export default function PublicProfileView({ publicUid }: { publicUid: number }) {
+  useLayoutEffect(resetCollectionOnReload, []);
   const userId = useGameStore(state => state.userId);
   const authReady = useGameStore(state => state.authReady);
   const t = useTranslations("common");
