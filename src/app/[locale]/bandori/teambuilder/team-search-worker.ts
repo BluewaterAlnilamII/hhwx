@@ -53,6 +53,7 @@ import {
   TeamSearchDataIntegrityError,
   type TimedCacheSnapshot,
 } from "./team-search-data-cache";
+import type { SearchInputIssue } from "./team-search-feedback";
 
 type MasterResponse<T> = {
   payload: T;
@@ -91,7 +92,6 @@ export type TeamSearchWorkerMessages = {
   dataInconsistent: string;
   preloadFailed: string;
   calculateFailed: string;
-  profileDataInvalid: string;
 };
 
 const DEFAULT_WORKER_MESSAGES: TeamSearchWorkerMessages = {
@@ -113,7 +113,6 @@ const DEFAULT_WORKER_MESSAGES: TeamSearchWorkerMessages = {
   dataInconsistent: "Calculation data is incomplete after refresh: {details}",
   preloadFailed: "Failed to prepare data",
   calculateFailed: "Calculation failed",
-  profileDataInvalid: "Profile data is invalid; try syncing or updating the profile",
 };
 
 const MEDLEY_FRONTEND_MEMORY_SOFT_LIMIT_MIB = 1024;
@@ -320,6 +319,7 @@ export type TeamSearchWorkerResponse =
       type: "preload" | "search";
       ok: false;
       error: string;
+      inputIssue?: SearchInputIssue;
     };
 
 type TeamSearchWorkerRunOptions = {
@@ -354,14 +354,22 @@ function getWorkerMessages(messages?: TeamSearchWorkerMessages): TeamSearchWorke
   return messages ?? DEFAULT_WORKER_MESSAGES;
 }
 
-function formatSearchError(error: unknown, messages: TeamSearchWorkerMessages): string {
-  const detail = error instanceof Error ? error.message : messages.calculateFailed;
-  return error instanceof MedleyFoundationInputError
-    && error.code === "INVALID_CARD"
-    && error.path.startsWith("sourceInput.cardsById.")
-    && error.path.includes(".profile.")
-    ? `${messages.profileDataInvalid}\n${detail}`
-    : detail;
+function searchFailure(error: unknown, messages: TeamSearchWorkerMessages) {
+  if (error instanceof MedleyFoundationInputError) {
+    return { error: error.message, inputIssue: { code: error.code, path: error.path } };
+  }
+  if (typeof error === "string") {
+    // The WASM binding throws validation errors as serialized SearchError values.
+    try {
+      const detail = JSON.parse(error);
+      if (typeof detail?.code === "string" && typeof detail.path === "string" && typeof detail.message === "string") {
+        return { error: `${detail.path}: ${detail.message}`, inputIssue: { code: detail.code, path: detail.path } };
+      }
+    } catch {
+      return { error: messages.calculateFailed };
+    }
+  }
+  return { error: error instanceof Error ? error.message : messages.calculateFailed };
 }
 
 async function requestJsonUncached<T>(
@@ -1182,7 +1190,7 @@ self.onmessage = (event: MessageEvent<TeamSearchWorkerMessage>) => {
         requestId: event.data.requestId,
         type: "search",
         ok: false,
-        error: formatSearchError(error, messages),
+        ...searchFailure(error, messages),
       } satisfies TeamSearchWorkerResponse);
     });
 };

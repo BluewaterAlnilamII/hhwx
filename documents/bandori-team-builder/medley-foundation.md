@@ -213,8 +213,6 @@ note time <= trigger time + skill duration
 
 No epsilon is added. When windows overlap, each window computes and floors its own extra independently; the extras are then added. Multipliers are not merged before flooring.
 
-Medley v4 deliberately retains fixed trigger windows and uniform orders. The single-song weighted-order model and 0.75-second post-skill queue do not run on this path. See the [alignment audit](single-song-algorithm.md#singlemedley-alignment-audit) for the common scoring rules and mode-specific differences that must survive any future timing migration.
-
 ### Expected skill order and leader
 
 The first five triggers use the five team skills in every one of the `5! = 120` orders with equal probability. The sixth trigger repeats the leader skill. Each member therefore occupies each of the first five windows in exactly `4! = 24` orders.
@@ -236,6 +234,10 @@ song score = floor(
 This is why production scoring does not need to enumerate 120 orders for every candidate. The numerator is accumulated exactly in signed `i128`, converted to binary64 once, divided by five and immediately floored. Each song is settled independently; the medley total is then calculated as `(song0 + song1) + song2`.
 
 The scorer evaluates all five leaders for a complete five-card set. Equal best song scores retain the leader with the smallest physical instance ID.
+
+### Possible changes to medley skill execution
+
+Two questions for a future medley scoring revision concern the client’s skill execution. Does formation affect the probability of each activation order? When a skill is already active, does the next one wait until 0.75 seconds after it ends? These rules affect the expected score and which notes receive a bonus. The current calculator uses the 120 equally likely orders and fixed trigger windows described above. If medley-specific evidence supports either change, its scope is skill execution. Medley retains its center-leader encore, combo carryover, per-song rounding and three-song Pt formula. [Current single-song and medley rules](single-song-algorithm.md#singlemedley-alignment-audit)
 
 ### Display-only medley event points
 

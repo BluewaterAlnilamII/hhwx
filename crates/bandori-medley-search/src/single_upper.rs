@@ -13,6 +13,14 @@ use std::collections::BTreeMap;
 
 type Suffix = Vec<[[f64; 2]; 6]>;
 
+fn other_score_upper(rate: f64, other_power: f64) -> Result<f64, UpperBoundFailure> {
+    // Enclose the weighted accumulation of up to 96 queued order rates.
+    let rate = mul_up(rate, rounding_factor(256)?)?;
+    // Within the validated room range, one point covers the two rounded
+    // additions and the 1e-5 tolerance before the room score is floored.
+    add_up(mul_up(rate, other_power)?, 1.0)
+}
+
 fn position_upper(rates: [f64; 6]) -> Result<f64, UpperBoundFailure> {
     let mut best = 0.0_f64;
     for (position, _) in ORDER_WEIGHTS[0].iter().enumerate() {
@@ -504,8 +512,7 @@ impl<'a> SingleUpper<'a> {
                 return Err(UpperBoundFailure::Unknown);
             }
             let score = mul_up(mul_up(p, rate)?, rounding_factor(2)?)?;
-            let room_rate = mul_up(rate, rounding_factor(256)?)?;
-            let other = add_up(mul_up(room_rate, input.other_players_power)?, 1.0)?;
+            let other = other_score_upper(rate, input.other_players_power)?;
             // Five nonnegative bonus additions, multiplication by 100, and
             // canonical-order reassociation are enclosed before monotone round.
             let raw_bonus = mul_up(add_up(bonus, bin as f64 / 32.0)?, rounding_factor(8)?)?;
@@ -552,14 +559,34 @@ impl<'a> SingleUpper<'a> {
         if input.target == SingleTargetV1::Score {
             return Ok(score);
         }
-        let bonus = self.shared.bonus.complete(group, fixed, false)?;
-        let bonus = div_up(mul_up(bonus, 100.0)?.ceil(), 100.0)?;
-        // Enclose weighted products and accumulation of 96 queued order rates.
-        let room_rate = mul_up(rate, rounding_factor(256)?)?;
-        let other = add_up(mul_up(room_rate, input.other_players_power)?, 1.0)?;
+        // The leaf sums the five rates in canonical card order.
+        let raw_bonus = mul_up(
+            self.shared.bonus.complete(group, fixed, false)?,
+            rounding_factor(8)?,
+        )?;
+        let bonus = div_up(mul_up(raw_bonus, 100.0)?.ceil(), 100.0)?;
+        let other = other_score_upper(rate, input.other_players_power)?;
         Ok(input
             .event_rule
             .upper(score, other, bonus, self.shared.support)
             .unwrap_or(score))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn room_and_residual_are_enclosed_at_the_score_limit() {
+        let limit = (1_u64 << 43) as f64;
+        let large = limit.next_down();
+        let small = 0.0006;
+        for (own, other) in [(large, small), (small, large)] {
+            let room = (own + other + 1e-5).floor();
+            assert_eq!(room, limit);
+            let upper = other_score_upper(1.0, other).unwrap();
+            assert!(room - own <= upper && room <= own + upper);
+        }
     }
 }

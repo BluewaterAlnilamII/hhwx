@@ -18,6 +18,7 @@ hhwx/
 |-- crates/           # Bandori 组曲 Rust workspace members
 |-- documents/        # 产品说明、设置说明和功能 SQL
 |-- messages/         # UI 翻译使用的语言消息目录
+|-- proofs/           # 经证明检查器验证的算法数学模型
 |-- public/           # 由 Next.js 直接提供的静态资源
 |-- scripts/          # 本地维护和校验脚本
 |-- src/

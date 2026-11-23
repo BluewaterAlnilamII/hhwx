@@ -1148,11 +1148,21 @@
       "running": "计算中",
       "stillProving": "仍在证明是否存在更高分队伍",
       "completedElapsed": "完成：用时 {elapsed}",
-      "boundedStop": "无法完成精确的全局最优证明，提前结束：{reason}",
+      "noMatchingTeam": "没有符合条件的队伍",
+      "stoppedWithoutTeams": "{reason}，尚未找到队伍",
+      "stoppedWithTeams": "{reason}，显示当前最佳队伍",
+      "stopReasons": {
+        "timeLimit": "搜索超时",
+        "memoryLimit": "内存不足",
+        "cancelled": "搜索已取消",
+        "overflow": "数值超出范围",
+        "invalidData": "输入数据有误",
+        "calculationFailed": "计算失败",
+        "stopped": "搜索已停止"
+      },
       "timeToBest": "找到当前最佳队伍用时 {elapsed}",
       "proofElapsed": "证明/收敛额外用时 {elapsed}",
       "hasMaxScoreCandidate": "在最高平均分结果之外，有另外的最高最高分结果",
-      "fallbackBounded": "搜索空间尚未完全证明，已按当前最佳结果返回",
       "configurationProgress": "配置证明进度 {closed}/{total}，已开始 {started}/{total}{traceLabel}",
       "firstUnclosedTrace": "；第一个未完成配置：{trace}",
       "unknownCompletion": "未记录完成状态",
@@ -1182,12 +1192,8 @@
         "dfsTimeout": "DFS 证明达到时间限制"
       },
       "reasonParts": {
-        "memoryLimit": "达到内存保护上限{limitLabel}",
-        "timeLimit": "达到时间限制{limitLabel}",
         "candidateJoinIncomplete": "候选拼接未完成：{reason}"
       },
-      "limitLabel": "（限制 {limit}）",
-      "upperLimitLabel": "（上限 {limit}）",
       "candidateSoftLimitLabel": "（上限 {limit}{generatedLabel}）",
       "generatedLabel": "，已生成 {count}"
     },
@@ -1217,8 +1223,7 @@
       "medleyChartDataInvalid": "第 {index} 首谱面数据格式无效",
       "dataInconsistent": "刷新后计算数据仍不完整：{details}",
       "preloadFailed": "准备数据失败",
-      "calculateFailed": "计算失败",
-      "profileDataInvalid": "档案数据错误，请尝试重新同步或更新档案"
+      "calculateFailed": "计算失败"
     },
     "errors": {
       "notSignedIn": "请先登录",
@@ -1236,6 +1241,20 @@
       "profileNotReady": "档案尚未准备完成",
       "invalidWorkerResponse": "计算线程返回格式无效",
       "invalidTimeLimit": "时间限制请输入 {min} 到 {max} 秒的整数",
+      "invalidThreshold": "请输入有效的非负整数",
+      "chartNoteLimit": "谱面最多支持 16,384 个计分音符",
+      "invalidNoteTime": "音符时间超出范围",
+      "invalidRoomPower": "队友综合力超出范围",
+      "invalidSkillDuration": "技能时长超出范围",
+      "scoreRangeExceeded": "预计分数超出范围",
+      "invalidPointBonus": "活动 Pt 加成超出范围",
+      "invalidSupportPower": "支援力超出范围",
+      "invalidEventRule": "活动计分参数有误",
+      "invalidProfile": "档案数据有误，请重新同步",
+      "invalidPerfectRate": "PERFECT 率有误",
+      "invalidChart": "谱面数据有误",
+      "invalidSkill": "技能数据有误",
+      "invalidSearchInput": "输入数据有误",
       "calculateFailed": "计算失败"
     },
     "preferences": {

@@ -18,6 +18,7 @@ hhwx/
 |-- crates/           # Bandori medley Rust workspace members
 |-- documents/        # Product notes, setup notes, and feature SQL
 |-- messages/         # Locale message catalogs for UI translations
+|-- proofs/           # Machine-checked mathematical models of algorithms
 |-- public/           # Static assets served directly by Next.js
 |-- scripts/          # Local maintenance and validation scripts
 |-- src/

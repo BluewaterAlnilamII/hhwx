@@ -1,0 +1,7 @@
+name = "bandori-single"
+defaultTargets = ["SingleSong"]
+leanOptions = { warningAsError = true }
+
+[[lean_lib]]
+name = "SingleSong"
+roots = ["Search", "Retention", "Formations", "Scoring", "Bounds", "SkillBounds", "EventPoints", "RoundedPoints", "Support", "SingleSong"]

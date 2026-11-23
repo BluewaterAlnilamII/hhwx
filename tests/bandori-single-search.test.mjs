@@ -10,11 +10,23 @@ import { getBandoriPowerDisplayValue, getBandoriTotalPowerDisplayValue } from ".
 
 initSync({ module: readFileSync(new URL("../src/lib/bandori/medley-wasm/pkg/bandori_medley_bg.wasm", import.meta.url)) });
 const fixture = JSON.parse(readFileSync(new URL("./fixtures/bandori-medley-foundation-source-v1.json", import.meta.url), "utf8"));
+
 function source(settings = {}) {
   return { ...structuredClone(fixture), song: fixture.songs[0], settings: { resultLimit: 1, ...settings } };
 }
 function run(input, stop = () => undefined, budget = 64 * 1024 * 1024, incumbent = () => {}) {
   return JSON.parse(runSingleSearchJson(JSON.stringify(input), budget, stop, incumbent, () => {}));
+}
+function assertRejectedBeforeSearch(input, path) {
+  let callbacks = 0;
+  const onSearch = () => { callbacks++; };
+  assert.throws(() => runSingleSearchJson(JSON.stringify(input), 64 * 1024 * 1024, onSearch, onSearch, onSearch), error => {
+    const rejection = JSON.parse(String(error));
+    assert.equal(rejection.code, "INVALID_CARD");
+    assert.equal(rejection.path, path);
+    return true;
+  });
+  assert.equal(callbacks, 0);
 }
 function small(settings = {}) {
   const { input } = buildSingleSearchInput(source(settings));
@@ -512,6 +524,16 @@ test("external skill conditions are independent and strictly validated", () => {
   s.settings.otherPlayerSkills.pop(); assert.throws(() => buildSingleSearchInput(s), /four external/);
 });
 
+test("cooperative normalization truncates one player's power before summing all four", () => {
+  const max = 2 ** 32 - 1;
+  const settings = { liveType: "multi", otherPlayerSkills: Array(4).fill({ skillId: 1, skillLevel: 1 }) };
+  for (const [average, total] of [[380_000.75, 1_520_000], [max + 0.75, 4 * max]]) {
+    assert.equal(buildSingleSearchInput(source({ ...settings, otherPlayersAveragePower: average })).input.otherPlayersPower, total);
+  }
+  assert.throws(() => buildSingleSearchInput(source({ ...settings, otherPlayersAveragePower: max + 1 })),
+    { code: "INVALID_PARAMETER", path: "otherPlayersAveragePower" });
+});
+
 test("Pt options retain every boost, CP, rank and result across score thresholds", () => {
   const boundaries = [1600000, 1750000, 2000000, 2100000, 2250000, 2500000, 2625000, 2812500, 3125000];
   for (const score of [0, ...boundaries.flatMap(value => [value - 0.25, value, value + 0.25])]) {
@@ -520,6 +542,26 @@ test("Pt options retain every boost, CP, rank and result across score thresholds
         { eventType, eventFormula, liveType: eventType === "challenge" ? "challenge" : ["versus", "festival"].includes(eventType) ? "versus" : "free", liveBoostCount: 2, challengeCpCost: 800 });
     }
   }
+});
+
+test("equal support power uses the lower instance ID for both signs of zero", () => {
+  const input = small({ eventType: "mission_live", liveType: "free", target: "eventPoint" });
+  const template = input.cards[0];
+  input.cards = Array.from({ length: 11 }, (_, id) => ({
+    ...template, instanceId: id, masterCardId: id + 1, characterId: id + 1,
+    isExcluded: false, characterParameter: [id < 5 ? 1_000_000 : 0, 0, 0], eventParameter: [0, 0, 0],
+  }));
+  input.pointBonusRates = Array(11).fill(0);
+  input.supportPowers = Array(11).fill(0);
+  const positive = run(input).outcome;
+  assert.equal(positive.status, "exact");
+  assert.deepEqual(positive.best.memberInstanceIds, [0, 1, 2, 3, 4]);
+  assert.deepEqual(positive.best.supportInstanceIds, [5, 6, 7, 8, 9]);
+  // Preserve the sign on the wire. JSON.stringify ordinarily serializes -0 as 0.
+  input.supportPowers[5] = JSON.rawJSON("-0.0");
+  const negative = run(input).outcome;
+  assert.equal(negative.status, "exact");
+  assert.deepEqual(negative.best, positive.best);
 });
 
 test("mission Pt jointly selects the main team and five remaining distinct-character supports", () => {
@@ -680,34 +722,196 @@ test("constrained WASM winners match exhaustive rosters, leaders and weighted fo
   assert.ok(feasible > 0 && infeasible > 0, "cover both feasible and proved-infeasible requests");
 });
 
-test("arithmetic failure in auxiliary Pt cannot become an exact score result", () => {
+test("an out-of-range auxiliary Pt divisor is rejected for both targets", () => {
   const input = small();
   input.eventRule = { kind: "normal", base: 50, divisor: 1e-320, formula: 2 };
   for (const target of ["score", "event_point"]) {
-    const { outcome, details } = run({ ...input, target });
-    assert.equal(outcome.status, "incomplete", target);
-    assert.equal(outcome.reason, "arithmetic_overflow", target);
-    assert.equal(outcome.bestSoFar, null, target);
-    assert.equal(details.length, 0, target);
+    assertRejectedBeforeSearch({ ...input, target }, "eventRule");
   }
 });
 
-test("finite extreme inputs either score safely or report incomplete arithmetic", () => {
-  const mutations = [
-    input => { input.cards.forEach(c => { c.characterParameter = [1e308, 0, 0]; }); },
-    input => { input.cards.forEach(c => Object.values(c.skillContexts).forEach(s => {
-      s.behavior = { kind: "score", scoreUpPercent: 1e308 }; s.isRateUpWithPerfect = false;
-    })); },
-    input => { input.cards.forEach(c => Object.values(c.skillContexts).forEach(s => { s.durationSeconds = Number.MAX_VALUE; })); },
-    input => { input.otherSkills = Array(4).fill(input.cards[0].skillContexts.mixed); input.otherPlayersPower = 1e308; },
-    input => { input.pointBonusRates.fill(1e308); },
-  ];
-  mutations.forEach((mutate, i) => {
-    const input = small(); mutate(input);
-    const { outcome } = run(input);
-    assert.equal(outcome.status, "incomplete", `extreme mutation ${i}`);
-    assert.equal(outcome.reason, "arithmetic_overflow", `extreme mutation ${i}`);
+test("an out-of-range bonus on a lower-scoring substitution is rejected before search", () => {
+  const input = small();
+  input.cards[5].characterId = input.cards[0].characterId;
+  input.cards[0].characterParameter = [100_000, 100_000, 100_000];
+  input.eventRule = { kind: "normal", base: 50, divisor: 10_000, formula: 2 };
+  input.cards[5].isExcluded = true;
+  const valid = run(input).outcome;
+  assert.equal(valid.status, "exact");
+  assert.ok(valid.best);
+  input.cards[5].isExcluded = false;
+  input.cards[0].isExcluded = true;
+  const alternative = run(input).outcome;
+  assert.equal(alternative.status, "exact");
+  assert.ok(alternative.best.averageScore < valid.best.averageScore);
+  input.cards[0].isExcluded = false;
+  input.pointBonusRates[5] = 1e307;
+  assertRejectedBeforeSearch(input, "pointBonusRates");
+});
+
+test("single WASM rejects the historical numerator collision before search", () => {
+  const input = small();
+  const cardPower = 700_000_000_000;
+  const noteCount = 3500;
+  const skillDuration = 0.1;
+  const triggerTimes = [0, 10, 20, 30, 40, 50];
+  const earlyTimes = [0, .02, .04, .06, 10, 10.01, 10.02, 10.03, 10.04, 10.05, 10.06, 10.07, 10.08, 20, 30, 40, 50];
+  const notes = Array.from({ length: noteCount }, (_, noteId) => {
+    const timeSeconds = earlyTimes[noteId] ?? 70 + noteId;
+    return { noteId, timeSeconds, isSkillTrigger: triggerTimes.includes(timeSeconds) };
   });
+  input.perfectRate = { numerator: 1, decimalScale: 0 };
+  input.cards = input.cards.slice(0, 5).map((card, id) => {
+    const scoreUpPercent = ((id === 4 ? 1 : 0) + 0.25) * 100 / 3_300_000_000;
+    const skill = { ...card.skillContexts.mixed, durationSeconds: skillDuration,
+      behavior: { kind: "score", scoreUpPercent }, isRateUpWithPerfect: false };
+    return { ...card, characterId: id + 1, isExcluded: false, characterParameter: [cardPower, 0, 0],
+      eventParameter: [0, 0, 0], skillContexts: { mixed: skill, sameBand: skill, sameAttribute: skill, sameBandAndAttribute: skill } };
+  });
+  input.areaItems = [];
+  input.areaConfigurations = [{ selectedAreaItemIds: [] }];
+  input.pointBonusRates = Array(5).fill(0);
+  input.supportPowers = Array(5).fill(0);
+  input.song = { ...input.song, playLevel: 5, notes };
+  input.fever = Array(noteCount).fill(false);
+
+  const baseNotes = notes.map((_, i) => Math.floor(cardPower * 5 * (3 / noteCount) * combo(i + 1) * 1.1));
+  const base = baseNotes.reduce((sum, score) => sum + BigInt(score), 0n);
+  const gains = input.cards.map(card => triggerTimes.map(start => notes.reduce((sum, note, i) => {
+    if (note.timeSeconds <= start || note.timeSeconds > start + skillDuration) return sum;
+    const boosted = Math.floor(baseNotes[i] * (1 + card.skillContexts.mixed.behavior.scoreUpPercent / 100));
+    return sum + boosted - baseNotes[i];
+  }, 0)));
+  assert.deepEqual(gains, input.cards.map((_, id) => id === 4 ? [3, 8, 0, 0, 0, 0] : Array(6).fill(0)));
+
+  // Only card 4 adds points. It occupies seat 1 or 4 in the two historical formations.
+  const numerators = [1, 4].map(seat => orders.reduce((sum, [order, weight]) =>
+    sum + BigInt(weight) * (base + BigInt(gains[4][order.indexOf(seat)])), 0n));
+  assert.deepEqual(numerators, [13_017_692_160_002_817n, 13_017_692_160_002_816n]);
+  for (const numerator of numerators) assert.equal(Number(numerator) / 1024, 12_712_590_000_002.75);
+  assertRejectedBeforeSearch(input, "scoreRange");
+});
+
+test("card power and skills that exceed the song score range are rejected before search", () => {
+  const power = small();
+  power.cards[0].characterParameter = [1e308, 0, 0];
+  assertRejectedBeforeSearch(power, "scoreRange");
+  const skills = small();
+  skills.cards[0].skillContexts.mixed.behavior = { kind: "score", scoreUpPercent: 1e308 };
+  assertRejectedBeforeSearch(skills, "scoreRange");
+  const external = small();
+  external.otherSkills = Array(4).fill(external.cards[0].skillContexts.mixed);
+  external.otherPlayersPower = 1e308;
+  assertRejectedBeforeSearch(external, "otherPlayersPower");
+});
+
+test("single WASM accepts inclusive game-scale limits and rejects out-of-range decoded values", () => {
+  const max = 2 ** 32 - 1;
+  const aboveMax = max + 2 ** -21;
+  const input = small();
+  input.otherSkills = Array(4).fill(input.cards[0].skillContexts.mixed);
+  input.otherPlayersPower = 4 * max;
+  input.pointBonusRates[0] = 10;
+  input.supportPowers[0] = max;
+  input.eventRule = { kind: "normal", base: max, divisor: 1, formula: 2 };
+  for (const divisor of [1, 1.5, max]) {
+    input.eventRule.divisor = divisor;
+    const { outcome } = run(input);
+    assert.equal(outcome.status, "exact");
+    assert.ok(outcome.best);
+  }
+  assertRejectedBeforeSearch({ ...input, otherPlayersPower: 4 * aboveMax }, "otherPlayersPower");
+  assertRejectedBeforeSearch({ ...input, pointBonusRates: input.pointBonusRates.map(() => 10 + 2 ** -49) }, "pointBonusRates");
+  assertRejectedBeforeSearch({ ...input, supportPowers: input.supportPowers.map(() => aboveMax) }, "supportPowers");
+  assertRejectedBeforeSearch({ ...input, eventRule: { ...input.eventRule, base: aboveMax } }, "eventRule");
+  for (const divisor of [1 - Number.EPSILON, aboveMax]) {
+    assertRejectedBeforeSearch({ ...input, eventRule: { ...input.eventRule, divisor } }, "eventRule");
+  }
+});
+
+test("the shared WASM JSON decoder rounds the decimal 0.9999999999999999 to divisor 1", () => {
+  const input = small();
+  input.target = "event_point";
+  input.eventRule = { kind: "normal", base: 50, divisor: 1, formula: 2 };
+  const boundary = run(input);
+  assert.equal(boundary.outcome.status, "exact");
+  assert.ok(boundary.outcome.best.eventPointBase > 0);
+  // Validation sees the decoded float. The next lower JS value survives
+  // JSON.stringify but the shared Rust decoder maps that decimal to 1.
+  input.eventRule.divisor = 1 - Number.EPSILON / 2;
+  assert.equal(JSON.stringify(input.eventRule.divisor), "0.9999999999999999");
+  assert.deepEqual(run(input), boundary);
+});
+
+test("single WASM accepts 16,384 scoring notes and rejects one more before search", () => {
+  const limit = 16_384;
+  const input = small();
+  input.song.notes = Array.from({ length: limit }, (_, noteId) => ({
+    noteId, timeSeconds: noteId / 100, isSkillTrigger: noteId < 6,
+  }));
+  input.fever = Array(limit).fill(false);
+  let polls = 0;
+  const { outcome } = run(input, () => { polls++; return "cancelled"; });
+  assert.ok(polls > 0);
+  assert.equal(outcome.status, "incomplete");
+  assert.equal(outcome.reason, "cancelled");
+  input.song.notes.push({ noteId: limit, timeSeconds: limit / 100, isSkillTrigger: false });
+  input.fever.push(false);
+  assertRejectedBeforeSearch(input, "song.notes");
+});
+
+test("at the chart limit cooperative PERFECT-only skills leave the first simultaneous note scored", () => {
+  const count = 16_384;
+  const input = small();
+  input.cards.length = input.pointBonusRates.length = input.supportPowers.length = 5;
+  input.perfectRate = { numerator: 0, decimalScale: 0 };
+  input.song.playLevel = 25;
+  input.song.notes = Array.from({ length: count }, (_, noteId) => ({
+    noteId, timeSeconds: 0, isSkillTrigger: noteId < 6,
+  }));
+  input.fever = Array(count).fill(false);
+  for (const card of input.cards) {
+    card.characterParameter = [0, 0, 0];
+    card.eventParameter = [0, 0, 0];
+    for (const skill of Object.values(card.skillContexts)) {
+      skill.behavior = { kind: "perfect_only", scoreUpPercent: 0 };
+      skill.isRateUpWithPerfect = false;
+      skill.durationSeconds = 1;
+    }
+  }
+  input.otherSkills = Array(4).fill(input.cards[0].skillContexts.mixed);
+  input.otherPlayersPower = 4 * (2 ** 32 - 1);
+  const { outcome } = run(input);
+  assert.equal(outcome.status, "exact");
+  assert.equal(outcome.best.averageScore, 0);
+  // Only the first trigger scores. All later notes share its timestamp and
+  // the next five skills queue past it. The first note is GREAT at combo 1.
+  const firstNoteRate = (3 + 0.03 * (25 - 5)) / count * 0.8;
+  assert.equal(outcome.best.roomScore, Math.floor(firstNoteRate * input.otherPlayersPower + 1e-5));
+});
+
+test("chart and skill times preserve fractional seconds and reject values beyond the supported clock", () => {
+  const max = 2 ** 32 - 1;
+  const chart = small();
+  chart.song.notes.at(-1).timeSeconds = max;
+  assert.equal(run(chart).outcome.status, "exact");
+  chart.song.notes.at(-1).timeSeconds = 2 ** 53;
+  assertRejectedBeforeSearch(chart, `song.notes[${chart.song.notes.length - 1}].timeSeconds`);
+
+  const duration = small();
+  for (const skill of Object.values(duration.cards[0].skillContexts)) skill.durationSeconds = max - 0.25;
+  assert.equal(run(duration).outcome.status, "exact");
+  for (const skill of Object.values(duration.cards[0].skillContexts)) skill.durationSeconds = max;
+  assert.equal(run(duration).outcome.status, "exact");
+  duration.cards.forEach(card => Object.values(card.skillContexts).forEach(skill => { skill.durationSeconds = Number.MAX_VALUE; }));
+  assertRejectedBeforeSearch(duration, "durationSeconds");
+
+  const external = small();
+  external.otherSkills = Array(4).fill({ ...external.cards[0].skillContexts.mixed, durationSeconds: max + 0.5 });
+  assertRejectedBeforeSearch(external, "durationSeconds");
+});
+
+test("in-range scores preserve runtime arithmetic failures, underflow and unknown bounds", () => {
   const tiny = small();
   tiny.cards.forEach(c => { c.characterParameter = [Number.MIN_VALUE, 0, 0]; c.eventParameter = [0, 0, 0]; });
   const { outcome, details } = run(tiny);
@@ -721,13 +925,20 @@ test("finite extreme inputs either score safely or report incomplete arithmetic"
   mixed.cards.forEach((card, i) => { card.bandId = i + 1; });
   const baseline = run(mixed).outcome.best;
   mixed.cards.forEach(card => {
-    card.skillContexts.sameBand.behavior = { kind: "score", scoreUpPercent: 1e308 };
+    card.skillContexts.sameBand.behavior = { kind: "score", scoreUpPercent: 50_000_000 };
     card.skillContexts.sameBand.isRateUpWithPerfect = false;
   });
   const unsafe = run(mixed).outcome;
   assert.equal(unsafe.status, "exact");
   assert.deepEqual(unsafe.best, baseline);
   assert.ok(unsafe.diagnostics.unknownBounds > 0);
+  mixed.cards.forEach((card, i) => {
+    card.bandId = 1;
+    card.attribute = i % 2 ? "cool" : "pure";
+  });
+  const reached = run(mixed).outcome;
+  assert.equal(reached.status, "incomplete");
+  assert.equal(reached.reason, "arithmetic_overflow");
 });
 
 test("malformed normalized inputs fail closed before any exact result", () => {

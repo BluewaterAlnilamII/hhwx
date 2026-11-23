@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useMessages, useTranslations } from "next-intl";
 import {
+  CircleAlert,
   Calculator,
   CheckCircle2,
   ChevronDown,
@@ -29,6 +30,7 @@ import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useBandoriEventsMaster } from "@/hooks/useBandoriEventsMaster";
 import { useBandoriMusicMaster } from "@/hooks/useBandoriMusicMaster";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
+import { groupedIntegerInputProps, parseIntegerMinimum } from "@/lib/grouped-integer-input";
 import type { BandoriAssetRegion } from "@/lib/bandori-asset-proxy";
 import {
   buildBandoriPublicAssetUrl,
@@ -116,6 +118,7 @@ import type {
   TeamSearchWorkerRequest,
   TeamSearchWorkerResponse,
 } from "./team-search-worker";
+import { searchInputMessageKey, searchOutcomeNotice } from "./team-search-feedback";
 
 type StepId = "event" | "live" | "song" | "profile" | "calculate";
 type LiveType = "free" | "multi" | "challenge" | "versus";
@@ -393,7 +396,6 @@ const DEFAULT_TEAM_SEARCH_WORKER_MESSAGES: TeamSearchWorkerMessages = {
   dataInconsistent: "Calculation data is incomplete after refresh: {details}",
   preloadFailed: "Failed to prepare data",
   calculateFailed: "Calculation failed",
-  profileDataInvalid: "Profile data is invalid; try syncing or updating the profile",
 };
 
 const TEAM_SEARCH_WORKER_MESSAGE_KEYS = Object.keys(DEFAULT_TEAM_SEARCH_WORKER_MESSAGES) as Array<keyof TeamSearchWorkerMessages>;
@@ -991,14 +993,6 @@ function isMedleySearchResponse(result: TeamBuilderSearchResponse): result is Ba
 
 type TeamBuilderTranslator = (key: string, values?: Record<string, string | number>) => string;
 
-function getSearchTimeLimitLabel(maxSearchDurationSeconds: string | undefined, secondsLabel: string): string | null {
-  if (!maxSearchDurationSeconds) {
-    return null;
-  }
-  const seconds = Number(maxSearchDurationSeconds);
-  return Number.isFinite(seconds) && seconds > 0 ? `${seconds} ${secondsLabel}` : null;
-}
-
 function parseSearchDurationSeconds(value: string): number | null {
   const token = value.trim();
   if (!/^[0-9]+$/.test(token)) {
@@ -1010,34 +1004,6 @@ function parseSearchDurationSeconds(value: string): number | null {
     && seconds <= MAX_SEARCH_DURATION_SECONDS
     ? seconds
     : null;
-}
-
-function parsePositiveConstraintInput(value: string): number | undefined {
-  const numeric = Number(value.trim());
-  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined;
-}
-
-function buildBoundedEarlyStopReason(
-  result: TeamBuilderSearchResponse,
-  proofT: TeamBuilderTranslator,
-  secondsLabel: string,
-  maxSearchDurationSeconds?: string,
-): string {
-  if (result.incompleteReason === "memory_exhausted") {
-    return proofT("reasonParts.memoryLimit", {
-      limitLabel: proofT("upperLimitLabel", {
-        limit: `${isMedleySearchResponse(result) ? Math.floor(result.stats.memoryBudgetBytes / (1024 * 1024)) : 1024} MiB`,
-      }),
-    });
-  }
-  if ((isMedleySearchResponse(result) && result.incompleteReason === "timed_out")
-    || (!isMedleySearchResponse(result) && result.stats.timedOut)) {
-    const timeLimitLabel = getSearchTimeLimitLabel(maxSearchDurationSeconds, secondsLabel);
-    return proofT("reasonParts.timeLimit", {
-      limitLabel: timeLimitLabel ? proofT("limitLabel", { limit: timeLimitLabel }) : "",
-    });
-  }
-  return proofT("fallbackBounded");
 }
 
 function formatSearchElapsedMs(elapsedMs: number | null | undefined): string | null {
@@ -1052,25 +1018,13 @@ function formatSearchElapsedMs(elapsedMs: number | null | undefined): string | n
 function buildSearchCompletionSummary(
   result: TeamBuilderSearchResponse,
   proofT: TeamBuilderTranslator,
-  secondsLabel: string,
-  maxSearchDurationSeconds?: string,
 ): string {
   const medleyResult = isMedleySearchResponse(result) ? result : null;
-  const elapsedLabel = medleyResult
-    ? formatSearchElapsedMs(medleyResult.stats.elapsedMs) ?? "0ms"
-    : formatSearchElapsedMs(result.stats.elapsedMs) ?? "0ms";
-  const parts = [proofT("completedElapsed", { elapsed: elapsedLabel })];
-  if (result.status !== "exact" && (medleyResult?.status === "incomplete"
-    || (!isMedleySearchResponse(result) && result.stats.searchMode === "bounded"))) {
-    parts.push(proofT("boundedStop", {
-      reason: buildBoundedEarlyStopReason(
-        result,
-        proofT,
-        secondsLabel,
-        maxSearchDurationSeconds,
-      ),
-    }));
-  }
+  const count = isMedleySearchResponse(result) ? result.candidates.length : result.results.length;
+  const notice = searchOutcomeNotice(result.status, result.incompleteReason, count, proofT);
+  if (notice) return notice;
+  const elapsed = formatSearchElapsedMs(result.stats.elapsedMs) ?? "0ms";
+  const parts = [proofT("completedElapsed", { elapsed })];
   if (medleyResult) {
     const timeToBestScoreMs = medleyResult.stats.timeToBestScoreMs;
     const timeToBestLabel = formatSearchElapsedMs(timeToBestScoreMs);
@@ -2149,6 +2103,9 @@ function TeamBuilderPanel({ userId }: { userId: string }) {
   const [maxSearchDurationSeconds, setMaxSearchDurationSeconds] = useState(DEFAULT_SEARCH_DURATION_SECONDS);
   const [minLeaderScoreUpPercent, setMinLeaderScoreUpPercent] = useState(() => initialLivePreferences.minLeaderScoreUpPercent ?? "");
   const [minTotalPower, setMinTotalPower] = useState(() => initialLivePreferences.minTotalPower ?? "");
+  const minLeaderThreshold = parseIntegerMinimum(minLeaderScoreUpPercent);
+  const minPowerThreshold = parseIntegerMinimum(minTotalPower);
+  const invalidThreshold = minLeaderThreshold === null || minPowerThreshold === null;
   const [submitting, setSubmitting] = useState(false);
   const [calculationStartedAt, setCalculationStartedAt] = useState<number | null>(null);
   const [calculationNow, setCalculationNow] = useState<number | null>(null);
@@ -2945,9 +2902,6 @@ function TeamBuilderPanel({ userId }: { userId: string }) {
       : medleySongIds;
     return sourceSongIds.map((id) => data.songs[id] ?? null);
   }, [data.songs, displayedResultIsMedley, medleyResultInputSnapshot, medleySongIds]);
-  const displayedMaxSearchDurationSeconds = displayedResultIsMedley && medleyResultInputSnapshot
-    ? medleyResultInputSnapshot.maxSearchDurationSeconds
-    : maxSearchDurationSeconds;
   const resultProofStatusLabel = result ? getSearchProofStatusLabel(result, proofT) : null;
   const displayedSearchResults = useMemo(() => {
     if (!result) {
@@ -3010,14 +2964,12 @@ function TeamBuilderPanel({ userId }: { userId: string }) {
     let constraints: TeamSearchWorkerRequest["calculation"]["constraints"];
     if (!isMedleyEvent) {
       const nextConstraints: NonNullable<TeamSearchWorkerRequest["calculation"]["constraints"]> = {};
-      const minLeaderScoreUpPercentConstraint = parsePositiveConstraintInput(minLeaderScoreUpPercent);
-      const minTotalPowerConstraint = parsePositiveConstraintInput(minTotalPower);
-      if (minLeaderScoreUpPercentConstraint !== undefined) {
-        nextConstraints.minLeaderScoreUpPercent = minLeaderScoreUpPercentConstraint;
+      if (minLeaderThreshold === null || minPowerThreshold === null) {
+        setActiveStep("calculate");
+        return;
       }
-      if (minTotalPowerConstraint !== undefined) {
-        nextConstraints.minTotalPower = minTotalPowerConstraint;
-      }
+      if (minLeaderThreshold > 0) nextConstraints.minLeaderScoreUpPercent = minLeaderThreshold;
+      if (minPowerThreshold > 0) nextConstraints.minTotalPower = minPowerThreshold;
       constraints = Object.keys(nextConstraints).length > 0 ? nextConstraints : undefined;
     }
 
@@ -3092,7 +3044,7 @@ function TeamBuilderPanel({ userId }: { userId: string }) {
           : undefined,
       });
       if (!response.ok) {
-        throw new Error(response.error);
+        throw new Error(response.inputIssue ? errorsT(searchInputMessageKey(response.inputIssue)) : response.error);
       }
       if (response.type !== "search") {
         throw new Error(errorsT("invalidWorkerResponse"));
@@ -3469,9 +3421,9 @@ function TeamBuilderPanel({ userId }: { userId: string }) {
                 <FieldRow label={labelsT("minLeaderScoreUp")}>
                   <div className="flex items-center gap-2">
                     <TextInput
-                      value={minLeaderScoreUpPercent}
-                      onChange={(event) => updateMinLeaderScoreUpPercent(event.target.value)}
-                      inputMode="decimal"
+                      {...groupedIntegerInputProps(minLeaderScoreUpPercent, updateMinLeaderScoreUpPercent)}
+                      aria-invalid={minLeaderThreshold === null || undefined}
+                      aria-describedby={minLeaderThreshold === null ? "team-builder-threshold-error" : undefined}
                       placeholder={labelsT("unlimited")}
                       aria-label={labelsT("minLeaderScoreUp")}
                     />
@@ -3480,20 +3432,25 @@ function TeamBuilderPanel({ userId }: { userId: string }) {
                 </FieldRow>
                 <FieldRow label={labelsT("minTotalPower")}>
                   <TextInput
-                    value={minTotalPower}
-                    onChange={(event) => updateMinTotalPower(event.target.value)}
-                    inputMode="numeric"
+                    {...groupedIntegerInputProps(minTotalPower, updateMinTotalPower)}
+                    aria-invalid={minPowerThreshold === null || undefined}
+                    aria-describedby={minPowerThreshold === null ? "team-builder-threshold-error" : undefined}
                     placeholder={labelsT("unlimited")}
                     aria-label={labelsT("minTotalPower")}
                   />
                 </FieldRow>
+                {invalidThreshold ? (
+                  <p id="team-builder-threshold-error" className="text-sm text-[var(--theme-color-semantic-danger-foreground)]">
+                    {errorsT("invalidThreshold")}
+                  </p>
+                ) : null}
               </>
             ) : null}
             <div className="flex justify-center">
               <button
                 type="button"
                 onClick={handleCalculate}
-                disabled={submitting || !isPreloadReady}
+                disabled={submitting || !isPreloadReady || (!isMedleyEvent && invalidThreshold)}
                 className="hhwx-action-accent inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-bold shadow-xs transition "
               >
                 {submitting || isPreloadLoading ? <LoadingSpinner className="text-current" /> : <Calculator className="h-4 w-4" />}
@@ -3520,14 +3477,11 @@ function TeamBuilderPanel({ userId }: { userId: string }) {
                 {buildSearchProgressSummary(medleyProgress, proofT)}
               </div>
             ) : result ? (
-              <div className="whitespace-pre-line rounded-xl bg-[var(--theme-color-semantic-success-background)] p-3 text-center text-sm font-semibold leading-6 text-[var(--theme-color-semantic-success-foreground)]">
-                <CheckCircle2 className="mr-1 inline h-4 w-4" />
-                {buildSearchCompletionSummary(
-                  result,
-                  proofT,
-                  termsT("seconds"),
-                  displayedMaxSearchDurationSeconds,
-                )}
+              <div role="status" className={`whitespace-pre-line rounded-xl p-3 text-center text-sm font-semibold leading-6 ${result.status === "exact"
+                ? "bg-[var(--theme-color-semantic-success-background)] text-[var(--theme-color-semantic-success-foreground)]"
+                : "bg-[var(--theme-color-semantic-warning-background)] text-[var(--theme-color-semantic-warning-foreground)]"}`}>
+                {result.status === "exact" ? <CheckCircle2 className="mr-1 inline h-4 w-4" /> : <CircleAlert className="mr-1 inline h-4 w-4" />}
+                {buildSearchCompletionSummary(result, proofT)}
               </div>
             ) : null}
           </div>
@@ -3544,7 +3498,7 @@ function TeamBuilderPanel({ userId }: { userId: string }) {
               />
             </div>
           ) : null}
-          {result ? (
+          {result && displayedSearchResults.length > 0 ? (
             <div className="space-y-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="text-xl font-bold text-[var(--theme-color-text-default)]">{labelsT("results")}</h2>

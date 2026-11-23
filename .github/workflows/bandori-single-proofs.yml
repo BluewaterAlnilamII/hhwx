@@ -1,0 +1,30 @@
+name: Single-song Lean proofs
+
+on:
+  pull_request:
+    paths:
+      - 'proofs/bandori-single/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'proofs/bandori-single/**'
+
+permissions:
+  contents: read
+
+jobs:
+  check-proofs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check single-song Lean proofs
+        uses: leanprover/lean-action@ba3fdfe5c4476c925da13bf11a005ddb47e47aee # v1.7.1
+        with:
+          lake-package-directory: proofs/bandori-single
+          auto-config: false
+          build: true
+          use-github-cache: false
+          use-mathlib-cache: false
