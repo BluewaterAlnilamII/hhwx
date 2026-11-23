@@ -104,7 +104,7 @@ Public indexes are serialized for deterministic hashing and human review:
 - Cards resources: standard names first, then `bili_` names;
 - Degrees resources: ordinary names first, then `ani_degree` names; each resource writes `images` before `animations`;
 - Stamps root: `schemaVersion`, `updatedAt`, `stamps`, `changedStampGroups`;
-- Music songs: `files`, `notes`, `bpm`, `length`; file fields are `jacket`, `thumb`, optional `audio`, then `charts`;
+- Music songs: `files`, `notes`, `bpm`, `length`; file fields are `jacket`, `thumb`, optional `additionalJackets` (the remaining master covers in order, each with `name`, `jacket` and `thumb`), optional `audio`, then `charts`;
 - Music score meta root: `schemaVersion`, `updatedAt`, `musicIndexSha256`, `durations`, `songs`; the server verifies the exact paired Music index bytes and the API projects only `durations` and `songs`;
 - keyed server maps: `jp`, `en`, `tw`, `cn`;
 - numeric IDs: ascending numeric order.

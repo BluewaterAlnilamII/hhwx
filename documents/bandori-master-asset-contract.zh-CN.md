@@ -90,7 +90,7 @@ hash 对应最终发布字节，独立于游戏 bundle ID。
 - Costumes/SD 资源按资源名排序，资源字段先 `images` 后 `live2d`；
 - Degrees 先排列普通资源名，再排列 `ani_degree` 名称；单个资源先写 `images`，再写 `animations`；
 - Stamps 根字段为 `schemaVersion`、`updatedAt`、`stamps`、`changedStampGroups`；
-- Music 单曲字段为 `files`、`notes`、`bpm`、`length`；文件字段依次为 `jacket`、`thumb`、可选 `audio`、`charts`；
+- Music 单曲字段为 `files`、`notes`、`bpm`、`length`；文件字段依次为 `jacket`、`thumb`、可选 `additionalJackets`（按 master 顺序存放其余封面，每项含 `name`、`jacket` 和 `thumb`）、可选 `audio`、`charts`；
 - Music 计分 meta 根字段为 `schemaVersion`、`updatedAt`、`musicIndexSha256`、`durations`、`songs`；服务端校验其绑定的精确 Music index bytes，API 只投影 `durations` 与 `songs`；
 - 具名区服 map 固定按 `jp`、`en`、`tw`、`cn`；
 - 数字 ID 按数值升序。
