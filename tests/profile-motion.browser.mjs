@@ -27,10 +27,6 @@ try {
     let failWrite = false;
     let playlist = songs;
     const preferences = {modules:[{id:"songs",public:true}], accounts:[], publicAccounts:true, allowGameIdSearch:true, signature:"", cover:null};
-    await page.addInitScript(() => {
-      window.pulses = [];
-      Object.defineProperty(navigator, "vibrate", { value: duration => { window.pulses.push(duration); return true; } });
-    });
     await page.route("**/*", route => {
       const req = route.request();
       const path = new URL(req.url()).pathname;
@@ -92,7 +88,6 @@ try {
       await drag(x, y, -30, 0);
       await page.waitForFunction(() => !document.querySelector("[data-sliding]"));
       await selected("home");
-      assert.deepEqual(await page.evaluate(() => window.pulses), [], "scrolling and a canceled swipe stay quiet");
       await drag(x, y, -110, 2, async () => {
         if (!reduced) {
           assert.ok(await page.locator("#profile-panel-details[inert]").isVisible());
@@ -127,7 +122,6 @@ try {
       await finger("touchEnd");
       await settled(menu);
       assert.ok(!await page.evaluate(() => window.menuClickedOnRelease), "Lifting the long press must not activate a menu action");
-      assert.deepEqual(await page.evaluate(() => window.pulses), reduced ? [] : [8, 8, 10]);
       const sheet = await menu.boundingBox();
       assert.ok(sheet.x >= 8 && width - sheet.x - sheet.width >= 8 && height - sheet.y - sheet.height >= 7);
       const header = await menu.evaluate(el => {
@@ -159,7 +153,6 @@ try {
       }
       await tap(trigger.x + trigger.width / 2, trigger.y + trigger.height / 2);
       await settled(menu);
-      assert.deepEqual(await page.evaluate(() => window.pulses), reduced ? [] : [8, 8, 10, 8], "one pulse per deliberate menu gesture");
       await tap(3, 115);
       await menu.waitFor({state: "detached"});
       await selected("home");
@@ -235,34 +228,24 @@ try {
       assert.equal(reads, initialReads);
     }
     if (owner) {
-      const expectPulses = async (...expected) => {
-        await page.waitForFunction(n => window.pulses.length >= n, expected.length);
-        assert.deepEqual(await page.evaluate(() => window.pulses), expected);
-      };
-      await page.evaluate(() => { window.pulses.length = 0; });
       await page.locator(tab("settings")).tap();
       const toggle = page.getByRole("switch").first();
       await toggle.waitFor();
-      await expectPulses(8);
       failWrite = true;
       await toggle.tap();
       await page.locator('[data-action-feedback=error]').waitFor();
-      await expectPulses(8);
       failWrite = false;
       await toggle.tap();
       await page.locator('[data-action-feedback=success]').waitFor();
-      await expectPulses(8, 12);
       await page.locator(tab("home")).tap();
       await more.tap();
       const star = menu.locator("button[aria-pressed=true]");
       failWrite = true;
       await star.tap();
       await menu.locator('[data-action-feedback=error]').waitFor();
-      await expectPulses(8, 12, 8, 8);
       failWrite = false;
       await star.tap();
       await menu.waitFor({state:"detached"});
-      await expectPulses(8, 12, 8, 8, 12);
 
       // Both collection types use a different edit URL from the playlist.
       const otherGroups = ["cards", "events"].map(kind => ({
@@ -285,7 +268,6 @@ try {
         }
       }
     }
-    if (!phone) assert.deepEqual(await page.evaluate(() => window.pulses), [], "mouse and keyboard stay quiet");
     assert.deepEqual(errors, []);
     console.log("PASS", width, height, reduced ? "reduced motion" : "normal motion");
     await context.close();

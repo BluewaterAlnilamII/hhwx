@@ -1,5 +1,4 @@
 "use client";
-import { confirmTouchOnSuccess } from "@/lib/touch-feedback";
 import RetryButton from "@/components/RetryButton";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
@@ -65,7 +64,6 @@ export default function GuestbookCommentSection() {
     }, [fetchComments]);
 
     const handleSubmit = async (e: React.FormEvent) => {
-        const confirm = confirmTouchOnSuccess();
         e.preventDefault();
         if (!newComment.trim() || !userId || !emailVerified) return;
         setLoading(true);
@@ -94,7 +92,6 @@ export default function GuestbookCommentSection() {
                 return;
             }
 
-            confirm();
             setNewComment("");
             setSubmitError("");
             fetchComments();

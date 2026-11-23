@@ -1,5 +1,3 @@
-import { pulseTouch } from "./touch-feedback";
-
 export function bindTabSwipe(bar: HTMLElement, index: number, count: number, callbacks: {
   viewport?: HTMLElement;
   ignore: (target: Element, root: HTMLElement, event: PointerEvent) => boolean;
@@ -59,7 +57,6 @@ export function bindTabSwipe(bar: HTMLElement, index: number, count: number, cal
     clear();
     if (horizontal) {
       const next = change ? Math.max(0, Math.min(count - 1, index + (x < 0 ? 1 : -1))) : index;
-      if (next !== index) pulseTouch(event);
       callbacks.onEnd(next);
     }
   };

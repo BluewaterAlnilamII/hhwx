@@ -27,7 +27,7 @@ export type ModuleSettings = Pick<ProfileHomepagePreferences, "modules">;
 export type BindingSettings = Partial<Pick<ProfileHomepagePreferences, "accounts" | "publicAccounts" | "allowGameIdSearch">>;
 type Column<T> = {
   pending: T | null;
-  save: (values: T, target: string, source?: Event) => Promise<boolean>;
+  save: (values: T, target: string) => Promise<boolean>;
   feedbackFor: (target: string) => ActionFeedbackState | null;
 };
 
@@ -48,7 +48,7 @@ export default function ProfileSettings({ preferences, readOnly, modules, accoun
     </span>;
   return <div className={styles.settings}>
     <section><div className={styles.settingRow}><h2>{t("homeDisplay")}</h2></div>
-      <SortList ids={preferences.modules.map(m => m.id)} onOrder={(ids, movedId, source) => modules.save({ modules: ids.map(id => preferences.modules.find(m => m.id === id)!) }, `module-order:${movedId}`, source)}>
+      <SortList ids={preferences.modules.map(m => m.id)} onOrder={(ids, movedId) => modules.save({ modules: ids.map(id => preferences.modules.find(m => m.id === id)!) }, `module-order:${movedId}`)}>
         {preferences.modules.map(module => <Row key={module.id} id={module.id} label={t("reorder", { name: t(module.id) })} readOnly={readOnly} saving={Boolean(modules.pending)} feedback={modules.feedbackFor(`module-order:${module.id}`)}>
           <div className={styles.settingRow}><span>{t(module.id)}</span>{toggle(modules, `module:${module.id}`, t("publish", { name: t(module.id) }), module.public, value => modules.save({ modules: preferences.modules.map(m => m.id === module.id ? { ...m, public: value } : m) }, `module:${module.id}`))}</div>
         </Row>)}
@@ -57,7 +57,7 @@ export default function ProfileSettings({ preferences, readOnly, modules, accoun
     <section><div className={styles.settingRow}><h2>{t("accounts")}</h2>{toggle(accounts, "accounts", t("publish", { name: t("accounts") }), preferences.publicAccounts, value => saveBindings({ publicAccounts: value }, "accounts"))}</div>
       <div className={`${styles.settingRow} ${styles.lookupRow}`}><span>{t("allowGameIdSearch")}</span>
         {toggle(accounts, "allowGameIdSearch", t("allowGameIdSearch"), preferences.publicAccounts && preferences.allowGameIdSearch, value => saveBindings({ allowGameIdSearch: value }, "allowGameIdSearch"), !preferences.publicAccounts)}</div>
-      <SortList ids={preferences.accounts.map(a => a.gameUid)} onOrder={(ids, movedId, source) => saveBindings({ accounts: ids.map(id => preferences.accounts.find(a => a.gameUid === id)!) }, `account-order:${movedId}`, source)}>
+      <SortList ids={preferences.accounts.map(a => a.gameUid)} onOrder={(ids, movedId) => saveBindings({ accounts: ids.map(id => preferences.accounts.find(a => a.gameUid === id)!) }, `account-order:${movedId}`)}>
         {preferences.accounts.map(account => {
           const effective = bindingVisibility(preferences.publicAccounts, account);
           const update = (patch: Partial<typeof account>, target: string) => saveBindings({ accounts: preferences.accounts.map(a => a.gameUid === account.gameUid ? { ...a, ...patch } : a) }, target);
