@@ -92,12 +92,12 @@
   --sheet-rest-max-height: min(85dvh, calc(100dvh - 32px - env(safe-area-inset-bottom)));
   inset: auto max(var(--sheet-gap), env(safe-area-inset-right)) var(--sheet-gap) max(var(--sheet-gap), env(safe-area-inset-left));
   width: auto; max-width: 40rem; margin-inline: auto; max-height: var(--sheet-rest-max-height); overscroll-behavior: contain;
-  padding: 16px 12px var(--sheet-bottom-padding);
+  padding: 24px 12px var(--sheet-bottom-padding);
   border-radius: clamp(32px, 10vw, 42px); corner-shape: superellipse(1.35);
   border-color: color-mix(in srgb, var(--theme-color-border-subtle) 65%, transparent);
   touch-action: pan-y pinch-zoom; user-select: none; -webkit-touch-callout: none;
   transform: translateY(calc((1 - var(--hhwx-song-sheet-reveal)) * (100% + var(--sheet-gap))));
-  .menuHeading { padding: 0 8px 14px; gap: 12px; }
+  .menuHeading { padding: 0 4px 14px; gap: 12px; }
   .menuHeading a { position: relative; z-index: 2; }
   .menuHeading h2, & > :is(button, a) { font-size: 15px; }
   & > :is(button, a) { min-height: 48px; padding-inline: 12px; }

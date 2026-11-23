@@ -2,7 +2,7 @@
 
 import { useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Ellipsis, FileMusic, ListEnd, ListPlus, Music2, Pause, Play, Star, StarOff } from "lucide-react";
+import { Ellipsis, FileMusic, ListEnd, ListPlus, Music2, Pause, Play, RotateCcw, Star, StarOff } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useBandoriMusicMaster } from "@/hooks/useBandoriMusicMaster";
 import { useBandoriMusicAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
@@ -20,7 +20,7 @@ import { getTooltipPosition } from "@/lib/tooltip-position";
 import { dismissMenuOnScroll } from "@/lib/dismiss-menu-on-scroll";
 import ActionFeedback from "@/components/ActionFeedback";
 import MusicArtwork from "@/components/music-player/MusicArtwork";
-import LoadingIndicator from "@/components/LoadingIndicator";
+import LoadingIndicator, { LoadingSpinner } from "@/components/LoadingIndicator";
 import LoadingError from "@/components/LoadingError";
 import type { useProfileSectionSave } from "@/hooks/useProfileSectionSave";
 import FavoriteRemoveButton from "./FavoriteRemoveButton";
@@ -55,6 +55,7 @@ function SongActions({ menu, editor, onClose: requestClose, onClosed, onRemove, 
   const t = useTranslations("account.favorites");
   const sheet = useSyncExternalStore(subscribeSheet, () => matchMedia(sheetQuery).matches);
   const favorite = useBandoriFavoriteAction("songs:" + song.target, "addToFavorites");
+  const FavoriteIcon = favorite.failed ? RotateCcw : favorite.selected ? StarOff : Star;
   const href = "/bandori/songs/" + song.target;
   const returnFocus = useRef<HTMLElement | null>(trigger);
   const [sheetPanel, setSheetPanel] = useState<HTMLDivElement | null>(null);
@@ -146,7 +147,7 @@ function SongActions({ menu, editor, onClose: requestClose, onClosed, onRemove, 
           <div><Dialog.Title><Link href={href} prefetch={false} onNavigate={onClose}>{song.title}</Link></Dialog.Title><small>{song.artist}</small></div>
         </div>
         <button type="button" aria-pressed={favorite.selected} aria-disabled={favorite.pending} aria-busy={favorite.pending} onClick={toggleFavorite}>
-          {favorite.selected ? <StarOff /> : <Star />}{favorite.label}
+          {favorite.loading ? <LoadingSpinner className="size-[18px]" /> : <FavoriteIcon />}{favorite.label}
         </button>
         <Link href={href} prefetch={false} onNavigate={onClose}><FileMusic />{t("goToSong")}</Link>
         <button type="button" className={styles.queueStart} disabled={!song.track} onClick={() => enqueue("next")}><ListPlus />{t("playNext")}</button>
