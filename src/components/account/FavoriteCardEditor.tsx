@@ -6,8 +6,9 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, ImageIcon, Triangle } from "lucide-react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-import { type ReactNode, useRef } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import ActionFeedback from "@/components/ActionFeedback";
+import LoadingImage from "@/components/LoadingImage";
 import { Link } from "@/i18n/navigation";
 import type { ActionFeedbackState } from "@/hooks/useActionFeedback";
 import { CARD_PREVIEW_DIVIDER, CARD_PREVIEW_MAX, favoriteCardDrop, type FavoriteCardLayout } from "@/lib/bandori/favorites";
@@ -47,6 +48,8 @@ type EditorCard = { target: string; href: string; title: string; name: string; b
 export default function FavoriteCardEditor({ cards, previewCount, saving, onLayout, feedbackFor }: CardEditorProps & { cards: EditorCard[] }) {
   const t = useTranslations("account.homepage");
   const action = useTranslations("account.favorites");
+  const common = useTranslations("common");
+  const [failedArt, setFailedArt] = useState<ReadonlySet<string>>(new Set());
   const visible = Math.min(previewCount, cards.length);
   const list = useRef<HTMLDivElement>(null);
   const targets = cards.map(card => card.target);
@@ -73,9 +76,10 @@ export default function FavoriteCardEditor({ cards, previewCount, saving, onLayo
     <EditorRow key={target} id={target} label={t("reorder", { name: [name, title].filter(Boolean).join(" - ") })}
       extra={index >= visible} disabled={saving || cards.length === 1} feedback={feedbackFor(target)}>
       <Link href={href} prefetch={false} draggable={false} className={styles.editorLink} aria-label={[name, title].filter(Boolean).join(" - ")}>
-        {art
-          ? <Image unoptimized draggable={false} src={art} width={40} height={40} alt="" className={styles.editorThumb} />
-          : <span className={styles.editorThumb}><ImageIcon size={16} aria-hidden="true" /></span>}
+        <span className={styles.editorThumb}>{art && !failedArt.has(art)
+          ? <LoadingImage draggable={false} src={art} width={40} height={40} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover"
+              loadingLabel={common("states.loading")} onError={() => setFailedArt(current => new Set(current).add(art))} />
+          : <ImageIcon size={16} aria-hidden="true" />}</span>
         <div className={styles.editorNames}>
           {name && <span className={styles.editorCharacter}>{band && <Image unoptimized draggable={false} src={band} alt="" width={16} height={16} />}<span>{name}</span></span>}
           <span className={styles.editorTitle}>{title}</span>

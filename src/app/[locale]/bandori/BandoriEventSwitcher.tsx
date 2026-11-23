@@ -9,7 +9,6 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { History, ImageOff, Search, X } from "lucide-react";
 import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
 import LoadingImage from "@/components/LoadingImage";
-import LoadingPlaceholder from "@/components/LoadingPlaceholder";
 import { cn } from "@/lib/utils";
 import { BANDORI_SERVERS, getBandoriServerCode, type BandoriServer } from "@/lib/bandori-server";
 
@@ -338,20 +337,18 @@ export default memo(function BandoriEventSwitcher({
 
       <div className="w-full max-w-[420px] xl:w-[420px] xl:justify-self-end">
         <div className="hhwx-panel-media relative aspect-3/1 w-full overflow-hidden">
-          {bannerUrl && bannerUrl !== failedBannerUrl ? (
+          {(bannerUrl ? bannerUrl !== failedBannerUrl : !bannerError && (loading || bannerLoading)) ? (
             <LoadingImage
-              src={bannerUrl}
+              src={bannerUrl || null}
               alt={effectiveBannerAlt}
               loadingLabel={commonT("states.loading")}
               loading="eager"
               fetchPriority="high"
               revealBeforeHydration
               decoding="async"
-              onError={() => setFailedBannerUrl(bannerUrl)}
+              onError={() => setFailedBannerUrl(bannerUrl ?? null)}
               className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 hover:scale-105"
             />
-          ) : !bannerUrl && !bannerError && (loading || bannerLoading) ? (
-            <LoadingPlaceholder label={commonT("states.loading")} className="absolute inset-0" />
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-[var(--theme-color-text-muted)]">
               <ImageOff className="h-6 w-6" aria-hidden="true" />

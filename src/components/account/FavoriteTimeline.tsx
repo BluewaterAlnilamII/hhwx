@@ -136,7 +136,7 @@ export default function FavoriteTimeline({ items, homeVisible, expanded, editing
         ref={revealed === target ? activeStation : undefined}>
         <small className={styles.when}>{schedule.startAt !== null ? date.format(schedule.startAt) : "—"}</small><i className={styles.rail} aria-hidden="true" />
         <Link className={styles.eventLink} href={href} prefetch={false} aria-label={title} onNavigate={enterEvent}>
-          <span className={styles.banner}>{hasBanner && <LoadingImage
+          <span className={styles.banner}>{(hasBanner || (!src && assets.loading)) && <LoadingImage
             onPointerDown={e => { touch.current = e.pointerType === "touch" || e.pointerType === "pen"; }}
             onClick={e => {
               if ((editor || visitor) && touch.current && e.detail && revealed !== target) {
@@ -144,7 +144,7 @@ export default function FavoriteTimeline({ items, homeVisible, expanded, editing
                 setRevealed(target);
               }
             }}
-            onError={() => setFailedBanners(current => new Set(current).add(src))} src={src} loadingLabel={common("states.loading")} alt="" loading="lazy" decoding="async" />}</span>
+            onError={() => { if (src) setFailedBanners(current => new Set(current).add(src)); }} src={src} loadingLabel={common("states.loading")} alt="" loading="lazy" decoding="async" />}</span>
           <strong><span>{title}</span></strong>
         </Link>
         {visitor ? <BandoriFavoriteButton kind="events" id={event.eventId} server={server} overlayClassName={styles.eventActions} /> : remove}

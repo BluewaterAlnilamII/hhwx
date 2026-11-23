@@ -3,7 +3,6 @@
 import { useLocale } from "next-intl";
 import { Gauge, ListMusic, Music2, Timer } from "lucide-react";
 import Heading from "@/components/Heading";
-import LoadingPlaceholder from "@/components/LoadingPlaceholder";
 import MusicArtwork from "@/components/music-player/MusicArtwork";
 import { cn } from "@/lib/utils";
 import SongDifficultyStrip, { type SongDifficultyStripProps } from "@/components/SongDifficultyStrip";
@@ -15,9 +14,8 @@ export function SongDetailHeader({ game, title, action, bandName, idLabel, artwo
   return <article className="hhwx-panel border p-4 sm:p-6">
     <div className="grid grid-cols-[5rem_minmax(0,1fr)] items-start gap-3 sm:grid-cols-[8rem_minmax(0,1fr)] sm:gap-5">
       <div className="flex aspect-square w-20 items-center justify-center overflow-hidden rounded-2xl bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] shadow-[var(--theme-shadow-media)] sm:w-32">
-        {artworkUrl ? <MusicArtwork src={artworkUrl} alt={labels.artwork} className="h-full w-full object-cover"
+        {artworkUrl || artworkLoading ? <MusicArtwork src={artworkUrl} alt={labels.artwork} className="h-full w-full object-cover"
           fallback={<Music2 className="h-8 w-8" aria-label={labels.unavailable} />} />
-          : artworkLoading ? <LoadingPlaceholder label={labels.loading} className="h-full w-full" />
             : <Music2 className="h-8 w-8" aria-label={labels.unavailable} />}
       </div>
       <div className="min-w-0 space-y-4"><div>

@@ -78,9 +78,9 @@ export default function FavoriteCardArtwork({ src, loadingLabel, onError }: {
     };
   }, [image, nearby]);
 
-  return <>
+  return <span className={styles.artSurface}>
     <LoadingImage className={styles.art} src={src} loadingLabel={loadingLabel} loading="lazy" decoding="async" alt=""
       onLoad={event => setImage(event.currentTarget)} onError={onError} />
     {nearby && <canvas className={styles.art} ref={canvasRef} width={0} height={0} aria-hidden="true" />}
-  </>;
+  </span>;
 }

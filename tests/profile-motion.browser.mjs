@@ -57,7 +57,9 @@ try {
     await row.waitFor({ timeout: 60000 });
     const original = await row.elementHandle();
     const initialReads = reads;
-    const settled = locator => locator.evaluate(el => Promise.allSettled(el.getAnimations().map(a => a.finished)));
+    const settled = locator => locator.evaluate(el => Promise.allSettled([
+      ...el.getAnimations(), ...(el.closest("[data-song-sheet]")?.getAnimations() ?? []),
+    ].map(a => a.finished)));
     const selected = name => page.locator(tab(name) + '[aria-selected="true"]').waitFor();
     if (owner) {
       const coverMenu = page.locator("header details:has(summary)");
@@ -79,10 +81,23 @@ try {
       await page.evaluate(() => scrollBy({top:16, behavior:"instant"}));
       await page.waitForFunction(el => !el.open, await coverMenu.elementHandle());
       await page.evaluate(() => window.scrollTo({top:64, behavior:"instant"}));
-      for (const name of ["details", "settings", "home"]) {
+      for (const name of ["settings", "home", "details", "settings", "home"]) {
         const frames = await page.evaluate(async name => {
           const strip = document.querySelector("#profile-tab-home").parentElement;
-          const sample = () => [scrollY, innerWidth, document.documentElement.scrollWidth, strip.getBoundingClientRect().top];
+          const active = strip.querySelector('[aria-selected=true]').id.replace("profile-tab-", "");
+          const skipsDetails = active !== name && active !== "details" && name !== "details";
+          const details = document.getElementById("profile-panel-details");
+          const panels = document.querySelector("[data-tab-panels]");
+          const sample = () => {
+            if (skipsDetails) {
+              if (!details.hidden || details.childElementCount) throw new Error("A direct tap mounted the skipped details panel");
+              const a = document.getElementById("profile-panel-home").getBoundingClientRect();
+              const b = document.getElementById("profile-panel-settings").getBoundingClientRect();
+              if (a.width && b.width && Math.abs(Math.abs(a.left - b.left) - panels.clientWidth) > 2)
+                throw new Error("A direct tap left a gap between the two panels");
+            }
+            return [scrollY, innerWidth, document.documentElement.scrollWidth, strip.getBoundingClientRect().top];
+          };
           const frames = [sample()];
           document.getElementById("profile-tab-" + name).dispatchEvent(new MouseEvent("click", {bubbles:true, detail:1}));
           do {
@@ -113,6 +128,15 @@ try {
       assert.ok(Math.abs(reversal.before[0] - reversal.start[0]) >= 40);
       assert.ok(reversal.before.every((value,i) => Math.abs(value - reversal.after[i]) < 2), "Reversing a tap starts from the painted frame");
       assert.deepEqual(reversal.end, reversal.start);
+      // The user can still choose the skipped tab while a direct jump is in flight.
+      await page.locator(tab("settings")).tap();
+      assert.equal(await page.locator("#profile-panel-details").evaluate(el => el.childElementCount), 0);
+      await page.locator(tab("details")).tap();
+      await page.waitForFunction(() => !document.querySelector("[data-tab-panels][data-sliding]"));
+      await selected("details");
+      await page.locator("#profile-panel-details section").first().waitFor();
+      await page.locator(tab("home")).tap();
+      await page.waitForFunction(() => !document.querySelector("[data-tab-panels][data-sliding]"));
     }
     if (phone) {
       const input = await context.newCDPSession(page);
@@ -127,6 +151,13 @@ try {
       if (owner) {
         const bar = await page.locator(tab("home")).boundingBox();
         const y = bar.y + bar.height / 2;
+        await page.locator(tab("settings")).tap();
+        await drag(80, y, 190, 0, async () => {
+          assert.equal(await page.locator("#profile-panel-details").evaluate(el => el.childElementCount), 0,
+            "Dragging back during a direct jump keeps the skipped tab unmounted");
+        });
+        await page.waitForFunction(() => !document.querySelector("[data-tab-panels][data-sliding]"));
+        await selected("home");
         await drag(320, y, -160, 0);
         // Hold a reproducible frame of the first release before the next real touch.
         await page.evaluate(() => {
@@ -229,6 +260,24 @@ try {
       await selected("home");
       await row.scrollIntoViewIfNeeded();
       const hold = await row.boundingBox();
+      await page.evaluate(() => {
+        window.sheetTimeline = new Promise(resolve => {
+          const frames = [];
+          function sample() {
+            const layer = document.querySelector("[data-song-sheet]");
+            const panel = layer?.querySelector("[data-song-menu]");
+            if (panel) {
+              const rect = panel.getBoundingClientRect();
+              const travel = rect.height + parseFloat(getComputedStyle(panel).bottom);
+              const visible = Math.min(1, Math.max(0, (innerHeight - rect.top) / travel));
+              const opacity = Number(getComputedStyle(layer.firstElementChild).opacity);
+              frames.push({state: layer.dataset.state, visible, opacity});
+            } else if (frames.length) { resolve(frames); return; }
+            requestAnimationFrame(sample);
+          }
+          requestAnimationFrame(sample);
+        });
+      });
       await finger("touchStart", hold.x + hold.width / 2, hold.y + hold.height / 2);
       await menu.waitFor();
       await menu.evaluate(el => el.addEventListener("click", () => { window.menuClickedOnRelease = true; }, {once:true}));
@@ -249,13 +298,83 @@ try {
       });
       assert.ok(header.gap >= 6 && header.gap <= 7);
       assert.ok(header.grip >= 40 && header.hits.every(Boolean));
-      console.log("sheet", width, {gutter: sheet.x, gripToArt: header.gap, dragHeight: header.grip});
+      const radius = await menu.evaluate(el => parseFloat(getComputedStyle(el).borderBottomLeftRadius));
+      assert.ok(radius >= 32 && radius <= 42);
+      const backgroundY = await page.evaluate(() => scrollY);
+      const action = await menu.locator(":scope > a").boundingBox();
+      const actionX = action.x + action.width / 2;
+      const actionY = action.y + action.height / 2;
       if (process.env.PROFILE_TEST_OUTPUT) await page.screenshot({ path: join(process.env.PROFILE_TEST_OUTPUT, `profile-sheet-${width}.png`), style: "nextjs-portal {display:none !important}" });
       await drag(width / 2, sheet.y + 12, 0, 22);
       await settled(menu);
+      assert.ok(Math.abs((await menu.boundingBox()).y - sheet.y) < 1, "A short grip drag settles back");
+      const disabledQueueAction = await menu.locator(":scope > button:disabled").last().boundingBox();
+      const measureSheet = () => menu.evaluate(el => {
+        const bounds = el.getBoundingClientRect();
+        const items = Array.from(el.querySelectorAll(":scope > button, :scope > a, h2"), item => item.getBoundingClientRect());
+        return { top: bounds.top, bottom: bounds.bottom, itemTops: items.map(item => item.top), bottomSpace: bounds.bottom - items.at(-1).bottom };
+      });
+      const rest = await measureSheet();
+      const pullY = disabledQueueAction.y + disabledQueueAction.height / 2;
+      await finger("touchStart", actionX, pullY);
+      const stretches = [];
+      for (const distance of [96, 192, 288]) {
+        await finger("touchMove", actionX, pullY - distance);
+        const pulled = await measureSheet();
+        const stretch = rest.top - pulled.top;
+        stretches.push(stretch);
+        assert.ok(Math.abs(pulled.bottom - rest.bottom) < 1, "The bottom edge stays anchored");
+        assert.ok(pulled.itemTops.every((y, i) => Math.abs(rest.itemTops[i] - y - stretch) < 1), "Heading and actions move with the top");
+        assert.ok(Math.abs(pulled.bottomSpace - rest.bottomSpace - stretch) < 1, "All extra space is below the last action");
+      }
+      if (reduced) assert.deepEqual(stretches, [0, 0, 0]);
+      else {
+        const [a, b, c] = stretches;
+        assert.ok(a > b - a && b - a > c - b && c - b > 1 && c > 28, "Continued pulling raises the top with increasing resistance");
+      }
+      await menu.evaluate(el => {
+        window.sheetReturn = new Promise(resolve => el.addEventListener("pointerup", () => {
+          const tops = [];
+          function sample() {
+            tops.push(el.getBoundingClientRect().top);
+            if (el.getAnimations().length) requestAnimationFrame(sample);
+            else resolve(tops);
+          }
+          requestAnimationFrame(sample);
+        }, {once: true}));
+      });
+      await finger("touchEnd");
+      const tops = await page.evaluate(() => window.sheetReturn);
+      const overshoot = Math.max(...tops) - rest.top;
+      if (!reduced) assert.ok(overshoot > .5 && overshoot < stretches.at(-1) / 4, `Release overshoot: ${overshoot}px`);
+      assert.ok(Math.abs(tops.at(-1) - rest.top) < 1);
+      console.log("sheet", {width, radius, stretches, overshoot, gutter: sheet.x});
+      await drag(actionX, actionY, 0, 22, async () => {
+        assert.ok(Math.abs((await menu.boundingBox()).y - sheet.y - 22) < 1, "A drag on an action moves the whole sheet");
+      });
+      await settled(menu);
       assert.ok(Math.abs((await menu.boundingBox()).y - sheet.y) < 1);
-      await drag(width / 2, sheet.y + 12, 0, 74);
+      const favoriteAction = await menu.locator("button[aria-pressed]").boundingBox();
+      const favoriteY = favoriteAction.y + favoriteAction.height / 2;
+      await finger("touchStart", actionX, favoriteY);
+      await finger("touchMove", actionX, favoriteY + 64);
+      await finger("touchCancel");
+      await settled(menu);
+      assert.ok(Math.abs((await menu.boundingBox()).y - sheet.y) < 1, "Cancelling a drag on the favorite button restores the sheet");
+      assert.ok(!await page.evaluate(() => window.menuClickedOnRelease), "Dragging an action must not activate it");
+      assert.equal(await page.evaluate(() => scrollY), backgroundY);
+      await drag(actionX, actionY, 0, 74);
       await menu.waitFor({state: "detached"});
+      const timeline = await page.evaluate(() => window.sheetTimeline);
+      const maxDelta = Math.max(...timeline.map(frame => Math.abs(frame.opacity - frame.visible)));
+      assert.ok(maxDelta < .015, `Scrim opacity diverged from the visible fraction by ${maxDelta}`);
+      if (!reduced) {
+        for (const state of ["open", "closed"]) {
+          assert.ok(timeline.some(frame => frame.state === state && frame.visible > .05 && frame.visible < .65),
+            `Expected a partially visible sheet during ${state}`);
+        }
+      }
+      assert.equal(await page.evaluate(() => scrollY), backgroundY);
       const trigger = await more.boundingBox();
       assert.ok(trigger, "Sheet dismissal should leave the song visible: " + await page.evaluate(() => JSON.stringify({
         url:location.pathname + location.hash, tab:document.querySelector("[role=tab][aria-selected=true]")?.id,
@@ -266,6 +385,18 @@ try {
       }
       await tap(trigger.x + trigger.width / 2, trigger.y + trigger.height / 2);
       await settled(menu);
+      if (reduced) {
+        await page.setViewportSize({width, height: 255});
+        const overflowAction = await menu.locator(":scope > a").boundingBox();
+        const y = overflowAction.y + overflowAction.height / 2;
+        const pageY = await page.evaluate(() => scrollY);
+        await drag(width / 2, y, 0, -70);
+        await page.waitForFunction(() => document.querySelector("[data-song-menu]")?.scrollTop > 0);
+        assert.equal(await page.evaluate(() => scrollY), pageY, "A short viewport scrolls only inside the sheet");
+        const last = await menu.locator(":scope > button").last().boundingBox();
+        assert.ok(last.y + last.height <= 255, "The last action is visible after scrolling");
+        await page.setViewportSize({width, height});
+      }
       await tap(3, 115);
       await menu.waitFor({state: "detached"});
       await selected("home");
@@ -305,7 +436,7 @@ try {
         assert.ok(Math.abs(after.y - before.y) <= 1, `Reading position moved from ${before.y} to ${after.y}`);
         console.log("return to track 30", {before:before.y, after:after.y});
         await reading.locator("[aria-haspopup=dialog]").tap();
-        await menu.locator('h2 a').tap();
+        await menu.locator(':scope > a').tap();
         await page.waitForURL("**/bandori/songs/30");
         await page.goBack();
         await reading.waitFor();

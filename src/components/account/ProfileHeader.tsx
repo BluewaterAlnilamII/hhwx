@@ -114,8 +114,8 @@ export default function ProfileHeader({ profile, ownProfile, degree, saving, onS
   const drag = useRef<{ id: number; x: number; y: number; focus: ProfileCover; rangeX: number; rangeY: number } | null>(null);
   const [failedImages, setFailedImages] = useState<string[]>([]);
   const selected = draft ?? profile.cover ?? DEFAULT_COVER;
-  const { data: cards, canonicalData } = useBandoriCardsMaster(selected.entityServer ?? undefined);
-  const { value: assets } = useBandoriCardsAssetIndex();
+  const { data: cards, canonicalData, loading: cardsLoading } = useBandoriCardsMaster(selected.entityServer ?? undefined);
+  const { value: assets, loading: assetsLoading } = useBandoriCardsAssetIndex();
   const selectedSrc = buildBandoriPublicAssetUrl(lookupBandoriCardImage(assets, cards?.[String(selected.cardId)]?.resourceSetName, selected.trainType, "full"));
   const useFallback = !draft && (!selectedSrc || failedImages.includes(selectedSrc));
   const cover = useFallback ? DEFAULT_COVER : selected;
@@ -130,7 +130,7 @@ export default function ProfileHeader({ profile, ownProfile, degree, saving, onS
   const finishCover = () => { setDraft(null); requestAnimationFrame(() => menuRef.current?.querySelector("summary")?.focus({ preventScroll: true })); };
   return <header className={styles.header} data-editing={Boolean(draft)}>
     <div className={styles.backdrop} ref={imageRef}>
-      {src && <LoadingImage src={src} loading="eager" draggable={false} alt={t("cover")} loadingLabel={commonT("states.loading")} onError={() => setFailedImages(previous => [...previous, src])} style={{ objectPosition: `${cover.x}% ${cover.y}%` }} />}
+      {(src || cardsLoading || assetsLoading) && <LoadingImage src={src} loading="eager" draggable={false} alt={t("cover")} loadingLabel={commonT("states.loading")} onError={() => { if (src) setFailedImages(previous => [...previous, src]); }} style={{ objectPosition: `${cover.x}% ${cover.y}%` }} />}
       {draft && src && <Crosshair size={24} className={styles.reticle} aria-hidden="true" />}
     </div>
     <div className={styles.coverWindow} ref={coverRef} tabIndex={draft ? 0 : undefined} role={draft ? "group" : undefined} aria-label={draft ? t("adjustCover") : undefined}

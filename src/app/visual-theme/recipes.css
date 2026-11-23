@@ -105,6 +105,7 @@
 
   /* Neutral low-emphasis surfaces stay independent from brand decoration. */
   --theme-color-control-background-muted: color-mix(in srgb, var(--theme-seed-neutral) 12%, var(--theme-color-control-background));
+  --theme-color-image-loading-accent: color-mix(in srgb, var(--theme-color-text-default) 18%, var(--theme-color-control-background-muted));
 
   /* Translucent toolbar controls inherit the active theme surface. */
   --theme-color-toolbar-control-background: color-mix(in srgb, var(--theme-color-surface-background) 28%, transparent);
@@ -302,6 +303,45 @@
   to { opacity: 1; translate: 0; scale: 1; }
 }
 @keyframes hhwx-menu-leave { to { opacity: 0; } }
+
+/* Keep the real image in place. Only a cover that became visible needs to fade away. */
+.hhwx-image-placeholder {
+  position: absolute;
+  inset: 0;
+  display: none;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: inherit;
+  background: var(--theme-color-control-background-muted);
+  opacity: 0;
+  transition: opacity 160ms ease-out, display 160ms allow-discrete;
+}
+.hhwx-image-placeholder[aria-busy="true"] {
+  display: block;
+  opacity: 1;
+  transition: opacity 100ms ease-out 200ms;
+}
+@starting-style {
+  .hhwx-image-placeholder[aria-busy="true"] { opacity: 0; }
+}
+.hhwx-image-placeholder::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--theme-color-image-loading-accent);
+  opacity: .65;
+}
+/* The first-paint banner stays above its cover when it was already available at hydration. */
+.hhwx-image-placeholder:has(+ img[data-covered]) { z-index: 1; }
+.hhwx-image-placeholder[data-failed] { transition: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .hhwx-image-placeholder::after { animation: hhwx-image-pulse 1.8s ease-in-out 200ms infinite both; }
+  @keyframes hhwx-image-pulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hhwx-image-placeholder { transition: none; }
+  .hhwx-image-placeholder[aria-busy="true"] { transition: opacity 0s 200ms; }
+}
 
 /* Profile pickers share a short opacity transition without moving the dialog. */
 .hhwx-profile-overlay[data-state="open"], .hhwx-profile-dialog[data-state="open"] {

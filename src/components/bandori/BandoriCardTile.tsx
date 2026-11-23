@@ -23,6 +23,7 @@ export type BandoriCardTileCard = BandoriCardThumbnailCard & {
 type BandoriCardTileBaseProps = {
   card: BandoriCardTileCard;
   metadata?: BandoriCardThumbnailMetadata;
+  metadataLoading?: boolean;
   cardName: string;
   badge?: string;
   leaderLabel?: string;
@@ -78,6 +79,7 @@ function getBandoriCardTileClassName(
 function BandoriCardTileContent({
   card,
   metadata,
+  metadataLoading,
   cardName,
   badge,
   leaderLabel,
@@ -97,6 +99,7 @@ function BandoriCardTileContent({
     <BandoriCardThumbnail
       card={card}
       metadata={metadata}
+      metadataLoading={metadataLoading}
       bandId={card.bandId}
       alt={cardName}
       power={card.totalPower}

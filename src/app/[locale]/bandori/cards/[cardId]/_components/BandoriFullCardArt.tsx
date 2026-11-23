@@ -4,7 +4,6 @@ import { useMemo, useState, type CSSProperties } from "react";
 import { ImageOff, Maximize2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import LoadingImage from "@/components/LoadingImage";
-import LoadingPlaceholder from "@/components/LoadingPlaceholder";
 import {
   buildBandoriCardAttributeIconUrl,
   buildBandoriCardBandIconUrl,
@@ -121,7 +120,7 @@ function BandoriFullCardSurface({
         className="absolute overflow-hidden bg-[var(--theme-color-control-background-muted)]"
         style={FULL_CARD_ARTWORK_VIEWPORT_STYLE}
       >
-        {src && !isFailed ? (
+        {(src || isResolving) && !isFailed ? (
           <LoadingImage
             src={src}
             alt={alt}
@@ -131,8 +130,6 @@ function BandoriFullCardSurface({
             className="h-full w-full object-cover"
             onError={() => setFailedSrc(src)}
           />
-        ) : isResolving ? (
-          <LoadingPlaceholder label={loadingLabel} className="h-full w-full" />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-sm font-bold text-[var(--theme-color-text-muted)]">
             <ImageOff className="h-8 w-8" aria-hidden="true" />

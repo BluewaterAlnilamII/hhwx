@@ -119,6 +119,8 @@ PWA installation colors are separate metadata in `src/app/manifest.ts` and `src/
 
 During a drag, move the selection indicator and content through the same fraction of the distance between tabs. On release, continue from that position and use a shorter settling time for a shorter remaining distance. A second swipe starts from the panel most visible when the finger begins moving, even if the previous slide finished while the finger was resting on the screen. Use the same slide timing for taps. Clip moving content to the panel viewport so switching tabs keeps the page width and any visible shared header stable.
 
+Tapping a nonadjacent tab slides directly between the two panels over one viewport width. Mount only the destination content needed for the transition. The indicator moves directly to the selected label.
+
 When reduced motion is enabled, the panel and its selection indicator stay still while the finger moves. On release, a swipe that meets the usual threshold selects the new tab immediately. A short or cancelled swipe preserves the current tab and reading position.
 
 The event tracker and public profile share [`getTabSlideTiming`](../src/lib/bind-tab-swipe.ts). Reuse it for new swipeable tab panels. Segmented controls that only change a filter use their own selection feedback.
@@ -127,9 +129,13 @@ The event tracker and public profile share [`getTabSlideTiming`](../src/lib/bind
 
 For a small menu anchored to a button or pointer location, use [`hhwx-anchored-menu`](../src/app/visual-theme/recipes.css). On every open, fade in from the edge nearest the trigger, moving 5px and scaling from 97% to 100% over 180ms with ease-out. Set `data-side="top"` when the menu opens above the trigger so the movement follows its placement. The profile cover options and desktop favorite-song actions both use this style.
 
-Native `details` closes immediately. Components that keep the popup mounted during dismissal fade out over 90ms. Mobile favorite-song actions slide in from the bottom and support dragging down to dismiss. Both menu types open and close immediately with reduced motion.
+Native `details` closes immediately. Components that keep the popup mounted during dismissal fade out over 90ms.
 
 Close an anchored menu as soon as the page or a container holding its trigger scrolls. This applies to the profile cover options and to desktop song actions opened with More or a right-click. Scrolling inside the menu keeps it open.
+
+Mobile action sheets, such as the favorite-song menu, slide in and rest 8px from the bottom with broad corners (32–42px) and safe-area clearance for their controls. Lock background scrolling while open. A tap activates the touched action. A vertical drag can start anywhere on the sheet, including on an action. On an upward pull, keep the bottom edge fixed. Move the top and all content up together, leaving the extra space below the last action. Travel continues with increasing resistance for the full gesture. On release the sheet moves slightly past its resting position and settles back. A downward pull of 56px dismisses it. When content overflows, let it scroll within the sheet first. With reduced motion, menus open and close immediately and sheets skip the stretch and animated return.
+
+An action sheet's position and backdrop use the same opening progress. Halfway open, the backdrop has half its full opacity. Opening, dragging, settling and dismissal all follow that relationship. Pulling an already open sheet upward keeps the backdrop at full strength.
 
 ## Event tracker chart interaction
 
@@ -222,8 +228,8 @@ Action outcomes are separate from content availability. Posting, saving, deletin
 | `RetryButton` | Shared compact read-retry control, including content pagination and route errors; preserve its styling and expanded hit area |
 | `ActionFeedback` | Success or failure of an explicit operation, using the compact comment-refresh appearance beside its action |
 | `LoadingSpinner` | Decorative progress inside an action; keep an accessible button label and use `text-current` when it should inherit the button ink |
-| `LoadingPlaceholder` | Reserve image or known layout dimensions while data is pending; supply a localized accessible label |
-| `LoadingImage` | Keep an image hidden until its actual source loads; reuse the placeholder and preserve the image dimensions. |
+| `LoadingPlaceholder` | Reserve known layout dimensions for pending metadata, with a localized accessible label. |
+| `LoadingImage` | Reserve the artwork slot through URL resolution and download. Pass `src={null}` while resolving the URL. The parent sets the dimensions and unavailable state. |
 
 Wait for the data required to render a meaningful initial view. Do not present initial defaults such as zero results, unknown service states, a fallback card identity or an incomplete filter list as loaded content. Show an empty state only after a successful response. An initial failure replaces loading with one failure state and retries missing dependencies; it must not also show a false empty state. Keep usable data during a background refresh of the same resource and handle refresh failure silently. A different account, item or data key must not inherit the previous result.
 
@@ -233,7 +239,11 @@ Manual comment refresh keeps the current list and page until the replacement suc
 
 For explicit reply expansion or participant pagination, retain loaded entries and retry only the failed page through `RetryButton` in the existing action/loading slot. Participant lists reserve one fixed-height footer for loading and retry; a failure must not append a second row or restart automatic pagination. A first failure without usable entries replaces the list slot with `LoadingError`. Chat resend and player play/retry icons retain their operation-specific controls; they are not ordinary content-read retry buttons.
 
-Image identity follows the resolved source URL. When it changes, remove the old image immediately and show a placeholder until the new image loads; do not remount an unchanged URL merely because the selected server changed. Metadata loading and the subsequent image download both need feedback. A viewer that needs its own image ref for zoom and gestures may keep a keyed native image with a centered `LoadingSpinner` over it. Viewers show no visible loading text; the status container retains a generic localized loading label for assistive technology. Failure ends the busy state. Fixed dark viewer overlays may retain white feedback text for contrast; ordinary image placeholders still use the theme roles above.
+For covers, banners, avatars and catalog artwork, reserve the final dimensions from the first render. Keep the same image slot while resolving the URL and requesting the file. Change the image when its URL changes. Retain it across a server or tab change that returns the same URL.
+
+Fast and already available images appear immediately. After 200ms of waiting, a neutral cover appears and gently pulses over 1.8s. Its tint mixes `image-loading-accent` over `control-background-muted` so the pulse remains visible on a matching background in both themes. As the artwork becomes available, the visible cover fades away over 160ms. Frames, badges, captions and controls stay still. The event header banner can paint before hydration. Reduced motion uses a static cover and an immediate reveal. Failure ends the busy state and shows the slot’s existing fallback.
+
+Fixed icons, flags and game-art overlays keep their native rendering. A zoomable viewer can keep its keyed image and centered `LoadingSpinner` with a localized accessible name. Fixed dark viewer overlays may retain white feedback text.
 
 Use hover styling only for hover-capable input (`@media (hover: hover)` for handwritten CSS). Pointer-driven previews open for mouse input; keyboard previews use `:focus-visible`. Touch activation performs the action on the first tap without a leftover hover selection. An intentional long-press preview can remain available independently. Escape closes the current preview before its containing dialog and restores focus to the trigger if focus was inside the preview. Button focus styling uses `focus-visible`; text inputs may retain a visible editing focus treatment. Filtering a picker must not reset its scroll container merely because results became empty and returned.
 

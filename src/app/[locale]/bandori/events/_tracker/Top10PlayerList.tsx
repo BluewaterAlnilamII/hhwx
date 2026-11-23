@@ -6,7 +6,6 @@ import { ImageOff } from "lucide-react";
 
 import { Link } from "@/i18n/navigation";
 import BandoriCardTile from "@/components/bandori/BandoriCardTile";
-import LoadingPlaceholder from "@/components/LoadingPlaceholder";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useBandoriCharactersMaster } from "@/hooks/useBandoriCharactersMaster";
 import { resolveBandoriCardBandId } from "@/lib/bandori/cards/master";
@@ -57,12 +56,7 @@ export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
               </div>
 
               <div className="flex items-center justify-center">
-                {player.avatarCardId > 0 && avatarLoading ? (
-                  <LoadingPlaceholder
-                    label={commonT("states.loading")}
-                    className="h-14 w-14 rounded-[5px] sm:h-[76px] sm:w-[76px]"
-                  />
-                ) : player.avatarCardId > 0 && metadata && characters ? (
+                {player.avatarCardId > 0 && (avatarLoading || (metadata && characters)) ? (
                   <BandoriCardTile
                     interaction={{ kind: "presentation" }}
                     card={{
@@ -76,6 +70,7 @@ export function Top10PlayerList({ players, server }: Top10PlayerListProps) {
                       totalPower: null,
                     }}
                     metadata={metadata ?? undefined}
+                    metadataLoading={avatarLoading}
                     cardName={player.name || String(player.uid)}
                     size="compact"
                     showPower={false}

@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import LoadingImage from "@/components/LoadingImage";
 
 interface MusicArtworkProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> {
-  src: string;
+  src: string | null;
   fallback?: ReactNode;
 }
 
@@ -18,7 +18,7 @@ export default function MusicArtwork({
   const [failedSourceUrl, setFailedSourceUrl] = useState<string | null>(null);
   const t = useTranslations("common");
 
-  if (failedSourceUrl === src) {
+  if (src && failedSourceUrl === src) {
     return fallback;
   }
 

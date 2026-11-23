@@ -30,7 +30,7 @@
 .editorActions { display: flex; flex: none; color: var(--theme-color-text-muted); }
 .editorActions button { display: grid; place-items: center; width: 32px; height: 44px; border-radius: 4px; }
 .editorActions button:enabled:hover { background: var(--theme-color-control-background-muted); }
-.editorThumb { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 4px; object-fit: cover; background: var(--theme-color-control-background-muted); }
+.editorThumb { position: relative; display: grid; place-items: center; flex: none; width: 36px; height: 36px; overflow: hidden; border-radius: 4px; background: var(--theme-color-control-background-muted); }
 .editorNames { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px; font-size: 14px; }
 .editorNames span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .editorCharacter { flex: none; max-width: 100%; color: var(--theme-color-text-muted); }
@@ -119,8 +119,10 @@ button.disclosure:focus-visible { background: var(--theme-color-control-backgrou
   .group[data-size="5"] .tile:nth-child(2) { justify-self: end; width: var(--pair-right-width); aspect-ratio: 4/3; }
   .group[data-size="5"] .tile:nth-child(n+3) { aspect-ratio: 4/3; }
 }
+.artSurface { position: absolute; inset: 0; isolation: isolate; }
+.artSurface > :global(.hhwx-image-placeholder) { z-index: 1; }
 .art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-img.art:has(+ canvas[data-ready]) { opacity: 0; }
+img.art:has(~ canvas[data-ready]) { opacity: 0; }
 canvas.art { pointer-events: none; }
 .caption { position: absolute; inset: auto 0 0; padding: 2rem 12px 8px; color: white; background: linear-gradient(transparent, #101522e6); opacity: 0; transition: opacity 140ms ease-out; pointer-events: none; }
 .caption strong { display: block; font-size: 15px; }

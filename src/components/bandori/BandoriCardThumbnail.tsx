@@ -87,32 +87,19 @@ function CardAssetImage({
   loading?: "eager" | "lazy";
 }) {
   const [failedSrcs, setFailedSrcs] = useState<string[]>([]);
-  const activeSrc = src && !failedSrcs.includes(src) ? src : null;
-
-  if (!activeSrc && isResolving) {
-    return (
-      <div
-        role="status"
-        aria-busy="true"
-        aria-label={loadingLabel}
-        className="h-full w-full motion-safe:animate-pulse bg-[var(--theme-color-control-background-muted)]"
-      />
-    );
-  }
-
-  if (!activeSrc) {
+  if (src ? failedSrcs.includes(src) : !isResolving) {
     return <BrokenImageFallback label={fallbackLabel} />;
   }
 
   return (
     <LoadingImage
-      src={activeSrc}
+      src={src}
       alt={alt}
       loadingLabel={loadingLabel}
       loading={loading}
       decoding="async"
       className={className}
-      onError={() => setFailedSrcs((current) => current.includes(activeSrc) ? current : [...current, activeSrc])}
+      onError={() => { if (src) setFailedSrcs(current => current.includes(src) ? current : [...current, src]); }}
     />
   );
 }
@@ -120,6 +107,7 @@ function CardAssetImage({
 export default function BandoriCardThumbnail({
   card,
   metadata,
+  metadataLoading = false,
   bandId,
   alt,
   size = "tile",
@@ -129,6 +117,7 @@ export default function BandoriCardThumbnail({
 }: {
   card: BandoriCardThumbnailCard;
   metadata?: BandoriCardThumbnailMetadata;
+  metadataLoading?: boolean;
   bandId: number | null;
   alt: string;
   size?: BandoriCardThumbnailSize;
@@ -196,81 +185,83 @@ export default function BandoriCardThumbnail({
             alt={alt}
             loading={loading}
             className="h-full w-full object-cover"
-            isResolving={assetIndexLoading}
+            isResolving={metadataLoading || assetIndexLoading}
             loadingLabel={t("imageLoading")}
             fallbackLabel={commonT("states.imageUnavailable")}
           />
         </div>
       </div>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      {frameUrl ? <img src={frameUrl} alt="" aria-hidden="true" loading={loading} decoding="async" className="pointer-events-none absolute inset-0 h-full w-full object-fill" /> : null}
-      {bandIconUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={bandIconUrl}
-          alt=""
-          aria-hidden="true"
-          loading={loading}
-          decoding="async"
-          data-bandori-thumbnail-overlay="band"
-          className="pointer-events-none absolute left-0 top-0 h-[27.6%] w-[27.6%] object-contain"
-        />
-      ) : null}
-      {attributeIconUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={attributeIconUrl}
-          alt=""
-          aria-hidden="true"
-          loading={loading}
-          decoding="async"
-          className="pointer-events-none absolute right-[0.8%] top-[1.1%] h-[25.5%] w-[25.5%]"
-        />
-      ) : null}
-      <div className="pointer-events-none absolute inset-0 z-10">
-        {starIconUrl ? starSlots.map((slot) => (
+      {!metadataLoading && <>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {frameUrl ? <img src={frameUrl} alt="" aria-hidden="true" loading={loading} decoding="async" className="pointer-events-none absolute inset-0 h-full w-full object-fill" /> : null}
+        {bandIconUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            key={slot}
-            src={starIconUrl}
+            src={bandIconUrl}
             alt=""
             aria-hidden="true"
             loading={loading}
             decoding="async"
-            className="bandori-card-thumbnail-star absolute object-contain drop-shadow-[0_1px_1px_rgba(0,0,0,0.55)]"
-            style={{ "--bandori-card-star-slot": slot } as CSSProperties}
+            data-bandori-thumbnail-overlay="band"
+            className="pointer-events-none absolute left-0 top-0 h-[27.6%] w-[27.6%] object-contain"
           />
-        )) : null}
-      </div>
-      {card.masterRank > 0 && masterIconUrl ? (
-        <div className="pointer-events-none absolute right-[-5.3%] top-[26.3%] z-30 h-[27.6%] w-[27.6%] drop-shadow-[0_1px_2px_rgba(15,23,42,0.55)]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={masterIconUrl} alt="" aria-hidden="true" loading={loading} decoding="async" className="h-full w-full object-contain" />
-          <span className="absolute inset-0 flex items-center justify-center text-[13cqw] font-black leading-none text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.68)]">
-            {card.masterRank}
-          </span>
-        </div>
-      ) : null}
-      {card.skillLevel > 1 ? (
-        <div className="pointer-events-none absolute right-[-1.3%] top-[53.9%] z-10 flex h-[19.7%] min-w-[27.6%] items-center justify-center rounded-[3px] border border-white/80 bg-rose-500 px-[3.9%] text-[13cqw] font-black leading-none text-white shadow-[0_1px_2px_rgba(15,23,42,0.5)] [text-shadow:0_1px_1px_rgba(0,0,0,0.55)]">
-          {card.skillLevel}
-        </div>
-      ) : null}
-      {powerLabel ? (
-        <>
-          <div
-            className="pointer-events-none absolute bottom-[2.6%] right-[2.6%] z-10 h-[21.7%] w-[58.5%]"
-            style={{
-              backgroundColor: "rgba(0, 0, 0, 0.42)",
-              clipPath: "polygon(22% 0, 100% 0, 100% 100%, 0 100%)",
-            }}
+        ) : null}
+        {attributeIconUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={attributeIconUrl}
+            alt=""
             aria-hidden="true"
+            loading={loading}
+            decoding="async"
+            className="pointer-events-none absolute right-[0.8%] top-[1.1%] h-[25.5%] w-[25.5%]"
           />
-          <div className="pointer-events-none absolute bottom-[3.9%] right-[5.3%] z-20 flex h-[16.8%] w-[58.5%] items-center justify-end overflow-hidden text-right text-[14cqw] font-normal leading-none text-white tabular-nums [text-shadow:0_1px_1px_rgba(0,0,0,0.72)]">
-            <span className="block max-w-full whitespace-nowrap">{powerLabel}</span>
+        ) : null}
+        <div className="pointer-events-none absolute inset-0 z-10">
+          {starIconUrl ? starSlots.map((slot) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={slot}
+              src={starIconUrl}
+              alt=""
+              aria-hidden="true"
+              loading={loading}
+              decoding="async"
+              className="bandori-card-thumbnail-star absolute object-contain drop-shadow-[0_1px_1px_rgba(0,0,0,0.55)]"
+              style={{ "--bandori-card-star-slot": slot } as CSSProperties}
+            />
+          )) : null}
+        </div>
+        {card.masterRank > 0 && masterIconUrl ? (
+          <div className="pointer-events-none absolute right-[-5.3%] top-[26.3%] z-30 h-[27.6%] w-[27.6%] drop-shadow-[0_1px_2px_rgba(15,23,42,0.55)]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={masterIconUrl} alt="" aria-hidden="true" loading={loading} decoding="async" className="h-full w-full object-contain" />
+            <span className="absolute inset-0 flex items-center justify-center text-[13cqw] font-black leading-none text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.68)]">
+              {card.masterRank}
+            </span>
           </div>
-        </>
-      ) : null}
+        ) : null}
+        {card.skillLevel > 1 ? (
+          <div className="pointer-events-none absolute right-[-1.3%] top-[53.9%] z-10 flex h-[19.7%] min-w-[27.6%] items-center justify-center rounded-[3px] border border-white/80 bg-rose-500 px-[3.9%] text-[13cqw] font-black leading-none text-white shadow-[0_1px_2px_rgba(15,23,42,0.5)] [text-shadow:0_1px_1px_rgba(0,0,0,0.55)]">
+            {card.skillLevel}
+          </div>
+        ) : null}
+        {powerLabel ? (
+          <>
+            <div
+              className="pointer-events-none absolute bottom-[2.6%] right-[2.6%] z-10 h-[21.7%] w-[58.5%]"
+              style={{
+                backgroundColor: "rgba(0, 0, 0, 0.42)",
+                clipPath: "polygon(22% 0, 100% 0, 100% 100%, 0 100%)",
+              }}
+              aria-hidden="true"
+            />
+            <div className="pointer-events-none absolute bottom-[3.9%] right-[5.3%] z-20 flex h-[16.8%] w-[58.5%] items-center justify-end overflow-hidden text-right text-[14cqw] font-normal leading-none text-white tabular-nums [text-shadow:0_1px_1px_rgba(0,0,0,0.72)]">
+              <span className="block max-w-full whitespace-nowrap">{powerLabel}</span>
+            </div>
+          </>
+        ) : null}
+      </>}
     </div>
   );
 }

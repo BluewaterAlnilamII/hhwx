@@ -2,7 +2,6 @@
 
 import { useState, type ReactNode } from "react";
 import LoadingImage from "@/components/LoadingImage";
-import LoadingPlaceholder from "@/components/LoadingPlaceholder";
 import { ImageOff } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
@@ -16,6 +15,7 @@ import { cn } from "@/lib/utils";
 export type BandoriCardArtImageProps = {
   cardId: number;
   resourceSetName: string | null | undefined;
+  resolvingResource?: boolean;
   trainType: BandoriCardAssetVariant;
   imageKind?: "thumb" | "trim";
   alt: string;
@@ -27,6 +27,7 @@ export type BandoriCardArtImageProps = {
 export function BandoriCardArtImage({
   cardId,
   resourceSetName,
+  resolvingResource = false,
   trainType,
   imageKind = "thumb",
   alt,
@@ -43,13 +44,7 @@ export function BandoriCardArtImage({
   );
   const failed = Boolean(src && failedSrc === src);
 
-  if (!src && indexLoading) {
-    return (
-      <LoadingPlaceholder label={t("imageLoading")} className={cn("h-full w-full", className)} />
-    );
-  }
-
-  if (!src || failed) {
+  if ((!src && !indexLoading && !resolvingResource) || failed) {
     return (
       <div
         data-card-id={cardId}
@@ -63,7 +58,7 @@ export function BandoriCardArtImage({
   }
 
   return (
-    <div data-card-id={cardId} className={cn("relative h-full w-full", className)}>
+    <div data-card-id={src ? cardId : undefined} className={cn("relative h-full w-full", className)}>
       <LoadingImage
         src={src}
         alt={alt}

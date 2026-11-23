@@ -1,8 +1,49 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import test from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { BandoriCardArtImage } from "../src/components/bandori/BandoriCardArtImage.tsx";
+import thumbnailModule from "../src/components/bandori/BandoriCardThumbnail.tsx";
 
 const readSource = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
+
+const { NextIntlClientProvider } = createRequire(import.meta.url)("next-intl");
+const BandoriCardThumbnail = thumbnailModule.default ?? thumbnailModule;
+
+test("card artwork and thumbnails distinguish a pending index from an unavailable image", () => {
+  const messages = {
+    bandori: { cards: { common: { imageLoading: "Loading card" } } },
+    common: { states: { imageUnavailable: "Image unavailable" } },
+  };
+  const render = child => renderToStaticMarkup(createElement(NextIntlClientProvider, {
+    locale: "en", timeZone: "UTC", messages,
+  }, child));
+  const metadata = { resourceSetName: "res001001", rarity: 3 };
+  const images = [
+    createElement(BandoriCardArtImage, { cardId: 1, resourceSetName: metadata.resourceSetName, trainType: "normal", alt: "Card art" }),
+    createElement(BandoriCardThumbnail, { card: { cardId: 1, level: 1, masterRank: 0, skillLevel: 1 }, metadata, bandId: null, alt: "Card art" }),
+  ];
+  const previous = process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL;
+  try {
+    process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL = "https://assets.example.invalid";
+    for (const image of images) {
+      const html = render(image);
+      assert.match(html, /role="status"[^>]*aria-busy="true"[^>]*aria-label="Loading card"/u);
+      assert.doesNotMatch(html, /Image unavailable/u);
+    }
+    delete process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL;
+    for (const image of images) {
+      const html = render(image);
+      assert.match(html, /Image unavailable/u);
+      assert.doesNotMatch(html, /aria-busy="true"/u);
+    }
+  } finally {
+    if (previous === undefined) delete process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL;
+    else process.env.NEXT_PUBLIC_BANDORI_ASSET_CDN_BASE_URL = previous;
+  }
+});
 
 test("card image consumers use index descriptors and never substitute full art", async () => {
   const artImage = await readSource("src/components/bandori/BandoriCardArtImage.tsx");
@@ -26,10 +67,7 @@ test("card image consumers use index descriptors and never substitute full art",
   assert.match(artImage, /imageKind = "thumb"/u);
   assert.match(artImage, /lookupBandoriCardImage\(assetIndex, resourceSetName, trainType, imageKind\)/u);
   assert.match(thumbnail, /resolveBandoriCardAssetVariant/u);
-  assert.match(thumbnail, /aria-busy="true"/u);
   assert.doesNotMatch(thumbnail, /No image/u);
-  assert.match(artImage, /<LoadingPlaceholder/u);
-  assert.match(await readSource("src/components/LoadingPlaceholder.tsx"), /aria-busy="true"/u);
   assert.match(artImage, /imageUnavailable/u);
   assert.doesNotMatch(artImage, /No image/u);
   const fullCard = await readSource("src/app/[locale]/bandori/cards/[cardId]/_components/BandoriFullCardArt.tsx");
@@ -194,11 +232,9 @@ test("Stamps consumers join the private master response with the public hash ind
 test("public index failure stays isolated from master loading and calculations", async () => {
   const tracker = await readSource("src/app/[locale]/bandori/events/EventTrackerPage.tsx");
   const teamBuilder = await readSource("src/app/[locale]/bandori/teambuilder/page.tsx");
-  const artImage = await readSource("src/components/bandori/BandoriCardArtImage.tsx");
 
   assert.match(tracker, /buildBandoriPublicAssetUrl\([\s\S]*\) \?\? ""/u);
   assert.match(teamBuilder, /buildBandoriPublicAssetUrl\([\s\S]*\) \?\? ""/u);
-  assert.match(artImage, /if \(!src \|\| failed\)/u);
   assert.doesNotMatch(teamBuilder, /loading\s*\|\|[^;\n]*eventAsset/u);
 });
 

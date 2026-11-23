@@ -3,7 +3,7 @@
 import { BandoriCardArtImage } from "@/components/bandori/BandoriCardArtImage";
 import { UserRound } from "lucide-react";
 import { useTranslations } from "next-intl";
-import LoadingPlaceholder from "@/components/LoadingPlaceholder";
+import LoadingImage from "@/components/LoadingImage";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
 import { type AccountAvatarCardTrainType } from "@/lib/account-avatar-defaults";
@@ -60,7 +60,6 @@ export default function AccountCardAvatar({
       ? pickGameProfileCardName(cardId, cardMetadata ?? undefined, preferredServer)
       : null
   );
-  const hasCardAvatar = Boolean(cardId && resolvedResourceSetName);
   const fallback = <UserRound className="h-1/2 w-1/2" aria-hidden="true" />;
 
   return (
@@ -71,12 +70,13 @@ export default function AccountCardAvatar({
         className,
       )}
     >
-      {pending || (!hasCardAvatar && loading) ? (
-        <LoadingPlaceholder label={t("imageLoading")} className="h-full w-full rounded-full" />
-      ) : hasCardAvatar && cardId && resolvedResourceSetName ? (
+      {pending ? (
+        <LoadingImage src={null} alt="" loadingLabel={t("imageLoading")} />
+      ) : cardId && (resolvedResourceSetName || loading) ? (
         <BandoriCardArtImage
           cardId={cardId}
           resourceSetName={resolvedResourceSetName}
+          resolvingResource={loading}
           trainType={trainType ?? "normal"}
           alt={resolvedDisplayName ?? username ?? "avatar"}
           className="rounded-full"
