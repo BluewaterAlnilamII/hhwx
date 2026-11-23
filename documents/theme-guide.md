@@ -135,6 +135,8 @@ Close an anchored menu as soon as the page or a container holding its trigger sc
 
 Mobile action sheets, such as the favorite-song menu, slide in and rest 8px from the bottom with broad corners (32–42px) and safe-area clearance for their controls. Lock background scrolling while open. A tap activates the touched action. A vertical drag can start anywhere on the sheet, including on an action. On an upward pull, keep the bottom edge fixed. Move the top and all content up together, leaving the extra space below the last action. Travel continues with increasing resistance for the full gesture. On release the sheet moves slightly past its resting position and settles back. A downward pull of 56px dismisses it. When content overflows, let it scroll within the sheet first. With reduced motion, menus open and close immediately and sheets skip the stretch and animated return.
 
+In an action sheet with a cover image, leave more room above the artwork than beside it so its top corner clears the curve of the sheet. The favorite-song header sits 24px below the top border and 16px inside each side border.
+
 An action sheet's position and backdrop use the same opening progress. Halfway open, the backdrop has half its full opacity. Opening, dragging, settling and dismissal all follow that relationship. Pulling an already open sheet upward keeps the backdrop at full strength.
 
 ## Event tracker chart interaction
@@ -232,6 +234,10 @@ Action outcomes are separate from content availability. Posting, saving, deletin
 | `LoadingImage` | Reserve the artwork slot through URL resolution and download. Pass `src={null}` while resolving the URL. The parent sets the dimensions and unavailable state. |
 
 Wait for the data required to render a meaningful initial view. Do not present initial defaults such as zero results, unknown service states, a fallback card identity or an incomplete filter list as loaded content. Show an empty state only after a successful response. An initial failure replaces loading with one failure state and retries missing dependencies; it must not also show a false empty state. Keep usable data during a background refresh of the same resource and handle refresh failure silently. A different account, item or data key must not inherit the previous result.
+
+Reserve the favorite button's space until the viewer and their saved items are known. The first visible star shows the confirmed state. Keep it visible during a save. If the initial read fails, show a retry action in the same slot.
+
+The event heading uses the same title and date rows for loading, retry and content. Size the title row for its favorite button and reserve two lines on phones. Longer titles expand the row as needed.
 
 Event pages fetch `/api/bandori/master/events` in the browser and derive the selected event, title, dates, and progress locally. The overview is the only game-data dependency of the heading; the banner uses the optional public asset index. Once an event is resolved, tracking reads its ranking API, while opening or swiping toward information requests `/api/bandori/master/events/{eventId}` and the required metadata APIs through the shared client cache. Server pages validate route syntax and supply generic metadata without preloading game data. A valid numeric ID missing from a successfully loaded overview shows the not-found view; a failed overview request remains retryable. Event-specific document titles update after the overview loads.
 

@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Star } from "lucide-react";
+import { RotateCcw, Star } from "lucide-react";
 import useBandoriFavoriteAction from "@/hooks/useBandoriFavoriteAction";
 import { favoriteKey } from "@/lib/bandori/favorites";
 import type { ProfileModuleId } from "@/lib/profile-homepage";
 import type { BandoriServer } from "@/lib/bandori-server";
 import ActionFeedback from "@/components/ActionFeedback";
 import { getTooltipPosition } from "@/lib/tooltip-position";
+import { cn } from "@/lib/utils";
 import styles from "./FavoriteButton.module.css";
 
 function alignFeedback(badge: HTMLDivElement | null) {
@@ -46,15 +47,16 @@ export default function BandoriFavoriteButton({ kind, id, server, detail = false
 }
 
 function FavoriteControl({ target, detail, compact, overlayClassName }: { target: string; detail: boolean; compact: boolean; overlayClassName?: string }) {
-  const { selected, label, pending, activate, feedback } = useBandoriFavoriteAction(target);
+  const { selected, loading, failed, label, pending, activate, feedback } = useBandoriFavoriteAction(target);
   const [added, setAdded] = useState(false);
-  const star = <Star size={overlayClassName ? 16 : 22} className={selected ? "hhwx-saved-star" : undefined} aria-hidden="true" onAnimationEnd={() => setAdded(false)} />;
+  const Icon = failed ? RotateCcw : Star;
+  const icon = <Icon size={overlayClassName ? 16 : 22} className={selected ? "hhwx-saved-star" : undefined} aria-hidden="true" onAnimationEnd={() => setAdded(false)} />;
   return <span className={overlayClassName ?? styles.control}>
-    <button type="button" className={overlayClassName ? "hhwx-favorite-motion" : `${styles.star} hhwx-favorite-motion`} data-detail={detail} data-compact={compact || undefined} aria-pressed={selected}
+    <button type="button" className={cn("hhwx-favorite-motion", !overlayClassName && styles.star, loading && "invisible")} data-detail={detail} data-compact={compact || undefined} aria-pressed={selected}
       title={label} aria-label={label}
       aria-disabled={pending} aria-busy={pending} onClick={() => void activate(setAdded)}
       data-saved={added && feedback?.type === "success" && selected && !pending || undefined}>
-      {overlayClassName ? <span>{star}</span> : star}
+      {overlayClassName ? <span>{icon}</span> : icon}
     </button>
     <ActionFeedback feedback={feedback} ref={alignFeedback} className="fixed inset-auto m-0 w-max" />
   </span>;
