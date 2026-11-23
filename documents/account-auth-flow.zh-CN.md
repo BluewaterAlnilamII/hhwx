@@ -109,7 +109,7 @@ node --import tsx --test tests/user-game-profile-sync.test.mjs
 node scripts/test-auth-local.mjs
 npx --no-install supabase test db --workdir temp/auth-otp-local D:/Workspace/hhwx/supabase/tests/auth_registration.sql
 npx --no-install supabase test db --workdir temp/auth-otp-local D:/Workspace/hhwx/supabase/tests/account_email_change.sql
-npx --no-install supabase db advisors --workdir temp/auth-otp-local --local --type security
+npx --no-install supabase db advisors --workdir temp/auth-otp-local --type security
 npm run typecheck
 npm run i18n:check
 npm run lint
