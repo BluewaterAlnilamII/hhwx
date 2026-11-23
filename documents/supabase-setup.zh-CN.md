@@ -51,6 +51,8 @@ English version: [supabase-setup.md](supabase-setup.md)
 
 2026-11-17 建立的主页开发环境使用独立本地项目 `hhwx-profile-dev`，配置目录为 `temp/profile-dev/supabase`。配置、迁移和邮件模板均复制自仓库。原 `hhwx` 数据卷已保留：其表结构与迁移记录不一致，因此没有清空或修复。新库从头应用了仓库全部 47 条迁移，最新为 `20261116105541_profile_homepage.sql`。
 
+升级从 CLI v2 复制的本地工作目录时，在该目录的 `supabase/config.toml` 中将 `[inbucket]` 改为 `[local_smtp]`，将 `[auth.email]` 和 `[auth.sms]` 下的 `enable_signup` 改为 `enabled`，保留原值。保留该工作目录的项目 ID 和端口，以便复用已有容器和数据库卷。
+
 先启动 Docker Desktop，再从仓库根目录运行：
 
 ```powershell
@@ -64,7 +66,7 @@ Git 忽略的 `.env.development.local` 同时覆盖开发环境的两个 Supabas
 
 国服预计排期来自当前环境的日历表。本地主页开发库已于 2026-11-19 导入当时公开的 20 条国服排期及其关联活动。核对后续排期变更时，可对照本地和线上 `/api/bandori/calendar/cn/schedules` 的结果。
 
-数据持久保存在 Docker 数据卷。停止时运行 `npx --no-install supabase stop --project-id hhwx-profile-dev`，不要加 `--no-backup`；重启开发不需要重置数据库。仓库新增迁移后，把规范 SQL 文件复制到 `temp/profile-dev/supabase/migrations`，再运行 `npx --no-install supabase migration up --local --workdir temp/profile-dev`。主页数据权限变化时，在这个本地工作目录重跑 `supabase/tests/profile_homepage.sql`。凭据与生成的夹具不要提交 Git。需要恢复开发环境的原连接时，移开 `.env.development.local` 并重启 Next；远端配置没有修改。
+数据持久保存在 Docker 数据卷。停止时运行 `npx --no-install supabase stop --project-id hhwx-profile-dev`，不要加 `--no-backup`；重启开发不需要重置数据库。仓库新增迁移后，把规范 SQL 文件复制到 `temp/profile-dev/supabase/migrations`，再运行 `npx --no-install supabase migration up --workdir temp/profile-dev`。主页数据权限变化时，在这个本地工作目录重跑 `supabase/tests/profile_homepage.sql`。凭据与生成的夹具不要提交 Git。需要恢复开发环境的原连接时，移开 `.env.development.local` 并重启 Next；远端配置没有修改。
 
 ## 迁移工作流
 
@@ -104,13 +106,13 @@ npm exec -- supabase migration new --help
 
 新的 schema 工作按以下流程处理：
 
-1. 可用 `npm exec -- supabase migration new <name>` 创建迁移并编写 SQL，也可通过明确指向本地 Supabase stack 的 SQL 连接先行试验。试验成功后用 CLI 捕获最终变更，例如 `npm exec -- supabase db pull <name> --local`。最终变更必须进入 `supabase/migrations/`，不要自行编造带时间戳的文件名，也不要留下未捕获的本地漂移。
+1. 可用 `npm exec -- supabase migration new <name>` 创建迁移并编写 SQL，也可通过明确指向本地 Supabase stack 的 SQL 连接先行试验。试验成功后用 CLI 捕获最终变更，例如 `npm exec -- supabase db pull <name>`。最终变更必须进入 `supabase/migrations/`，不要自行编造带时间戳的文件名，也不要留下未捕获的本地漂移。
 2. 复查生成 SQL 的约束、索引、grants、RLS、函数 `search_path`、service-role 边界以及发布和数据迁移要求。生成的差异不能替代安全审查；检查是否有对象或数据变更需要显式补充 SQL。
-3. 在可重建的本地 stack 上通过 `npm exec -- supabase db reset --local` 重放，验证受影响的 SQL 行为。修改 RLS、grants 或特权 SQL 时，复用或扩展保留的 SQL 测试，以预期角色和所有权、会话状态检查允许与拒绝场景，不能只用数据库 owner 或 service role。临时查询可以辅助迭代，但不能保留回归覆盖。性能敏感 SQL 的修改需要查询计划证据。本地 stack 需要 Docker；无法执行的检查应明确说明。
-4. 运行适用的 [Supabase Advisors](https://supabase.com/docs/guides/observability/advisors)，例如 `npm exec -- supabase db advisors --local --type all`。评估变更范围内的安全、性能发现；Advisors 补充角色行为测试，不要求顺带清理无关历史问题。
-5. 对已获授权的 linked 项目检查，核实目标后运行 `npm exec -- supabase db push --dry-run`。只有已明确授权远程写入范围，且满足发布顺序时，才能通过 `npm exec -- supabase db push` 应用。
+3. 在可重建的本地 stack 上通过 `npm exec -- supabase db reset` 重放，验证受影响的 SQL 行为。修改 RLS、grants 或特权 SQL 时，复用或扩展保留的 SQL 测试，以预期角色和所有权、会话状态检查允许与拒绝场景，不能只用数据库 owner 或 service role。临时查询可以辅助迭代，但不能保留回归覆盖。性能敏感 SQL 的修改需要查询计划证据。本地 stack 需要 Docker；无法执行的检查应明确说明。
+4. 运行适用的 [Supabase Advisors](https://supabase.com/docs/guides/observability/advisors)，例如 `npm exec -- supabase db advisors --type all`。评估变更范围内的安全、性能发现；Advisors 补充角色行为测试，不要求顺带清理无关历史问题。
+5. 对已获授权的 linked 项目检查，核实目标后运行 `npm exec -- supabase db push --dry-run --remote`。只有已明确授权远程写入范围，且满足发布顺序时，才能通过 `npm exec -- supabase db push --remote` 应用。
 
-`db pull` 默认面向 linked 数据库，并可能更新迁移历史；本地试验必须显式选择 `--local`。`db reset --local` 会清除本地数据库内容，应先捕获预期变更并保留所需本地数据。本地 SQL 试验、dry run 和现有凭据都不代表已获授权执行远程 SQL、修复迁移历史、修改配置或写入生产环境。目标和操作已经得到明确授权时，沿用该授权。
+CLI v3 的 `db pull`、`db push` 和 `db reset` 默认使用本地数据库。从远程数据库执行 `db pull` 可能更新其迁移历史。`db reset` 会清除本地数据库内容，应先捕获预期变更并保留所需本地数据。本地 SQL 试验、dry run 和现有凭据都不代表已获授权执行远程 SQL、修复迁移历史、修改配置或写入生产环境。目标和操作已经得到明确授权时，沿用该授权。
 
 `20260728185041_scope_bandori_event_comments_by_server.sql` 必须与应用协调发布：先部署已支持服务器隔离的评论 API，使并发新写入直接使用统一目标格式，再立即执行迁移。两个步骤之间旧讨论可能会暂时不可见，但迁移会保留全部评论和通知记录。
 
@@ -145,7 +147,7 @@ node --import tsx scripts/backfill-user-game-profile-servers.mjs
 
 回填只处理手动档案，以通过校验和验证的正文 `bestdoriProfile.server` 为准，并且仅在原 `server` 和 `payload_sha256` 都未变化时更新。只要存在任何无法验证的手动档案正文，apply 就会拒绝执行。
 
-当前 baseline migration 面向全新的空项目。不要直接对现有生产 HHWX 项目执行它。对已 link 的生产项目，保留远端已应用版本对应的历史 no-op 记录；只有在确认线上 schema 已经匹配后，才把 baseline version 标记为 applied。任何生产 push 前都先运行 `npm exec -- supabase db push --dry-run`。
+当前 baseline migration 面向全新的空项目。不要直接对现有生产 HHWX 项目执行它。对已 link 的生产项目，保留远端已应用版本对应的历史 no-op 记录；只有在确认线上 schema 已经匹配后，才把 baseline version 标记为 applied。任何生产 push 前都先运行 `npm exec -- supabase db push --dry-run --remote`。
 
 ## 特权脚本
 
