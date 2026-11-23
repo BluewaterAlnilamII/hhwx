@@ -3,7 +3,6 @@
 import { CalendarDays, ChevronRight, Music2 } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import MusicArtwork from "@/components/music-player/MusicArtwork";
-import LoadingPlaceholder from "@/components/LoadingPlaceholder";
 import SongDifficultyStrip, { type SongDifficultyStripProps } from "@/components/SongDifficultyStrip";
 
 export default function SongCatalogRow({ game, href, songId, action, title, bandName, attribute, missions, typeLabel, releaseDate, artworkUrl, artworkLoading = false, labels, difficulties, track, playbackLoading, compact = false }: {
@@ -14,8 +13,8 @@ export default function SongCatalogRow({ game, href, songId, action, title, band
 } & SongDifficultyStripProps) {
   if (compact) return <article data-music-id={songId} className="hhwx-panel @container/song grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 border px-2 pt-2.5 pb-1 @[20rem]:gap-x-3 @[20rem]:px-3">
     <Link href={href} prefetch={false} aria-label={title} className="hhwx-text-link row-span-2 flex h-12 w-12 self-start items-center justify-center overflow-hidden rounded-lg bg-[var(--theme-color-control-background-muted)] @[22rem]/song:h-14 @[22rem]/song:w-14">
-      {artworkUrl ? <MusicArtwork src={artworkUrl} alt={labels.artwork} className="h-full w-full object-cover" fallback={<Music2 className="h-5 w-5" aria-label={labels.unavailable} />} />
-        : artworkLoading ? <LoadingPlaceholder label={labels.loading} className="h-full w-full" /> : <Music2 className="h-5 w-5" aria-label={labels.unavailable} />}
+      {artworkUrl || artworkLoading ? <MusicArtwork src={artworkUrl} alt={labels.artwork} className="h-full w-full object-cover" fallback={<Music2 className="h-5 w-5" aria-label={labels.unavailable} />} />
+        : <Music2 className="h-5 w-5" aria-label={labels.unavailable} />}
     </Link>
     <div className="min-w-0">
       <h4 className="text-sm leading-5 font-bold wrap-anywhere text-[var(--theme-color-text-default)] @[22rem]/song:text-base @[22rem]/song:leading-6"><Link href={href} prefetch={false}
@@ -29,9 +28,8 @@ export default function SongCatalogRow({ game, href, songId, action, title, band
   return <article className="hhwx-panel hhwx-catalog-row group relative block border p-3 transition sm:p-4">
     <div className="grid min-h-24 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-5">
       <div className="flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] shadow-[var(--theme-shadow-media)] sm:h-24 sm:w-24">
-        {artworkUrl ? <MusicArtwork src={artworkUrl} alt={labels.artwork} className="h-full w-full object-cover"
+        {artworkUrl || artworkLoading ? <MusicArtwork src={artworkUrl} alt={labels.artwork} className="h-full w-full object-cover"
           fallback={<Music2 className="h-7 w-7" aria-label={labels.unavailable} />} />
-          : artworkLoading ? <LoadingPlaceholder label={labels.loading} className="h-full w-full" />
             : <Music2 className="h-7 w-7" aria-label={labels.unavailable} />}
       </div>
       <div className="min-w-0 self-stretch py-0.5">

@@ -244,7 +244,7 @@ test("TOP10 keeps player scores but waits for metadata before rendering an avata
   assert.match(html, /Audit Player/u);
   assert.match(html, />150</u);
   assert.match(html, /aria-busy="true"/u);
-  assert.doesNotMatch(html, /bandori-card-thumbnail|data-card-id/u);
+  assert.doesNotMatch(html, /<img\b|data-card-id/u, "The pending avatar must not paint any card artwork, frame or stars");
   assert.ok(!html.includes(messages.common.states.imageUnavailable));
   const noAvatar = renderLocalized(Top10PlayerList, { players: [{ ...player, avatarCardId: 0 }], server: 2 });
   assert.ok(noAvatar.includes(messages.common.states.imageUnavailable));

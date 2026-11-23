@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Ellipsis, FileMusic, ListEnd, ListPlus, Music2, Pause, Play, Star, StarOff } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -26,6 +26,7 @@ import type { useProfileSectionSave } from "@/hooks/useProfileSectionSave";
 import FavoriteRemoveButton from "./FavoriteRemoveButton";
 import ProfileSortList from "./ProfileSortList";
 import SortableSongRow, { type SongSortControls } from "./SortableSongRow";
+import { bindSongSheetDrag } from "./bindSongSheetDrag";
 import styles from "./FavoriteSongList.module.css";
 
 type Song = { target: string; title: string; artist: string; thumb: string | null; duration: string; track: MusicPlayerItem | null };
@@ -47,7 +48,7 @@ function Cover({ song }: { song: Song }) {
   return song.thumb ? <MusicArtwork src={song.thumb} alt="" draggable={false} width={44} height={44} loading="lazy" decoding="async" fallback={fallback} /> : fallback;
 }
 
-function SongActions({ menu, editor, onClose, onClosed, onRemove, onFeedback }: {
+function SongActions({ menu, editor, onClose: requestClose, onClosed, onRemove, onFeedback }: {
   menu: OpenMenu; editor: string | null; onClose: () => void; onClosed: () => void; onRemove: (target: string, keyboardMenu?: boolean) => void; onFeedback: (message: string) => void;
 }) {
   const { song, trigger } = menu;
@@ -56,7 +57,19 @@ function SongActions({ menu, editor, onClose, onClosed, onRemove, onFeedback }: 
   const favorite = useBandoriFavoriteAction("songs:" + song.target, "addToFavorites");
   const href = "/bandori/songs/" + song.target;
   const returnFocus = useRef<HTMLElement | null>(trigger);
-  const grip = useRef<{ id: number; startY: number } | null>(null);
+  const [sheetPanel, setSheetPanel] = useState<HTMLDivElement | null>(null);
+  const sheetLayer = useRef<HTMLDivElement>(null);
+  function onClose() {
+    const layer = sheetLayer.current;
+    if (layer && !menu.closing) {
+      layer.style.setProperty("--sheet-exit-from", getComputedStyle(layer).getPropertyValue("--hhwx-song-sheet-reveal"));
+    }
+    requestClose();
+  }
+  const dismissSheet = useEffectEvent(onClose);
+  useLayoutEffect(() => {
+    if (sheetPanel && sheetLayer.current) return bindSongSheetDrag(sheetPanel, sheetLayer.current, dismissSheet);
+  }, [sheetPanel]);
   const backdropTouch = useRef<Pick<Touch, "identifier" | "clientX" | "clientY"> | null>(null);
   function place(panel: HTMLDivElement | null) {
     if (!panel || sheet || menu.closing) return;
@@ -108,20 +121,7 @@ function SongActions({ menu, editor, onClose, onClosed, onRemove, onFeedback }: 
       onClose();
     });
   }
-  return <Dialog.Root open={!menu.closing} modal={sheet} onOpenChange={open => { if (!open) onClose(); }}>
-    <Dialog.Portal>
-      {sheet && <div className={styles.overlay} data-state={menu.closing ? "closed" : "open"} aria-hidden="true"
-        onTouchStart={e => { backdropTouch.current = e.touches.length === 1 ? e.touches[0] : null; }}
-        onTouchCancel={() => { backdropTouch.current = null; }}
-        onTouchEnd={e => {
-          const start = backdropTouch.current;
-          backdropTouch.current = null;
-          const end = e.changedTouches[0];
-          if (!start || start.identifier !== end.identifier || Math.hypot(end.clientX - start.clientX, end.clientY - start.clientY) > 8) return;
-          e.preventDefault();
-          onClose();
-        }} />}
-      <Dialog.Content ref={place} className={sheet ? styles.menu : `${styles.menu} hhwx-anchored-menu`} data-song-menu={song.target} aria-describedby={undefined}
+  const content = <Dialog.Content ref={sheet ? setSheetPanel : place} forceMount={sheet || undefined} className={sheet ? styles.menu : `${styles.menu} hhwx-anchored-menu`} data-song-menu={song.target} aria-describedby={undefined}
         aria-modal={sheet || undefined}
         onOpenAutoFocus={e => {
           e.preventDefault();
@@ -141,30 +141,7 @@ function SongActions({ menu, editor, onClose, onClosed, onRemove, onFeedback }: 
           if (document.activeElement === document.body) returnFocus.current?.focus({ preventScroll: true });
           onClosed();
         }}>
-        {sheet && <div className={styles.sheetGrip} aria-hidden="true"
-          onPointerDown={e => {
-            if (!e.isPrimary || e.button !== 0) return;
-            grip.current = { id: e.pointerId, startY: e.clientY };
-            e.currentTarget.setPointerCapture(e.pointerId);
-            e.currentTarget.parentElement!.dataset.gripped = "true";
-            e.currentTarget.parentElement!.dataset.dragging = "true";
-          }}
-          onPointerMove={e => {
-            if (grip.current?.id !== e.pointerId) return;
-            e.currentTarget.parentElement!.style.setProperty("--sheet-drag", Math.max(0, e.clientY - grip.current.startY) + "px");
-          }}
-          onPointerUp={e => {
-            if (grip.current?.id !== e.pointerId) return;
-            if (e.clientY - grip.current.startY >= 56) { grip.current = null; onClose(); }
-          }}
-          onLostPointerCapture={e => {
-            if (grip.current?.id !== e.pointerId) return;
-            grip.current = null;
-            const panel = e.currentTarget.parentElement!;
-            delete panel.dataset.dragging;
-            panel.style.removeProperty("--sheet-drag");
-          }}
-        />}
+        {sheet && <div className={styles.sheetGrip} data-sheet-grip aria-hidden="true" />}
         <div className={styles.menuHeading}><Link className={styles.art} href={href} prefetch={false} onNavigate={onClose} aria-label={song.title} tabIndex={-1}><Cover song={song} /></Link>
           <div><Dialog.Title><Link href={href} prefetch={false} onNavigate={onClose}>{song.title}</Link></Dialog.Title><small>{song.artist}</small></div>
         </div>
@@ -175,8 +152,22 @@ function SongActions({ menu, editor, onClose, onClosed, onRemove, onFeedback }: 
         <button type="button" className={styles.queueStart} disabled={!song.track} onClick={() => enqueue("next")}><ListPlus />{t("playNext")}</button>
         <button type="button" disabled={!song.track} onClick={() => enqueue("end")}><ListEnd />{t("addToQueue")}</button>
         <ActionFeedback feedback={favorite.feedback} className="bottom-2 right-2" />
-      </Dialog.Content>
-    </Dialog.Portal>
+      </Dialog.Content>;
+  return <Dialog.Root open={!menu.closing} modal={sheet} onOpenChange={open => { if (!open) onClose(); }}>
+    <Dialog.Portal>{sheet ? <div ref={sheetLayer} className={styles.sheetLayer} data-song-sheet data-state={menu.closing ? "closed" : "open"}>
+      <Dialog.Overlay forceMount className={styles.overlay} aria-hidden="true"
+        onTouchStart={e => { backdropTouch.current = e.touches.length === 1 ? e.touches[0] : null; }}
+        onTouchCancel={() => { backdropTouch.current = null; }}
+        onTouchEnd={e => {
+          const start = backdropTouch.current;
+          backdropTouch.current = null;
+          const end = e.changedTouches[0];
+          if (!start || start.identifier !== end.identifier || Math.hypot(end.clientX - start.clientX, end.clientY - start.clientY) > 8) return;
+          e.preventDefault();
+          onClose();
+        }} />
+      {content}
+    </div> : content}</Dialog.Portal>
   </Dialog.Root>;
 }
 

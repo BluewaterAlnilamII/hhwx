@@ -32,10 +32,7 @@ function MediaImage({ src, alt, loading, error, onOpen }: {
   const commonT = useTranslations("common");
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const failed = Boolean(src && failedSrc === src);
-  if (!src && loading && !error) {
-    return <LoadingPlaceholder label={t("detail.mediaLoading")} className="aspect-square w-full" />;
-  }
-  if (!src || failed) {
+  if ((!src && (!loading || error)) || failed) {
     return (
       <div className="flex aspect-square w-full flex-col items-center justify-center gap-1 text-center text-xs leading-4 text-[var(--theme-color-text-muted)]">
         <ImageOff className="h-4 w-4" aria-hidden="true" />
@@ -49,7 +46,7 @@ function MediaImage({ src, alt, loading, error, onOpen }: {
     </span>
   );
   return onOpen ? (
-    <button type="button" onClick={onOpen} aria-label={t("detail.openMediaOriginal", { label: alt })} className="block w-full cursor-zoom-in rounded-lg outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]">
+    <button type="button" disabled={!src} onClick={onOpen} aria-label={t("detail.openMediaOriginal", { label: alt })} className="block w-full rounded-lg outline-hidden enabled:cursor-zoom-in focus-visible:ring-2 focus-visible:ring-[var(--theme-color-focus-ring)]">
       {image}
     </button>
   ) : image;

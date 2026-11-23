@@ -46,6 +46,8 @@ export function useProfileTabs(hasDetails: boolean, isOwner: boolean) {
       return origin + (scrollOffsets.current.get(name) ?? 0);
     };
 
+    const allPages = tabs.map((_, i) => i);
+    let pages = allPages;
     let position = index;
     let first = index;
     let last = index;
@@ -53,16 +55,16 @@ export function useProfileTabs(hasDetails: boolean, isOwner: boolean) {
     const measureTabs = () => buttons.map(button => ({ left: button.offsetLeft, width: button.offsetWidth }));
     let bounds = measureTabs();
     const underline = (at: number) => {
-      const a = bounds[Math.floor(at)], b = bounds[Math.ceil(at)];
+      const a = bounds[pages[Math.floor(at)]], b = bounds[pages[Math.ceil(at)]];
       const part = at - Math.floor(at);
       const left = a.left + (b.left - a.left) * part - bounds[0].left;
       const width = a.width + (b.width - a.width) * part;
       return `translateX(${left}px) scaleX(${width / bounds[0].width})`;
     };
-    const panelTransform = (i: number, at: number) => `translateX(${(i - at) * 100}%)`;
+    const panelTransform = (slot: number, at: number) => `translateX(${(slot - at) * 100}%)`;
     const paint = (at: number) => {
       position = at;
-      panels.forEach((panel, i) => { panel.style.transform = panelTransform(i, at); });
+      pages.forEach((page, slot) => { panels[page].style.transform = panelTransform(slot, at); });
       indicator.style.transform = underline(at);
     };
     const stop = () => { animations.forEach(animation => animation.cancel()); animations = []; };
@@ -72,6 +74,7 @@ export function useProfileTabs(hasDetails: boolean, isOwner: boolean) {
       delete panels[index].dataset.slideOrigin;
       viewport.style.removeProperty("--swipe-visible-height");
       panels.forEach(panel => { panel.style.transform = ""; panel.style.top = ""; });
+      pages = allPages;
       first = last = position = index;
     };
     const resize = new ResizeObserver(() => {
@@ -85,7 +88,7 @@ export function useProfileTabs(hasDetails: boolean, isOwner: boolean) {
       if (animations.length) {
         // A new drag or tap takes over at the frame currently on screen.
         const x = new DOMMatrixReadOnly(getComputedStyle(panels[index]).transform).m41;
-        const at = Math.max(0, Math.min(tabs.length - 1, index - x / viewport.clientWidth));
+        const at = Math.max(0, Math.min(pages.length - 1, pages.indexOf(index) - x / viewport.clientWidth));
         stop();
         paint(at);
       }
@@ -96,7 +99,7 @@ export function useProfileTabs(hasDetails: boolean, isOwner: boolean) {
         });
         viewport.dataset.sliding = "true";
         panels[index].dataset.slideOrigin = "";
-        paint(index);
+        paint(pages.indexOf(index));
       }
       return position;
     };
@@ -104,7 +107,7 @@ export function useProfileTabs(hasDetails: boolean, isOwner: boolean) {
       if (at >= first && at <= last) return;
       first = Math.min(first, Math.floor(at));
       last = Math.max(last, Math.ceil(at));
-      setPreview(tabs.slice(first, last + 1));
+      setPreview(pages.slice(first, last + 1).map(page => tabs[page]));
     };
     const commit = (next: number) => {
       if (next !== index) {
@@ -120,38 +123,60 @@ export function useProfileTabs(hasDetails: boolean, isOwner: boolean) {
       flushSync(() => { setTab(tabs[next]); setTapTarget(null); setPreview([]); });
       if (next === index) { reset(); indicator.style.transform = underline(index); }
     };
-    const settle = (next: number, immediate = false) => {
+    const settle = (slot: number) => {
+      const next = pages[slot];
       if (next === index && !viewport.hasAttribute("data-sliding")) return;
-      if (immediate || reduced.matches) { commit(next); return; }
+      if (reduced.matches) { commit(next); return; }
       begin();
-      const distance = Math.abs(next - position);
+      const distance = Math.abs(slot - position);
       if (distance < .002) { commit(next); return; }
-      expose(next);
+      expose(slot);
       const timing: KeyframeAnimationOptions = { ...getTabSlideTiming(distance), fill: "forwards" };
-      animations = panels.map((panel, i) => panel.animate([
-        { transform: panelTransform(i, position) }, { transform: panelTransform(i, next) },
+      animations = pages.map((page, i) => panels[page].animate([
+        { transform: panelTransform(i, position) }, { transform: panelTransform(i, slot) },
       ], timing));
       // Cross each label at its own position, including when localized labels differ in width.
       const stops = [position];
-      const step = Math.sign(next - position);
-      for (let i = step > 0 ? Math.floor(position) + 1 : Math.ceil(position) - 1; i !== next; i += step) stops.push(i);
-      stops.push(next);
+      const step = Math.sign(slot - position);
+      for (let i = step > 0 ? Math.floor(position) + 1 : Math.ceil(position) - 1; i !== slot; i += step) stops.push(i);
+      stops.push(slot);
       animations.push(indicator.animate(stops.map(at => ({
         transform: underline(at), offset: Math.abs(at - position) / distance,
       })), timing));
-      const slide = animations[index];
-      void slide.finished.then(() => { if (animations[index] === slide) commit(next); }, () => {});
+      const slide = animations[0];
+      void slide.finished.then(() => { if (animations[0] === slide) commit(next); }, () => {});
     };
     select.current = (name, immediate) => {
       const next = tabs.indexOf(name);
       if (next < 0) return;
       setTapTarget(next === index ? null : name);
-      settle(next, immediate);
+      if (immediate || reduced.matches) { commit(next); return; }
+      if (!viewport.hasAttribute("data-sliding") && Math.abs(next - index) > 1) {
+        // A direct tap only needs two neighboring visual slots, regardless of label distance.
+        pages = [Math.min(index, next), Math.max(index, next)];
+        first = last = position = pages.indexOf(index);
+      } else if (!pages.includes(next)) {
+        // Explicitly selecting the skipped tab mid-slide keeps both painted panels in place.
+        begin();
+        if (position < (pages.length - 1) / 2) {
+          pages = [next, ...pages];
+          first++; last++; position++;
+        } else {
+          pages = [...pages, next];
+        }
+        paint(position);
+      }
+      settle(pages.indexOf(next));
     };
     swipeMotion.current = {
-      onStart: () => reduced.matches ? index : begin(),
-      onProgress: at => { if (!reduced.matches) { expose(at); paint(at); } },
-      onEnd: settle,
+      onStart: () => reduced.matches ? pages.indexOf(index) : begin(),
+      onProgress: at => {
+        if (reduced.matches) return;
+        const slot = Math.min(at, pages.length - 1);
+        expose(slot);
+        paint(slot);
+      },
+      onEnd: slot => settle(Math.min(slot, pages.length - 1)),
     };
     return () => { resize.disconnect(); reset(); indicator.style.transform = ""; };
   }, [tabs, originTab]);
