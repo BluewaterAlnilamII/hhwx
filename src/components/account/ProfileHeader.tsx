@@ -12,6 +12,7 @@ import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
 import { CommentPublicUid } from "@/components/comments/CommentPublicUid";
 import LoadingImage from "@/components/LoadingImage";
 import ActionFeedback from "@/components/ActionFeedback";
+import { dismissMenuOnScroll } from "@/lib/dismiss-menu-on-scroll";
 import { useActionFeedback, type ActionFeedbackState } from "@/hooks/useActionFeedback";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
 import { useBandoriCardsAssetIndex } from "@/hooks/useBandoriPublicAssetIndex";
@@ -22,6 +23,11 @@ import { fitProfileSignature, type ProfileCover, type ProfileHomepage, type Prof
 import styles from "./PublicProfile.module.css";
 
 const DEFAULT_COVER: ProfileCover = { cardId: 2087, entityServer: null, trainType: "after_training", x: 50, y: 33.111000870726784 };
+
+function dismissCoverMenuOnScroll(summary: HTMLElement | null) {
+  const details = summary?.closest("details");
+  if (details) return dismissMenuOnScroll(details, () => { if (details.open) details.open = false; });
+}
 
 export function ProfileInfo({ profile, mobile = false }: { profile: ProfileHomepage; mobile?: boolean }) {
   const t = useTranslations("account.homepage");
@@ -156,8 +162,8 @@ export default function ProfileHeader({ profile, ownProfile, degree, saving, onS
       <ActionFeedback feedback={feedback} className="right-full top-0 mr-2" />
       {draft ? <><button type="button" disabled={saving || !src} onClick={async () => { if (await onSave({ cover: draft })) finishCover(); }}>{t("save")}</button><button type="button" disabled={saving} onClick={finishCover}>{t("cancel")}</button></> :
         <details ref={menuRef} className={styles.coverMenu} onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.open = false; }} onKeyDown={e => { if (e.key === "Escape") { e.currentTarget.open = false; e.currentTarget.querySelector("summary")?.focus(); } }}>
-          <summary aria-label={t("coverOptions")} title={t("coverOptions")}><ImageIcon size={16} /></summary>
-          <div className={styles.menu}>
+          <summary ref={dismissCoverMenuOnScroll} aria-label={t("coverOptions")} title={t("coverOptions")}><ImageIcon size={16} /></summary>
+          <div className={`${styles.menu} hhwx-anchored-menu`}>
             <button type="button" onClick={() => { menuRef.current!.open = false; setPickerValue(selected); setPickerOpen(true); }}>{t("chooseCover")}</button>
             <button type="button" disabled={!src || useFallback} onClick={() => { menuRef.current!.open = false; setDraft(cover); focusCover(); }}>{t("adjustCover")}</button>
           </div>

@@ -73,8 +73,9 @@
 .event-view-section[data-moving] .event-view-panel {
   position: absolute; inset: 0 0 auto; width: 100%; pointer-events: none;
 }
+.event-view-section[data-moving] .event-view-panel[data-active="false"] { top: var(--event-preview-top); }
 .event-view-section[data-settling] .event-view-panel,
-.event-view-section[data-settling] .event-view-indicator { transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1); }
+.event-view-section[data-settling] .event-view-indicator { transition: transform var(--event-slide-motion); }
 .event-view-panel > .hhwx-panel { border: 0; background: transparent; }
 @media (min-width: 640px) {
   .event-view-section { --event-tabs-normal-height: max(58px, 3.625rem); --event-tab-compact-font: 0.875rem; }

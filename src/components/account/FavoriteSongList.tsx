@@ -17,6 +17,7 @@ import { pickBandoriRegionalText } from "@/lib/bandori-server";
 import { formatPlaybackTime, musicPlayerAlbum, type MusicPlayerItem } from "@/lib/music-player-contract";
 import type { FavoriteItem } from "@/lib/bandori/favorites";
 import { getTooltipPosition } from "@/lib/tooltip-position";
+import { dismissMenuOnScroll } from "@/lib/dismiss-menu-on-scroll";
 import ActionFeedback from "@/components/ActionFeedback";
 import MusicArtwork from "@/components/music-player/MusicArtwork";
 import LoadingIndicator from "@/components/LoadingIndicator";
@@ -28,7 +29,7 @@ import SortableSongRow, { type SongSortControls } from "./SortableSongRow";
 import styles from "./FavoriteSongList.module.css";
 
 type Song = { target: string; title: string; artist: string; thumb: string | null; duration: string; track: MusicPlayerItem | null };
-type OpenMenu = { song: Song; trigger: HTMLButtonElement; anchor: DOMRect; atPointer: boolean; closing?: boolean };
+type OpenMenu = { song: Song; trigger: HTMLButtonElement; point?: DOMRect; closing?: boolean };
 
 const sheetQuery = "(max-width: 639px), (hover: none) and (pointer: coarse)";
 function subscribeSheet(callback: () => void) {
@@ -58,23 +59,35 @@ function SongActions({ menu, editor, onClose, onClosed, onRemove, onFeedback }: 
   const grip = useRef<{ id: number; startY: number } | null>(null);
   const backdropTouch = useRef<Pick<Touch, "identifier" | "clientX" | "clientY"> | null>(null);
   function place(panel: HTMLDivElement | null) {
-    if (!panel || sheet) return;
+    if (!panel || sheet || menu.closing) return;
     function position() {
       if (!panel) return;
-      const anchor = menu.anchor;
-      const box = panel.getBoundingClientRect();
+      const anchor = menu.point ?? trigger.getBoundingClientRect();
+      const width = panel.offsetWidth;
       const viewportWidth = document.documentElement.clientWidth;
-      const { top } = getTooltipPosition({ anchorRect: anchor, tooltipHeight: box.height, tooltipWidth: box.width,
+      if (anchor.bottom < 0 || anchor.top > window.innerHeight || anchor.right < 0 || anchor.left > viewportWidth) {
+        onClose();
+        return;
+      }
+      const { top, placement } = getTooltipPosition({ anchorRect: anchor, tooltipHeight: panel.offsetHeight, tooltipWidth: width,
         viewportHeight: window.innerHeight, viewportWidth });
-      const left = menu.atPointer ? anchor.left : anchor.right - box.width;
+      const left = Math.max(8, Math.min(menu.point ? anchor.left : anchor.right - width, viewportWidth - width - 8));
       panel.style.setProperty("--menu-top", top + "px");
-      panel.style.setProperty("--menu-left", Math.max(8, Math.min(left, viewportWidth - box.width - 8)) + "px");
+      panel.style.setProperty("--menu-left", left + "px");
+      panel.style.setProperty("--menu-origin-x", Math.max(0, Math.min(width, anchor.left + anchor.width / 2 - left)) + "px");
+      panel.dataset.side = placement === "above" ? "top" : "bottom";
     }
     position();
     const observer = new ResizeObserver(position);
     observer.observe(panel);
-    window.addEventListener("resize", position);
-    return () => { observer.disconnect(); window.removeEventListener("resize", position); };
+    const onResize = menu.point ? onClose : position;
+    window.addEventListener("resize", onResize);
+    const stopWatchingScroll = dismissMenuOnScroll(trigger, onClose);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", onResize);
+      stopWatchingScroll();
+    };
   }
   function enqueue(position: "next" | "end") {
     if (!song.track) return;
@@ -108,7 +121,7 @@ function SongActions({ menu, editor, onClose, onClosed, onRemove, onFeedback }: 
           e.preventDefault();
           onClose();
         }} />}
-      <Dialog.Content ref={place} className={styles.menu} data-song-menu={song.target} aria-describedby={undefined}
+      <Dialog.Content ref={place} className={sheet ? styles.menu : `${styles.menu} hhwx-anchored-menu`} data-song-menu={song.target} aria-describedby={undefined}
         aria-modal={sheet || undefined}
         onOpenAutoFocus={e => {
           e.preventDefault();
@@ -242,12 +255,11 @@ export default function FavoriteSongList({ items, limit, expanded, editing, orde
         function openRowMenu(row: HTMLLIElement, point?: DOMRect) {
           const trigger = row.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]');
           if (!trigger) return;
-          setMenu({ song, trigger, anchor: point ?? trigger.getBoundingClientRect(), atPointer: Boolean(point) });
+          setMenu({ song, trigger, point });
         }
         function activateMore(trigger: HTMLButtonElement, toggle: boolean) {
-          const anchor = trigger.getBoundingClientRect();
           setMenu(current => current?.trigger === trigger && !current.closing
-            ? (toggle ? { ...current, closing: true } : current) : { song, trigger, anchor, atPointer: false });
+            ? (toggle ? { ...current, closing: true } : current) : { song, trigger });
         }
         const renderRow = (sort?: SongSortControls) => <li key={song.target} ref={sort?.rowRef} style={sort?.style} className={styles.row}
           data-song={song.target} data-collection-extra={index >= limit || undefined} data-current={active || undefined} data-dragging={sort?.dragging || undefined}

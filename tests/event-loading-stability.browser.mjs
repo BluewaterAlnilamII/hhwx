@@ -1,4 +1,4 @@
-// Run against the dev server; delays and catalog responses stay in this browser.
+// Run against the local Next server. This browser controls hydration and the catalog response.
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
@@ -21,14 +21,19 @@ try {
       page.on("console", message => {
         if (message.type() === "error" && /hydrat/i.test(message.text())) errors.push(message.text());
       });
-      let releaseScripts;
-      const scriptsReady = new Promise(resolve => { releaseScripts = resolve; });
+      const scripts = Promise.withResolvers();
+      const catalogResponse = Promise.withResolvers();
+      const catalogUrl = "**/api/bandori/master/events";
+      const testRetry = direct && width === 393;
+      let requests = 0;
       await page.route("**/*", async route => {
-        if (direct && route.request().resourceType() === "script") await scriptsReady;
+        if (route.request().resourceType() === "script") await scripts.promise;
         await route.continue();
       });
-      await page.route("**/api/bandori/master/events", async route => {
-        await new Promise(resolve => setTimeout(resolve, 1200));
+      await page.route(catalogUrl, async route => {
+        const attempt = ++requests;
+        await catalogResponse.promise;
+        if (testRetry && attempt === 1) return route.fulfill({ status: 503, json: { success: false } });
         await route.fulfill({ json: catalog });
       });
       await page.addInitScript(() => {
@@ -53,14 +58,32 @@ try {
         requestAnimationFrame(sample);
       });
       await page.goto(`${base}/bandori/events${direct ? "/328" : ""}?server=cn`, { waitUntil: "commit", timeout: 90000 });
+      const picker = page.locator(".event-switcher-field select");
+      const summary = page.locator(".event-switcher-summary");
+      const progress = page.locator(".event-progress");
+      async function checkLoading() {
+        await summary.getByRole("status").waitFor();
+        assert.equal(await picker.isDisabled(), true);
+        assert.equal(await picker.inputValue(), "");
+        assert.equal(await progress.count(), 0);
+      }
       try {
-        if (direct) {
-          await page.locator(".event-progress").waitFor({ timeout: 30000 });
-          const picker = page.locator(".event-switcher-field select");
-          assert.equal(await picker.inputValue(), "328", "SSR keeps the selected event before hydration");
-          assert.equal(await picker.isDisabled(), true, "a partial catalog is not interactive");
-        }
-      } finally { releaseScripts(); }
+        await checkLoading();
+        const requested = page.waitForRequest(catalogUrl);
+        scripts.resolve();
+        await requested;
+        await checkLoading();
+      } finally {
+        scripts.resolve();
+        catalogResponse.resolve();
+      }
+      if (testRetry) {
+        const retry = summary.getByRole("alert").getByRole("button");
+        await retry.waitFor();
+        assert.ok(await picker.isDisabled());
+        assert.equal(await progress.count(), 0);
+        await Promise.all([page.waitForRequest(catalogUrl), retry.click()]);
+      }
       await page.waitForURL("**/bandori/events/328?*", { waitUntil: "domcontentloaded", timeout: 90000 });
       await page.waitForFunction(() => {
         const select = document.querySelector(".event-switcher-field select");
@@ -74,6 +97,7 @@ try {
         assert.ok(frames.slice(first).every(frame => frame[field]), `${field} must not disappear after its first display: ${JSON.stringify(frames)}`);
       }
       const spacings = frames.map(frame => frame.spacing).filter(value => value > 0);
+      assert.ok(spacings.length > 0, "sample the visible progress bar and mode controls");
       assert.ok(Math.max(...spacings) - Math.min(...spacings) <= 1, `progress keeps its layout slot: ${JSON.stringify(frames)}`);
       if (direct) {
         await page.evaluate(() => scrollTo(0, 0));
