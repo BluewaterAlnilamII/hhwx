@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bindEventViewTabsSwipe, getEventTabsCollapseProgress, getEventViewScrollTarget } from "../src/app/[locale]/bandori/events/EventViewTabs.tsx";
+import { getEventTabsCollapseProgress, getEventViewScrollTarget } from "../src/app/[locale]/bandori/events/EventViewTabs.tsx";
+import { bindTabSwipe } from "../src/lib/bind-tab-swipe.ts";
 
-function tabs(context, value = "tracker", mobile = true) {
+function tabs(context, value = "tracker", mobile = true, origin = value === "info" ? 1 : 0) {
   const listeners = new Map();
   const captures = new Set();
   const changes = [];
@@ -17,11 +18,16 @@ function tabs(context, value = "tracker", mobile = true) {
     addEventListener: (type, listener) => listeners.set(type, listener),
     removeEventListener: type => listeners.delete(type),
   };
-  const cleanup = bindEventViewTabsSwipe(bar, value, {
-    onStart: () => value === "info" ? 1 : 0,
+  const motion = {
+    onStart: () => origin,
     onProgress: position => positions.push(position),
-    onEnd: view => { endings.push(view); if (view !== value) changes.push(view); },
-  });
+    onEnd: index => {
+      const view = ["tracker", "info"][index];
+      endings.push(view);
+      if (view !== value) changes.push(view);
+    },
+  };
+  const cleanup = bindTabSwipe(bar, 2, { ignore: () => false, motion: () => motion });
   context.after(cleanup);
   return { bar, changes, positions, endings, captures, listeners, cleanup,
     emit(type, detail = {}) {
@@ -60,6 +66,14 @@ test("short drags snap back without selecting a tab or triggering a click", cont
   assert.deepEqual(t.changes, []);
   assert.deepEqual(t.endings, ["tracker"]);
   assert.equal(t.emit("click", { detail: 1 }).prevented, true);
+});
+
+test("a short or cancelled second gesture settles on the page visible at pickup", context => {
+  for (const end of ["pointerup", "pointercancel", "lostpointercapture"]) {
+    const t = tabs(context, "tracker", true, .8);
+    t.emit("pointerdown"); t.emit("pointermove", {clientX: 185}); t.emit(end, {clientX: 185});
+    assert.deepEqual(t.endings, ["info"]);
+  }
 });
 
 test("vertical gestures, ordinary taps, and keyboard clicks retain their own behavior", context => {

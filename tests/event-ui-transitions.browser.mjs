@@ -96,7 +96,7 @@ const bundle = await build({
           {scrolling && <><button data-action onClick={() => {window.actions = (window.actions ?? 0) + 1;}}>内容操作</button><div data-horizontal-scroll style={{width:200,overflowX:'auto'}}><div style={{width:800}}>横向内容</div></div>
             {Array.from({length:16}, (_,i) => <p key={i} style={{height:80}}>{view} 内容段落 {i + 1}</p>)}</>}
         </div>}
-      </EventViewTabs>{scrolling && <div style={{height:1000}}>共用评论区</div>}{Array.from({length: 24}, (_,i) => <SlowCommit key={i} value={value} />)}</>;
+      </EventViewTabs>{scrolling && <div style={{height:1000}}>共用评论区<button>刷新评论</button></div>}{Array.from({length: 24}, (_,i) => <SlowCommit key={i} value={value} />)}</>;
     }
     const reaction = {emojiKey: 'fixture', count: 3, reactedByViewer: false, users: [], remainingUserCount: 0};
     function Reaction() {
@@ -119,10 +119,11 @@ const bundle = await build({
           id: c.id, color: COMPARISON_LINE_COLORS[c.colorIndex], label: c.targetId + '期 T1000'
         }]))} comparisonAlignment="start" onAlignmentChange={noop}
         onToggleComparison={id => setConfigs(cs => cs.map(c => c.id === id ? {...c, enabled: !c.enabled} : c))}
-        onUpdateComparison={noop} onAddComparison={noop} onRemoveComparison={noop} onRemoveAllComparisons={noop}
+        onUpdateComparison={noop} onAddComparison={noop}
+        onRemoveComparison={id => setConfigs(rows => rows.filter(row => row.id !== id))} onRemoveAllComparisons={() => setConfigs([])}
         comparisonTargetLabelMap={new Map()} comparisonTargetOptions={configs.map(c => ({id: c.targetId, label: String(c.targetId)}))}
         comparisonTargetType="event" comparisonTierOptions={[1000]} comparisonTierOptionsByConfigId={new Map()}
-        canAddComparisonRow={false} bestdoriPrediction={{status:'no-data'}} trackingMode="event" status="ended"
+        canAddComparisonRow={configs.length < 5} bestdoriPrediction={{status:'no-data'}} trackingMode="event" status="ended"
         setShowBestdoriPrediction={noop} setShowDayProjection={noop} setShowInstantProjection={noop}
         showBestdoriPrediction={false} showDayProjection={false} showInstantProjection={false}/>;
     }
@@ -307,16 +308,48 @@ try {
     }
     assert.equal(await page.getByRole("textbox", {name: "tracker draft"}).inputValue(), "retained planner draft");
     await page.evaluate(() => { window.slowCommits = false; });
+    const trackerTab = page.getByRole("tab", {name: "分数追踪"});
+    const infoTab = page.getByRole("tab", {name: "活动信息"});
+    await trackerTab.press("ArrowRight");
+    await page.keyboard.press("Tab");
+    assert.ok(await page.getByRole("textbox", {name: "info draft"}).evaluate(el => el === document.activeElement));
+    await infoTab.press("Home");
+    assert.equal(await trackerTab.getAttribute("aria-selected"), "true");
     if (width < 640) {
       const session = await page.context().newCDPSession(page);
       const bar = await page.locator('.event-view-tabs-bar').boundingBox();
       const x = bar.x + bar.width * 0.7, y = bar.y + bar.height / 2;
+      const startX = bar.x + bar.width * 0.22;
+      await infoTab.tap();
+      await session.send('Input.dispatchTouchEvent', {type:'touchStart', touchPoints:[{x:startX, y}]});
+      assert.ok(await page.locator('.event-view-section[data-moving]').count(), "The second touch starts during the first slide");
+      await page.waitForFunction(() => !document.querySelector('.event-view-section').hasAttribute('data-moving'));
+      assert.equal(await infoTab.getAttribute("aria-selected"), "true");
+      await session.send('Input.dispatchTouchEvent', {type:'touchMove', touchPoints:[{x:startX + 70, y}]});
+      await session.send('Input.dispatchTouchEvent', {type:'touchMove', touchPoints:[{x, y}]});
+      assert.ok(await page.locator('.event-view-section[data-moving]').count(), "The held touch drags back after the info tab commits");
+      await session.send('Input.dispatchTouchEvent', {type:'touchEnd', touchPoints:[]});
+      await page.waitForFunction(() => document.querySelector('.event-view-tabs-bar button')?.getAttribute('aria-selected') === 'true');
+      assert.equal(page.url(), `${base}/tabs`, "Swiping back stays on the event page");
       await session.send('Input.dispatchTouchEvent', {type: 'touchStart', touchPoints: [{x, y}]});
       await session.send('Input.dispatchTouchEvent', {type: 'touchMove', touchPoints: [{x: x - 35, y}]});
       await page.waitForFunction(() => document.querySelector('.event-view-section').hasAttribute('data-moving'));
       await session.send('Input.dispatchTouchEvent', {type: 'touchCancel', touchPoints: []});
       await page.waitForFunction(() => !document.querySelector('.event-view-section').hasAttribute('data-moving'));
       assert.equal(await page.getByRole('tab', {name: '分数追踪'}).getAttribute('aria-selected'), 'true');
+      await page.emulateMedia({reducedMotion: "reduce"});
+      const offsets = () => page.locator('.event-view-panel[data-active=true], .event-view-indicator').evaluateAll(elements =>
+        elements.map(el => el.getBoundingClientRect().left));
+      const resting = await offsets();
+      for (const distance of [35, 100]) {
+        await session.send('Input.dispatchTouchEvent', {type: 'touchStart', touchPoints: [{x, y}]});
+        await session.send('Input.dispatchTouchEvent', {type: 'touchMove', touchPoints: [{x: x - distance, y}]});
+        assert.deepEqual(await offsets(), resting, "Reduced-motion drag keeps the panel and indicator stationary");
+        await session.send('Input.dispatchTouchEvent', {type: 'touchEnd', touchPoints: []});
+        assert.equal(await (distance === 35 ? trackerTab : infoTab).getAttribute("aria-selected"), "true");
+      }
+      await infoTab.press("Home");
+      await page.emulateMedia({reducedMotion: "no-preference"});
       await session.detach();
     }
     await page.getByRole('tab', {name: '活动信息'}).click();
@@ -330,6 +363,15 @@ try {
     await page.emulateMedia({reducedMotion: "no-preference"});
 
     await page.goto(`${base}/scroll-tabs`);
+    await trackerTab.press("ArrowRight");
+    await page.keyboard.press("Tab");
+    const refreshComments = page.getByRole("button", {name: "刷新评论"});
+    assert.ok(await refreshComments.evaluate(el => el === document.activeElement), "Tab skips the loading panel");
+    await page.evaluate(() => window.finishInfo());
+    await page.getByRole("textbox", {name: "info draft"}).waitFor();
+    assert.ok(await refreshComments.evaluate(el => el === document.activeElement), "Loading content preserves the current focus");
+
+    await page.reload();
     const collapse = await page.evaluate(async () => {
       const root = document.querySelector('.event-view-section');
       const strip = root.querySelector('.event-view-tabs-bar');
@@ -387,7 +429,9 @@ try {
         const sample = () => {
           if (!window.recordChrome) return;
           const bar = document.querySelector('.event-view-tabs-bar').getBoundingClientRect();
-          window.chromeFrames.push({top: bar.top, height: bar.height, header: document.querySelector('header').getBoundingClientRect().bottom});
+          const active = document.querySelector('.event-view-panel[data-active=true] [data-view]');
+          window.chromeFrames.push({top: bar.top, height: bar.height, header: document.querySelector('header').getBoundingClientRect().bottom,
+            view: active.dataset.view, panelTop: active.getBoundingClientRect().top});
           requestAnimationFrame(sample);
         };
         sample();
@@ -400,7 +444,13 @@ try {
         `${width}: switching keeps the header and tab bar fixed throughout every frame`);
       const [preview, committed] = await page.evaluate(view => [window.pendingPanelTop,
         document.querySelector('[data-view=' + view + ']').getBoundingClientRect().top], view);
-      assert.ok(Math.abs(preview - committed) < 2, `${width}: incoming preview matches restored content without a vertical jump`);
+      if (await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+        const visible = frames.filter(frame => frame.view === view);
+        assert.ok(visible.length > 0 && visible.every(frame => Math.abs(frame.panelTop - committed) < 2),
+          `${width}: immediate selection paints the restored position from its first visible frame`);
+      } else {
+        assert.ok(Math.abs(preview - committed) < 2, `${width}: incoming preview matches restored content without a vertical jump`);
+      }
     };
     const scrollDepth = async depth => page.evaluate(depth => {
       const origin = document.querySelector('.event-view-viewport').getBoundingClientRect().top + scrollY - 104;
@@ -542,6 +592,19 @@ try {
     assert.deepEqual(legendColors, before, `${width}: hidden legend and editor colors match`);
     for (let index = 0; index < 5; index++) await buttons.nth(index).click();
     assert.deepEqual(await colors(), before);
+    const rows = page.locator('.event-comparison-row');
+    const assertFocused = async locator => assert.ok(await locator.evaluate(el => el === document.activeElement));
+    for (const [index, nextTarget] of [[1, '320'], [3, '319']]) {
+      await rows.nth(index).getByRole('button').press('Enter');
+      const target = page.locator('.event-comparison-target select:focus');
+      assert.equal(await target.inputValue({timeout: 2000}), nextTarget);
+    }
+    const add = page.getByRole('button', {name:'添加对比', exact:true});
+    await page.getByRole('button', {name:'移除全部对比线'}).press('Space');
+    await assertFocused(add);
+    await page.reload();
+    for (let remaining = 5; remaining > 0; remaining--) await rows.last().getByRole('button').press('Enter');
+    await assertFocused(add);
     assert.deepEqual(errors, []);
     await page.close();
     console.log(`PASS ${width}px: isolated stamp loading, tab frames, cancelled/reversed transitions, retained draft, reduced motion, async popup frames, hidden comparison colors`);

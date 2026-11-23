@@ -15,6 +15,8 @@ const longPlaylist = songs.concat(Array.from({length:50}, (_, i) => `Track ${i +
 const binding = { server: 0, gameUid: "12345", playerName: "Poppin'Party", public: true, titlesPublic: false, ownedDegreeIds: [], ownedDegreeEffectIds: [] };
 const profile = { publicUid: uid, username: "Motion fixture", createdAt: "2026-01-01", signature: "", cover: null, preferences: null, isOwner: false, avatar: { cardId: 0, entityServer: null, trainType: "normal" }, displayDegree: { server: 0, degreeId: 0, degreeEffectId: null }, bindings: [binding] };
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true });
+const openingTiming = el => [getComputedStyle(el).animationDuration, getComputedStyle(el).animationTimingFunction];
+let coverMenuTiming;
 try {
   for (const [width, height, phone, reduced] of [[390, 844, true, false], [844, 390, true, true], [1440, 900, false, false]]) {
     const context = await browser.newContext({ viewport: { width, height }, isMobile: phone, hasTouch: phone, reducedMotion: reduced ? "reduce" : "no-preference" });
@@ -57,6 +59,61 @@ try {
     const initialReads = reads;
     const settled = locator => locator.evaluate(el => Promise.allSettled(el.getAnimations().map(a => a.finished)));
     const selected = name => page.locator(tab(name) + '[aria-selected="true"]').waitFor();
+    if (owner) {
+      const coverMenu = page.locator("header details:has(summary)");
+      await coverMenu.waitFor();
+      for (let open = 0; open < 2; open++) {
+        const opacity = await coverMenu.evaluate(async el => {
+          el.querySelector("summary").click();
+          const menu = el.querySelector("button").parentElement;
+          const initial = Number(getComputedStyle(menu).opacity);
+          await Promise.all(menu.getAnimations().map(animation => animation.finished));
+          return [initial, Number(getComputedStyle(menu).opacity)];
+        });
+        assert.ok(opacity[0] < 0.1 && opacity[1] === 1, "The card options appear from their trigger on every open");
+        coverMenuTiming = await coverMenu.locator("summary + div").evaluate(openingTiming);
+        await coverMenu.locator("summary").tap();
+      }
+      await coverMenu.locator("summary").tap();
+      assert.equal(await coverMenu.evaluate(el => el.open), true);
+      await page.evaluate(() => scrollBy({top:16, behavior:"instant"}));
+      await page.waitForFunction(el => !el.open, await coverMenu.elementHandle());
+      await page.evaluate(() => window.scrollTo({top:64, behavior:"instant"}));
+      for (const name of ["details", "settings", "home"]) {
+        const frames = await page.evaluate(async name => {
+          const strip = document.querySelector("#profile-tab-home").parentElement;
+          const sample = () => [scrollY, innerWidth, document.documentElement.scrollWidth, strip.getBoundingClientRect().top];
+          const frames = [sample()];
+          document.getElementById("profile-tab-" + name).dispatchEvent(new MouseEvent("click", {bubbles:true, detail:1}));
+          do {
+            await new Promise(requestAnimationFrame);
+            frames.push(sample());
+          } while (document.querySelector("[data-tab-panels][data-sliding]") && frames.length < 120);
+          return frames;
+        }, name);
+        await selected(name);
+        assert.ok(frames.length > 3, "A tap slides between the two panels");
+        assert.ok(frames.every(frame => frame.every((value,i) => Math.abs(value - frames[0][i]) <= 1)),
+          "The viewport, shared header and tab strip stay in place throughout a tap: " + JSON.stringify(frames));
+      }
+      const reversal = await page.evaluate(async () => {
+        const panel = document.getElementById("profile-panel-home");
+        const strip = document.querySelector("[data-tab-indicator]");
+        const sample = () => [panel.getBoundingClientRect().left, strip.getBoundingClientRect().left];
+        const tap = name => document.getElementById("profile-tab-" + name).dispatchEvent(new MouseEvent("click", {bubbles:true, detail:1}));
+        const start = sample();
+        tap("settings");
+        for (let i = 0; i < 120 && Math.abs(sample()[0] - start[0]) < 40; i++) await new Promise(requestAnimationFrame);
+        const before = sample();
+        tap("home");
+        const after = sample();
+        for (let i = 0; i < 120 && document.querySelector("[data-tab-panels][data-sliding]"); i++) await new Promise(requestAnimationFrame);
+        return {start, before, after, end:sample()};
+      });
+      assert.ok(Math.abs(reversal.before[0] - reversal.start[0]) >= 40);
+      assert.ok(reversal.before.every((value,i) => Math.abs(value - reversal.after[i]) < 2), "Reversing a tap starts from the painted frame");
+      assert.deepEqual(reversal.end, reversal.start);
+    }
     if (phone) {
       const input = await context.newCDPSession(page);
       const finger = (type, x, y) => input.send("Input.dispatchTouchEvent", { type, touchPoints: x === undefined ? [] : [{ x, y }] });
@@ -66,6 +123,35 @@ try {
         await finger("touchMove", x + dx, y + dy);
         if (during) await during();
         await finger("touchEnd");
+      }
+      if (owner) {
+        const bar = await page.locator(tab("home")).boundingBox();
+        const y = bar.y + bar.height / 2;
+        await drag(320, y, -160, 0);
+        // Hold a reproducible frame of the first release before the next real touch.
+        await page.evaluate(() => {
+          const animations = document.querySelector("[data-tab-panels]").getAnimations({subtree:true})
+            .concat(document.querySelector("[data-tab-indicator]").getAnimations());
+          for (const animation of animations) {
+            animation.pause();
+            animation.currentTime = animation.effect.getComputedTiming().duration * .75;
+          }
+        });
+        await drag(320, y, -255, 0);
+        await selected("settings");
+        await page.locator(tab("home")).tap();
+        await page.waitForFunction(() => !document.querySelector("[data-tab-panels][data-sliding]"));
+        await page.locator(tab("details")).tap();
+        await finger("touchStart", 280, y);
+        assert.ok(await page.locator("[data-tab-panels][data-sliding]").count(), "Finger is down before the tap finishes");
+        await page.waitForFunction(() => !document.querySelector("[data-tab-panels][data-sliding]"));
+        await finger("touchMove", 210, y);
+        await finger("touchMove", 75, y);
+        assert.ok(await page.locator("[data-tab-panels][data-sliding]").count(), "Movement after the commit still drags the panel");
+        await finger("touchEnd");
+        await selected("settings");
+        await page.locator(tab("home")).tap();
+        await page.waitForFunction(() => !document.querySelector("[data-tab-panels][data-sliding]"));
       }
       await row.scrollIntoViewIfNeeded();
       let box = await row.boundingBox();
@@ -88,13 +174,34 @@ try {
       await drag(x, y, -30, 0);
       await page.waitForFunction(() => !document.querySelector("[data-sliding]"));
       await selected("home");
+      const indicator = page.locator("[data-tab-indicator]");
+      const homeLine = await indicator.boundingBox();
       await drag(x, y, -110, 2, async () => {
-        if (!reduced) {
+        if (reduced) {
+          assert.equal(await page.locator("#profile-panel-home").evaluate(el => getComputedStyle(el).transform), "none");
+          assert.equal((await indicator.boundingBox()).x, homeLine.x);
+        } else {
           assert.ok(await page.locator("#profile-panel-details[inert]").isVisible());
+          const progress = await page.evaluate(() => {
+            const rect = selector => document.querySelector(selector).getBoundingClientRect();
+            const home = rect("#profile-tab-home"), details = rect("#profile-tab-details"), panels = rect("[data-tab-panels]");
+            return [(rect("[data-tab-indicator]").left - home.left) / (details.left - home.left),
+              (panels.left - rect("#profile-panel-home").left) / panels.width];
+          });
+          assert.ok(progress[0] > .1 && Math.abs(progress[0] - progress[1]) < .015, "Underline and panel follow the same drag");
           await page.evaluate(() => {
             const viewport = document.querySelector("[data-tab-panels]");
             const old = document.querySelector("#profile-panel-home");
             window.flashFrames = [];
+            window.releaseFrames = [];
+            window.addEventListener("pointerup", () => {
+              const start = performance.now();
+              function track() {
+                window.releaseFrames.push([performance.now() - start, old.getBoundingClientRect().left]);
+                if (!old.hidden) requestAnimationFrame(track);
+              }
+              track();
+            }, {once:true, capture:true});
             const sample = () => {
               if (!old.hidden && !viewport.hasAttribute("data-sliding") &&
                   Math.abs(old.getBoundingClientRect().left - viewport.getBoundingClientRect().left) < 1) window.flashFrames.push(performance.now());
@@ -110,7 +217,13 @@ try {
         }
       });
       await selected("details");
-      if (!reduced) assert.deepEqual(await page.evaluate(() => window.flashFrames), [], "old panel must stay offscreen through the React commit");
+      if (!reduced) {
+        assert.deepEqual(await page.evaluate(() => window.flashFrames), [], "old panel must stay offscreen through the React commit");
+        const frames = await page.evaluate(() => window.releaseFrames);
+        const early = frames.filter(([time]) => time <= 65);
+        assert.ok(early.length > 1 && Math.abs(early.at(-1)[1] - frames[0][1]) < (width - 110) * .4,
+          "Release continues from the dragged position without a sudden leap");
+      }
       const details = await page.locator("#profile-panel-details").boundingBox();
       await drag(details.x + 65, details.y + 15, 130, 0);
       await selected("home");
@@ -212,6 +325,7 @@ try {
       await row.click({button: "right"});
       await settled(menu);
       assert.equal(await menu.getAttribute("aria-modal"), null);
+      assert.deepEqual(await menu.evaluate(openingTiming), coverMenuTiming, "Anchored menus share the cover menu's opening timing");
       await page.locator(tab("details")).click();
       await selected("details");
       await menu.waitFor({ state: "detached" });
@@ -222,6 +336,46 @@ try {
       await page.keyboard.press("Escape");
       await menu.waitFor({state:"detached"});
       await page.waitForFunction(el => document.activeElement === el, await more.elementHandle());
+      const fifthSong = page.locator("li[data-song]").nth(4);
+      const songActions = fifthSong.locator("[aria-haspopup=dialog]");
+      await fifthSong.evaluate(el => el.scrollIntoView({block:"center", behavior:"instant"}));
+      await fifthSong.hover();
+      for (const via of ["button", "context"]) {
+        if (via === "button") await songActions.click();
+        else await fifthSong.click({button:"right"});
+        await settled(menu);
+        await page.evaluate(() => scrollBy({top:scrollY > 40 ? -16 : 16, behavior:"instant"}));
+        await menu.waitFor({state:"detached"});
+        assert.equal(await songActions.getAttribute("aria-expanded"), "false");
+      }
+      const list = fifthSong.locator("..");
+      await list.evaluate(el => { el.style.maxHeight = "180px"; el.style.overflowY = "auto"; });
+      await fifthSong.click({button:"right"});
+      await settled(menu);
+      await list.evaluate(el => el.scrollBy({top:el.scrollTop > 16 ? -16 : 16, behavior:"instant"}));
+      await menu.waitFor({state:"detached"});
+      await list.evaluate(el => { el.style.removeProperty("max-height"); el.style.removeProperty("overflow-y"); });
+      await page.setViewportSize({width:1024, height:230});
+      await fifthSong.evaluate(el => el.scrollIntoView({block:"center", behavior:"instant"}));
+      await fifthSong.hover();
+      await songActions.click();
+      await settled(menu);
+      const menuScroll = await menu.evaluate(async el => {
+        el.scrollTop = el.scrollHeight;
+        await new Promise(requestAnimationFrame);
+        return el.scrollTop;
+      });
+      assert.ok(menuScroll > 0);
+      assert.equal(await menu.getAttribute("data-state"), "open");
+      await page.evaluate(() => scrollTo({top:0, behavior:"instant"}));
+      await menu.waitFor({state:"detached"});
+      await page.setViewportSize({width, height});
+      await page.emulateMedia({reducedMotion:"reduce"});
+      await row.hover();
+      await more.click();
+      assert.equal(await menu.evaluate(el => getComputedStyle(el).animationName), "none");
+      await page.keyboard.press("Escape");
+      await menu.waitFor({state:"detached"});
     }
     if (!owner) {
       assert.ok(await row.evaluate((el, first) => el === first, original));
@@ -231,11 +385,15 @@ try {
       await page.locator(tab("settings")).tap();
       const toggle = page.getByRole("switch").first();
       await toggle.waitFor();
+      const hit = await toggle.boundingBox();
+      const track = await toggle.locator(':scope > span').first().boundingBox();
+      assert.equal(hit.height, 44);
+      assert.equal(track.height, 20);
       failWrite = true;
-      await toggle.tap();
+      await toggle.tap({position: {x: hit.width / 2, y: 2}});
       await page.locator('[data-action-feedback=error]').waitFor();
       failWrite = false;
-      await toggle.tap();
+      await toggle.tap({position: {x: hit.width / 2, y: hit.height - 2}});
       await page.locator('[data-action-feedback=success]').waitFor();
       await page.locator(tab("home")).tap();
       await more.tap();

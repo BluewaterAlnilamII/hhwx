@@ -115,6 +115,22 @@ Calendar bars retain band identity, white labels and no added colored outlines. 
 
 PWA installation colors are separate metadata in `src/app/manifest.ts` and `src/app/[locale]/manifest.webmanifest/route.ts`. They currently retain the fixed yellow brand color and are not changed by CSS media queries.
 
+## Swipeable tabs and reduced motion
+
+During a drag, move the selection indicator and content through the same fraction of the distance between tabs. On release, continue from that position and use a shorter settling time for a shorter remaining distance. A second swipe starts from the panel most visible when the finger begins moving, even if the previous slide finished while the finger was resting on the screen. Use the same slide timing for taps. Clip moving content to the panel viewport so switching tabs keeps the page width and any visible shared header stable.
+
+When reduced motion is enabled, the panel and its selection indicator stay still while the finger moves. On release, a swipe that meets the usual threshold selects the new tab immediately. A short or cancelled swipe preserves the current tab and reading position.
+
+The event tracker and public profile share [`getTabSlideTiming`](../src/lib/bind-tab-swipe.ts). Reuse it for new swipeable tab panels. Segmented controls that only change a filter use their own selection feedback.
+
+## Opening menus
+
+For a small menu anchored to a button or pointer location, use [`hhwx-anchored-menu`](../src/app/visual-theme/recipes.css). On every open, fade in from the edge nearest the trigger, moving 5px and scaling from 97% to 100% over 180ms with ease-out. Set `data-side="top"` when the menu opens above the trigger so the movement follows its placement. The profile cover options and desktop favorite-song actions both use this style.
+
+Native `details` closes immediately. Components that keep the popup mounted during dismissal fade out over 90ms. Mobile favorite-song actions slide in from the bottom and support dragging down to dismiss. Both menu types open and close immediately with reduced motion.
+
+Close an anchored menu as soon as the page or a container holding its trigger scrolls. This applies to the profile cover options and to desktop song actions opened with More or a right-click. Scrolling inside the menu keeps it open.
+
 ## Event tracker chart interaction
 
 The tracking and information tabs retain separate content-scroll offsets during the current page visit. The heading above the tabs is shared: switching while it is visible keeps the current document position, even when the destination has a saved offset. Once the tab bar is fully sticky, switching keeps it sticky; returning to a tab last viewed above the bar starts at its content opening, never brings the heading back into view. Otherwise, returning restores the saved content offset; changing event or server clears both offsets. This does not persist across reloads. The incoming panel previews its target position during the horizontal transition, and committing the tab restores document scrolling without a smooth vertical animation. Comments remain outside the tabs.
@@ -171,6 +187,8 @@ When changing these shared components, check complete loaded filters in both gam
 
 ## Binary switches
 
+For a compact settings row, center the visible track inside the button and use the full row height for the hit area. Verify taps near the top and bottom of the 44px button, outside the painted track. Keep adjacent labels and drag handles independently targetable.
+
 The shared [Switch](../src/components/Switch.tsx) uses a 36 × 20px track and 16px thumb below `sm`, and a 40 × 22px track and 18px thumb at and above `sm`. Uniform 2px track padding keeps the thumb equally inset at either endpoint; avoid asymmetric inset highlights or thumb shadows. Labels use 13px text on mobile and 14px at `sm`. The button retains a minimum 44px touch height, visible keyboard focus, switch semantics and reduced-motion support. Event-song Fever controls reuse this geometry without visible On/Off text.
 
 The off track uses `--theme-color-switch-off-background`, separate from disabled controls, to keep the white thumb and track visible in both color schemes. Keep the accessible name stable when toggling; `aria-checked` conveys the state.
@@ -221,7 +239,7 @@ Use hover styling only for hover-capable input (`@media (hover: hover)` for hand
 
 Shared indicators and placeholders expose an accessible loading label/status and use `motion-safe` animation, leaving static feedback when reduced motion is requested. Specialized layout skeletons, such as the calendar grid, may keep their geometry and theme colors; they follow the same state and accessibility rules instead of introducing another loading style.
 
-Verify delayed responses, failure and retry, successful empty results, cached data, changed and unchanged image URLs, light/dark mode, reduced motion, and touch/keyboard behavior where applicable. These rules define the target for affected components; they do not imply that every unrelated site flow has been audited.
+Use the default interactions of native controls and shared components on new pages. Verify delayed responses, failure and retry, successful empty results, cached data, changed and unchanged image URLs, light/dark mode, reduced motion, and touch behavior where applicable.
 
 ## How to change and verify a color
 

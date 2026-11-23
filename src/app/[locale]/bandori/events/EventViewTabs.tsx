@@ -2,7 +2,7 @@
 
 import { Activity, useCallback, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { bindTabSwipe } from "@/lib/bind-tab-swipe";
+import { bindTabSwipe, getTabSlideTiming, type TabSwipeMotion } from "@/lib/bind-tab-swipe";
 import type { EventTrackerView } from "./urlQuery";
 
 const views = ["tracker", "info"] as const;
@@ -22,16 +22,6 @@ function ownsSwipe(target: Element, root: HTMLElement) {
   return false;
 }
 
-export function bindEventViewTabsSwipe(bar: HTMLElement, value: EventTrackerView, callbacks: {
-  onStart: () => number;
-  onProgress: (position: number) => void;
-  onEnd: (view: EventTrackerView) => void;
-}) {
-  return bindTabSwipe(bar, views.indexOf(value), views.length, {
-    ...callbacks, ignore: ownsSwipe, onEnd: index => callbacks.onEnd(views[index]),
-  });
-}
-
 export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, scrollKey, children }: {
   value: EventTrackerView;
   onChange: (view: EventTrackerView) => void;
@@ -46,7 +36,8 @@ export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, s
   const sentinel = useRef<HTMLSpanElement>(null);
   const bar = useRef<HTMLDivElement>(null);
   const viewport = useRef<HTMLDivElement>(null);
-  const selectView = useRef(onChange);
+  const selectView = useRef<(view: EventTrackerView, immediate?: boolean) => void>(onChange);
+  const swipeMotion = useRef<TabSwipeMotion>(null);
   const scroll = useRef<{ key: string; positions: Partial<Record<EventTrackerView, number>>; pending: number | null }>({
     key: scrollKey, positions: {}, pending: null,
   });
@@ -60,7 +51,6 @@ export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, s
     // Keep the animation's final frame until React has committed the active panel.
     delete section.current.dataset.moving;
     delete section.current.dataset.settling;
-    viewport.current?.querySelectorAll<HTMLElement>(".event-view-panel").forEach(panel => { panel.style.top = ""; });
     if (scroll.current.key !== scrollKey) {
       scroll.current = { key: scrollKey, positions: {}, pending: Math.min(0, window.scrollY - scrollOrigin()) };
     }
@@ -112,19 +102,22 @@ export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, s
     if (!root || !strip || !body) return;
     let frame = 0;
     let timer = 0;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
     const index = views.indexOf(value);
     const target = (view: EventTrackerView) => getEventViewScrollTarget(scrollOrigin(), window.scrollY, scroll.current.positions[view]);
     const position = (next: number) => {
       // A changing inherited variable invalidates styles throughout both panels.
       body.querySelectorAll<HTMLElement>(".event-view-panel").forEach((panel, panelIndex) => {
         panel.style.transform = `translateX(${(panelIndex - next) * 100}%)`;
-        panel.style.top = root.hasAttribute("data-moving") && panelIndex !== index
-          ? `${window.scrollY - target(views[panelIndex])}px` : "";
       });
       const indicator = strip.querySelector<HTMLElement>(".event-view-indicator");
       if (indicator) indicator.style.transform = `translateX(${next * 100}%)`;
     };
     const stop = () => { cancelAnimationFrame(frame); window.clearTimeout(timer); };
+    const rememberPosition = () => {
+      // The heading is shared; only the content below the tabs has a per-view position.
+      scroll.current.positions[value] = Math.max(0, window.scrollY - scrollOrigin());
+    };
     const prepare = () => {
       const panel = body.querySelector<HTMLElement>("[data-active=true]");
       const transform = panel && root.hasAttribute("data-moving") ? getComputedStyle(panel).transform : "none";
@@ -132,45 +125,62 @@ export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, s
       stop();
       delete root.dataset.settling;
       if (!root.hasAttribute("data-moving")) {
-        // The heading is shared; only the content below the tabs has a per-view position.
-        scroll.current.positions[value] = Math.max(0, window.scrollY - scrollOrigin());
+        rememberPosition();
         body.style.setProperty("--event-view-height", `${body.getBoundingClientRect().height}px`);
       }
       root.dataset.moving = "true";
+      body.style.setProperty("--event-preview-top", `${window.scrollY - target(views[1 - index])}px`);
       position(current);
       setPreviewFrom(previous => previous?.view === value && previous.key === scrollKey ? previous : { view: value, key: scrollKey });
       onPreviewChange(views[1 - index]);
       return current;
     };
-    const settle = (next: EventTrackerView) => {
+    const settle = (next: EventTrackerView, immediate = false) => {
       if (next === value && !root.hasAttribute("data-moving")) return;
-      prepare();
+      const finish = () => {
+        if (next !== value) scroll.current.pending = target(next) - scrollOrigin();
+        setPreviewFrom(null);
+        onChange(next);
+        onPreviewChange(null);
+      };
+      if (immediate || reduced.matches) {
+        stop();
+        if (!root.hasAttribute("data-moving")) rememberPosition();
+        delete root.dataset.settling;
+        position(views.indexOf(next));
+        finish();
+        return;
+      }
+      const remaining = Math.abs(views.indexOf(next) - prepare());
+      if (remaining < .002) { position(views.indexOf(next)); finish(); return; }
+      const { duration, easing } = getTabSlideTiming(remaining);
+      root.style.setProperty("--event-slide-motion", `${duration}ms ${easing}`);
       frame = requestAnimationFrame(() => {
         // Measure the mounted preview before transitioning from its current offset.
         body.getBoundingClientRect();
         root.dataset.settling = "true";
         position(views.indexOf(next));
-        const finish = () => {
-          if (next !== value) scroll.current.pending = target(next) - scrollOrigin();
-          setPreviewFrom(null);
-          onChange(next);
-          onPreviewChange(null);
-        };
-        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) finish();
-        else timer = window.setTimeout(finish, 220);
+        timer = window.setTimeout(finish, duration + 20);
       });
     };
     position(index);
     selectView.current = settle;
-    const unbind = bindEventViewTabsSwipe(root, value, { onStart: prepare, onProgress: position, onEnd: settle });
+    swipeMotion.current = {
+      onStart: () => reduced.matches ? index : prepare(),
+      onProgress: next => { if (!reduced.matches) position(next); },
+      onEnd: next => settle(views[next]),
+    };
     return () => {
       stop();
-      unbind();
       delete root.dataset.moving;
       delete root.dataset.settling;
       onPreviewChange(null);
     };
   }, [value, onChange, onPreviewChange, scrollKey, scrollOrigin]);
+  useLayoutEffect(() => {
+    const root = section.current;
+    if (root) return bindTabSwipe(root, views.length, { ignore: ownsSwipe, motion: () => swipeMotion.current! });
+  }, [scrollKey]);
 
   return <div ref={section} className="event-view-section hhwx-panel border" data-planner-open={plannerOpen || undefined}>
     <span ref={sentinel} className="event-view-sentinel" aria-hidden />
@@ -178,13 +188,13 @@ export function EventViewTabs({ value, onChange, onPreviewChange, plannerOpen, s
       <span className="event-view-indicator" style={{ transform: `translateX(${views.indexOf(value) * 100}%)` }} aria-hidden />
       {views.map((view, index) => <button key={view} type="button" role="tab" id={`${id}-${view}`}
         aria-selected={value === view} aria-controls={`${id}-${view}-panel`} tabIndex={value === view ? 0 : -1}
-        onClick={() => selectView.current(view)}
+        onClick={event => selectView.current(view, event.detail === 0)}
         onKeyDown={event => {
           const next = event.key === "ArrowLeft" || event.key === "ArrowRight" ? 1 - index
             : event.key === "Home" ? 0 : event.key === "End" ? 1 : null;
           if (next === null) return;
           event.preventDefault();
-          selectView.current(views[next]);
+          selectView.current(views[next], true);
           bar.current?.querySelectorAll<HTMLButtonElement>("button")[next]?.focus({ preventScroll: true });
         }}>{t(view)}</button>)}
     </div>

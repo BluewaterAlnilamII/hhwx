@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo, type Dispatch, type SetStateAction } from "react";
+import { memo, useLayoutEffect, useMemo, useRef, type Dispatch, type SetStateAction } from "react";
 import { useTranslations } from "next-intl";
 import { AlignEndVertical, AlignStartVertical, Plus, Trash2, X } from "lucide-react";
 
@@ -77,6 +77,17 @@ export const ComparisonControls = memo(function ComparisonControls({
   trackingMode,
 }: ComparisonControlsProps) {
   const t = useTranslations("bandori.events.tracker.comparison");
+  const editor = useRef<HTMLDivElement>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
+  const focusRowAfterRemoval = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const index = focusRowAfterRemoval.current;
+    if (index === null || !editor.current) return;
+    focusRowAfterRemoval.current = null;
+    const targets = editor.current.querySelectorAll<HTMLSelectElement>(".event-comparison-target select");
+    const next = targets[Math.min(index, targets.length - 1)] ?? addButton.current;
+    next?.focus({ preventScroll: true });
+  }, [comparisonConfigs]);
   const targetOptions = useMemo(() => comparisonTargetOptions.map(option => (
     <option key={option.id} value={option.id}
       className={option.isSameEventType ? "font-semibold text-[var(--theme-color-selection-subtle-foreground)]" : undefined}>
@@ -208,8 +219,8 @@ export const ComparisonControls = memo(function ComparisonControls({
           </>
         )}
 
-        <div className="event-comparison-editor flex w-full flex-col items-center gap-2 border-t border-[var(--theme-color-border-subtle)] pt-3 pb-3 sm:pb-4">
-          {comparisonConfigs.map((config) => {
+        <div ref={editor} className="event-comparison-editor flex w-full flex-col items-center gap-2 border-t border-[var(--theme-color-border-subtle)] pt-3 pb-3 sm:pb-4">
+          {comparisonConfigs.map((config, index) => {
             const rowTierOptions = comparisonTierOptionsByConfigId.get(config.id) ?? comparisonTierOptions;
             const colorIndex = resolvedComparisonConfigs.find((resolved) => resolved.id === config.id)?.colorIndex ?? 0;
 
@@ -252,7 +263,10 @@ export const ComparisonControls = memo(function ComparisonControls({
 
               <button
                 type="button"
-                onClick={() => onRemoveComparison(config.id)}
+                onClick={event => {
+                  if (event.detail === 0) focusRowAfterRemoval.current = index;
+                  onRemoveComparison(config.id);
+                }}
                 className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-control-background)] px-3 text-xs font-semibold text-[var(--theme-color-text-muted)] transition-colors hover:border-[var(--theme-color-semantic-danger-border)] hover:bg-[var(--theme-color-semantic-danger-background)] hover:text-[var(--theme-color-semantic-danger-foreground)] sm:h-9 sm:text-sm"
                 aria-label={t("removeLine")}
               >
@@ -267,6 +281,7 @@ export const ComparisonControls = memo(function ComparisonControls({
             <button
               type="button"
               onClick={onAddComparison}
+              ref={addButton}
               disabled={!canAddComparisonRow}
               title={comparisonConfigs.length >= MAX_COMPARISON_LINES
                 ? t("maxLines", { count: MAX_COMPARISON_LINES })
@@ -279,7 +294,10 @@ export const ComparisonControls = memo(function ComparisonControls({
             {comparisonConfigs.length > 0 && (
               <button
                 type="button"
-                onClick={onRemoveAllComparisons}
+                onClick={event => {
+                  if (event.detail === 0) focusRowAfterRemoval.current = 0;
+                  onRemoveAllComparisons();
+                }}
                 className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--theme-color-action-destructive-border)] bg-[var(--theme-color-action-destructive-background)] px-3 text-xs font-semibold text-[var(--theme-color-action-destructive-foreground)] transition-colors hover:bg-[var(--theme-color-action-destructive-background-hover)] sm:h-9 sm:text-sm"
                 aria-label={t("removeAllLines")}
                 title={t("removeAllLines")}
