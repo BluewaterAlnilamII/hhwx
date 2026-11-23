@@ -1,5 +1,4 @@
 "use client";
-import { confirmTouchOnSuccess } from "@/lib/touch-feedback";
 import LoadingError from "@/components/LoadingError";
 import ActionFeedback from "@/components/ActionFeedback";
 import { groupProfileDegrees } from "@/lib/profile-homepage";
@@ -201,7 +200,6 @@ export default function AccountDisplayDegreeControl({
   };
 
   const saveDegree = async () => {
-    const confirm = confirmTouchOnSuccess();
     const sessionId = dialogSession.current;
     const isCurrent = () => sessionId === dialogSession.current;
     setSaving(true);
@@ -242,7 +240,7 @@ export default function AccountDisplayDegreeControl({
         displayDegreeId: saved.degreeId,
         displayDegreeEffectId: saved.degreeEffectId,
       });
-      if (isCurrent()) { confirm(); handleOpenChange(false); }
+      if (isCurrent()) handleOpenChange(false);
     } catch {
       if (isCurrent()) setMessage(t("saveFailed"));
     } finally {

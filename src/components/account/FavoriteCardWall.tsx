@@ -1,6 +1,5 @@
 "use client";
 
-import { confirmTouchOnSuccess } from "@/lib/touch-feedback";
 import { useRef, useState } from "react";
 import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
@@ -53,9 +52,7 @@ function FavoriteCardActions({ item, editor, canFlip, onArt, onRemove, listContr
       if (action === "remove") {
         await setBandoriFavorite(editor, key, false, () => onRemove(item.target));
       } else {
-        const confirm = confirmTouchOnSuccess();
         await favoritesRequest("/api/bandori/favorites/" + key + "?art=" + (item.normalArt ? "after_training" : "normal"), editor, { method: "PATCH" });
-        confirm();
         onArt(item.target, !item.normalArt);
         showFeedback("success", homepage("saved"));
       }

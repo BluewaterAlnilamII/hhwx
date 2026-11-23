@@ -5,7 +5,7 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSo
 import { useTranslations } from "next-intl";
 
 export default function ProfileSortList({ ids, onOrder, children, collisionDetection = closestCenter, modifiers, touchHold = false }: {
-  ids: string[]; onOrder: (ids: string[], movedId: string, source: Event) => void; children: ReactNode; collisionDetection?: CollisionDetection;
+  ids: string[]; onOrder: (ids: string[], movedId: string) => void; children: ReactNode; collisionDetection?: CollisionDetection;
   modifiers?: Modifiers; touchHold?: boolean;
 }) {
   const id = useId();
@@ -35,7 +35,7 @@ export default function ProfileSortList({ ids, onOrder, children, collisionDetec
       guard.abort();
     }, options);
     window.addEventListener("pointerdown", () => guard.abort(), options);
-  }} onDragEnd={({ active, over, activatorEvent }) => {
-    if (over && active.id !== over.id) onOrder(arrayMove(ids, ids.indexOf(String(active.id)), ids.indexOf(String(over.id))), String(active.id), activatorEvent);
+  }} onDragEnd={({ active, over }) => {
+    if (over && active.id !== over.id) onOrder(arrayMove(ids, ids.indexOf(String(active.id)), ids.indexOf(String(over.id))), String(active.id));
   }}><SortableContext items={ids} strategy={verticalListSortingStrategy}>{children}</SortableContext></DndContext>;
 }
