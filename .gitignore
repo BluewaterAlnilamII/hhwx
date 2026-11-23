@@ -13,6 +13,21 @@
 # testing
 /coverage
 /temp/
+/public/__local__/chat-stamps/
+
+# Local design reviews and tool state
+/design-qa.md
+/.impeccable/critique/*__*.md
+/.impeccable/hook.cache.json
+/.impeccable/hook.pending.json
+/.impeccable/config.local.json
+
+# Screenshots from the archived design QA report
+/documents/homepage-desktop.png
+/documents/homepage-mobile-drawer.png
+/documents/smile-patrol-light-theme.png
+/documents/theme-unification-calendar-mobile.jpg
+/documents/theme-unification-song-desktop.jpg
 
 # next.js
 /.next/

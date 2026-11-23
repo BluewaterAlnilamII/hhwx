@@ -125,11 +125,11 @@ Local browser tests in `tests/bandori-favorites.browser.mjs` cover desktop and t
 
 ## Delivery and acceptance evidence
 
-[Open the final overall prototype](http://localhost:4317/?revision=7&stage=initial). It is available while the service runs; restart with `node serve.cjs` from the prototype directory.
+The November 16 review used revision 7 of the local prototype.
 
 The local prototype uses index.html and profile.js. The picker is compiled from the application components. The prototype's asset-sources.json, fixtures/sources.json and fixtures/degree-sources.json record the sources. Accounts are illustrative and edits persist only in page memory.
 
-The final pass used independent design assessment A and detector/browser assessment B, read by the parent only after A finished. Combined record: [2026-11-16 critique](../.impeccable/critique/2026-11-16T09-58-59Z__index-html.md). The prototype retains final-review-a.md, final-review-b.md, final-detector.json and final-browser-b.json. The pre-polish score is 33/40, with no P0/P1; both P2 issues were fixed without inventing a higher post-fix score. Historical 25/32 and 33/40 runs cover different scopes, and earlier review missed desktop regressions; they are neither a continuous quality trend nor current acceptance evidence.
+The final pass used independent design assessment A and detector/browser assessment B, read by the parent only after A finished. The pre-polish score is 33/40, with no P0/P1; both P2 issues were fixed without inventing a higher post-fix score. Historical 25/32 and 33/40 runs cover different scopes, and earlier review missed desktop regressions; they are neither a continuous quality trend nor current acceptance evidence.
 
 - Independent browser work and existing checks cover 320/390px phones, intermediate thresholds and 1440px desktop, both themes, 24-character names, no public content, no accounts, privacy/order, actual pickers, cover cancellation and signature editing. Reading, keyboard and emulated-touch paths have retained evidence.
 - The existing 36 interaction groups and nine focused layout cases passed. The final two fixes use critique-after-check.cjs: critique-after-checks.json records zero header-height change on edit entry at 320/390/1440px, an 8px name-to-UID gap for empty-signature visitors, and no name nodes with titles preserved for undefined/null/empty/whitespace fixtures.
@@ -184,7 +184,7 @@ References: current account profile/display-degree APIs, AccountCardAvatar, Band
 - No remote migration, deployment, physical-device, alternate-browser or real screen-reader verification. Review/apply the additive migration before deploying the app; retain the table on application rollback. Completion here refers to implementation and local checks, not a production rollout.
 
 - Final npm run build passed, including Next TypeScript and 71 generated static pages. Latest changed-file lint and final nine browser groups passed; 11 homepage writes were intercepted. Direct cover dragging, reticle-to-image center error below 1px and signature Escape focus restoration have assertions.
-- Independent integration critique is complete: A scored 32/40 before polish, without re-scoring. Its signature-feedback and title-picker density P2 findings passed independent rechecks. B's desktop reticle P2 and signature-focus P3 are fixed; cream-palette is an inapplicable style hint. Snapshot: .impeccable/critique/2026-11-16T14-22-46Z__src-components-account-publicprofileview-tsx.md.
+- Independent integration critique is complete: A scored 32/40 before polish, without re-scoring. Its signature-feedback and title-picker density P2 findings passed independent rechecks. B's desktop reticle P2 and signature-focus P3 are fixed; cream-palette is an inapplicable style hint.
 - Temporary database, review browsers and detector service were removed. The 3000 dev server and existing 4317 prototype remain. The dev environment connected to the original database still requires the additive migration before real homepage-settings reads/writes; browser acceptance and screenshots used intercepted fixtures.
 
 - B closed both remaining findings on independent recheck: reticle center error was 0px at 1440px and -0.0078125px at 390px; Escape restored visible signature-entry focus at both sizes. The final critique/polish snapshot is closed with no remaining priority issues.

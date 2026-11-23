@@ -2,7 +2,7 @@
 
 中文说明见 [theme-guide.zh-CN.md](theme-guide.zh-CN.md).
 
-This is the current contract for Smile Patrol's light and dark web UI. CSS is the executable source of truth; this guide explains ownership and intended use. [design-qa.md](../design-qa.md) is a historical record, including superseded alternatives, rather than a second specification.
+This is the current contract for Smile Patrol's light and dark web UI. CSS is the executable source of truth; this guide explains ownership and intended use. The [archived design reviews](https://github.com/BluewaterAlnilamII/hhwx/blob/ed8b72a21c25986c5becf50daad5c3b402c7cd74/design-qa.md) record earlier iterations.
 
 ## Configuration and ownership
 

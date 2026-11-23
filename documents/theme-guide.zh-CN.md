@@ -2,7 +2,7 @@
 
 英文主文档见 [theme-guide.md](theme-guide.md)。
 
-本文是 Smile Patrol 浅色与深色网页 UI 的当前规范。CSS 是可执行的事实来源，本文说明配置归属与使用方式。[design-qa.md](../design-qa.md) 保存历史迭代和已被取代的方案，不作为另一份现行规范。
+本文是 Smile Patrol 浅色与深色网页 UI 的当前规范。CSS 是可执行的事实来源，本文说明配置归属与使用方式。早期迭代可查阅[历史设计评审](https://github.com/BluewaterAlnilamII/hhwx/blob/ed8b72a21c25986c5becf50daad5c3b402c7cd74/design-qa.md)。
 
 ## 配置入口与归属
 

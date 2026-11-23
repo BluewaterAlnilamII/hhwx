@@ -109,7 +109,7 @@ English version: [realtime-message-board-validation.md](realtime-message-board-v
 
 消息反馈补充：桌面悬浮和已打开的消息菜单/回应面板会强调对应行，不改变尺寸或时间分隔。跳转使用 1.8 秒底色强调，同一目标重复跳转会重新计时，并保留提及行的暖黄色基础。真实组件浏览器检查通过，覆盖 1280 × 900 英文浅色与 390 × 900 中文深色，包括触屏不残留悬浮、面板打开时保持目标提示、按钮按压、淡出结束、重复定位和减少动态效果下的静态提示；原有引用/回应/@ 流程仍通过。Typecheck、受影响文件 ESLint、隔离本地 Webpack 构建和 diff 检查通过。实际内置浏览器截图位于 `hhwx-chat-feedback`，本批未加入新消息入场或面板/引用预览的展开过渡。
 
-提醒卡片补充：按确认的视觉稿改为从原有标题栏下方露出的 44 px 卡片，只把用户名标蓝，后缀使用普通文字颜色；保留轻微下边缘层次，连续提醒位置稳定，展开/收回支持减少动态效果设置。桌面英文浅色与手机中文深色浏览器检查覆盖长用户名、独立关闭/定位、连续提醒的键盘焦点，以及最后一条关闭后不再占位或接收焦点。内置浏览器的中文视觉对照通过；Typecheck、受影响文件 lint、i18n、118 项留言板测试和隔离本地环境的 Webpack 构建均通过。截图在本地临时目录 `hhwx-mention-card`，组件对照记录见 `design-qa.md`，没有新增依赖或后端修改。
+提醒卡片补充：按确认的视觉稿改为从原有标题栏下方露出的 44 px 卡片，只把用户名标蓝，后缀使用普通文字颜色；保留轻微下边缘层次，连续提醒位置稳定，展开/收回支持减少动态效果设置。桌面英文浅色与手机中文深色浏览器检查覆盖长用户名、独立关闭/定位、连续提醒的键盘焦点，以及最后一条关闭后不再占位或接收焦点。内置浏览器的中文视觉对照通过；Typecheck、受影响文件 lint、i18n、118 项留言板测试和隔离本地环境的 Webpack 构建均通过。视觉检查结果见[历史卡片对照记录](https://github.com/BluewaterAlnilamII/hhwx/blob/ed8b72a21c25986c5becf50daad5c3b402c7cd74/design-qa.md#chat-mention-notification-card-2026-10-28)。本次没有新增依赖或后端修改。
 
 后续修正：初始验证遗漏了选中用户后继续输入时搜索重新打开的问题。先用保留的回归测试复现失败，再将查询判断改为排除与已确认引用重叠的搜索，而不只判断光标是否在名字内部。**118 项留言板测试**、Typecheck 和受影响文件 lint 通过。桌面/手机浏览器测试现已覆盖选中后输入数字、中文及表情，不弹框、不追加搜索请求；新输入 `@` 仍可选择第二人，发送时原账号绑定保持正确。真实 localhost 上的 `chat_preview` 场景也验证通过，没有为该复现发送消息。
 
@@ -165,7 +165,7 @@ English version: [realtime-message-board-validation.md](realtime-message-board-v
 - 在独立 PostgreSQL 17.11 项目 `hhwx-chat-verify-reading` 重放规范迁移。CI 中八个 SQL 文件、**45 项 TAP 检查通过**；本地安全/性能 Advisors 无问题。被删的同步 RPC 不存在，保留的向后读取 RPC 仍为仅服务端可调用、空 search_path 的 invoker。
 - `npm run test:chat:postgres` 使用真实处理器、PostgreSQL、Centrifugo 6.9.7 和合成身份通过。恢复时直接合并未广播成功的已保存消息；离线删除保留到重开。房间隔离、额度、重试、消息服务重启及私有发布入口检查通过，没有生产操作。
 - Browser 插件不可用，沿用 Playwright/本机 Chrome 的 localhost 夹具：真实对话框、会话和主题，简化身份/输入框/媒体。1280×900、390×844 的英文浅色和中文深色均通过。顶部只有提示与关闭，标题完整；仅一个最新箭头，没有“继续读取”。重连位置变化为 **0 CSS px**。桌面/手机尺寸下，分页期间反向滚动仍保持位置，变化不超过 2 px。3→5 条自动合并；3→120 条缺口自动补一页到可滚动后停止；可视区域变大时恢复跟随。保留 1,250 条仍只做一次重连读取。已检查页面身份、内容、截图，无控制台/页面错误。
-- 截图：`C:/Users/bluew/AppData/Local/Temp/hhwx-chat-simple-reading/`；可运行夹具：`tests/chat-reading.browser.mjs`。图片解码/编码结果仍为 1000×12000 不变、4095×4096 和 963×16383。
+- 截图：`<temp>/hhwx-chat-simple-reading/`；可运行夹具：`tests/chat-reading.browser.mjs`。图片解码/编码结果仍为 1000×12000 不变、4095×4096 和 963×16383。
 
 未进行真机手机、Safari/Firefox、持续大量图片内存或生产 Auth/TLS 验证。发布时先应用修订后的未发布迁移，再发布应用；回退保留数据和放宽后的图片约束。
 
@@ -175,8 +175,8 @@ English version: [realtime-message-board-validation.md](realtime-message-board-v
 
 - `npm run test:chat`：**94/94 通过**。覆盖 1,001 条实时消息、1,200 条待显示消息、完整保留 780 条逐页下读记录、2,200 个保留 ID 按 1000/1000/200 分批核对、批次期间的删除/创建事件、取消时不提交部分结果，以及 1,202 张本地预览保留至关闭后释放。
 - 类型检查、受影响文件 ESLint、Node 24 的 `next build --webpack` 通过。SQL、同步接口的单次请求保护和图片约束未改变；沿用下文已有的临时 PostgreSQL 验证，不声称本轮重新执行。此前的本地 Turbopack 失败仍未在默认 Linux 构建路径核验。
-- `tests/chat-reading.browser.mjs` 使用真实对话框、会话和主题，配合合成传输/消息通过验证。桌面和手机布局加载 **1,250** 条后，重连按 1000/250 个 ID 核对并全部保留。上下两个方向的延迟响应都能在用户突然反向滚动后正常补入，当前消息位置变化不超过 2 CSS px。英文浅色、中文深色的重连用例位置变化为 0 px。没有未捕获页面异常。截图：`C:/Users/bluew/AppData/Local/Temp/hhwx-chat-reading-no-cap/`。
-- 改动后复查仍复现三项行为：最新缓存的 50 条全部删除后，显式跳转显示空列表，数据库仍有 150 条；3→5 条且不足一屏的重连仍依赖额外加入的“继续读取”按钮；可视区域从 390×400 变为 390×900、露出最新底部后没有恢复跟随，下一条消息仍留在待显示区。这些只记录为后续设计/修复项，没有擅自纳入本次取消上限。证据：`C:/Users/bluew/AppData/Local/Temp/hhwx-chat-no-cap-review.mjs` 及相邻截图。
+- `tests/chat-reading.browser.mjs` 使用真实对话框、会话和主题，配合合成传输/消息通过验证。桌面和手机布局加载 **1,250** 条后，重连按 1000/250 个 ID 核对并全部保留。上下两个方向的延迟响应都能在用户突然反向滚动后正常补入，当前消息位置变化不超过 2 CSS px。英文浅色、中文深色的重连用例位置变化为 0 px。没有未捕获页面异常。截图：`<temp>/hhwx-chat-reading-no-cap/`。
+- 改动后复查仍复现三项行为：最新缓存的 50 条全部删除后，显式跳转显示空列表，数据库仍有 150 条；3→5 条且不足一屏的重连仍依赖额外加入的“继续读取”按钮；可视区域从 390×400 变为 390×900、露出最新底部后没有恢复跟随，下一条消息仍留在待显示区。这些只记录为后续设计/修复项，没有擅自纳入本次取消上限。证据：`<temp>/hhwx-chat-no-cap-review.mjs` 及相邻截图。
 
 没有生产发布、远端数据库修改、真机手机验证或持续大量图片的内存基准。
 
@@ -295,7 +295,7 @@ English version: [realtime-message-board-validation.md](realtime-message-board-v
 - Browser 插件不可用，使用内置 Playwright 和已安装 Chrome。两个独立登录的浏览器上下文（1280×900 发送端、390×844 接收端）实际操作选择器 → HTTP 路由 → RPC → Centrifugo → 接收端浮层，聊天请求无模拟。自身回显不重复、草稿不变、同用户替换、五个上限/第六人挤出、边界约束均通过。冷资源时名字保留，预热后动态媒体产生不同帧且不延长效果生命周期。普通语音 408 显示标识，变体 255 不显示，均播放真实语音；公共音效也实际播放。
 - CDN 检查发现并修复名字底板预加载与 CSS 遮罩的跨域模式不一致；预加载现使用匿名 CORS。通用遮罩解码前先显示同色圆角底板，保证名字可读。最后的媒体检查无控制台/网络错误；这些证据与此前本地文件预览分开记录。
 - R2 `cdn` 桶只新增两个对象：`bandori/resources/atlases/menu-atlas/label_round_white.png`（716 字节）、`bandori/resources/audio/common/SE_UI_STUMP.wav`（79,916 字节）；声音标识复用原对象。私有读回核对原始 hash、MIME 和一年 immutable 缓存头，浏览器实际读取三个公开 CDN 地址均成功。没有上传公开报告/manifest。Builder 固定资源及音效测试 12 项通过。
-- 证据：`C:/Users/bluew/AppData/Local/Temp/hhwx-chat-stamp-integration/`（`result.json`、`media.json`、截图）。临时联调账号已删除，本地预览服务保留；没有部署网站或远端 SQL。实体手机、移动端音频/自动播放行为、生产 TLS/部署未实测。房间限速明确以一个 Next.js 发布进程为适用条件。
+- 证据：`<temp>/hhwx-chat-stamp-integration/`（`result.json`、`media.json`、截图）。临时联调账号已删除，本地预览服务保留；没有部署网站或远端 SQL。实体手机、移动端音频/自动播放行为、生产 TLS/部署未实测。房间限速明确以一个 Next.js 发布进程为适用条件。
 
 ## 2026-10-24 七项审计问题修复
 
@@ -306,7 +306,7 @@ English version: [realtime-message-board-validation.md](realtime-message-board-v
 - 在全新隔离的 PostgreSQL 17.6 数据库 `hhwx-chat-verify-audit-20261024` 回放全部 37 份迁移。执行与 CI 相同的五文件 SQL 命令，账号及聊天共 **37 项 TAP 测试通过**。`npm run test:chat:postgres` 配合真实 Centrifugo 6.9.7 也通过：并发限额/去重、禁言锁、回滚、创建/删除广播失败后重连恢复、禁止旧回放恢复删除消息及服务重启。Auth 为模拟身份，RPC 通过 psql；脚本检查广播结果时会等待已安排的响应后回调。这不代表托管 Auth 全链路或生产部署已验证。
 - Browser 插件不可用，使用内置 Playwright 和已安装 Chrome，在 `http://localhost:3000` 检查真实本地 UI/Worker/Auth。1280×900、390×844 下，关闭重开均保留文字草稿和同一图片 Blob 地址，没有新增上传。另一标签页登出后，聊天入口消失，草稿地址释放。每次打开/重开各请求一份连接信息和一页历史，无页面异常；已查看截图。
 - 通过六页历史加载 300 条已保存消息后，React 渲染计数显示：**输入一次文字时，`ChatMessageBubble` 渲染 0 次**，输入组件正常更新；计数器先确认初次渲染了全部 300 个气泡。此结果证明渲染隔离，不是设备延迟或内存基准测试。
-- 原有批次发送、复制、保存、重试及查看器浏览器检查在桌面/手机/短视口再次通过。JPEG/PNG/WebP/GIF/APNG 保存字节保持一致；两次刻意制造的 HTTP 503 覆盖失败重试。证据位于 `C:/Users/bluew/AppData/Local/Temp/hhwx-chat-audit-fixes/` 和 `hhwx-chat-native-viewer-qa/`。浏览器检查中的业务写入、上传和 CDN 响应使用受控夹具；实体手机相册行为和真实 R2 CORS/PUT 约束仍未验证。
+- 原有批次发送、复制、保存、重试及查看器浏览器检查在桌面/手机/短视口再次通过。JPEG/PNG/WebP/GIF/APNG 保存字节保持一致；两次刻意制造的 HTTP 503 覆盖失败重试。证据位于 `<temp>/hhwx-chat-audit-fixes/` 和 `hhwx-chat-native-viewer-qa/`。浏览器检查中的业务写入、上传和 CDN 响应使用受控夹具；实体手机相册行为和真实 R2 CORS/PUT 约束仍未验证。
 - CI 已在既有应用任务中运行 `npm run test:chat`，在既有数据库任务中加入两份聊天 SQL。对应本地命令已通过，没有声称远端 CI 或部署已运行。验证后停止隔离测试数据库，保留原有预览。
 
 ## 2026-10-24 原生图片菜单与失败图片查看
@@ -314,35 +314,35 @@ English version: [realtime-message-board-validation.md](realtime-message-board-v
 - 待发送/失败图片复用共用查看器和本地 Blob。查看器允许原生图片菜单，触屏捕获留在图片上，鼠标真正拖动后再捕获；点击图片或拖动结束不关闭，仍可用背景、关闭按钮和 Esc 关闭。共用卡面查看器的中英文操作说明同步更新。
 - `npm run test:chat`：50 项通过。新增可运行手势检查覆盖原生菜单事件不被阻止、点击图片/菜单关闭后保持打开、背景关闭、鼠标延迟捕获、拖动结束、双指缩放及监听清理。Typecheck、定向 ESLint、i18n 和生产构建通过，沿用下文的本地构建配置。
 - Browser 插件不可用，使用内置 Playwright 和已安装 Chrome 访问 `http://localhost:3000`，桌面 1280×900、手机视口 390×844，并保留原有 390×420 批次检查。失败图片打开真实本地 Blob；右键事件落在 IMG 上，没有阻止默认行为，也不弹聊天菜单。滚轮缩放/鼠标拖动、模拟触屏长按/双指缩放通过；背景、按钮、Esc 关闭可回到聊天并保留草稿，按钮关闭后焦点回到原图片。查看大图不产生业务请求。原有保存/复制/重试/删除回归通过；已查看截图，无未捕获异常或框架错误覆盖层，仅有两次刻意制造的 HTTP 503。
-- 证据：`C:/Users/bluew/AppData/Local/Temp/hhwx-chat-native-viewer-qa/`。Chrome 触屏模拟的长按未产生原生菜单事件，因此只证明长按后查看器保持打开、双指缩放正常，不代表实际手机保存菜单已弹出。静态检查确认大图允许 WebKit 原生菜单、未阻止 contextmenu。实体 iOS/Android 的保存到相册及原生菜单取消行为仍未实测，不声称已在手机相册中完成保存。
+- 证据：`<temp>/hhwx-chat-native-viewer-qa/`。Chrome 触屏模拟的长按未产生原生菜单事件，因此只证明长按后查看器保持打开、双指缩放正常，不代表实际手机保存菜单已弹出。静态检查确认大图允许 WebKit 原生菜单、未阻止 contextmenu。实体 iOS/Android 的保存到相册及原生菜单取消行为仍未实测，不声称已在手机相册中完成保存。
 
 ## 2026-10-24 系统保存窗口修正
 
 - “另存为”现于菜单选择事件内同步调用 `showSaveFilePicker`，先打开选择器再读取图片。选定文件后写入原始字节；取消不产生图片请求或下载。不支持的浏览器保留普通下载。此修改修正前一版只有下载的行为，不包含手机相册访问能力。
 - `npm run test:chat`：47 项通过，覆盖调用顺序、取消/拒绝不降级下载、读取失败不打开可写文件流、写入失败中止。Typecheck、定向 ESLint 和生产构建通过，沿用下文的本地构建配置。
 - Browser 插件不可用，使用已安装 Chrome 和内置 Playwright，在下文桌面与手机视口验证真实本地菜单。选择器夹具返回真实浏览器 OPFS 文件句柄，七种原格式场景写入后均逐字节一致，且调用时仍有用户操作激活状态。每次取消均未产生远端图片请求或下载；不支持选择器的路径通过七次实际浏览器下载。原有复制粘贴、重试/删除、键盘/模拟触屏检查也通过；已查看截图，无未捕获异常或框架错误覆盖层，仅有两次刻意制造的 HTTP 503。
-- 证据：`C:/Users/bluew/AppData/Local/Temp/hhwx-chat-save-picker-qa/`。浏览器自动化替换了选择器边界，验证的是实际菜单、用户激活、文件写入和取消流程，不代表实测了操作系统原生保存窗口的外观或操作。未验证实体 iOS/Android 相册、Safari 或真实 R2。
+- 证据：`<temp>/hhwx-chat-save-picker-qa/`。浏览器自动化替换了选择器边界，验证的是实际菜单、用户激活、文件写入和取消流程，不代表实测了操作系统原生保存窗口的外观或操作。未验证实体 iOS/Android 相册、Safari 或真实 R2。
 
 ## 2026-10-24 图片原格式下载与删除文案
 
 - 图片菜单现为“复制、另存为…、删除”，失败消息也统一使用“删除”。复制逻辑不变。目前“另存为”触发浏览器下载：复用本地 Blob 地址，或获取 CDN 原文件字节，不重新编码。是否出现位置选择窗口由浏览器设置决定；当前实现没有主动调用系统保存选择器。
 - `npm run test:chat`：44 项通过；typecheck、定向 ESLint、i18n 和生产构建通过。构建使用本地夹具 Supabase 配置并关闭聊天。本轮没有依赖、服务端、数据库或远端存储改动。
 - 已安装 Chrome 在 `http://localhost:3000` 完成七种实际下载验证，均与原文件逐字节一致：本地 PNG/GIF，以及已发送 JPEG、静态 WebP、动态 GIF/WebP 和 APNG。本地保存不产生业务请求，预览地址仍可使用。PNG/JPEG/WebP 复制粘贴、逐条重试/删除、右键、Shift+F10 和模拟触屏长按也通过。
-- 已查看桌面 1280×900 和手机视口 390×844 / 390×420 截图。无未捕获页面异常或框架错误覆盖层；两次刻意产生的 HTTP 503 用于验证失败路径。图片写入和 CDN 响应使用受控夹具，非真实 R2。证据位于 `C:/Users/bluew/AppData/Local/Temp/hhwx-chat-save-qa/`。未验证系统原生保存窗口、Safari 或物理触屏；下载成功不代表会弹出保存窗口。
+- 已查看桌面 1280×900 和手机视口 390×844 / 390×420 截图。无未捕获页面异常或框架错误覆盖层；两次刻意产生的 HTTP 503 用于验证失败路径。图片写入和 CDN 响应使用受控夹具，非真实 R2。证据位于 `<temp>/hhwx-chat-save-qa/`。未验证系统原生保存窗口、Safari 或物理触屏；下载成功不代表会弹出保存窗口。
 
 ## 2026-10-24 复制回归修复
 
 - 撤掉原文件 MIME 支持检查、“不支持格式”状态和自定义另存为下载器。恢复图片复制及简单的“复制”文案，保留已发送/失败消息原有菜单，成功后静默关闭，输入区不再提示或跳动。
 - `npm run test:chat`：42 项通过；类型检查、相关 ESLint、多语言检查和生产构建通过。剪贴板 PNG 表示不改变源文件或上传文件；不改依赖、服务端或数据库。
 - Browser 插件不可用，使用内置 Playwright 和本机 Chrome，在 `http://localhost:3000` 验证桌面 1280×900、移动尺寸 390×844 / 390×420。PNG、JPEG、WebP 实际写入剪贴板并按 Ctrl+V 粘贴成图片均通过。失败图片本地复制不发起业务请求；失败文字复制、权限失败后重试、右键、模拟触控长按、Shift+F10 和本地移除通过，输入框位置不变，原有多图/重试检查也通过。
-- 已检查截图，没有未捕获页面异常或框架错误浮层；唯一控制台错误是故意制造的 HTTP 503。图片/文字写入及 CDN 读取使用受控响应，未操作线上 R2。证据：`C:/Users/bluew/AppData/Local/Temp/hhwx-chat-copy-restored-qa/`。本轮未测试实体触屏、Safari 或操作系统原生另存为。
+- 已检查截图，没有未捕获页面异常或框架错误浮层；唯一控制台错误是故意制造的 HTTP 503。图片/文字写入及 CDN 读取使用受控响应，未操作线上 R2。证据：`<temp>/hhwx-chat-copy-restored-qa/`。本轮未测试实体触屏、Safari 或操作系统原生另存为。
 
 ## 2026-10-24 多图草稿与失败重试展示
 
 - 输入区现支持累计十个选中/粘贴文件，提示超出名额的文件名，逐张处理，并通过同一个按钮按图片、最后文字的顺序提交。预览移除按钮悬浮在右上角。失败内容各自保留红色圆形感叹号重试；待发送文字同样支持菜单移除。重试不会连带恢复其他失败条目。
 - `npm run test:chat`：40 项通过，新增覆盖批次顺序、之后单独发送文字、已成功部分保留、逐条重试/移除、复用上传文件、十文件上限、拒绝提交时保留草稿、额度耗尽停止请求，以及广播确认先于丢失的 HTTP 响应。Typecheck、定向 ESLint、i18n 和生产构建通过。本轮不改服务端接口、数据库 schema 或存储策略，沿用前次 SQL/存储验证及其边界。
 - Browser 插件不可用，使用内置 Playwright 和已安装 Chrome 访问现有 `http://localhost:3000` 预览，桌面 1280×900、手机视口 390×844 / 390×420。使用真实本地 Auth、页面和 Worker；消息写入、图片上传/完成及 CDN 响应使用受控夹具。实际 ClipboardItem＋Ctrl+V 可追加图片，并在光标处插入随附文字。选择十一张只保留十张并提示未添加文件，选择/移除草稿不产生上传请求。图片依次保存后发送文字、上传期间继续输入发送、失败后逐条重试、保存重试不再 PUT、键盘提示/重试/菜单及移除处理中图片均通过。
-- 已查看草稿布局、短视口、失败图标及深色模式截图，无溢出、框架错误覆盖层或未捕获页面异常；只出现为验证失败路径而刻意产生的一次 HTTP 503。证据位于 `C:/Users/bluew/AppData/Local/Temp/hhwx-chat-batch-qa/`。未声称验证真实 R2、物理触屏/长按或 Safari。
+- 已查看草稿布局、短视口、失败图标及深色模式截图，无溢出、框架错误覆盖层或未捕获页面异常；只出现为验证失败路径而刻意产生的一次 HTTP 503。证据位于 `<temp>/hhwx-chat-batch-qa/`。未声称验证真实 R2、物理触屏/长按或 Safari。
 
 ## 2026-10-24 图片消息
 
@@ -351,7 +351,7 @@ English version: [realtime-message-board-validation.md](realtime-message-board-v
 - 在全新隔离的 `hhwx-chat-verify-images-20261024` PostgreSQL 17.6 栈回放全部 37 份迁移，13 个 SQL 文件、123 项 TAP 检查全部通过。图片 SQL 检查覆盖共用消息额度、独立上传额度、禁言、UUID 去重/冲突、删除、历史图片元数据、字段约束及仅服务端访问。本地安全/性能 Advisors 没有报告问题。
 - 原有 `test:chat:postgres` 在该栈和 Centrifugo 6.9.7 上通过，覆盖并发限额/去重、禁言锁、回滚、广播失败、重连恢复和重启。使用真实 PostgreSQL/Centrifugo、夹具 Auth 和 psql RPC 传输，不构成图片到 R2 的实际集成验证，也不是新的性能基准。
 - Playwright 使用已安装 Chrome，在 `http://localhost:3000` 验证真实 Next.js UI 和图片 Worker，桌面 1280×900、手机视口 390×844。图片上传、完成和 CDN 请求使用受控测试响应。覆盖预览/查看器、发布失败后重试（一次 PUT、两次完成请求）、长图超过 3 倍缩放、5000 px 静态图缩小、实际双帧 GIF/WebP/APNG 保持原字节、超限动图拒绝、左右展示、评论区同款 UID、深色模式、右键菜单及键盘关闭。已查看截图，没有未捕获页面异常或视口溢出；不代表真实触屏或 Safari 已验证。
-- 浏览器证据位于 `C:/Users/bluew/AppData/Local/Temp/hhwx-chat-images-qa/`，包括 `result.json`、`desktop-images.png`、`mobile-images.png`、`desktop-dark.png` 及预览/缩放截图。迁移也已应用到原有本地预览，保留账号和消息；单独验证栈及其临时数据卷已清理，预览继续运行。
+- 浏览器证据位于 `<temp>/hhwx-chat-images-qa/`，包括 `result.json`、`desktop-images.png`、`mobile-images.png`、`desktop-dark.png` 及预览/缩放截图。迁移也已应用到原有本地预览，保留账号和消息；单独验证栈及其临时数据卷已清理，预览继续运行。
 - 本轮没有执行远端 Supabase 迁移、R2 上传或桶配置。真实桶仍需按文档配置凭据、CORS 和 31 天前缀生命周期，再验证浏览器 PUT、签名、禁止覆盖及 CDN 响应头。HEAD 核对存储大小、类型和缓存元数据，不解码图片像素。详见[图片接入与上线说明](realtime-message-board.zh-CN.md)。
 
 ## 2026-10-24 前端和表情
@@ -362,7 +362,7 @@ English version: [realtime-message-board-validation.md](realtime-message-board-v
 - 浏览器使用临时本地预览：桌面 1280 × 900 / 1280 × 720，手机 390 × 844 浅色/深色，以及五行草稿下的 390 × 420 短视口。右键/Shift+F10、Esc 关闭菜单、取消删除确认和焦点恢复通过。Context Menu 2.3.7 与 Dialog 1.1.23 共用焦点/关闭依赖。UI 验证没有实际删除已有用户消息。
 - 文字/表情发送、断网失败和手动重试均保留新草稿。打开/选择/关闭表情及打开/关闭加号未产生聊天 API 请求；重新打开为一次连接 POST 和一次历史 GET。增加有限历史窗口回归：加载旧页导致最新内容移出窗口后，仍可回到最新。
 - `test:chat` 28 项、`test:comments` 45 项通过；typecheck、定向 ESLint、i18n 和最终生产构建通过。全量 lint 零错误、21 条其他文件警告；生产依赖审计零漏洞。最终浏览器检查在刷新后无新警告/错误；此前人为断网错误及编辑期间的 Fast Refresh 警告单独记录。
-- 对照和迭代证据见本地项目根目录 `design-qa.md`，截图位于 `C:/Users/bluew/.codex/generated_images/chat-design-20261024/`。尚未使用真实触屏验证长按或软件键盘；已检查 Radix 标准实现并验证短视口几何布局。本轮不是生产发布，也不构成新的负载基准。
+- 视觉对照见[历史前端评审](https://github.com/BluewaterAlnilamII/hhwx/blob/ed8b72a21c25986c5becf50daad5c3b402c7cd74/design-qa.md#chat-frontend-2026-10-24)。尚未使用真实触屏验证长按或软件键盘；已检查 Radix 标准实现并验证短视口几何布局。本轮不是生产发布，也不构成新的负载基准。
 
 ## 2026-10-24 发送规则及查询精简
 
