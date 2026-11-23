@@ -5,6 +5,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { ChevronUp, History, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { getBandoriServerTimeZone, type BandoriServer } from "@/lib/bandori-server";
+import { groupedIntegerInputProps } from "@/lib/grouped-integer-input";
 import { cn } from "@/lib/utils";
 import { CALCULATOR_FIELD_DEFAULTS, CP_COSTS, FLAME_COSTS, getPlayDurationParts, type CalculatorDraft, type EventPtResult } from "./event-pt-calculator";
 
@@ -19,7 +20,6 @@ const desktopSnapshot = () => window.matchMedia(CALCULATOR_DESKTOP_QUERY).matche
 const serverSnapshot = () => false;
 const controlClass = "event-calculator-control hhwx-control min-w-0 w-full rounded-lg border tabular-nums";
 const iconClass = "hhwx-control inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border xl:h-8 xl:w-8 xl:[&>svg]:size-4";
-const formatIntegerInput = (value: string) => /^\d+$/.test(value) ? value.replace(/\B(?=(\d{3})+(?!\d))/g, ",") : value;
 
 type Props = {
   open: boolean;
@@ -110,34 +110,14 @@ export function EventPtCalculator({ open, visible, autoFocus, draft, baselineAt,
       <label htmlFor={`${id}-${key}`} id={`${id}-${key}-label`} className={options.hideLabel ? "sr-only" : undefined}>{label}</label>
       <span className="event-calculator-input-row">
         <span className="event-calculator-control-wrap">
-        <input id={`${id}-${key}`} name={key} type={integer ? "text" : "number"} inputMode={integer ? "numeric" : "decimal"}
-          className={controlClass} value={integer ? formatIntegerInput(value) : value} min={options.min ?? 0} step={options.step ?? 1}
+        <input id={`${id}-${key}`} name={key}
+          {...(integer ? groupedIntegerInputProps(value, raw => onChange(key, raw)) : {
+            type: "number", inputMode: "decimal", value, onChange: event => onChange(key, event.currentTarget.value),
+          })}
+          className={controlClass} min={options.min ?? 0} step={options.step ?? 1}
           placeholder={options.placeholder ?? CALCULATOR_FIELD_DEFAULTS[key]}
           aria-describedby={invalid ? `${id}-${key}-error` : undefined}
-          aria-labelledby={`${id}-${key}-label`} aria-invalid={invalid || undefined}
-          onKeyDown={event => {
-            if (!integer || event.altKey || event.ctrlKey || event.metaKey) return;
-            const input = event.currentTarget;
-            const start = input.selectionStart;
-            if (start === null || start !== input.selectionEnd) return;
-            if (event.key === "Backspace" && input.value[start - 1] === ",") input.setSelectionRange(start - 1, start - 1);
-            if (event.key === "Delete" && input.value[start] === ",") input.setSelectionRange(start + 1, start + 1);
-          }}
-          onChange={event => {
-            const input = event.currentTarget;
-            if (!integer) { onChange(key, input.value); return; }
-            const raw = input.value.replace(/,/g, "");
-            let remaining = input.value.slice(0, input.selectionStart ?? input.value.length).replace(/,/g, "").length;
-            const formatted = formatIntegerInput(raw);
-            let cursor = 0;
-            while (remaining > 0 && cursor < formatted.length) {
-              if (formatted[cursor] !== ",") remaining--;
-              cursor++;
-            }
-            input.value = formatted;
-            input.setSelectionRange(cursor, cursor);
-            onChange(key, raw);
-          }} />
+          aria-labelledby={`${id}-${key}-label`} aria-invalid={invalid || undefined} />
         </span>
         {options.unit ? <span className="event-calculator-unit shrink-0 font-normal">{options.unit}</span> : null}
       </span>

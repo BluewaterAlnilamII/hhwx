@@ -138,6 +138,8 @@ export function buildSingleSearchInput(source: {
         sameAttribute: value.conditionSatisfied ? attribute : null },
       server: roster.profile.server, path: `otherPlayerSkills[${i}]` });
   }) as SingleSearchInputV1["otherSkills"] : null;
+  const averagePower = multi ? Math.trunc(nonnegative(settings.otherPlayersAveragePower ?? settings.roomPower, "otherPlayersAveragePower")) : 0;
+  if (averagePower > 0xffff_ffff) failInput("INVALID_PARAMETER", "otherPlayersAveragePower", "one player's deck power must fit uint32");
   const input: SingleSearchInputV1 = {
     schemaVersion: SINGLE_SEARCH_INPUT_VERSION, scoringRulesVersion: SINGLE_SCORING_RULES_VERSION,
     perfectRate: parsePerfectRatePercent(source.perfectRatePercentText),
@@ -149,7 +151,7 @@ export function buildSingleSearchInput(source: {
     missionSupport: settings.eventType === "mission_live" && settings.target === "eventPoint",
     eventRule: eventRule(settings), target: settings.target === "eventPoint" ? "event_point" : "score", otherSkills,
     encoreActor: multi && settings.encoreSkillSource?.startsWith("other") ? Number(settings.encoreSkillSource.slice(5)) : 0,
-    otherPlayersPower: multi ? 4 * Math.trunc(nonnegative(settings.otherPlayersAveragePower ?? settings.roomPower, "otherPlayersAveragePower")) : 0,
+    otherPlayersPower: 4 * averagePower,
     minLeaderScoreUpPercent: nonnegative(settings.constraints?.minLeaderScoreUpPercent, "minLeaderScoreUpPercent"),
     minTotalPower: nonnegative(settings.constraints?.minTotalPower, "minTotalPower"),
     resultLimit: Math.min(50, Math.max(1, Math.trunc(nonnegative(settings.resultLimit, "resultLimit", 10)))),

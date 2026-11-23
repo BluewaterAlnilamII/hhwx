@@ -42,10 +42,8 @@ impl SingleEventRuleV1 {
                 divisor,
                 formula,
             } => {
-                base.is_finite()
-                    && base >= 0.0
-                    && divisor.is_finite()
-                    && divisor > 0.0
+                (0.0..=f64::from(u32::MAX)).contains(&base)
+                    && (1.0..=f64::from(u32::MAX)).contains(&divisor)
                     && formula <= 2
             }
             _ => true,
@@ -128,6 +126,22 @@ impl SingleEventRuleV1 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn divisor_lower_limit_applies_to_the_decoded_value() {
+        let rule = |divisor| SingleEventRuleV1::Normal {
+            base: 50.0,
+            divisor,
+            formula: 2,
+        };
+        assert!(!rule(1.0_f64.next_down()).valid());
+        assert!(rule(1.0).valid());
+        let json = r#"{"kind":"normal","base":50,"divisor":0.9999999999999999,"formula":2}"#;
+        assert_eq!(
+            serde_json::from_str::<SingleEventRuleV1>(json).unwrap(),
+            rule(1.0)
+        );
+    }
 
     // Cumulative endpoints give a separate reference for the production
     // remaining-cap loop, including its two distinct floor operations.

@@ -1148,11 +1148,21 @@
       "running": "Calculating",
       "stillProving": "Still proving whether a higher-scoring team exists",
       "completedElapsed": "Completed: {elapsed}",
-      "boundedStop": "Exact global optimum proof did not complete; stopped early: {reason}",
+      "noMatchingTeam": "No matching team",
+      "stoppedWithoutTeams": "{reason}. No team found yet.",
+      "stoppedWithTeams": "{reason}. Showing the best team found so far.",
+      "stopReasons": {
+        "timeLimit": "Search timed out",
+        "memoryLimit": "Memory limit reached",
+        "cancelled": "Search canceled",
+        "overflow": "Value out of range",
+        "invalidData": "Invalid input",
+        "calculationFailed": "Calculation failed",
+        "stopped": "Search stopped"
+      },
       "timeToBest": "Found current best team in {elapsed}",
       "proofElapsed": "Extra proof/convergence time {elapsed}",
       "hasMaxScoreCandidate": "A separate highest max-score result exists outside the highest average-score result",
-      "fallbackBounded": "The search space is not fully proven; returning the current best result",
       "configurationProgress": "Configuration proof progress {closed}/{total}; started {started}/{total}{traceLabel}",
       "firstUnclosedTrace": "; first unfinished configuration: {trace}",
       "unknownCompletion": "Completion status not recorded",
@@ -1182,12 +1192,8 @@
         "dfsTimeout": "DFS proof reached the time limit"
       },
       "reasonParts": {
-        "memoryLimit": "Memory guard limit reached{limitLabel}",
-        "timeLimit": "Time limit reached{limitLabel}",
         "candidateJoinIncomplete": "Candidate join incomplete: {reason}"
       },
-      "limitLabel": " (limit {limit})",
-      "upperLimitLabel": " (limit {limit})",
       "candidateSoftLimitLabel": " (limit {limit}{generatedLabel})",
       "generatedLabel": ", generated {count}"
     },
@@ -1217,8 +1223,7 @@
       "medleyChartDataInvalid": "Song {index} chart data format is invalid",
       "dataInconsistent": "Calculation data is incomplete after refresh: {details}",
       "preloadFailed": "Failed to prepare data",
-      "calculateFailed": "Calculation failed",
-      "profileDataInvalid": "Profile data is invalid; try syncing or updating the profile"
+      "calculateFailed": "Calculation failed"
     },
     "errors": {
       "notSignedIn": "Please log in first",
@@ -1236,6 +1241,20 @@
       "profileNotReady": "Profile is not ready yet",
       "invalidWorkerResponse": "Calculation worker response format is invalid",
       "invalidTimeLimit": "Enter a whole-number time limit from {min} to {max} seconds",
+      "invalidThreshold": "Enter a valid nonnegative integer",
+      "chartNoteLimit": "Charts support up to 16,384 scoring notes",
+      "invalidNoteTime": "Note time is out of range",
+      "invalidRoomPower": "Other players’ power is out of range",
+      "invalidSkillDuration": "Skill duration is out of range",
+      "scoreRangeExceeded": "Estimated score is out of range",
+      "invalidPointBonus": "Event Pt bonus is out of range",
+      "invalidSupportPower": "Support power is out of range",
+      "invalidEventRule": "Invalid event scoring settings",
+      "invalidProfile": "Invalid profile data. Sync the profile again.",
+      "invalidPerfectRate": "Invalid PERFECT rate",
+      "invalidChart": "Invalid chart data",
+      "invalidSkill": "Invalid skill data",
+      "invalidSearchInput": "Invalid search input",
       "calculateFailed": "Calculation failed"
     },
     "preferences": {

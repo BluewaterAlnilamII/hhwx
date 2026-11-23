@@ -8,7 +8,7 @@ use crate::candidate::{member_order_for_leader, resolved_skill};
 use crate::exact_score::{PreparedSong, exact_probability_to_f64};
 use crate::parameters::{TeamParameterTrace, calculate_team_parameters};
 use crate::single_event::SingleEventRuleV1;
-use crate::single_score::{SingleScoreDetailsV1, SingleWindows};
+use crate::single_score::{SingleScoreDetailsV1, SingleWindows, max_skill_percent};
 use crate::single_upper::{SingleUpper, SingleUpperShared};
 use crate::{
     AreaItemConfigurationV1, SearchAreaItemV1, SearchCardV1, SearchControl, SearchError,
@@ -74,6 +74,14 @@ impl SingleSearchInputV1 {
             &self.area_items,
             &self.area_configurations,
         )?;
+        // Cooperative rates add signed window contributions to a grouped base sum.
+        // Limit accumulation error on long charts with nearly cancelling terms.
+        if self.song.notes.len() > 16_384 {
+            return Err(invalid(
+                "song.notes",
+                "a single-song chart may contain at most 16384 scoring notes",
+            ));
+        }
         crate::validation::validate_song(&self.song, 0)?;
         if self.fever.len() != self.song.notes.len()
             || self.point_bonus_rates.len() != self.cards.len()
@@ -84,21 +92,44 @@ impl SingleSearchInputV1 {
                 "parallel arrays must match their source lengths",
             ));
         }
-        if self
-            .point_bonus_rates
+        let scalar_limit = f64::from(u32::MAX);
+        for (path, values, limit) in [
+            (
+                "pointBonusRates",
+                self.point_bonus_rates.as_slice(),
+                10.0, // normalized rate: 10 means a 1,000% bonus on one card
+            ),
+            (
+                "supportPowers",
+                self.support_powers.as_slice(),
+                scalar_limit,
+            ),
+            (
+                "otherPlayersPower",
+                std::slice::from_ref(&self.other_players_power),
+                4.0 * scalar_limit,
+            ),
+        ] {
+            if values.iter().any(|v| !(0.0..=limit).contains(v)) {
+                return Err(invalid(
+                    path,
+                    &format!("values must be between 0 and {limit}"),
+                ));
+            }
+        }
+        if !self.event_rule.valid() {
+            return Err(invalid(
+                "eventRule",
+                "expected formula 0..2, base 0..4294967295 and divisor 1..4294967295",
+            ));
+        }
+        if [self.min_total_power, self.min_leader_score_up_percent]
             .iter()
-            .chain(&self.support_powers)
-            .chain([
-                &self.other_players_power,
-                &self.min_total_power,
-                &self.min_leader_score_up_percent,
-            ])
             .any(|x| !x.is_finite() || *x < 0.0)
-            || !self.event_rule.valid()
         {
             return Err(invalid(
                 "parameters",
-                "values must be finite and non-negative; event divisor must be positive",
+                "minimums must be finite and non-negative",
             ));
         }
         if !(1..=50).contains(&self.result_limit)
@@ -116,7 +147,82 @@ impl SingleSearchInputV1 {
                 crate::validation::validate_skill(skill, &format!("otherSkills[{i}]"))?;
             }
         }
+        // At this scale adding the 0.75s wait always advances the clock,
+        // even after all six skill durations have accumulated.
+        if let Some(note) = self
+            .song
+            .notes
+            .last()
+            .filter(|n| n.time_seconds > scalar_limit)
+        {
+            return Err(invalid(
+                &format!("song.notes[{}].timeSeconds", note.note_id),
+                "note times must be at most 4294967295 seconds",
+            ));
+        }
+        if self
+            .cards
+            .iter()
+            .map(|c| &c.skill_contexts.mixed)
+            .chain(self.other_skills.iter().flatten())
+            .any(|s| s.duration_seconds > scalar_limit)
+        {
+            return Err(invalid(
+                "durationSeconds",
+                "skill durations must be at most 4294967295 seconds",
+            ));
+        }
+        if !self.within_score_range() {
+            return Err(invalid(
+                "scoreRange",
+                "the estimated maximum single-song score exceeds 2^43",
+            ));
+        }
         Ok(())
+    }
+
+    fn within_score_range(&self) -> bool {
+        let item_rate = self
+            .area_items
+            .iter()
+            .flat_map(|item| item.parameter_rates)
+            .fold(0.0, f64::max);
+        let slots = self
+            .area_configurations
+            .iter()
+            .map(|config| config.selected_area_item_ids.len())
+            .max()
+            .unwrap_or(0);
+        let area_factor = 1.0 + item_rate * slots as f64;
+        let mut card_power = 0.0_f64;
+        let mut skill_percent = 0.0_f64;
+        for card in &self.cards {
+            let power = card.character_parameter.iter().sum::<f64>() * area_factor
+                + card.event_parameter.iter().sum::<f64>();
+            if !power.is_finite() {
+                return false;
+            }
+            card_power = card_power.max(power);
+            let skills = card.skill_contexts;
+            for skill in [
+                skills.mixed,
+                skills.same_band,
+                skills.same_attribute,
+                skills.same_band_and_attribute,
+            ] {
+                skill_percent = skill_percent.max(max_skill_percent(skill));
+            }
+        }
+        for skill in self.other_skills.iter().flatten() {
+            skill_percent = skill_percent.max(max_skill_percent(*skill));
+        }
+        let power = (5.0 * card_power + self.other_players_power).max(1.0);
+        let level_factor = 3.0 + 0.03 * (f64::from(self.song.play_level) - 5.0);
+        // A chart's note count cancels its per-note divisor. 32 exceeds
+        // 7 (base + six windows) * 1.11 (combo) * 1.1 (judgment) * 2 (Fever),
+        // leaving room for binary64 rounding.
+        let budget = power * level_factor * (1.0 + skill_percent / 100.0) * 32.0;
+        budget <= (1_u64 << 43) as f64
     }
 }
 
@@ -219,7 +325,8 @@ fn support_selection(input: &SingleSearchInputV1, members: [u32; 5]) -> (f64, Ve
     let mut candidates: Vec<u32> = by_character.into_values().collect();
     candidates.sort_unstable_by(|a, b| {
         input.support_powers[*b as usize]
-            .total_cmp(&input.support_powers[*a as usize])
+            .partial_cmp(&input.support_powers[*a as usize])
+            .expect("validated support powers are finite")
             .then_with(|| a.cmp(b))
     });
     candidates.truncate(5);
@@ -461,6 +568,9 @@ impl Search<'_, '_> {
                 self.diagnostics.pruned_nodes += 1;
                 return Ok(());
             }
+        } else {
+            // Preparation can also reject the bound for this configuration.
+            self.diagnostics.unknown_bounds += 1;
         }
         if needed == 0 {
             self.poll()?;
@@ -749,6 +859,15 @@ mod tests {
             min_total_power: 0.0,
             result_limit: 5,
         }
+    }
+
+    #[test]
+    fn out_of_range_bonus_is_rejected_before_candidate_selection() {
+        let mut input = input(2, false, true);
+        input.target = SingleTargetV1::Score;
+        input.cards[5].character_id = input.cards[0].character_id;
+        input.point_bonus_rates[5] = 1e307;
+        assert_eq!(input.validate().unwrap_err().path, "pointBonusRates");
     }
 
     #[test]
@@ -1225,7 +1344,38 @@ mod tests {
     }
 
     #[test]
-    fn unsafe_arithmetic_fails_open_and_cannot_become_exact() {
+    fn score_limit_accounts_for_own_and_external_power_together() {
+        let mut request = input(0, true, false);
+        request.area_configurations.truncate(1); // no items selected
+        request.song.play_level = 5;
+        let mut skill = request.cards[0].skill_contexts.mixed;
+        skill.behavior = SkillBehaviorV1::Score {
+            score_up_percent: 400.0,
+        };
+        skill.is_rate_up_with_perfect = false;
+        request.other_skills = Some([skill; 4]);
+        for card in &mut request.cards {
+            card.character_parameter = [3_200_000_000.0, 0.0, 0.0];
+            card.event_parameter = [0.0; 3];
+            card.skill_contexts = SearchCardSkillContextsV1 {
+                mixed: skill,
+                same_band: skill,
+                same_attribute: skill,
+                same_band_and_attribute: skill,
+            };
+        }
+        request.other_players_power = 0.0;
+        request.validate().unwrap();
+        request.other_players_power = 3_000_000_000.0;
+        assert_eq!(request.validate().unwrap_err().path, "scoreRange");
+        for card in &mut request.cards {
+            card.character_parameter = [0.0; 3];
+        }
+        request.validate().unwrap();
+    }
+
+    #[test]
+    fn inputs_outside_the_numeric_domain_never_start_search() {
         for variant in 0..3 {
             let mut input = input(0, false, true);
             input.cards.truncate(5);
@@ -1242,18 +1392,16 @@ mod tests {
                 }
                 _ => input.point_bonus_rates.fill(f64::MAX),
             }
-            input.validate().unwrap();
-            let mut poll = || None;
-            assert!(
-                matches!(
-                    search_single(&input, &mut SearchControl::new(64 << 20, &mut poll)),
-                    SingleSearchOutcomeV1::Incomplete {
-                        reason: SearchIncompleteReasonV1::ArithmeticOverflow,
-                        ..
-                    }
-                ),
-                "variant {variant}"
-            );
+            let path = ["scoreRange", "eventRule", "pointBonusRates"][variant];
+            assert_eq!(input.validate().unwrap_err().path, path);
+            let mut poll = || panic!("invalid input should be rejected before search starts");
+            assert!(matches!(
+                search_single(&input, &mut SearchControl::new(64 << 20, &mut poll)),
+                SingleSearchOutcomeV1::Incomplete {
+                    reason: SearchIncompleteReasonV1::InvalidData,
+                    ..
+                }
+            ));
         }
     }
 }

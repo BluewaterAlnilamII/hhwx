@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
+import { groupedIntegerInputProps, parseIntegerMinimum } from "../src/lib/grouped-integer-input.ts";
 
 // Execute the page's storage boundary without mounting the authenticated UI.
 const source = await readFile(new URL("../src/app/[locale]/bandori/teambuilder/page.tsx", import.meta.url), "utf8");
@@ -33,6 +34,44 @@ function createStorage() {
   const values = new Map();
   return { values, getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
 }
+
+test("team minimums preserve formatted and invalid saved drafts until corrected", () => {
+  const storage = createStorage();
+  const prefs = loadPreferences(storage);
+  for (const [draft, expected] of [
+    ["", 0], ["0", 0], ["50000", 50_000], ["50,000", 50_000],
+    ["9,007,199,254,740,991", Number.MAX_SAFE_INTEGER], ["9,007,199,254,740,992", null],
+    ["17250.5", null], ["-10", null], ["1e3", null], [",", null], ["12,34", 1234], ["abc", null],
+  ]) {
+    prefs.write({ minTotalPower: draft, minLeaderScoreUpPercent: draft });
+    const saved = loadPreferences(storage).read();
+    for (const key of ["minTotalPower", "minLeaderScoreUpPercent"]) {
+      assert.equal(saved[key], draft);
+      assert.equal(parseIntegerMinimum(saved[key]), expected, draft);
+    }
+  }
+});
+
+test("grouped integer edits retain the cursor and distinguish pasted errors from a cleared field", () => {
+  function edit(value, text, cursor) {
+    let raw;
+    const props = groupedIntegerInputProps(value, next => { raw = next; });
+    const input = { value: text, selectionStart: cursor, setSelectionRange(start) { this.selectionStart = start; } };
+    props.onChange({ currentTarget: input });
+    return [raw, input.value, input.selectionStart];
+  }
+  assert.equal(groupedIntegerInputProps("50000", () => {}).value, "50,000");
+  assert.deepEqual(edit("", "50,000", 6), ["50000", "50,000", 6]);
+  assert.deepEqual(edit("", " 50,000 ", 8), ["50000", "50,000", 6]);
+  assert.deepEqual(edit("", " 50,000 ", 2), ["50000", "50,000", 1]);
+  assert.deepEqual(edit("1234", "1,5234", 3), ["15234", "15,234", 2]);
+  assert.deepEqual(edit("", ",", 1), [",", ",", 1]);
+  assert.deepEqual(edit("", "12,34", 5), ["1234", "1,234", 5]);
+  assert.deepEqual(edit("", "50,,000", 7), ["50000", "50,000", 6]);
+  assert.deepEqual(edit("", "12,3.4", 6), ["12,3.4", "12,3.4", 6]);
+  assert.deepEqual(edit("", "1a,23", 5), ["1a,23", "1a,23", 5]);
+  assert.deepEqual(edit("0", "", 0), ["", "", 0]);
+});
 
 // Run the actual page derivations and callbacks, including async loading races.
 function panelValue(name, bindings) {

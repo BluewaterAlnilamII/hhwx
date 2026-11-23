@@ -137,6 +137,8 @@ Changing memory limits, cache capacity, branch order or heuristic proposals must
 
 HHWX maintainers may also use an ignored archive under `temp/medley-regression-fixtures/`. It contains private profiles, cached master/chart records, historical reports, normalized inputs and run outputs. These files may contain account data and must not be committed or published.
 
+For a single-song change, run representative medley cases when a specific regression risk remains. Reserve the full 80-case medley comparison for changes to medley or its shared logic or delivery path, evidence of a medley regression, or an explicit request. Use identical inputs and search budgets to compare the best result, stable ties, exact or incomplete status and hydration of retained teams. Measure medley runtime when the change presents a performance risk.
+
 The small opt-in acceptance entry is:
 
 ```powershell
