@@ -125,11 +125,11 @@ Bilibili/知乎分析基于用户截图；Steam/GitHub为官方资料，不声�
 
 ## 当前交付与验收证据
 
-[打开最终整体设计稿](http://localhost:4317/?revision=7&stage=initial)。服务运行时可访问，从原型目录执行 `node serve.cjs` 可重启。
+11 月 16 日的评审使用了本地原型第 7 版。
 
 本地原型的主文件是 index.html 和 profile.js。卡面选择器编译自应用组件，原型中的 asset-sources.json、fixtures/sources.json 和 fixtures/degree-sources.json 记录素材及样例来源。账号使用示例数据，修改仅保留在当前页面内存。
 
-最终评审采用独立设计评审 A 与检测/浏览器证据 B；主代理在 A 完成后读取 B。合成记录：[2026-11-16 critique](../.impeccable/critique/2026-11-16T09-58-59Z__index-html.md)。原型目录保留 final-review-a.md、final-review-b.md、final-detector.json、final-browser-b.json。polish 前评分 33/40，无 P0/P1；两处 P2 已修复，未为修复后状态人为加分。历史 25/32 与 33/40 采用不同范围，且旧评审遗漏过桌面回退，不能当作连续质量增长或当前验收依据。
+最终评审采用独立设计评审 A 与检测/浏览器证据 B；主代理在 A 完成后读取 B。polish 前评分 33/40，无 P0/P1；两处 P2 已修复，未为修复后状态人为加分。历史 25/32 与 33/40 采用不同范围，且旧评审遗漏过桌面回退，不能当作连续质量增长或当前验收依据。
 
 - 独立浏览器及现有检查覆盖 320/390px 手机、临界宽度与 1440px 桌面、明暗主题、24 字符名字、无公开内容、无账号、隐私及顺序、真实选择器、封面取消与签名编辑。正常阅读、键盘和模拟触摸路径均保留证据。
 - 原有 36 组交互检查与 9 个针对性布局案例通过；最终两处修正使用 critique-after-check.cjs 验证。critique-after-checks.json 记录 320/390/1440px 编辑高度变化为 0、空签名访客姓名到 UID 间距为 8px，以及 undefined/null/空字符串/纯空格四类缺名均无名称节点且保留称号。
@@ -184,7 +184,7 @@ snapshotToNormalizedProfile 从同步快照读取 profile.user_name，syncAutoGa
 - 远程迁移、线上部署、真机、其他浏览器和真实读屏器未执行。发布顺序为先审查/应用新增迁移，再部署 app；回滚 app 时保留新增表。工作清单完成表示代码与本地验收完成，不表示已上线。
 
 - 最终 npm run build 通过（含 Next TypeScript 与71个静态页面生成），最近改动的 lint 与最终9组浏览器回归通过；11次主页写请求由夹具拦截，未产生真实账户写入。封面直接拖动、实际图片准星误差<1px、签名 Escape 焦点恢复均有断言。
-- 正式集成双代理 critique 已完成：A修复前32/40，未重新打分；签名反馈遮名和称号弹窗密度两项P2经独立复验关闭。B的桌面准星P2与签名退出焦点P3已修复，主题cream-palette为不适用提示。快照为 .impeccable/critique/2026-11-16T14-22-46Z__src-components-account-publicprofileview-tsx.md。
+- 正式集成双代理 critique 已完成：A修复前32/40，未重新打分；签名反馈遮名和称号弹窗密度两项P2经独立复验关闭。B的桌面准星P2与签名退出焦点P3已修复，主题cream-palette为不适用提示。
 - 本轮临时数据库容器、评审浏览器及检测服务已清理；保留3000开发服务器和此前4317设计稿。连接原数据库的开发环境仍需先应用新增迁移才可真实读写主页设置，截图/浏览器验收使用的是拦截夹具。
 
 - B最终定向复验已关闭剩余两项：1440px准星中心误差0px，390px误差-0.0078125px；两端签名Escape后均恢复可见焦点。最终critic/polish快照已关闭，无待修优先项。

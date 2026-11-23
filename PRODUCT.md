@@ -97,8 +97,7 @@ does not choose a new palette, typography, component system, or page concept.
 - [Theme Guide](documents/theme-guide.md),
   [localization contract](documents/localization.md), and
   [team-builder documentation](documents/bandori-team-builder/README.md):
-  established behavior and constraints. `design-qa.md` is historical evidence,
-  not a competing current design specification.
+  established behavior and constraints.
 
 ## Product Principles
 
