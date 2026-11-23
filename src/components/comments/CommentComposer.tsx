@@ -1,6 +1,5 @@
 "use client";
 
-import { confirmTouchOnSuccess } from "@/lib/touch-feedback";
 import { memo, useEffect, useState } from "react";
 import { Check, X } from "lucide-react";
 import { LoadingSpinner } from "@/components/LoadingIndicator";
@@ -72,13 +71,11 @@ export const CommentComposer = memo(function CommentComposer({
   };
 
   const handleSubmit = async () => {
-    const confirm = confirmTouchOnSuccess();
     if (!content.trim() || submitting) return;
     setSubmitting(true);
     clearFeedback();
     try {
       await onSubmit(content.trim());
-      confirm();
       clearCommentDraft(draftStorageKey);
       setContent("");
       setEmojiOpen(false);

@@ -6,7 +6,6 @@ import { Root as SidebarDialog } from "@radix-ui/react-dialog";
 import SectionSidebarShell from "@/components/SectionSidebarShell";
 import Toolbar from "@/components/Toolbar";
 import MusicPlayerHost from "@/components/music-player/MusicPlayerHost";
-import { bindTouchFeedback } from "@/lib/touch-feedback";
 
 interface AppChromeProps {
   children: ReactNode;
@@ -14,7 +13,6 @@ interface AppChromeProps {
 
 export default function AppChrome({ children }: AppChromeProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  useEffect(bindTouchFeedback, []);
 
   useEffect(() => {
     const desktop = window.matchMedia("(min-width: 64rem)");

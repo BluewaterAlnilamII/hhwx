@@ -1,6 +1,5 @@
 "use client";
 
-import { pulseTouch } from "@/lib/touch-feedback";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Ellipsis, FileMusic, ListEnd, ListPlus, Music2, Pause, Play, Star, StarOff } from "lucide-react";
@@ -238,13 +237,11 @@ export default function FavoriteSongList({ items, limit, expanded, editing, orde
         function playFromRow(event: MouseEvent<HTMLLIElement>) {
           if (!event.detail || !isRowContent(event.target)) return;
           if (event.type !== (touch.current ? "click" : "dblclick")) return;
-          if (song.track) pulseTouch(event.nativeEvent);
           start();
         }
-        function openRowMenu(row: HTMLLIElement, source: Event, point?: DOMRect) {
+        function openRowMenu(row: HTMLLIElement, point?: DOMRect) {
           const trigger = row.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]');
           if (!trigger) return;
-          pulseTouch(source, 10);
           setMenu({ song, trigger, anchor: point ?? trigger.getBoundingClientRect(), atPointer: Boolean(point) });
         }
         function activateMore(trigger: HTMLButtonElement, toggle: boolean) {
@@ -268,7 +265,7 @@ export default function FavoriteSongList({ items, limit, expanded, editing, orde
             const row = e.currentTarget;
             const timer = window.setTimeout(() => {
               held.current = true;
-              if (!editing) openRowMenu(row, e.nativeEvent);
+              if (!editing) openRowMenu(row);
             }, 500);
             hold.current = { timer, x: e.clientX, y: e.clientY };
           }}
@@ -278,7 +275,7 @@ export default function FavoriteSongList({ items, limit, expanded, editing, orde
             if (held.current) return;
             held.current = touch.current;
             if (editing) return;
-            openRowMenu(e.currentTarget, e.nativeEvent, e.clientX || e.clientY ? new DOMRect(e.clientX, e.clientY, 0, 0) : undefined);
+            openRowMenu(e.currentTarget, e.clientX || e.clientY ? new DOMRect(e.clientX, e.clientY, 0, 0) : undefined);
           }}
           onClick={playFromRow} onDoubleClick={playFromRow}>
           {sort?.handle || <div className={styles.number}><span>{index + 1}</span>
@@ -290,20 +287,19 @@ export default function FavoriteSongList({ items, limit, expanded, editing, orde
             <span className={styles.art} aria-hidden="true">
               <Cover song={song} />
             </span>
-            <div className={styles.meta}><button type="button" className={styles.title} disabled={!song.track} data-haptic="manual" data-song-title aria-label={label}
+            <div className={styles.meta}><button type="button" className={styles.title} disabled={!song.track} data-song-title aria-label={label}
               onClick={e => { if (!e.detail) start(); }}>{song.title}</button>
               <small><span>{song.artist}</span><span className={styles.mobileTime}>{song.duration}</span></small>
             </div>
           </div>
           <span className={styles.album}>{musicPlayerAlbum("bandori")}</span><span className={styles.time}>{song.duration}</span>
           {editing && editor ? <FavoriteRemoveButton kind="songs" editor={editor} target={song.target} editing onRemove={onRemove} /> :
-            <button type="button" className={styles.more} data-haptic="manual" aria-haspopup="dialog" aria-expanded={!menu?.closing && menu?.song.target === song.target}
+            <button type="button" className={styles.more} aria-haspopup="dialog" aria-expanded={!menu?.closing && menu?.song.target === song.target}
             aria-label={t("songActions", { title: song.title })}
             onPointerUp={e => {
               // A tap immediately after a sheet drag may have no compatibility click.
               if (e.pointerType === "touch" && e.isPrimary && hold.current && !held.current) {
                 held.current = true;
-                pulseTouch(e.nativeEvent);
                 activateMore(e.currentTarget, false);
               }
             }}
@@ -318,8 +314,8 @@ export default function FavoriteSongList({ items, limit, expanded, editing, orde
       if (!catalog.music) catalog.refresh();
       if (!assets.value) assets.refresh();
     }} /> : <LoadingIndicator label={common("states.loading")} />) : <>
-      {editor ? <ProfileSortList ids={visibleSongs.map(song => song.target)} onOrder={(order, moved, source) =>
-        orderSave.save(order.concat(items.slice(order.length).map(item => item.target)), moved, source)} touchHold>{list}</ProfileSortList> : list}
+      {editor ? <ProfileSortList ids={visibleSongs.map(song => song.target)} onOrder={(order, moved) =>
+        orderSave.save(order.concat(items.slice(order.length).map(item => item.target)), moved)} touchHold>{list}</ProfileSortList> : list}
       {footer}
       {menu && <SongActions key={menu.song.target} menu={menu} editor={editor} onRemove={onRemove}
         onClose={() => setMenu(current => current === menu && !current.closing ? { ...current, closing: true } : current)}

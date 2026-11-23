@@ -1,6 +1,5 @@
 "use client";
 
-import { confirmTouchOnSuccess } from "@/lib/touch-feedback";
 import { useEffect } from "react";
 import { create } from "zustand";
 import { ApiRouteError, getApiErrorCode, parseApiSuccessData } from "@/lib/api-contracts";
@@ -86,9 +85,7 @@ export function syncOwnFavoriteKeys(viewer: string, groups: FavoriteGroup[]) {
 }
 
 export async function setBandoriFavorite(viewer: string, key: string, selected: boolean, onSaved?: () => void) {
-  const confirm = confirmTouchOnSuccess();
   await favoritesRequest("/api/bandori/favorites/" + key, viewer, { method: selected ? "PUT" : "DELETE" });
-  confirm();
   onSaved?.();
   notifyChange(viewer, key, selected);
   channel?.postMessage({ viewer, key, selected });
