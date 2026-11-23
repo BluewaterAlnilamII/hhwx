@@ -56,6 +56,7 @@ export type BandoriMusicAssetEntry = {
   files: {
     jacket: BandoriPngAssetDescriptor;
     thumb: BandoriPngAssetDescriptor;
+    additionalJackets?: { name: string; jacket: BandoriPngAssetDescriptor; thumb: BandoriPngAssetDescriptor }[];
     audio?: BandoriAudioAssetDescriptor;
     charts: Partial<Record<BandoriMusicDifficultyIndex, BandoriJsonAssetDescriptor>>;
   };
@@ -365,7 +366,7 @@ function parseMusicEntry(value: unknown, musicId: string): BandoriMusicAssetEntr
   if (!isRecord(value.files)) {
     throw new Error(`${label} files must be an object`);
   }
-  assertExactKeys(value.files, ["jacket", "thumb", "charts"], ["audio"], `${label} files`);
+  assertExactKeys(value.files, ["jacket", "thumb", "charts"], ["audio", "additionalJackets"], `${label} files`);
   if (!isRecord(value.files.charts) || Object.keys(value.files.charts).length === 0) {
     throw new Error(`${label} charts must be a non-empty object`);
   }
@@ -445,6 +446,22 @@ function parseMusicEntry(value: unknown, musicId: string): BandoriMusicAssetEntr
     ),
     charts,
   };
+  if (Object.hasOwn(value.files, "additionalJackets")) {
+    if (!Array.isArray(value.files.additionalJackets)) {
+      throw new Error(`${label} additionalJackets must be an array`);
+    }
+    files.additionalJackets = value.files.additionalJackets.map((cover: unknown) => {
+      if (!isRecord(cover) || typeof cover.name !== "string" || !cover.name) {
+        throw new Error(`${label} has an invalid additional jacket`);
+      }
+      assertExactKeys(cover, ["name", "jacket", "thumb"], [], `${label} additional jacket`);
+      return {
+        name: cover.name,
+        jacket: createPngDescriptor(cover.jacket, "bandori/music/jackets", `${label} additional jacket`),
+        thumb: createPngDescriptor(cover.thumb, "bandori/music/thumbs", `${label} additional thumb`),
+      };
+    });
+  }
   if (Object.hasOwn(value.files, "audio")) {
     files.audio = createAudioDescriptor(
       value.files.audio,

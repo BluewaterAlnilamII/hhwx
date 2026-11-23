@@ -599,6 +599,18 @@ test("Music schema 2 reconstructs content-addressed asset keys", () => {
   assert.equal(parsed.songs["1"].notes["3"], 459);
 });
 
+test("Music additional jackets resolve ordered full and thumbnail images", () => {
+  const index = musicIndex();
+  const covers = [{ name: "blackshout_1", jacket: hashes.musicJacket, thumb: hashes.musicThumb }];
+  index.songs["1"].files.additionalJackets = covers;
+  const files = parseBandoriMusicAssetIndex(index).songs["1"].files;
+  assert.deepEqual(files.additionalJackets, [{
+    name: "blackshout_1", jacket: files.jacket, thumb: files.thumb,
+  }]);
+  delete covers[0].thumb;
+  assert.throws(() => parseBandoriMusicAssetIndex(index));
+});
+
 test("Music parser rejects legacy arrays and incomplete chart metadata", () => {
   const legacy = musicIndex();
   legacy.schemaVersion = "hhwx-bandori-music-index-v1";
