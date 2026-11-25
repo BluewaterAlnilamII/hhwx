@@ -41,7 +41,7 @@ export async function generateMetadata({ params }: Pick<LocaleLayoutProps, "para
         { url: "/favicon.ico", sizes: "any", type: "image/x-icon" },
       ],
       shortcut: [{ url: "/favicon.ico", type: "image/x-icon" }],
-      apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
+      apple: [{ url: "/apple-icon.png?v=3", sizes: "180x180", type: "image/png" }],
     },
   };
 }

@@ -6,7 +6,7 @@ import {
   REFERENCE_HTTP_CACHE_POLICY,
   withHttpCachePolicy,
 } from "@/lib/api-cache";
-import { SITE_BRAND } from "@/lib/site-brand";
+import manifest from "@/app/manifest";
 
 type ManifestRouteContext = {
   params: Promise<{ locale: string }>;
@@ -18,25 +18,9 @@ export async function GET(_request: NextRequest, { params }: ManifestRouteContex
   const t = await getTranslations({ locale, namespace: "metadata.manifest" });
 
   return NextResponse.json({
-    name: SITE_BRAND,
-    short_name: SITE_BRAND,
+    ...manifest(),
     description: t("description"),
     start_url: buildLocalizedPathname("/", locale as AppLocale),
-    display: "standalone",
-    background_color: "#FFEE22",
-    theme_color: "#FFEE22",
-    icons: [
-      {
-        src: "/favicon/icon-192.png",
-        sizes: "192x192",
-        type: "image/png",
-      },
-      {
-        src: "/favicon/icon-512.png",
-        sizes: "512x512",
-        type: "image/png",
-      },
-    ],
   }, {
     headers: withHttpCachePolicy(REFERENCE_HTTP_CACHE_POLICY, {
       "Content-Type": "application/manifest+json; charset=utf-8",
