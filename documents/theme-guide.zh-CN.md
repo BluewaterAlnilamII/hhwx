@@ -111,7 +111,11 @@ className="bg-[var(--theme-color-action-success-background)] text-[var(--theme-c
 
 日历条保留乐队身份色、白色标签，不添加额外彩色描边。深色通过 `--theme-color-calendar-event-shade` 压暗原色条，浅色保持透明。浅色模式中，白字在部分明亮乐队底色上的低对比度仍是已接受的取舍，不能据此声称全站无障碍对比度全部通过。
 
-PWA 安装颜色是单独的元数据，位于 `src/app/manifest.ts` 和 `src/app/[locale]/manifest.webmanifest/route.ts`。目前保留固定品牌黄色，不随 CSS 媒体查询变化。
+## 主屏幕图标
+
+[网页应用清单](../src/app/manifest.ts)为中英文页面提供固定的黄色安装主题色和主屏幕图标列表。浏览器标签使用透明底团徽。主屏幕图标将团徽原有的金色与白色对调，以原金色（`#F4B600`）铺底，团徽纹样呈白色。安卓可裁切版本预留更多边距，适配不同的桌面图标形状。
+
+运行 `node scripts/build-home-screen-icons.mjs` 可从 `public/favicon/smile-patrol-logo-white.png` 重新生成 Apple 主屏幕图标和安卓 PNG。这张反白团徽由 `scripts/build-smile-patrol-logo.mjs` 从 `src/app/icon.png` 生成。修改 Apple 图案时，同步更新 `src/app/[locale]/layout.tsx` 中图标 URL 的版本号，以便浏览器获取新版。
 
 ## 横滑标签与减少动态效果
 
