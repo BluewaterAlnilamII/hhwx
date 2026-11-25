@@ -113,7 +113,9 @@ The shared stamp picker keeps four image columns at every width. Below `sm`, cat
 
 Calendar bars retain band identity, white labels and no added colored outlines. Dark mode shades the existing bar through `--theme-color-calendar-event-shade`; light mode leaves it transparent. Plain white text on some bright light-mode bands remains an accepted contrast limitation, not a blanket accessibility pass.
 
-The web app manifest in `src/app/manifest.ts` supplies the fixed yellow installation colors and the home-screen icon list for both locales. The browser tab uses the transparent emblem. Home-screen icons reverse the emblem’s original colors, placing the white artwork on a solid gold (`#F4B600`) background. The Android maskable variant has extra padding for launcher cropping.
+## Home-screen icons
+
+The [web app manifest](../src/app/manifest.ts) supplies the fixed yellow installation colors and the home-screen icon list for both locales. The browser tab uses the transparent emblem. Home-screen icons reverse the emblem’s original colors, placing the white artwork on a solid gold (`#F4B600`) background. The Android maskable variant has extra padding for launcher cropping.
 
 Run `node scripts/build-home-screen-icons.mjs` to regenerate the Apple touch icon and Android PNGs from `public/favicon/smile-patrol-logo-white.png`. The white artwork is derived from `src/app/icon.png` by `scripts/build-smile-patrol-logo.mjs`. When changing the Apple artwork, update the icon URL version in `src/app/[locale]/layout.tsx` so browsers can fetch the new image.
 
