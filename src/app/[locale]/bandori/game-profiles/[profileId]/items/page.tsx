@@ -1,7 +1,7 @@
 "use client";
 
 import { Link } from "@/i18n/navigation";
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import { type AppLocale } from "@/i18n/routing";
@@ -10,6 +10,8 @@ import {
   type BandoriServer,
 } from "@/lib/bandori-server";
 import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
+import { useHistoryEntryState } from "@/hooks/useHistoryEntryState";
+import { useListReadingPosition } from "@/hooks/useListReadingPosition";
 import {
   decodeCompressedGameProfilePayload,
   compactMissionBonusRecords,
@@ -487,7 +489,9 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
     characters: [],
     areaItems: {},
   });
-  const [activeTab, setActiveTab] = useState<"area" | "characters">("area");
+  const visitScope = userId ? `${userId}:${profileId}` : undefined;
+  const [activeTab, setActiveTab] = useHistoryEntryState<"area" | "characters">("profileItemsTab", visitScope, "area");
+  const panel = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState(false);
   const [isEditableProfile, setIsEditableProfile] = useState(true);
   const [baseItemsHash, setBaseItemsHash] = useState<string | null>(null);
@@ -495,6 +499,8 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
+  useListReadingPosition(panel, visitScope && `${visitScope}:${activeTab}`,
+    authReady && !loadingProfile && !profileError && !error && !loadingItems);
   const messages = useMemo<ItemPageMessages>(() => ({
     notSignedIn: t("errors.notSignedIn"),
     requestFailed: (status) => t("errors.requestFailed", { status }),
@@ -784,16 +790,16 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
           </div>
 
           <div className="mt-5 flex border-b border-[var(--theme-color-border-subtle)]">
-            <button type="button" onClick={() => setActiveTab("area")} className={`h-11 px-4 text-sm font-semibold transition ${activeTab === "area" ? "border-b-2 border-[var(--theme-color-selection-subtle-ring)] text-[var(--theme-color-selection-subtle-foreground)]" : "text-[var(--theme-color-text-muted)] hover:text-[var(--theme-color-text-default)]"}`}>
+            <button type="button" aria-pressed={activeTab === "area"} onClick={() => setActiveTab("area")} className={`h-11 px-4 text-sm font-semibold transition ${activeTab === "area" ? "border-b-2 border-[var(--theme-color-selection-subtle-ring)] text-[var(--theme-color-selection-subtle-foreground)]" : "text-[var(--theme-color-text-muted)] hover:text-[var(--theme-color-text-default)]"}`}>
               {t("tabs.area")}
             </button>
-            <button type="button" onClick={() => setActiveTab("characters")} className={`h-11 px-4 text-sm font-semibold transition ${activeTab === "characters" ? "border-b-2 border-[var(--theme-color-selection-subtle-ring)] text-[var(--theme-color-selection-subtle-foreground)]" : "text-[var(--theme-color-text-muted)] hover:text-[var(--theme-color-text-default)]"}`}>
+            <button type="button" aria-pressed={activeTab === "characters"} onClick={() => setActiveTab("characters")} className={`h-11 px-4 text-sm font-semibold transition ${activeTab === "characters" ? "border-b-2 border-[var(--theme-color-selection-subtle-ring)] text-[var(--theme-color-selection-subtle-foreground)]" : "text-[var(--theme-color-text-muted)] hover:text-[var(--theme-color-text-default)]"}`}>
               {t("tabs.characters")}
             </button>
           </div>
 
           {activeTab === "area" ? (
-            <div className="mt-5 space-y-6">
+            <div ref={panel} className="mt-5 space-y-6">
               {AREA_ITEM_GROUPS.map((group) => {
                 const groupItems = group.itemIds.map((areaItemId) => areaItemsById.get(areaItemId)).filter((item): item is ItemRecord => Boolean(item));
                 if (groupItems.length === 0) {
@@ -817,7 +823,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
                           labels,
                         );
                         return (
-                          <div key={item.itemKey} className="grid gap-2 rounded-lg border border-[var(--theme-color-border-subtle)] px-2.5 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-3">
+                          <div key={item.itemKey} data-reading-row={item.itemKey} className="grid gap-2 rounded-lg border border-[var(--theme-color-border-subtle)] px-2.5 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-3">
                             <div className="min-w-0">
                               <div className="truncate text-sm font-semibold text-[var(--theme-color-text-default)]">{areaItemName}</div>
                             </div>
@@ -851,7 +857,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
                         labels,
                       );
                       return (
-                        <div key={item.itemKey} className="rounded-lg border border-[var(--theme-color-border-subtle)] px-3 py-3 text-sm text-[var(--theme-color-text-default)]">
+                        <div key={item.itemKey} data-reading-row={item.itemKey} className="rounded-lg border border-[var(--theme-color-border-subtle)] px-3 py-3 text-sm text-[var(--theme-color-text-default)]">
                           {t("labels.itemLevel", { name: itemName, level: item.level })}
                         </div>
                       );
@@ -861,7 +867,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
               ) : null}
             </div>
           ) : (
-            <div className="mt-5 space-y-6">
+            <div ref={panel} className="mt-5 space-y-6">
               {characterRowsByBand.map((group) => (
                 <section key={group.bandId}>
                   <div className="mb-3 flex items-center justify-between gap-3 border-b border-[var(--theme-color-border-subtle)] pb-2">
@@ -886,7 +892,7 @@ export default function GameProfileItemsPage({ params }: { params: Promise<{ pro
                       };
 
                       return (
-                        <div key={row.characterId} className="grid gap-4 rounded-lg border border-[var(--theme-color-border-subtle)] px-3 py-4 lg:grid-cols-[minmax(9rem,0.8fr)_repeat(3,minmax(0,1fr))]">
+                        <div key={row.characterId} data-reading-row={row.characterId} className="grid gap-4 rounded-lg border border-[var(--theme-color-border-subtle)] px-3 py-4 lg:grid-cols-[minmax(9rem,0.8fr)_repeat(3,minmax(0,1fr))]">
                           <div className="min-w-0">
                             <div className="truncate text-sm font-semibold text-[var(--theme-color-text-default)]">{row.characterName}</div>
                           </div>

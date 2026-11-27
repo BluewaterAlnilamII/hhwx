@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
 import { favoritePreviewLimit, type FavoriteGroup } from "@/lib/bandori/favorites";
 import type { ProfileModuleId } from "@/lib/profile-homepage";
 
 type CollectionView = ProfileModuleId | `${ProfileModuleId}/edit`;
-type ReturnPosition = { url: string; top: number; selector: string };
+type FavoriteAnchor = { section: string; id: string };
+type ReturnPosition = { url: string; top: number; selector?: string; offset?: number; focus?: boolean; item?: FavoriteAnchor };
 type InlinePosition = { selector: string; edge?: "bottom"; y: number; focus: string; eventServer?: string };
 
 function visibleCollectionParts(root: HTMLElement) {
@@ -33,19 +34,28 @@ function subscribe(listener: () => void) {
     window.removeEventListener("popstate", listener);
   };
 }
-function readHash() {
+function readView() {
+  const editor = history.state?.collectionEditor;
+  if (editor === "cards" || editor === "events" || editor === "songs") return `${editor}/edit` as const;
   if (location.hash === "#collection/songs" && history.state?.editingSongs) return "songs/edit";
   return (window.location.hash.match(/^#collection\/((?:cards|events)(?:\/edit)?|songs)$/u)?.[1] ?? "") as CollectionView | "";
 }
 const noCollection = () => "" as const;
 const notify = () => window.dispatchEvent(new HashChangeEvent("hashchange"));
 
-function remember(selector: string) {
-  const position: ReturnPosition = { url: location.href, top: window.scrollY, selector };
+function remember(selector?: string, focus = true) {
+  const target = selector ? Array.from(document.querySelectorAll<HTMLElement>(selector)).find(el => el.getClientRects().length) : undefined;
+  const row = target?.closest<HTMLElement>("[data-card], [data-event], [data-song]");
+  const id = row?.dataset.card ?? row?.dataset.event ?? row?.dataset.song;
+  const section = row?.closest<HTMLElement>("[data-collection]")?.dataset.collection;
+  const position: ReturnPosition = { url: location.href, top: window.scrollY, selector, offset: target?.getBoundingClientRect().top,
+    focus, item: section && id ? { section, id } : undefined };
   history.replaceState({ ...history.state, collectionPosition: position }, "");
 }
-function leaveSharedView() {
-  history.replaceState({ ...history.state, collectionFromHome: false, collectionDepth: 0, fromCollection: null, fromAllCards: false, editingSongs: false, collectionPosition: null }, "", location.pathname + location.search);
+function replaceView(hash: string, editor?: string) {
+  const state = { ...history.state, collectionEditor: editor, editingSongs: false, collectionPosition: null };
+  if (hash === location.hash) history.replaceState(state, "");
+  else history.replaceState(state, "", location.pathname + location.search + hash);
   notify();
 }
 
@@ -55,24 +65,27 @@ export function resetCollectionOnReload() {
   checkedDocumentLoad = true;
   const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
   if (navigation?.type !== "reload" || new URL(navigation.name).pathname !== location.pathname) return;
-  if (readHash()) leaveSharedView();
+  if (readView()) replaceView("");
   else if (history.state?.collectionPosition) history.replaceState({ ...history.state, collectionPosition: null }, "");
 }
 
 export default function useCollectionNavigation(groups: FavoriteGroup[] | null, editable: boolean | undefined) {
-  const hash = useSyncExternalStore(subscribe, readHash, noCollection);
-  const kind = hash.split("/")[0];
+  const view = useSyncExternalStore(subscribe, readView, noCollection);
+  const kind = view.split("/")[0];
   const group = groups?.find(group => group.kind === kind);
-  const editing = Boolean(group) && editable === true && hash.endsWith("/edit");
-  const awaitingEditPermission = editable === undefined && hash.endsWith("/edit");
+  const editing = Boolean(group) && editable === true && view.endsWith("/edit");
+  const awaitingEditPermission = editable === undefined && view.endsWith("/edit");
   const expanded = group && (editing || group.items.length > favoritePreviewLimit(group)) ? group.kind : undefined;
   const loaded = groups !== null;
   const root = useRef<HTMLDivElement>(null);
   const start = useRef<HTMLSpanElement>(null);
   const inlinePosition = useRef<InlinePosition | null>(null);
+  const waitingForReturn = useRef(false);
   const previousParts = useRef<ReturnType<typeof visibleCollectionParts> | null>(null);
   const exitAnimations = useRef<Animation[]>([]);
   const [stuck, setStuck] = useState<ReadonlySet<string>>(new Set());
+  const stillInCollection = useEffectEvent(({ section, id }: FavoriteAnchor) =>
+    groups?.some(group => group.kind === section && group.items.some(item => item.target === id)));
 
   // Collection transitions and detail returns both restore their own viewport anchor.
   useEffect(() => {
@@ -88,9 +101,9 @@ export default function useCollectionNavigation(groups: FavoriteGroup[] | null, 
 
   useLayoutEffect(() => {
     if (!loaded) return;
-    if (hash && !expanded) {
+    if (view && !expanded) {
       if (awaitingEditPermission) return;
-      leaveSharedView();
+      replaceView("");
       return;
     }
     const anchor = inlinePosition.current;
@@ -156,18 +169,52 @@ export default function useCollectionNavigation(groups: FavoriteGroup[] | null, 
     }
     // A detail page can return before the catalog has rendered the original link.
     const restore = () => {
-      const target = Array.from(document.querySelectorAll<HTMLElement>(position.selector)).find(el => el.getClientRects().length);
-      if (!target) return false;
-      target.focus({ preventScroll: true });
-      window.scrollTo({ top: position.top, behavior: "instant" });
-      history.replaceState({ ...history.state, collectionPosition: null }, "");
+      const target = position.selector && Array.from(document.querySelectorAll<HTMLElement>(position.selector)).find(el => el.getClientRects().length);
+      if (position.selector && !target) {
+        if (!position.item || stillInCollection(position.item)) return false;
+        const selector = `[data-collection-start="${CSS.escape(position.item.section)}"]`;
+        const marker = root.current?.querySelector<HTMLElement>(selector);
+        (marker ?? root.current)?.scrollIntoView({ block: "start", behavior: "instant" });
+        if (position.focus !== false) marker?.parentElement?.querySelector<HTMLElement>("[data-collection-heading]")?.focus({ preventScroll: true });
+        waitingForReturn.current = false;
+        remember(marker ? selector : undefined, false);
+        return true;
+      }
+      if (target && position.focus !== false) target.focus({ preventScroll: true });
+      const top = position.top > 0 && target && position.offset !== undefined ? window.scrollY + target.getBoundingClientRect().top - position.offset : position.top;
+      window.scrollTo({ top, behavior: "instant" });
+      waitingForReturn.current = false;
+      history.replaceState({ ...history.state, collectionPosition: { ...position, focus: false } }, "");
       return true;
     };
     if (restore() || !root.current) return;
-    const observer = new ResizeObserver(() => { if (restore()) observer.disconnect(); });
+    waitingForReturn.current = true;
+    const input = new AbortController();
+    const observer = new ResizeObserver(() => { if (restore()) input.abort(); });
     observer.observe(root.current);
-    return () => observer.disconnect();
-  }, [expanded, hash, loaded, awaitingEditPermission]);
+    input.signal.addEventListener("abort", () => { observer.disconnect(); waitingForReturn.current = false; }, { once: true });
+    for (const event of ["wheel", "touchmove", "pointerdown", "keydown"]) {
+      window.addEventListener(event, () => input.abort(), { passive: true, capture: true, signal: input.signal });
+    }
+    return () => input.abort();
+  }, [expanded, view, loaded, awaitingEditPermission]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    const url = location.href;
+    function rememberReadingPosition() {
+      if (!root.current?.getClientRects().length || waitingForReturn.current || location.href !== url) return;
+      if (history.state?.collectionPosition?.top === window.scrollY) return;
+      const row = Array.from(root.current.querySelectorAll<HTMLElement>("[data-card], [data-event], [data-song]")).find(el => {
+        const rect = el.getBoundingClientRect();
+        return rect.bottom > 0 && rect.top < innerHeight && rect.height > 0;
+      });
+      const attr = row?.hasAttribute("data-card") ? "data-card" : row?.hasAttribute("data-event") ? "data-event" : "data-song";
+      remember(row && `[${attr}="${CSS.escape(row.getAttribute(attr)!)}"]`, false);
+    }
+    window.addEventListener("scrollend", rememberReadingPosition);
+    return () => window.removeEventListener("scrollend", rememberReadingPosition);
+  }, [loaded, view]);
 
   const sectionCount = groups?.length;
   useEffect(() => {
@@ -187,7 +234,7 @@ export default function useCollectionNavigation(groups: FavoriteGroup[] | null, 
     return () => observer.disconnect();
   }, [sectionCount, editing, expanded]);
 
-  useEffect(() => () => { exitAnimations.current.forEach(animation => animation.cancel()); }, [hash]);
+  useEffect(() => () => { exitAnimations.current.forEach(animation => animation.cancel()); }, [view]);
 
   function transition(change: () => void) {
     exitAnimations.current.forEach(animation => animation.cancel());
@@ -253,19 +300,8 @@ export default function useCollectionNavigation(groups: FavoriteGroup[] | null, 
   function openView(view: CollectionView, source: "more" | "more-footer" | "edit") {
     const [kind] = view.split("/");
     anchorSection(kind, source);
-    const nested = expanded === kind && view.endsWith("/edit");
-    const switching = Boolean(expanded) && !nested;
-    const depth = history.state?.collectionDepth ?? (history.state?.collectionFromHome ? 1 : 0);
-    const state = { collectionFromHome: expanded ? Boolean(history.state?.collectionFromHome) : true,
-      collectionDepth: switching ? depth : depth + 1, fromCollection: nested ? kind : null,
-      editingSongs: view === "songs/edit", collectionEventServer: history.state?.collectionEventServer };
-    const url = "#collection/" + (state.editingSongs ? "songs" : view);
-    if (switching) history.replaceState(state, "", url);
-    else {
-      remember(`[data-${source}="${kind}"]`);
-      history.pushState(state, "", url);
-    }
-    notify();
+    if (view.endsWith("/edit")) replaceView(location.hash, kind);
+    else replaceView("#collection/" + kind);
   }
   function close() {
     transition(() => closeView(false));
@@ -275,12 +311,11 @@ export default function useCollectionNavigation(groups: FavoriteGroup[] | null, 
   }
   function closeView(finished: boolean, hasMore = true) {
     if (!expanded) return;
-    const state = history.state;
-    const toFull = finished && hasMore && (state?.fromCollection === expanded || (expanded === "cards" && state?.fromAllCards));
-    anchorSection(expanded, finished ? "edit" : "more", !toFull);
-    if (toFull) history.back();
-    else if (state?.collectionFromHome) history.go(-(state.collectionDepth || 1));
-    else leaveSharedView();
+    const original = location.hash;
+    const legacyEditor = original.endsWith("/edit") || history.state?.editingSongs;
+    const returnHash = finished && !legacyEditor && (hasMore || original !== "#collection/" + expanded) ? original : "";
+    anchorSection(expanded, finished ? "edit" : "more", returnHash !== "#collection/" + expanded);
+    replaceView(returnHash);
   }
   function rememberDetail(event: MouseEvent) {
     if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;

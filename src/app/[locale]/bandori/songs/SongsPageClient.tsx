@@ -1,7 +1,8 @@
 "use client";
+import { CATALOG_PAGE_SIZE, useCatalogVisit } from "@/hooks/useCatalogVisit";
 import RetryButton from "@/components/RetryButton";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo } from "react";
 import { SearchX } from "lucide-react";
 import LoadingIndicator from "@/components/LoadingIndicator";
 import { useSearchParams } from "next/navigation";
@@ -25,9 +26,6 @@ import BandoriSongFilterControls from "./_components/BandoriSongFilterControls";
 function navigate(query: string) {
   window.history.replaceState(null, "", window.location.pathname + (query ? `?${query}` : "") + window.location.hash);
 }
-
-const INITIAL_VISIBLE_COUNT = 40;
-const PAGE_SIZE = 40;
 
 export default function SongsPageClient() {
   const t = useTranslations("bandori.songs");
@@ -60,7 +58,6 @@ function SongInformation() {
   const preferredTextServer = useBandoriPreferredServer();
   const musicMaster = useBandoriMusicMaster();
   const musicAssetIndex = useBandoriMusicAssetIndex();
-  const [visibleState, setVisibleState] = useState({ key: "", count: INITIAL_VISIBLE_COUNT });
   const filter = useMemo(
     () => parseBandoriSongsPageFilter(new URLSearchParams(searchParams.toString())),
     [searchParams],
@@ -90,7 +87,8 @@ function SongInformation() {
     [catalog, deferredFilter],
   );
   const filterKey = useMemo(() => JSON.stringify(deferredFilter), [deferredFilter]);
-  const visibleCount = visibleState.key === filterKey ? visibleState.count : INITIAL_VISIBLE_COUNT;
+
+  const { count: visibleCount, listRef, showMore } = useCatalogVisit(filterKey, !musicMaster.loading && filteredSongs.length > 0);
   const visibleSongs = filteredSongs.slice(0, visibleCount);
   const remainingCount = Math.max(0, filteredSongs.length - visibleSongs.length);
 
@@ -124,7 +122,7 @@ function SongInformation() {
           <div className="text-sm font-bold">{t("states.empty")}</div>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div ref={listRef} className="space-y-3">
           {visibleSongs.map((entry) => (
             <BandoriSongDetailedRow
               key={entry.songId}
@@ -137,10 +135,10 @@ function SongInformation() {
           {remainingCount > 0 ? (
             <button
               type="button"
-              onClick={() => setVisibleState({ key: filterKey, count: visibleCount + PAGE_SIZE })}
+              onClick={showMore}
               className="hhwx-panel hhwx-catalog-action h-12 w-full border text-sm font-black transition"
             >
-              {t("page.showMore", { count: Math.min(PAGE_SIZE, remainingCount) })}
+              {t("page.showMore", { count: Math.min(CATALOG_PAGE_SIZE, remainingCount) })}
             </button>
           ) : null}
         </div>

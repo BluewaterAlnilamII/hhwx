@@ -1,9 +1,10 @@
 "use client";
+import { CATALOG_PAGE_SIZE, useCatalogVisit } from "@/hooks/useCatalogVisit";
 import RetryButton from "@/components/RetryButton";
 
 import LoadingIndicator from "@/components/LoadingIndicator";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo } from "react";
 import { SearchX } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import BandoriCardFilterControls from "@/components/bandori/BandoriCardFilterControls";
@@ -37,9 +38,6 @@ import { useBandoriPreferredServer } from "@/store/useBandoriPreferencesStore";
 import BandoriPageShell from "../BandoriPageShell";
 import { useTranslations } from "next-intl";
 import BandoriCardDetailedRow from "./_components/BandoriCardDetailedRow";
-
-const INITIAL_VISIBLE_COUNT = 40;
-const PAGE_SIZE = 40;
 
 function parseNumberSelection(
   rawValue: string | null,
@@ -85,7 +83,6 @@ export default function CardsPageClient() {
   const charactersMaster = useBandoriCharactersMaster();
   const skillsMaster = useBandoriSkillsMaster();
   const cardsAssetIndex = useBandoriCardsAssetIndex();
-  const [visibleState, setVisibleState] = useState({ key: "", count: INITIAL_VISIBLE_COUNT });
   const cardsListQuery = searchParams.toString();
 
   useEffect(() => {
@@ -166,15 +163,16 @@ export default function CardsPageClient() {
     filterOptions.characterIds,
   ), [catalog, deferredFilter, filterOptions.bandIds, filterOptions.characterIds]);
   const filterKey = useMemo(() => JSON.stringify(deferredFilter), [deferredFilter]);
-  const visibleCount = visibleState.key === filterKey ? visibleState.count : INITIAL_VISIBLE_COUNT;
-  const visibleCards = filteredCards.slice(0, visibleCount);
-  const remainingCount = Math.max(0, filteredCards.length - visibleCards.length);
   const isLoading = cardsMaster.loading
     || charactersMaster.loading
     || skillsMaster.loading
     || cardsAssetIndex.loading;
   const error = cardsMaster.error ?? charactersMaster.error ?? skillsMaster.error ?? cardsAssetIndex.error;
   const hasCatalog = cardsMaster.data !== null && charactersMaster.data !== null && skillsMaster.data !== null;
+
+  const { count: visibleCount, listRef, showMore } = useCatalogVisit(filterKey, !isLoading && filteredCards.length > 0);
+  const visibleCards = filteredCards.slice(0, visibleCount);
+  const remainingCount = Math.max(0, filteredCards.length - visibleCards.length);
 
   const updateFilter = (patch: Partial<BandoriCardsPageFilter>) => {
     replaceCardsListQuery(updateBandoriCardsListQuery(window.location.search, patch, filterOptions));
@@ -220,7 +218,7 @@ export default function CardsPageClient() {
           <div className="text-sm font-bold">{t("states.empty")}</div>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div ref={listRef} className="space-y-3">
           {visibleCards.map((entry) => (
             <BandoriCardDetailedRow
               key={entry.cardRef}
@@ -233,10 +231,10 @@ export default function CardsPageClient() {
           {remainingCount > 0 ? (
             <button
               type="button"
-              onClick={() => setVisibleState({ key: filterKey, count: visibleCount + PAGE_SIZE })}
+              onClick={showMore}
               className="hhwx-panel hhwx-catalog-action h-12 w-full border text-sm font-black transition"
             >
-              {t("page.showMore", { count: Math.min(PAGE_SIZE, remainingCount) })}
+              {t("page.showMore", { count: Math.min(CATALOG_PAGE_SIZE, remainingCount) })}
             </button>
           ) : null}
         </div>

@@ -146,7 +146,8 @@ test("Songs home reuses the Music and public-asset contracts without a new API",
   assert.match(client, /useBandoriMusicAssetIndex\(\)/u);
   assert.match(client, /buildBandoriSongCatalog/u);
   assert.match(client, /filterBandoriSongCatalog/u);
-  assert.match(client, /INITIAL_VISIBLE_COUNT = 40/u);
+  assert.match(client, /useCatalogVisit\(filterKey,/u);
+  assert.match(await read("src/hooks/useCatalogVisit.ts"), /CATALOG_PAGE_SIZE = 40/u);
   assert.match(catalog, /setListParam\(params, "difficulty", nextFilter\.difficulties, BANDORI_SONG_DIFFICULTY_FILTERS\)/u);
   assert.match(catalog, /nextFilter\.sortBy === "id"/u);
   assert.match(client, /params\.delete\("server"\)/u);

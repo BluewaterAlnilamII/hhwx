@@ -28,7 +28,7 @@ export default function SectionSidebarShell({ children, onCloseMobileDrawer }: S
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const isOthelloPage = pathname === "/othello";
   const contentWrapperClassName = isOthelloPage
-    ? "relative h-[calc(100svh-58px)] min-h-[calc(100svh-58px)] px-2 py-0 sm:px-6 sm:py-0 lg:px-6 lg:py-0"
+    ? "relative h-[calc(100svh-var(--site-toolbar-height))] min-h-[calc(100svh-var(--site-toolbar-height))] px-2 py-0 sm:px-6 sm:py-0 lg:px-6 lg:py-0"
     : "relative min-h-full px-2 py-5 sm:px-6 lg:px-8 lg:py-6";
 
   const requestPrefetch = (href: string) => {
@@ -85,7 +85,7 @@ export default function SectionSidebarShell({ children, onCloseMobileDrawer }: S
 
   return (
     <div className="relative flex flex-1">
-      <aside className="hhwx-desktop-sidebar sticky top-[58px] hidden h-[calc(100svh-58px)] w-[270px] shrink-0 border-r border-[var(--theme-color-shell-sidebar-border)] bg-transparent shadow-[var(--theme-shadow-shell-sidebar)] lg:flex lg:flex-col">
+      <aside className="hhwx-desktop-sidebar sticky top-[var(--site-toolbar-height)] hidden h-[calc(100svh-var(--site-toolbar-height))] w-[270px] shrink-0 border-r border-[var(--theme-color-shell-sidebar-border)] bg-transparent shadow-[var(--theme-shadow-shell-sidebar)] lg:flex lg:flex-col">
         {sidebarContent}
       </aside>
 
@@ -97,7 +97,7 @@ export default function SectionSidebarShell({ children, onCloseMobileDrawer }: S
         <Dialog.Overlay className="fixed inset-0 z-260 bg-[var(--theme-color-shell-sidebar-backdrop)] lg:hidden" />
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed bottom-0 left-0 top-[58px] z-260 flex h-[calc(100svh-58px)] min-h-[calc(100svh-58px)] w-[286px] max-w-[88vw] flex-col overflow-hidden border-r border-[var(--theme-color-shell-sidebar-border)] bg-[var(--theme-color-shell-sidebar-background)] shadow-[var(--theme-shadow-shell-sidebar-overlay)] lg:hidden"
+          className="fixed bottom-0 left-0 top-[var(--site-toolbar-height)] z-260 flex h-[calc(100svh-var(--site-toolbar-height))] min-h-[calc(100svh-var(--site-toolbar-height))] w-[286px] max-w-[88vw] flex-col overflow-hidden border-r border-[var(--theme-color-shell-sidebar-border)] bg-[var(--theme-color-shell-sidebar-background)] shadow-[var(--theme-shadow-shell-sidebar-overlay)] lg:hidden"
           onOpenAutoFocus={() => {
             returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
           }}

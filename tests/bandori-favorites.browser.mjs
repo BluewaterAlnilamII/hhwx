@@ -476,8 +476,10 @@ async function checkEventEditor(page, panel, phone, api) {
     href: row.querySelector("a").getAttribute("href"),
     icons: [...row.querySelectorAll("small img")].map(icon => icon.alt),
   })));
+  const beforeEdit = page.url();
   await page.getByRole("button", { name: "编辑收藏活动" }).click();
-  await page.waitForURL("**#collection/events/edit");
+  await panel.locator("[data-edit=events][aria-pressed=true]").waitFor();
+  assert.equal(page.url(), beforeEdit);
   await section.getByRole("heading", {name:heading, exact:true}).waitFor();
   assert.equal(await section.locator("[data-heading-part=toggle]").count(), 0, "both JP events already fit in the preview");
   assert.equal(await flags.getByRole("button", { name: "日服" }).getAttribute("aria-pressed"), "true");
@@ -650,7 +652,8 @@ async function checkCardEditor(page, panel, cards, phone, api, trainedArt) {
   assert.equal((await saving).status(), 200);
   await page.getByRole("button", { name: "以上展示在首页，当前 5 张" }).waitFor();
   await page.getByRole("button", { name: "完成编辑", exact: true }).click();
-  await page.waitForFunction(() => !location.hash);
+  await panel.locator("[data-edit=cards][aria-pressed=false]").waitFor();
+  assert.equal(new URL(page.url()).hash, "");
   const links = panel.locator('a[href*="/bandori/cards/"]');
   assert.equal(await links.count(), 5);
   await page.reload({ waitUntil: "domcontentloaded" });
@@ -713,7 +716,8 @@ async function checkCardEditor(page, panel, cards, phone, api, trainedArt) {
   assert.deepEqual(await rows.evaluateAll(entries => entries.slice(0, 7).map(el => el.dataset.sortId)),
     [...cards.slice(0, 6).map(String), "preview-divider"]);
   await page.getByRole("button", { name: "完成编辑", exact: true }).click();
-  await page.waitForFunction(() => !location.hash);
+  await panel.locator("[data-edit=cards][aria-pressed=false]").waitFor();
+  assert.equal(new URL(page.url()).hash, "");
   await links.first().waitFor();
   assert.equal(await links.first().locator("img").first().getAttribute("src"), trainedArt);
   assert.deepEqual(await links.evaluateAll(entries => entries.map(link => Number(new URL(link.href).pathname.split("/").pop()))), cards.slice(0, 6));
@@ -813,10 +817,13 @@ async function checkSongEditMode(page, panel, songs, phone, api) {
       assert.deepEqual(await ids(), expected.slice(0,10));
     }
   }
+  const previewUrl = page.url();
+  const profileHistoryLength = await page.evaluate(() => history.length);
   await edit.click();
   await rows.last().locator("[data-favorite-remove]").waitFor();
   await checkSongListHeading(panel);
-  assert.equal(new URL(page.url()).hash, "#collection/songs");
+  assert.equal(page.url(), previewUrl);
+  assert.equal(await page.evaluate(() => history.length), profileHistoryLength);
   assert.deepEqual(await ids(), songs);
   if (!phone) {
     assert.deepEqual(await cursors(), ["grab","grab","grab"]);
@@ -837,7 +844,8 @@ async function checkSongEditMode(page, panel, songs, phone, api) {
   const before = await geometry();
   assert.equal(await handle(rows.first()).locator("svg").evaluate(el => getComputedStyle(el).animationName), "none");
   await done.click();
-  await page.waitForFunction(() => !location.hash);
+  await panel.locator("[data-edit=songs][aria-pressed=false]").waitFor();
+  assert.equal(new URL(page.url()).hash, "");
   assert.deepEqual(await ids(), songs.slice(0,10));
   await rows.first().locator("[data-song-play]").waitFor({state:"attached"});
   if (!phone) assert.ok((await cursors()).every(cursor => cursor !== "grab" && cursor !== "grabbing"));
@@ -980,7 +988,8 @@ async function checkSongEditMode(page, panel, songs, phone, api) {
   await api("/songs:" + lastId,"PUT");
   assert.equal(await back.count(), 0);
   await done.click();
-  await page.waitForFunction(() => !location.hash);
+  await panel.locator("[data-edit=songs][aria-pressed=false]").waitFor();
+  assert.equal(new URL(page.url()).hash, "");
   await page.reload({waitUntil:"domcontentloaded"});
   await rows.nth(9).waitFor();
   console.log("PASS in-place playlist edit, motion, sorting, persistence and removal", phone ? "mobile" : "desktop");
@@ -1543,8 +1552,10 @@ try {
     cards.push(removedId);
     await checkSongPlaylist(page, panel, songs, phone, api);
     const flags = panel.getByRole("group",{name:"活动区服"});
+    const beforeEdit = page.url();
     await panel.getByRole("button", { name: "编辑收藏活动" }).click();
-    await page.waitForURL("**#collection/events/edit");
+    await panel.locator("[data-edit=events][aria-pressed=true]").waitFor();
+    assert.equal(page.url(), beforeEdit);
     await page.getByRole("button", { name: "完成编辑", exact: true }).click();
     await panel.locator('[data-more=events]').click();
     await checkCollectionHeader(page, panel, `收藏的活动（${events.length}）`, phone);

@@ -1,7 +1,8 @@
 "use client";
+import { CATALOG_PAGE_SIZE, useCatalogVisit } from "@/hooks/useCatalogVisit";
 import RetryButton from "@/components/RetryButton";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { SearchX } from "lucide-react";
@@ -56,13 +57,12 @@ function SongInformation() {
   const music = useOurNotesMaster("music");
   const bands = useOurNotesMaster("bands");
   const images = useOurNotesMusicAssetIndex();
-  const [pagination, setPagination] = useState({ query, count: 40 });
-  const count = pagination.query === deferredQuery ? pagination.count : 40;
   const options = useMemo(() => ourNotesSongBandFilters(bands.data ?? {}), [bands.data]);
   const filter = useMemo(() => parseOurNotesSongFilter(deferredQuery, options), [deferredQuery, options]);
   const catalog = useMemo(() => buildOurNotesSongCatalog(music.data ?? {}, server), [music.data, server]);
   const results = useMemo(() => filterOurNotesSongs(catalog, filter, bands.data ?? {}), [catalog, filter, bands.data]);
   const ready = hydrated && music.data !== null && bands.data !== null && images.value !== null;
+  const { count, listRef, showMore } = useCatalogVisit(deferredQuery, ready && query === deferredQuery);
   const failed = music.error || bands.error || images.error;
   const dateFormatter = useMemo(() => new Intl.DateTimeFormat(locale, { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit" }), [locale]);
   useEffect(() => {
@@ -85,7 +85,7 @@ function SongInformation() {
     {ready && bands.data ? <>
       <OurNotesSongFilterControls filter={parseOurNotesSongFilter(query, options)} resultCountLabel={t("page.resultCount", { count: results.length })}
         bands={bands.data} server={server} onFilterChange={update} onClearFilter={() => navigate("")} />
-      <div className="space-y-3" aria-busy={query !== deferredQuery}>
+      <div ref={listRef} className="space-y-3" aria-busy={query !== deferredQuery}>
         {results.length === 0 ? <div className="hhwx-panel flex min-h-64 flex-col items-center justify-center gap-3 border text-center text-[var(--theme-color-text-muted)]">
           <SearchX className="h-9 w-9" aria-hidden="true" /><div className="text-sm font-bold">{t("states.empty")}</div>
         </div> : null}
@@ -107,7 +107,7 @@ function SongInformation() {
             difficulties={entry.charts.map((chart) => ({ difficulty: chart.difficulty, label: t(`difficulties.${chart.difficulty}`), level: chart.level }))} />;
         })}
         {count < results.length ? <button type="button" className="hhwx-panel hhwx-catalog-action h-12 w-full border text-sm font-black transition"
-          onClick={() => setPagination({ query: deferredQuery, count: count + 40 })}>{t("page.showMore", { count: Math.min(40, results.length - count) })}</button> : null}
+          onClick={showMore}>{t("page.showMore", { count: Math.min(CATALOG_PAGE_SIZE, results.length - count) })}</button> : null}
       </div>
     </> : null}
   </>;

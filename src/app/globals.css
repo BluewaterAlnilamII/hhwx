@@ -516,6 +516,8 @@
 
 
 :root {
+  --site-toolbar-height: 59px;
+
   /* Chart data ink remains Event Tracker-owned rather than theme-owned. */
   --eventtracker-bestdori-color: var(--theme-color-text-muted);
 
