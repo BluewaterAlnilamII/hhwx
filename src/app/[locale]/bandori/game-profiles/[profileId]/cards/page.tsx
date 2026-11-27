@@ -23,6 +23,8 @@ import BandoriCardFilterControls from "@/components/bandori/BandoriCardFilterCon
 import { type BandoriCardPickerDialogProps } from "@/components/bandori/card-picker/BandoriCardPickerDialog";
 import BandoriCardTile from "@/components/bandori/BandoriCardTile";
 import { type GameProfileCardEditorDialogProps } from "@/components/bandori/GameProfileCardEditorDialog";
+import { useVisitBatch } from "@/hooks/useCatalogVisit";
+import { useHistoryEntryState } from "@/hooks/useHistoryEntryState";
 import VirtualizedBandoriCardGrid from "@/components/bandori/VirtualizedBandoriCardGrid";
 import { type BandoriCardPickerValue } from "@/components/bandori/card-picker/types";
 import { useBandoriCardsMaster } from "@/hooks/useBandoriCardsMaster";
@@ -238,8 +240,8 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
   const [saveError, setSaveError] = useState("");
   const [saveNotice, setSaveNotice] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("idle");
-  const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
-  const [visibleState, setVisibleState] = useState({ key: "", count: CARD_PAGE_SIZE });
+  const visitScope = userId ? `${userId}:${profileId}` : undefined;
+  const [isFilterPanelOpen, setIsFilterPanelOpen] = useHistoryEntryState("profileCardsFilterOpen", visitScope, false);
   const cardPickerScrollRef = useRef<HTMLDivElement | null>(null);
   const profileLoadGenerationRef = useRef(0);
   const profileLoadRequestRef = useRef<{
@@ -288,7 +290,6 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
       setSaveError("");
       setSaveNotice("");
       setSaveState("idle");
-      setVisibleState({ key: "", count: CARD_PAGE_SIZE });
     } catch (error) {
       if (generation !== profileLoadGenerationRef.current || request.controller.signal.aborted) return;
       setLoadError(error instanceof Error ? error.message : t("errors.loadFailed"));
@@ -401,6 +402,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
     updateFilter,
     resetFilter,
   } = useBandoriProfileCardFilter({
+    visitScope,
     entries,
     characters,
     preferredServer,
@@ -410,7 +412,8 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
     getCharacterLabel: getCharacterFilterLabel,
     sortValues,
   });
-  const visibleCount = visibleState.key === filterKey ? visibleState.count : CARD_PAGE_SIZE;
+  const batchKey = `${visitScope}:${filterKey}`;
+  const { count: visibleCount, setCount, showMore } = useVisitBatch(batchKey, CARD_PAGE_SIZE);
   const remainingCards = Math.max(0, filteredEntries.length - Math.min(visibleCount, filteredEntries.length));
   const editorEntry = useMemo(() => cardEditorState ? buildBandoriProfileCardEntry(
     cardEditorState.card,
@@ -611,7 +614,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                 ) : null}
                 <button
                   type="button"
-                  onClick={() => setIsFilterPanelOpen((current) => !current)}
+                  onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
                   aria-expanded={isFilterPanelOpen}
                   className="hhwx-control inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-bold transition"
                 >
@@ -708,6 +711,7 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                   <VirtualizedBandoriCardGrid
                     items={filteredEntries}
                     visibleLimit={visibleCount}
+                    readingScope={areEntriesReady ? `${batchKey}:${visibleCount}` : undefined}
                     layoutKey={isFilterPanelOpen ? "profile-filters-open" : "profile-filters-closed"}
                     getKey={(entry) => entry.card.cardId}
                     renderItem={(entry) => (
@@ -737,17 +741,14 @@ export default function GameProfileCardsPage({ params }: { params: Promise<{ pro
                     <div className="mt-4 flex flex-wrap justify-center gap-2">
                       <button
                         type="button"
-                        onClick={() => setVisibleState({
-                          key: filterKey,
-                          count: Math.min(visibleCount + CARD_PAGE_SIZE, filteredEntries.length),
-                        })}
+                        onClick={showMore}
                         className="hhwx-control inline-flex h-10 items-center justify-center rounded-xl border px-4 text-sm font-bold"
                       >
                         {t("actions.showMore", { count: Math.min(CARD_PAGE_SIZE, remainingCards) })}
                       </button>
                       <button
                         type="button"
-                        onClick={() => setVisibleState({ key: filterKey, count: filteredEntries.length })}
+                        onClick={() => setCount(filteredEntries.length)}
                         className="hhwx-control inline-flex h-10 items-center justify-center rounded-xl border px-4 text-sm font-bold"
                       >
                         {t("actions.showAll")}

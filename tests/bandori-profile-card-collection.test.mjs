@@ -461,6 +461,12 @@ test("profile filters migrate an all-server selection across contexts but preser
       useMemo: (build) => build(), useCallback: (callback) => callback, useDeferredValue: (value) => value,
       useState: () => [stored, (next) => { stored = next; }],
     },
+    "./useHistoryEntryState": {
+      useHistoryEntryState: (_field, scope, initial) => {
+        assert.equal(scope, undefined);
+        return [initial, () => assert.fail("A filter without a visit scope must stay local")];
+      },
+    },
     "@/lib/bandori/cards/filter": cardFilters,
     "@/lib/bandori/cards/profile-card-collection": cardCollection,
   };

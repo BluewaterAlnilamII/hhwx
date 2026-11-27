@@ -96,7 +96,7 @@ Card and event edit rows use the same title weight and a separate column for the
 
 Owners can use a mouse to reorder tracks from the jacket, title, metadata, or blank space in a row, both in the home preview and in the full playlist. A drop in the preview reorders the visible tracks and preserves the order of the rest. The grab cursor appears in edit mode. On touchscreens, the edit handle drags immediately, holding a row briefly picks it up, and a quick swipe scrolls. In browse mode a long press opens track actions.
 
-Finishing an edit returns the collection to its previous preview or full view. When all items fit in the preview, the heading and footer omit the disclosure controls. Events use the selected server’s timeline for this check.
+Expanding a collection updates the current profile address to `#collection/cards`, `#collection/events` or `#collection/songs`, so that the full collection can be shared. Collapse clears that fragment on the same history entry. Edit and Done keep the address that was open before editing. Finishing an edit returns the collection to its previous preview or full view. Existing shared card and event links ending in `/edit` still respect the viewer’s permissions. When all items fit in the preview, the heading and footer omit the disclosure controls. Events use the selected server’s timeline for this check.
 
 Reloading the profile opens all three collections in preview mode. Returning from a detail page restores the collection view and reading position. Switching profile tabs also preserves the reading position when the other tab is too short to scroll.
 
@@ -112,6 +112,8 @@ Reloading the profile opens all three collections in preview mode. Returning fro
 - Detail and catalog stars share the signed-in viewer’s set of favorite keys. Each fresh read of the owner's collection supplies those keys directly. Saved additions and removals update open views for the same account, including changes confirmed while a read is in flight. Otherwise the first star loads the keys once for the account. The application does not query or display site-wide totals. Each saved favorite contributes one record for statistics, including favorites in private modules. Profile headings show the number of items in the visible collection.
 - Card previews have a star in the upper-right corner. Song cards group the star with playback. On desktop, Meta rows show it beside the title on hover or keyboard focus, and keep saved songs starred across difficulties. On touchscreens the song card provides the action.
 - Each detail star has a 44 px target. The event star sits directly after the event name. Cards place the star at the right end of the back-link row, and songs use the right end of the ID row.
+
+[The catalog navigation test](../tests/catalog-navigation.browser.mjs) follows a reader from the second batch of each public catalog to the profile on desktop and mobile. It checks the cover after loading, editing from preview and full view, returning from a card detail, and revisiting the same catalog URL as a new visit.
 
 Local browser tests in `tests/bandori-favorites.browser.mjs` cover desktop and touch interactions, shared membership reads, failed writes and retries. Database regression `supabase/tests/bandori_favorites.sql` covers role access, private favorites in statistics, ordering and collections exceeding 1,000 records.
 

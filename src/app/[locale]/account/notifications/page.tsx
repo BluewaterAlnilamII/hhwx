@@ -3,11 +3,13 @@ import RetryButton from "@/components/RetryButton";
 
 import { LoadingSpinner } from "@/components/LoadingIndicator";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import AccountShell, { AccountErrorState, AccountLoadingState, AccountSignInState } from "../AccountShell";
 import { getAccessToken, useLocalizedAccountProfile } from "../useAccountProfile";
+import { readEntryValue, writeEntryValue, useHistoryEntryState } from "@/hooks/useHistoryEntryState";
+import { useListReadingPosition } from "@/hooks/useListReadingPosition";
 import { getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
 import {
   COMMENT_TARGET_BANDORI_EVENT,
@@ -27,7 +29,18 @@ import { getLocalizedApiErrorMessage } from "@/lib/localized-api-errors";
 
 type NotificationColumnState = CommentNotificationListResponse & {
   loadingMore: boolean;
+  paginationFailed?: boolean;
+  pendingBoundary?: NotificationBoundary;
 };
+
+type NotificationBoundary = Pick<CommentNotification, "id" | "createdAt">;
+type NotificationBoundaries = Partial<Record<CommentNotificationType, NotificationBoundary>>;
+
+function rememberOldest(userId: string, type: CommentNotificationType, oldest?: CommentNotification) {
+  if (!oldest) return;
+  const saved = readEntryValue<NotificationBoundaries>("notificationBoundaries", userId);
+  writeEntryValue("notificationBoundaries", userId, { ...saved, [type]: { id: oldest.id, createdAt: oldest.createdAt } });
+}
 
 type NotificationColumns = Record<CommentNotificationType, NotificationColumnState>;
 
@@ -55,13 +68,6 @@ function createEmptyColumns(): NotificationColumns {
   return {
     comment_reply: createEmptyColumnState(),
     comment_reaction: createEmptyColumnState(),
-  };
-}
-
-function toLoadedColumnState(data: CommentNotificationListResponse): NotificationColumnState {
-  return {
-    ...data,
-    loadingMore: false,
   };
 }
 
@@ -180,7 +186,7 @@ export default function AccountNotificationsPage() {
   const errorT = useTranslations("errors");
   const { userId, authReady, loadingProfile, profileError } = useLocalizedAccountProfile();
   const [columns, setColumns] = useState<NotificationColumns>(() => createEmptyColumns());
-  const [activeNotificationType, setActiveNotificationType] = useState<CommentNotificationType>("comment_reply");
+  const [activeNotificationType, setActiveNotificationType] = useHistoryEntryState<CommentNotificationType>("notificationColumn", userId ?? undefined, "comment_reply");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [loadedUserId, setLoadedUserId] = useState<string | null>(null);
@@ -206,54 +212,82 @@ export default function AccountNotificationsPage() {
   }), [columns]);
   const activeColumn = columns[activeNotificationType];
 
+  const panel = useRef<HTMLElement>(null);
+  const reads = useRef<AbortController | null>(null);
+  useListReadingPosition(panel, userId ? userId + ":" + activeNotificationType : undefined,
+    hasLoaded && !loading && !activeColumn.pendingBoundary);
+
   const fetchNotificationColumn = useCallback(async (
     type: CommentNotificationType,
     cursor: string | null | undefined,
     accessToken: string,
+    signal: AbortSignal,
   ) => requestJson<CommentNotificationListResponse>(
     buildNotificationRequestUrl(type, cursor),
     (status) => t("requestFailed", { status }),
     (payload) => getLocalizedApiErrorMessage(payload, errorT),
-    { headers: { Authorization: `Bearer ${accessToken}` } },
+    { headers: { Authorization: `Bearer ${accessToken}` }, signal },
   ), [errorT, t]);
 
-  useEffect(() => {
-    let disposed = false;
+  const readPages = useCallback(async (
+    type: CommentNotificationType, cursor: string | null, token: string, signal: AbortSignal,
+    boundary?: NotificationBoundary,
+  ): Promise<NotificationColumnState> => {
+    let page = await fetchNotificationColumn(type, cursor, token, signal);
+    const notifications = [...page.notifications];
+    // New arrivals can push the previous tail onto a later page.
+    // The API orders by creation time and then by ID, both descending.
+    while (boundary && page.hasMore && page.nextCursor) {
+      const tail = notifications.at(-1);
+      if (!tail || tail.createdAt < boundary.createdAt || (tail.createdAt === boundary.createdAt && tail.id <= boundary.id)) break;
+      try {
+        page = await fetchNotificationColumn(type, page.nextCursor, token, signal);
+      } catch (error) {
+        if (signal.aborted) throw error;
+        return { ...page, notifications, loadingMore: false, paginationFailed: true, pendingBoundary: boundary };
+      }
+      notifications.push(...page.notifications);
+    }
+    return { ...page, notifications, loadingMore: false };
+  }, [fetchNotificationColumn]);
 
+  useEffect(() => {
     if (!authReady || !userId) {
       // No notification subscription/read can be active without an authenticated owner.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
-      return () => {
-        disposed = true;
-      };
+      return;
     }
 
+    const controller = new AbortController();
+    reads.current = controller;
+    const { signal } = controller;
+    const boundaries = readEntryValue<NotificationBoundaries>("notificationBoundaries", userId);
     const loadInitialNotifications = async () => {
       setLoading(true);
       setError("");
 
       try {
         const accessToken = await getAccessToken();
-        if (disposed) return;
+        if (signal.aborted) return;
         if (!accessToken) throw new Error(t("loadFailed"));
         const [replyData, reactionData] = await Promise.all([
-          fetchNotificationColumn("comment_reply", null, accessToken),
-          fetchNotificationColumn("comment_reaction", null, accessToken),
+          readPages("comment_reply", null, accessToken, signal, boundaries?.comment_reply),
+          readPages("comment_reaction", null, accessToken, signal, boundaries?.comment_reaction),
         ]);
-        if (disposed) return;
+        if (signal.aborted) return;
 
         setColumns({
-          comment_reply: toLoadedColumnState(replyData),
-          comment_reaction: toLoadedColumnState(reactionData),
+          comment_reply: replyData,
+          comment_reaction: reactionData,
         });
         setLoadedUserId(userId);
       } catch (err) {
-        if (!disposed) {
+        if (!signal.aborted) {
           setError(err instanceof Error ? err.message : t("loadFailed"));
         }
       } finally {
-        if (!disposed) {
+        if (!signal.aborted) {
           setLoading(false);
         }
       }
@@ -262,16 +296,15 @@ export default function AccountNotificationsPage() {
     void loadInitialNotifications();
 
     return () => {
-      disposed = true;
+      controller.abort();
+      reads.current = null;
     };
-  }, [authReady, fetchNotificationColumn, loadAttempt, t, userId]);
+  }, [authReady, readPages, loadAttempt, t, userId]);
 
   const loadMoreNotifications = async (type: CommentNotificationType) => {
     const column = columns[type];
-    if (!column.hasMore || column.loadingMore) return;
-
-    const accessToken = await getAccessToken();
-    if (!accessToken) return;
+    const signal = reads.current?.signal;
+    if (!column.hasMore || column.loadingMore || !userId || !signal) return;
 
     setColumns((current) => ({
       ...current,
@@ -283,23 +316,27 @@ export default function AccountNotificationsPage() {
     setError("");
 
     try {
-      const data = await fetchNotificationColumn(type, column.nextCursor, accessToken);
+      const accessToken = await getAccessToken();
+      if (signal.aborted) return;
+      if (!accessToken) throw new Error(t("loadFailed"));
+      const data = await readPages(type, column.nextCursor, accessToken, signal, column.pendingBoundary);
+      if (signal.aborted) return;
+      if (!data.pendingBoundary) rememberOldest(userId, type, data.notifications.at(-1));
       setColumns((current) => ({
         ...current,
         [type]: {
+          ...data,
           notifications: [...current[type].notifications, ...data.notifications],
-          nextCursor: data.nextCursor,
-          hasMore: data.hasMore,
-          loadingMore: false,
         },
       }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("loadFailed"));
+    } catch {
+      if (signal.aborted) return;
       setColumns((current) => ({
         ...current,
         [type]: {
           ...current[type],
           loadingMore: false,
+          paginationFailed: true,
         },
       }));
     }
@@ -397,14 +434,18 @@ export default function AccountNotificationsPage() {
     const className = "flex items-center justify-between gap-3 rounded-2xl border border-[var(--theme-color-border-subtle)] bg-[var(--theme-color-panel-background)] px-4 py-3.5 shadow-xs";
 
     if (!target.href) {
-      return <div key={notification.id} className={className}>{content}</div>;
+      return <div key={notification.id} data-reading-row={notification.id} className={className}>{content}</div>;
     }
 
     return (
       <Link
         key={notification.id}
+        data-reading-row={notification.id}
         href={target.href}
-        onClick={() => void markRead(notification.id).catch(() => undefined)}
+        onClick={() => {
+          if (userId) rememberOldest(userId, notification.type, activeColumn.notifications.at(-1));
+          void markRead(notification.id).catch(() => undefined);
+        }}
         className={`${className} transition hover:border-[var(--theme-color-action-secondary-border)] hover:shadow-[var(--theme-shadow-surface-raised)]`}
       >
         {content}
@@ -414,7 +455,7 @@ export default function AccountNotificationsPage() {
 
   const renderActiveNotifications = () => {
     return (
-      <section
+      <section ref={panel}
         id={`notification-panel-${activeNotificationType}`}
         role="tabpanel"
         aria-labelledby={`notification-tab-${activeNotificationType}`}
@@ -432,15 +473,19 @@ export default function AccountNotificationsPage() {
 
         {activeColumn.hasMore ? (
           <div className="flex justify-center pt-2">
-            <button
-              type="button"
-              onClick={() => void loadMoreNotifications(activeNotificationType)}
-              disabled={activeColumn.loadingMore}
-              className="hhwx-control inline-flex h-10 items-center rounded-full border px-5 text-sm font-semibold shadow-xs transition disabled:opacity-60"
-            >
-              {activeColumn.loadingMore ? <LoadingSpinner className="mr-2 text-current" /> : null}
-              {activeColumn.loadingMore ? commonT("actions.loading") : commonT("actions.loadMore")}
-            </button>
+            {activeColumn.paginationFailed && !activeColumn.loadingMore ? (
+              <RetryButton onClick={() => void loadMoreNotifications(activeNotificationType)} />
+            ) : (
+              <button
+                type="button"
+                onClick={() => void loadMoreNotifications(activeNotificationType)}
+                disabled={activeColumn.loadingMore}
+                className="hhwx-control inline-flex h-10 items-center rounded-full border px-5 text-sm font-semibold shadow-xs transition disabled:opacity-60"
+              >
+                {activeColumn.loadingMore ? <LoadingSpinner className="mr-2 text-current" /> : null}
+                {activeColumn.loadingMore ? commonT("actions.loading") : commonT("actions.loadMore")}
+              </button>
+            )}
           </div>
         ) : null}
       </section>

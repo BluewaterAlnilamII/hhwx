@@ -456,8 +456,8 @@ export default function Toolbar({ showDebugButton = true, isSidebarOpen = false,
     };
 
     return (
-        <header className="sticky top-0 z-250 border-b border-[var(--theme-color-shell-header-border)] bg-[var(--theme-color-shell-header-background)] text-[var(--theme-color-toolbar-foreground)] shadow-[var(--theme-shadow-toolbar-header)]">
-            <div className="flex h-[58px] w-full items-center justify-between gap-2 px-3 sm:px-4 lg:justify-end lg:px-5">
+        <header className="sticky top-0 z-250 h-[var(--site-toolbar-height)] border-b border-[var(--theme-color-shell-header-border)] bg-[var(--theme-color-shell-header-background)] text-[var(--theme-color-toolbar-foreground)] shadow-[var(--theme-shadow-toolbar-header)]">
+            <div className="flex h-full w-full items-center justify-between gap-2 px-3 sm:px-4 lg:justify-end lg:px-5">
                 <div className="lg:hidden">
                     <button
                         type="button"

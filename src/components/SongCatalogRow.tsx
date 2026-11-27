@@ -25,7 +25,7 @@ export default function SongCatalogRow({ game, href, songId, action, title, band
     </div>
     <div className="col-start-2 min-w-0"><SongDifficultyStrip compact game={game} difficulties={difficulties} track={track} playbackLoading={playbackLoading} action={action} /></div>
   </article>;
-  return <article className="hhwx-panel hhwx-catalog-row group relative block border p-3 transition sm:p-4">
+  return <article data-reading-row={href} className="hhwx-panel hhwx-catalog-row group relative block border p-3 transition sm:p-4">
     <div className="grid min-h-24 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-5">
       <div className="flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[var(--theme-color-control-background-muted)] text-[var(--theme-color-text-muted)] shadow-[var(--theme-shadow-media)] sm:h-24 sm:w-24">
         {artworkUrl || artworkLoading ? <MusicArtwork src={artworkUrl} alt={labels.artwork} className="h-full w-full object-cover"

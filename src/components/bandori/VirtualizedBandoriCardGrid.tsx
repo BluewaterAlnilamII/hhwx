@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useVirtualizer, useWindowVirtualizer } from "@tanstack/react-virtual";
+import { useListReadingPosition } from "@/hooks/useListReadingPosition";
 import { cn } from "@/lib/utils";
 
 type VirtualizedBandoriCardGridProps<T> = {
@@ -12,6 +13,7 @@ type VirtualizedBandoriCardGridProps<T> = {
   desktopItemSize?: number;
   gap?: number;
   visibleLimit?: number;
+  readingScope?: string;
   scrollElementRef?: RefObject<HTMLElement | null>;
   className?: string;
   overscan?: number;
@@ -189,7 +191,7 @@ function VirtualRows<T>({
             {rowItems.map((item, rowItemIndex) => {
               const itemIndex = startIndex + rowItemIndex;
               return (
-                <div key={getKey(item)} className="overflow-visible" style={{ height: itemSize, width: itemSize }}>
+                <div key={getKey(item)} data-reading-row={getKey(item)} data-reading-index={itemIndex} className="overflow-visible" style={{ height: itemSize, width: itemSize }}>
                   {renderItem(item, itemIndex)}
                 </div>
               );
@@ -209,6 +211,7 @@ function WindowVirtualizedBandoriCardGrid<T>({
   desktopItemSize = DEFAULT_DESKTOP_ITEM_SIZE,
   gap = DEFAULT_GAP,
   visibleLimit,
+  readingScope,
   className,
   overscan = DEFAULT_OVERSCAN,
   layoutKey = "",
@@ -221,6 +224,12 @@ function WindowVirtualizedBandoriCardGrid<T>({
   const visibleItems = useMemo(() => getVisibleItems(items, visibleLimit), [items, visibleLimit]);
   const rowCount = Math.ceil(visibleItems.length / columns);
   const scrollMargin = useVirtualizerScrollMargin(elementRef, `${width}:${rowCount}:${itemSize}:${gap}:${layoutKey}`);
+  useListReadingPosition(elementRef, readingScope, width > 0, (id, fallbackIndex) => {
+    const index = visibleItems.findIndex(item => String(getKey(item)) === id);
+    if (!elementRef.current || !visibleItems.length) return undefined;
+    const target = index >= 0 ? index : Math.min(fallbackIndex, visibleItems.length - 1);
+    return elementRef.current.getBoundingClientRect().top + window.scrollY + Math.floor(target / columns) * rowHeight;
+  });
   const rowVirtualizer = useWindowVirtualizer<HTMLDivElement>({
     count: rowCount,
     estimateSize: () => rowHeight,

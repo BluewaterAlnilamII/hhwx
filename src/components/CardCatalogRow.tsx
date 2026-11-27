@@ -15,7 +15,7 @@ export default function CardCatalogRow({ href, prefetch, preview, title, id, sub
   mobileDescriptionBelow?: boolean;
 }) {
   return (
-    <Link href={href} prefetch={prefetch} className="hhwx-panel hhwx-catalog-row group block border p-3 transition sm:p-4">
+    <Link data-reading-row={href} href={href} prefetch={prefetch} className="hhwx-panel hhwx-catalog-row group block border p-3 transition sm:p-4">
       <article className={cn("grid min-h-24 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 sm:gap-5", mobileDescriptionBelow && "max-sm:items-start max-sm:gap-y-0")}>
         <div className={cn("flex items-center gap-1.5 sm:gap-2", mobileDescriptionBelow && "max-sm:col-start-1 max-sm:row-start-1 max-sm:row-span-3")}>{preview}</div>
         <div className={cn("min-w-0 self-stretch py-0.5", mobileDescriptionBelow && "max-sm:contents")}>

@@ -1,7 +1,8 @@
 "use client";
+import { CATALOG_PAGE_SIZE, useCatalogVisit } from "@/hooks/useCatalogVisit";
 import RetryButton from "@/components/RetryButton";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
@@ -37,9 +38,7 @@ export default function CardsPageClient() {
   const bands = useOurNotesMaster("bands");
   const skills = useOurNotesMaster("skills");
   const images = useOurNotesCardsAssetIndex();
-  const [pagination, setPagination] = useState({ query, count: 40 });
   const deferredQuery = useDeferredValue(query);
-  const count = pagination.query === deferredQuery ? pagination.count : 40;
   const entries = useMemo(() => cards.data && characters.data && bands.data && skills.data
     ? buildOurNotesCardCatalog(cards.data, kind, characters.data, bands.data, skills.data, server) : [],
   [cards.data, characters.data, bands.data, skills.data, kind, server]);
@@ -52,6 +51,7 @@ export default function CardsPageClient() {
   const results = useMemo(() => filterOurNotesCards(entries, filter, bands.data ?? {}, characters.data ?? {}), [entries, filter, bands.data, characters.data]);
   const dependencies = [cards, characters, bands, skills];
   const ready = hydrated && dependencies.every((item) => item.data !== null) && images.value !== null;
+  const { count, listRef, showMore } = useCatalogVisit(deferredQuery, ready && query === deferredQuery);
   const failed = dependencies.some((item) => item.error) || images.error;
   function navigate(next: string, push = false) {
     const url = window.location.pathname + (next ? `?${next}` : "") + window.location.hash;
@@ -76,7 +76,7 @@ export default function CardsPageClient() {
         {ready && characters.data && bands.data ? <>
           <OurNotesCardFilterControls filter={parseOurNotesCardFilter(query, options)} options={options} characters={characters.data} bands={bands.data} server={server} count={results.length}
             onChange={update} onClear={() => navigate(kind === "support" ? "kind=support" : "")} />
-          <div aria-busy={query !== deferredQuery} className="space-y-3">
+          <div ref={listRef} aria-busy={query !== deferredQuery} className="space-y-3">
             {results.length === 0 ? <div className="hhwx-panel flex min-h-64 flex-col items-center justify-center gap-3 border text-center text-[var(--theme-color-text-muted)]"><SearchX className="h-9 w-9" aria-hidden="true" /><p className="text-sm font-bold">{t("states.empty")}</p></div> : null}
             {results.slice(0, count).map((entry) => {
               const detailQuery = new URLSearchParams({ server: OURNOTES_SLOTS[entry.displayServer], list: query });
@@ -86,7 +86,7 @@ export default function CardsPageClient() {
                 metadata={<><span>{OURNOTES_RARITY_NAMES[entry.card.rarity]}</span><span>{t(`attributes.${entry.card.cardType}`)}</span></>}
                 description={entry.summaries.map((description) => description || t("states.skillUnavailable"))} />;
             })}
-            {count < results.length ? <button type="button" className="hhwx-panel hhwx-catalog-action h-12 w-full border text-sm font-black transition" onClick={() => setPagination({ query, count: count + 40 })}>{t("actions.more", { count: Math.min(40, results.length - count) })}</button> : null}
+            {count < results.length ? <button type="button" className="hhwx-panel hhwx-catalog-action h-12 w-full border text-sm font-black transition" onClick={showMore}>{t("actions.more", { count: Math.min(CATALOG_PAGE_SIZE, results.length - count) })}</button> : null}
           </div>
         </> : null}
       </Tabs.Content>

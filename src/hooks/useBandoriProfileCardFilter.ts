@@ -17,7 +17,17 @@ import {
 } from "@/lib/bandori/cards/profile-card-collection";
 import { type BandoriServer } from "@/lib/bandori-server";
 
+import { useHistoryEntryState } from "./useHistoryEntryState";
+
+type StoredFilter = {
+  filter: BandoriProfileCardFilterState;
+  availableBandIds: number[];
+  availableCharacterIds: number[];
+  contextServer: BandoriServer;
+};
+
 export function useBandoriProfileCardFilter({
+  visitScope,
   entries,
   characters,
   preferredServer,
@@ -27,6 +37,7 @@ export function useBandoriProfileCardFilter({
   getCharacterLabel,
   sortValues,
 }: {
+  visitScope?: string;
   entries: readonly BandoriProfileCardEntry[];
   characters: Readonly<Record<string, BandoriCharacterMaster | null | undefined>>;
   preferredServer: BandoriServer;
@@ -36,12 +47,10 @@ export function useBandoriProfileCardFilter({
   getCharacterLabel: (characterId: number) => string;
   sortValues: readonly BandoriProfileCardSortBy[];
 }) {
-  const [storedState, setStoredState] = useState<{
-    filter: BandoriProfileCardFilterState;
-    availableBandIds: number[];
-    availableCharacterIds: number[];
-    contextServer: BandoriServer;
-  } | null>(null);
+  const [local, setLocal] = useState<StoredFilter | null>(null);
+  const [saved, save] = useHistoryEntryState<StoredFilter | null>("profileCardsFilter", visitScope, null);
+  const storedState = visitScope ? saved : local;
+  const setStoredState = visitScope ? save : setLocal;
   const { bandOptions, characterOptions, bandIds, characterIds } = useMemo(
     () => buildBandoriCardFilterOptions(characters, {
       preferredServer,
@@ -102,8 +111,9 @@ export function useBandoriProfileCardFilter({
     characterIds: filter.characterIds,
     sortBy: filter.sortBy,
     sortDirection: filter.sortDirection,
-    entryCount: entries.length,
-  }), [deferredQuery, entries.length, filter]);
+    // A revisited profile should still find the card if the collection has grown.
+    entryCount: visitScope === undefined ? entries.length : undefined,
+  }), [deferredQuery, entries.length, filter, visitScope]);
 
   const updateFilter = useCallback((patch: Partial<BandoriProfileCardFilterState>) => {
     setStoredState({
@@ -112,10 +122,10 @@ export function useBandoriProfileCardFilter({
       availableCharacterIds: characterIds,
       contextServer,
     });
-  }, [bandIds, characterIds, contextServer, filter]);
+  }, [bandIds, characterIds, contextServer, filter, setStoredState]);
   const resetFilter = useCallback(() => {
     setStoredState(null);
-  }, []);
+  }, [setStoredState]);
 
   return {
     filter,
