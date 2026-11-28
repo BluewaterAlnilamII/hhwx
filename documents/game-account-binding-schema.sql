@@ -1,5 +1,5 @@
 -- Game account binding schema for hhwx.
--- Run this in Supabase SQL editor with service-role/admin privileges.
+-- Historical CN-only reference. Apply the canonical files in supabase/migrations/ for regional bindings.
 
 create extension if not exists pgcrypto;
 

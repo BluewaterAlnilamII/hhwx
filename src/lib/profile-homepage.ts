@@ -2,6 +2,7 @@ import type { AccountDisplayDegreeBinding, AccountDisplayDegreeSelection } from 
 import { getAccountDisplayDegreeVariants } from "@/lib/account-display-degree";
 import type { BandoriDegreeCatalogItem } from "@/lib/bandori-degree-assets";
 import { isBandoriServer, type BandoriServer } from "@/lib/bandori-server";
+import { isValidPlayerUid } from "@/lib/bandori/player-profile";
 import { eastAsianWidth } from "get-east-asian-width";
 
 export type ProfileCard = { cardId: number; entityServer: BandoriServer | null; trainType: "normal" | "after_training" };
@@ -26,7 +27,10 @@ export function fitProfileSignature(value: string, suffix = ""): string {
 }
 export const DEFAULT_BINDING_VISIBILITY = { public: true, titlesPublic: false } as const;
 export type ProfileModuleId = typeof PROFILE_MODULES[number];
-export type ProfileAccountPreference = { gameUid: string; public: boolean; titlesPublic: boolean };
+export function profileAccountKey(account: { server: BandoriServer; gameUid: string }) {
+  return `${account.server}:${account.gameUid}`;
+}
+export type ProfileAccountPreference = { server: BandoriServer; gameUid: string; public: boolean; titlesPublic: boolean };
 export type ProfileHomepagePreferences = {
   signature: string;
   cover: ProfileCover | null;
@@ -87,11 +91,14 @@ export function parseHomepagePatch(value: unknown): Partial<ProfileHomepagePrefe
   }
   if (Object.hasOwn(value, "accounts")) {
     if (!Array.isArray(value.accounts) || value.accounts.some(a => !record(a)
-      || Object.keys(a).sort().join() !== "gameUid,public,titlesPublic"
-      || typeof a.gameUid !== "string" || !/^[1-9]\d{3,15}$/.test(a.gameUid)
+      || !["gameUid,public,server,titlesPublic", "gameUid,public,titlesPublic"].includes(Object.keys(a).sort().join())
+      || (a.server !== undefined && !isBandoriServer(a.server))
+      || typeof a.gameUid !== "string" || !isValidPlayerUid(a.gameUid) || /^0\d/u.test(a.gameUid)
       || typeof a.public !== "boolean" || typeof a.titlesPublic !== "boolean")
-      || new Set(value.accounts.map(a => a.gameUid)).size !== value.accounts.length) return null;
-    patch.accounts = value.accounts;
+    ) return null;
+    const accounts = value.accounts.map(a => ({ ...a, server: a.server ?? 3 }));
+    if (new Set(accounts.map(profileAccountKey)).size !== accounts.length) return null;
+    patch.accounts = accounts;
   }
   return patch;
 }
@@ -103,16 +110,16 @@ export function bindingVisibility(publicAccounts: boolean, account: ProfileAccou
 }
 
 export function projectProfileBindings(bindings: ProfileBinding[], preferences: ProfileHomepagePreferences, isOwner: boolean): ProfileBinding[] {
-  const order = new Map(preferences.accounts.map((a, i) => [a.gameUid, i]));
+  const order = new Map(preferences.accounts.map((a, i) => [profileAccountKey(a), i]));
   return bindings.flatMap(binding => {
-    const preference = preferences.accounts.find(a => a.gameUid === binding.gameUid)
-      ?? { gameUid: binding.gameUid, ...DEFAULT_BINDING_VISIBILITY };
+    const preference = preferences.accounts.find(a => a.server === binding.server && a.gameUid === binding.gameUid)
+      ?? { server: binding.server, gameUid: binding.gameUid, ...DEFAULT_BINDING_VISIBILITY };
     const visibility = bindingVisibility(preferences.publicAccounts, preference);
     if (!isOwner && !visibility.public) return [];
     return [{ ...binding, ...visibility, playerName: binding.playerName?.trim() || null,
       ownedDegreeIds: isOwner || visibility.titlesPublic ? binding.ownedDegreeIds : [],
       ownedDegreeEffectIds: isOwner || visibility.titlesPublic ? binding.ownedDegreeEffectIds : [] }];
-  }).sort((a, b) => (order.get(a.gameUid) ?? Infinity) - (order.get(b.gameUid) ?? Infinity)
+  }).sort((a, b) => (order.get(profileAccountKey(a)) ?? Infinity) - (order.get(profileAccountKey(b)) ?? Infinity)
     || a.gameUid.localeCompare(b.gameUid, "en", { numeric: true }));
 }
 

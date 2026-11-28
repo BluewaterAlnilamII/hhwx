@@ -41,6 +41,7 @@ export async function readAccountDisplayDegreeOptions(
     serviceClient
       .from(USER_GAME_BINDINGS_TABLE)
       .select("game_uid, owned_degree_ids, owned_degree_effect_ids")
+      .eq("server", "cn")
       .eq("web_user_id", userId),
   ]);
 

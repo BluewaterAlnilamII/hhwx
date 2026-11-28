@@ -8,11 +8,12 @@ import { Link } from "@/i18n/navigation";
 import { type AppLocale } from "@/i18n/routing";
 import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
 import { ApiRouteError, getApiErrorCode, getApiErrorMessage, parseApiSuccessData } from "@/lib/api-contracts";
-import { normalizeBandoriServer, type BandoriServer } from "@/lib/bandori-server";
+import { BANDORI_SERVERS, getBandoriServerCode, getBandoriServerFromCode, normalizeBandoriServer, type BandoriServer } from "@/lib/bandori-server";
 import { getLocalizedApiErrorMessage, isLocalizedApiErrorCode } from "@/lib/localized-api-errors";
 import { formatLocalizedDateTime } from "@/lib/localized-format";
 import { GAME_PROFILE_SYNC_ENABLED, type GameProfileLoginTask } from "@/lib/user-game-profile-sync";
-import BandoriCnExclusiveNotice from "@/app/[locale]/bandori/BandoriCnExclusiveNotice";
+import ServerSwitcher from "@/components/ServerSwitcher";
+import { isValidPlayerUid } from "@/lib/bandori/player-profile";
 import type { GameAccountBinding, GameBindChallenge } from "@/lib/game-account-binding";
 import {
   decodeCompressedGameProfilePayload,
@@ -57,15 +58,12 @@ type ManagedProfileSummary = {
   cloudProfile: CloudGameProfileSummary | null;
 };
 
-type VerifyResult = {
-  gameUid: string;
-  transferred: boolean;
-};
+type VerifyResult = GameAccountBinding & { transferred: boolean };
 
 type BusyAction =
   | { type: "challenge" }
   | { type: "verify" }
-  | { type: "unbind"; gameUid: string }
+  | { type: "unbind"; server: GameAccountBinding["server"]; gameUid: string }
   | { type: "create" }
   | { type: "import" }
   | { type: "copy"; profileId: string }
@@ -143,10 +141,10 @@ export default function GameProfilesPanel() {
   const t = useTranslations("bandori.gameProfiles.panel");
   const termsT = useTranslations("bandori.terms");
   const errorT = useTranslations("errors");
-  const cnExclusiveT = useTranslations("bandori.notices.cnExclusive");
   const [cloudProfiles, setCloudProfiles] = useState<CloudGameProfileSummary[]>([]);
   const [localProfiles, setLocalProfiles] = useState<LocalGameProfileSummary[]>([]);
   const [bindings, setBindings] = useState<GameAccountBinding[]>([]);
+  const [bindServer, setBindServer] = useState<BandoriServer>(3);
   const [gameUid, setGameUid] = useState("");
   const [challenge, setChallenge] = useState<GameBindChallenge | null>(null);
   const [copiedChallenge, setCopiedChallenge] = useState(false);
@@ -304,7 +302,7 @@ export default function GameProfilesPanel() {
     try {
       const nextChallenge = await requestGameJson<GameBindChallenge>("/api/account/game-bind/challenge", {
         method: "POST",
-        body: JSON.stringify({ gameUid: normalizedUid }),
+        body: JSON.stringify({ server: getBandoriServerCode(bindServer), gameUid: normalizedUid }),
       });
       setChallenge(nextChallenge);
       setCopiedChallenge(false);
@@ -314,7 +312,7 @@ export default function GameProfilesPanel() {
     } finally {
       setBusyAction(null);
     }
-  }, [normalizedUid, requestGameJson, t]);
+  }, [bindServer, normalizedUid, requestGameJson, t]);
 
   const verifyChallenge = useCallback(async () => {
     if (!challenge) {
@@ -330,17 +328,21 @@ export default function GameProfilesPanel() {
         method: "POST",
         body: JSON.stringify({ challengeId: challenge.id }),
       });
+      const { server, gameUid, boundAt } = result;
+      setBindings(current => [
+        { server, gameUid, boundAt },
+        ...current.filter(binding => binding.server !== server || binding.gameUid !== gameUid),
+      ]);
       setMessage(result.transferred ? t("messages.transferred") : t("messages.bound"));
       setChallenge(null);
       setCopiedChallenge(false);
       setGameUid("");
-      await loadData();
     } catch (verifyError) {
       setError(verifyError instanceof Error ? verifyError.message : t("errors.verifyFailed"));
     } finally {
       setBusyAction(null);
     }
-  }, [challenge, loadData, requestGameJson, t]);
+  }, [challenge, requestGameJson, t]);
 
   const copyChallenge = useCallback(() => {
     if (!challenge) {
@@ -353,11 +355,12 @@ export default function GameProfilesPanel() {
     }).catch(() => undefined);
   }, [challenge]);
 
-  const unbindGameUid = useCallback(async (targetUid: string) => {
-    const profile = profilesByUid.get(targetUid);
+  const unbindGameUid = useCallback(async ({ gameUid: targetUid, server }: GameAccountBinding) => {
+    const profile = server === "cn" ? profilesByUid.get(targetUid) : undefined;
+    const label = `${server.toUpperCase()} ${targetUid}`;
     const confirmed = window.confirm(
-      t("confirm.unbind", {
-        uid: targetUid,
+      t(profile ? "confirm.unbind" : "confirm.unbindOnly", {
+        uid: label,
         profileName: profile ? t("confirm.profileNameSuffix", { profileName: profile.name }) : "",
       }),
     );
@@ -365,15 +368,15 @@ export default function GameProfilesPanel() {
       return;
     }
 
-    setBusyAction({ type: "unbind", gameUid: targetUid });
+    setBusyAction({ type: "unbind", server, gameUid: targetUid });
     setError("");
     setMessage("");
     setExportedPayload(null);
     try {
-      await requestGameJson<{ gameUid: string }>(`/api/account/game-bind/bindings/${encodeURIComponent(targetUid)}`, {
+      await requestGameJson<{ gameUid: string }>(`/api/account/game-bind/bindings/${encodeURIComponent(targetUid)}?server=${server}`, {
         method: "DELETE",
       });
-      setMessage(t("messages.unbound", { uid: targetUid }));
+      setMessage(t("messages.unbound", { uid: label }));
       await loadData();
     } catch (unbindError) {
       setError(unbindError instanceof Error ? unbindError.message : t("errors.unbindFailed"));
@@ -661,11 +664,8 @@ export default function GameProfilesPanel() {
 
       <div className="mt-6 border-t border-[var(--theme-color-border-subtle)] pt-5">
         <h3 className="text-base font-semibold text-[var(--theme-color-text-default)]">{t("bind.title")}</h3>
-        <BandoriCnExclusiveNotice
-          label={cnExclusiveT("label")}
-          description={cnExclusiveT("gameProfileBindingDescription")}
-          className="mt-3"
-        />
+        <ServerSwitcher className="mt-3" servers={BANDORI_SERVERS} selectedServer={bindServer}
+          getCode={getBandoriServerCode} onChange={setBindServer} label={t("bind.server")} />
         <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
           <input
             value={gameUid}
@@ -677,7 +677,7 @@ export default function GameProfilesPanel() {
           <button
             type="button"
             onClick={createChallenge}
-            disabled={writeBusy || !normalizedUid || bindings.length >= USER_GAME_BINDING_LIMIT}
+            disabled={writeBusy || !isValidPlayerUid(normalizedUid) || bindings.length >= USER_GAME_BINDING_LIMIT}
             className="hhwx-action-accent inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl px-5 text-sm font-semibold transition sm:w-auto"
           >
             {busyAction?.type === "challenge" ? <LoadingSpinner className="text-current" /> : <Plus className="h-4 w-4" />}
@@ -690,7 +690,7 @@ export default function GameProfilesPanel() {
 
         {challenge && (
           <div className="mt-4 rounded-2xl border border-[var(--theme-color-semantic-info-border)] bg-[var(--theme-color-semantic-info-background)] p-3 sm:p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-[var(--theme-color-semantic-info-foreground)]">{t("bind.challengeLabel")}</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-[var(--theme-color-semantic-info-foreground)]">{t("bind.challengeLabel")} · {challenge.server.toUpperCase()} {challenge.gameUid}</div>
             <div className="mt-2 flex flex-wrap items-center gap-3">
               <code className="min-w-0 break-all rounded-xl bg-[var(--theme-color-panel-background)] px-3 py-2 text-base font-bold text-[var(--theme-color-text-default)] shadow-xs sm:text-lg">{challenge.challenge}</code>
               <button
@@ -722,11 +722,11 @@ export default function GameProfilesPanel() {
           </div>
           <div className="text-sm text-[var(--theme-color-text-muted)]">{t("uidManagement.quota", { count: autoProfileCount, limit: USER_GAME_AUTO_PROFILE_LIMIT })}</div>
         </div>
-        <div className="mt-3 rounded-2xl border border-[var(--theme-color-semantic-warning-border)] bg-[var(--theme-color-semantic-warning-background)] px-4 py-3 text-sm leading-6 text-[var(--theme-color-semantic-warning-foreground)]">
+        {bindings.some(binding => binding.server === "cn") && <div className="mt-3 rounded-2xl border border-[var(--theme-color-semantic-warning-border)] bg-[var(--theme-color-semantic-warning-background)] px-4 py-3 text-sm leading-6 text-[var(--theme-color-semantic-warning-foreground)]">
           {GAME_PROFILE_SYNC_ENABLED ? (
             <>
               <ul className="space-y-2">
-                <li className="flex gap-2"><span aria-hidden="true">·</span><span>{t("uidManagement.syncWarning")}</span></li>
+                <li className="flex gap-2"><span aria-hidden="true">·</span><span>{t("bind.syncRegion")} {t("uidManagement.syncWarning")}</span></li>
                 <li className="flex gap-2"><span aria-hidden="true">·</span><span>{t("uidManagement.syncAuthorization")}</span></li>
                 <li className="flex gap-2"><span aria-hidden="true">·</span><span>{t("uidManagement.syncDisclaimer")}</span></li>
               </ul>
@@ -744,7 +744,7 @@ export default function GameProfilesPanel() {
               </div>
             </>
           ) : t("uidManagement.syncUnavailable")}
-        </div>
+        </div>}
         {loading ? (
           <LoadingIndicator compact label={t("uidManagement.loading")} className="mt-3 justify-start" />
         ) : bindings.length === 0 ? (
@@ -752,38 +752,39 @@ export default function GameProfilesPanel() {
         ) : (
           <div className="mt-3 grid gap-3">
             {sortedBindings.map((binding) => {
-              const profile = profilesByUid.get(binding.gameUid);
-              const isSyncing = syncingUid === binding.gameUid;
-              const rowTask = loginTask?.gameUid === binding.gameUid ? loginTask : null;
-              const rowNotice = syncNotice?.gameUid === binding.gameUid ? syncNotice : null;
-              const isUnbinding = busyAction?.type === "unbind" && busyAction.gameUid === binding.gameUid;
+              const isCn = binding.server === "cn";
+              const profile = isCn ? profilesByUid.get(binding.gameUid) : undefined;
+              const isSyncing = isCn && syncingUid === binding.gameUid;
+              const rowTask = isCn && loginTask?.gameUid === binding.gameUid ? loginTask : null;
+              const rowNotice = isCn && syncNotice?.gameUid === binding.gameUid ? syncNotice : null;
+              const isUnbinding = busyAction?.type === "unbind" && busyAction.server === binding.server && busyAction.gameUid === binding.gameUid;
               const syncLimitReached = !profile && autoProfileCount >= USER_GAME_AUTO_PROFILE_LIMIT;
               return (
-                <div key={binding.gameUid} className="rounded-2xl border border-[var(--theme-color-border-subtle)] p-3 sm:p-4">
+                <div key={`${binding.server}:${binding.gameUid}`} className="rounded-2xl border border-[var(--theme-color-border-subtle)] p-3 sm:p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="inline-flex min-w-0 items-center gap-2">
                           <BandoriServerIcon
-                            server={normalizeBandoriServer(profile?.server) ?? 3}
+                            server={getBandoriServerFromCode(binding.server)!}
                             className="h-5 w-5 shadow-[0_1px_3px_rgba(15,23,42,0.18)]"
                           />
                           <span className="min-w-0 break-all font-semibold text-[var(--theme-color-text-default)]">
                             UID {binding.gameUid}{profile ? ` / ${profile.name}` : ""}
                           </span>
                         </span>
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${profile ? "bg-[var(--theme-color-semantic-success-background)] text-[var(--theme-color-semantic-success-foreground)]" : "bg-[var(--theme-color-panel-background)] text-[var(--theme-color-text-muted)]"}`}>
+                        {isCn && <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${profile ? "bg-[var(--theme-color-semantic-success-background)] text-[var(--theme-color-semantic-success-foreground)]" : "bg-[var(--theme-color-panel-background)] text-[var(--theme-color-text-muted)]"}`}>
                           {profile ? t("uidManagement.generated") : t("uidManagement.notSynced")}
-                        </span>
+                        </span>}
                       </div>
                       <div className="mt-2 text-sm leading-6 text-[var(--theme-color-text-muted)]">
                         {t("uidManagement.boundAt", { date: formatDate(binding.boundAt) })}
-                        <br />
+                        {isCn && <><br />
                         {profile
                           ? t("uidManagement.profileStatus", { cardCount: profile.cardCount, date: formatDate(profile.syncedAt) })
-                          : t("uidManagement.missingProfile")}
+                          : t("uidManagement.missingProfile")}</>}
                       </div>
-                      {syncLimitReached && (
+                      {isCn && syncLimitReached && (
                         <p className="mt-2 text-sm text-[var(--theme-color-semantic-warning-foreground)]">{t("uidManagement.syncLimitReached")}</p>
                       )}
                       {rowNotice && (
@@ -807,7 +808,7 @@ export default function GameProfilesPanel() {
                         </>
                       ) : (
                         <>
-                          <button
+                          {isCn && <button
                             type="button"
                             onClick={() => syncAutoProfile(binding.gameUid)}
                             disabled={!GAME_PROFILE_SYNC_ENABLED || !syncConsent || writeBusy || loginTask !== null || syncLimitReached}
@@ -815,10 +816,10 @@ export default function GameProfilesPanel() {
                           >
                             {isSyncing ? <LoadingSpinner className="text-current" /> : <RefreshCw className="h-4 w-4" />}
                             {!GAME_PROFILE_SYNC_ENABLED ? t("uidManagement.syncPaused") : isSyncing ? t("uidManagement.generatingLoginLink") : profile ? t("uidManagement.resync") : t("uidManagement.sync")}
-                          </button>
+                          </button>}
                           <button
                             type="button"
-                            onClick={() => unbindGameUid(binding.gameUid)}
+                            onClick={() => unbindGameUid(binding)}
                             disabled={writeBusy}
                             className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-[var(--theme-color-semantic-danger-border)] bg-[var(--theme-color-control-background)] px-4 text-sm font-semibold text-[var(--theme-color-semantic-danger-foreground)] transition hover:bg-[var(--theme-color-semantic-danger-background)] disabled:cursor-not-allowed disabled:bg-[var(--theme-color-control-background-disabled)] disabled:text-[var(--theme-color-control-foreground-disabled)]"
                           >

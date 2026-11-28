@@ -56,39 +56,6 @@ function positive(value: unknown): number | null {
 }
 function text(value: unknown): string { return typeof value === "string" ? value : ""; }
 
-/** Retain the existing wire shape, but never send protected values to a browser. */
-export function redactBandoriPlayerProfile(raw: RecordValue): RecordValue {
-  const profile = { ...raw };
-  for (const [field, flag] of [
-    ["enabledUserAreaItems", "publishTotalDeckPowerFlg"],
-    ["bandRankMap", "publishBandRankFlg"],
-    ["userHighScoreRating", "publishHighScoreRatingFlg"],
-    ["userDeckTotalRatingMap", "publishDeckRankFlg"],
-    ["stageChallengeAchievementConditionsMap", "publishStageChallengeAchievementConditionsFlg"],
-    ["userCharacterRankMap", "publishCharacterRankFlg"],
-    ["updatedAt", "publishUpdatedAtFlg"],
-  ]) {
-    if (profile[flag] !== true) delete profile[field];
-  }
-  if (profile.userMusicClearInfoMap) {
-    profile.userMusicClearInfoMap = { entries: Object.fromEntries(Object.entries(entries(profile.userMusicClearInfoMap)).map(([difficulty, value]) => {
-      const counts = { ...playerRecord(value) };
-      for (const [field, flag] of PLAYER_CLEAR_ROWS) if (profile[flag] !== true) delete counts[field];
-      return [difficulty, counts];
-    })) };
-  }
-  // Append parameters can reveal power that the player has chosen to hide.
-  const situations = playerRecord(profile.mainDeckUserSituations).entries;
-  if (profile.publishTotalDeckPowerFlg !== true && Array.isArray(situations)) {
-    profile.mainDeckUserSituations = { entries: situations.map((value) => {
-      const card = { ...playerRecord(value) };
-      delete card.userAppendParameter;
-      return card;
-    }) };
-  }
-  return profile;
-}
-
 export type PlayerCard = {
   cardId: number; level: number | null; masterRank: number | null; skillLevel: number | null;
   illust: "normal" | "after_training"; isTrained: boolean; isLeader: boolean;
@@ -102,7 +69,9 @@ export type PlayerPowerInput = {
 };
 
 function readPlayerPower(profile: RecordValue, cards: PlayerCard[]): PlayerSection<PlayerPowerInput> {
-  if (profile.publishTotalDeckPowerFlg !== true) return { public: false, value: null };
+  const situations = playerRecord(profile.mainDeckUserSituations).entries;
+  if (profile.publishTotalDeckPowerFlg !== true && profile.enabledUserAreaItems === undefined
+    && !(Array.isArray(situations) && situations.some(card => playerRecord(card).userAppendParameter !== undefined))) return { public: false, value: null };
   function parameters(value: RecordValue, prefix: string): PlayerParameters {
     return Object.fromEntries(["performance", "technique", "visual"].map((key) => {
       const field = prefix ? `${prefix}${key[0].toUpperCase()}${key.slice(1)}` : key;
@@ -149,6 +118,27 @@ export type PlayerProfileView = {
   power: PlayerSection<PlayerPowerInput>;
 };
 
+function readDegreeIds(profile: RecordValue): number[] {
+  const degrees = entries(profile.userProfileDegreeMap);
+  const degreeIds = ["first", "second"].flatMap((slot) => {
+    const id = positive(playerRecord(degrees[slot]).degreeId);
+    return id ? [id] : [];
+  });
+  if (!degreeIds.length && positive(profile.degree)) degreeIds.push(profile.degree as number);
+  return degreeIds;
+}
+
+function readRatingSongs(value: unknown): PlayerRatingSong[] | null {
+  const list = playerRecord(value).entries;
+  return Array.isArray(list) && list.every((song) => {
+    const entry = playerRecord(song);
+    return positive(entry.musicId) !== null && integer(entry.rating) !== null && isBandoriChartDifficulty(text(entry.difficulty));
+  }) ? list.map((song) => {
+    const entry = playerRecord(song);
+    return { musicId: entry.musicId as number, rating: entry.rating as number, difficulty: entry.difficulty as BandoriChartDifficulty };
+  }) : null;
+}
+
 export function parseBandoriPlayerResponse(raw: unknown): PlayerProfileView {
   const data = playerRecord(parseApiSuccessData(raw));
   const profile = playerRecord(data.profile);
@@ -185,38 +175,26 @@ export function parseBandoriPlayerResponse(raw: unknown): PlayerProfileView {
   function section<T>(flag: string, field: string, read: (value: unknown) => T | null): PlayerSection<T> {
     const published = profile[flag] === true;
     const value = profile[field];
-    return { public: published, value: published && value !== null && typeof value === "object" && !Array.isArray(value) ? read(value) : null };
+    const data = value !== null && typeof value === "object" && !Array.isArray(value) ? read(value) : null;
+    return { public: published || data !== null, value: data };
   }
   function numberMap(value: unknown): Record<string, number | null> {
     return Object.fromEntries(Object.entries(entries(value)).map(([key, item]) => [key, integer(item)]));
   }
-  const degrees = entries(profile.userProfileDegreeMap);
-  const degreeIds = ["first", "second"].flatMap((slot) => {
-    const id = positive(playerRecord(degrees[slot]).degreeId);
-    return id ? [id] : [];
-  });
-  if (!degreeIds.length && positive(profile.degree)) degreeIds.push(profile.degree as number);
   return {
     server: data.server as BandoriServerCode, uid: data.uid,
     fetchedAt: typeof data.fetchedAt === "string" && Number.isFinite(Date.parse(data.fetchedAt)) ? data.fetchedAt : null,
     name: text(profile.userName), rank: integer(profile.rank), introduction: text(profile.introduction),
-    cards, avatar, portrait, degreeIds,
+    cards, avatar, portrait, degreeIds: readDegreeIds(profile),
     power: readPlayerPower(profile, cards),
     bandRanks: section("publishBandRankFlg", "bandRankMap", numberMap),
     clears: PLAYER_CLEAR_ROWS.map(([field, flag]) => section(flag, "userMusicClearInfoMap", (value) => (
-      Object.fromEntries(BANDORI_CHART_DIFFICULTIES.map((difficulty) => [difficulty, integer(playerRecord(entries(value)[difficulty])[field])])) as Record<BandoriChartDifficulty, number | null>
+      Object.values(entries(value)).some(row => integer(playerRecord(row)[field]) !== null) ? Object.fromEntries(BANDORI_CHART_DIFFICULTIES.map((difficulty) => [difficulty, integer(playerRecord(entries(value)[difficulty])[field])])) as Record<BandoriChartDifficulty, number | null> : null
     ))),
     rating: section("publishHighScoreRatingFlg", "userHighScoreRating", (value) => {
       const rating = playerRecord(value);
       const groups = RATING_FIELDS.map(([bandId, field]) => {
-        const list = playerRecord(rating[field]).entries;
-        const songs = Array.isArray(list) && list.every((song) => {
-          const entry = playerRecord(song);
-          return positive(entry.musicId) !== null && integer(entry.rating) !== null && isBandoriChartDifficulty(text(entry.difficulty));
-        }) ? list.map((song) => {
-          const entry = playerRecord(song);
-          return { musicId: entry.musicId as number, rating: entry.rating as number, difficulty: entry.difficulty as BandoriChartDifficulty };
-        }) : null;
+        const songs = readRatingSongs(rating[field]);
         return { bandId, songs, total: songs?.reduce((sum, song) => sum + song.rating, 0) ?? null };
       });
       return { groups, total: groups.every((group) => group.total !== null) ? groups.reduce((sum, group) => sum + group.total!, 0) : null };
@@ -234,5 +212,52 @@ export function parseBandoriPlayerResponse(raw: unknown): PlayerProfileView {
       return [key, { rank: text(rank.rank).toLowerCase(), level: integer(rank.level), score: integer(rank.score) }];
     }))),
     characterRanks: section("publishCharacterRankFlg", "userCharacterRankMap", (value) => Object.fromEntries(Object.entries(entries(value)).map(([key, value]) => [key, integer(playerRecord(value).rank)]))),
+  };
+}
+
+// Store only facts supplied by a visitor response. Display defaults have different semantics.
+export function publicPlayerObservation(profile: RecordValue) {
+  const cards = playerRecord(profile.mainDeckUserSituations).entries;
+  const portrait = playerRecord(profile.userProfileSituation);
+  const ids = Array.isArray(cards) ? cards.slice(0, 5).map(card => positive(playerRecord(card).situationId)) : [];
+  if (portrait.viewProfileSituationStatus === "profile_situation") ids.push(positive(portrait.situationId));
+
+  function observedMap(value: unknown, project: (item: unknown) => unknown) {
+    const result = Object.fromEntries(Object.entries(entries(value)).flatMap(([key, item]) => {
+      const fact = project(item);
+      return fact == null ? [] : [[key, fact]];
+    }));
+    return Object.keys(result).length ? result : undefined;
+  }
+  const clearCounts = PLAYER_CLEAR_ROWS.map(([field]) =>
+    observedMap(profile.userMusicClearInfoMap, row => integer(playerRecord(row)[field])));
+  const rating = playerRecord(profile.userHighScoreRating);
+  const groups = Object.fromEntries(RATING_FIELDS.flatMap(([id, field]) => {
+    const songs = readRatingSongs(rating[field]);
+    return songs === null ? [] : [[id, songs]];
+  }));
+  const progress = playerRecord(profile.stageChallengeAchievementConditionsMap).entries;
+  const stars = progress && typeof progress === "object" && !Array.isArray(progress)
+    ? Object.fromEntries(PLAYER_STAGE_BANDS.flatMap(({ stageChallengeId }) => {
+      const value = playerRecord(progress)[stageChallengeId];
+      return value === undefined ? [[stageChallengeId, 0]] : integer(value) === null ? [] : [[stageChallengeId, value]];
+    })) : undefined;
+  return {
+    player_name: typeof profile.userName === "string" ? profile.userName : undefined,
+    player_rank: integer(profile.rank) ?? undefined,
+    introduction: typeof profile.introduction === "string" && !/^hhwx[0-9]{6}$/u.test(profile.introduction.trim())
+      ? profile.introduction : undefined,
+    owned_card_ids: [...new Set(ids.filter((id): id is number => id !== null))],
+    owned_degree_ids: readDegreeIds(profile),
+    band_ranks: observedMap(profile.bandRankMap, integer),
+    music_clear_counts: clearCounts[0], music_full_combo_counts: clearCounts[1], music_all_perfect_counts: clearCounts[2],
+    high_score_rating: Object.keys(groups).length ? groups : undefined,
+    stage_challenge_stars: stars,
+    deck_ranks: observedMap(profile.userDeckTotalRatingMap, value => {
+      const row = playerRecord(value);
+      if (typeof row.rank !== "string") return null;
+      return { rank: row.rank, level: integer(row.level) ?? undefined, score: integer(row.score) ?? undefined };
+    }),
+    character_ranks: observedMap(profile.userCharacterRankMap, row => integer(playerRecord(row).rank)),
   };
 }

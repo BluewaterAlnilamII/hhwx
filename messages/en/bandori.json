@@ -3,8 +3,7 @@
     "cnExclusive": {
       "label": "CN exclusive",
       "calendarDescription": "This calendar only covers the CN server. JP, EN, and TW servers are not supported here.",
-      "eventtrackerDescription": "This event tracker only supports CN server rankings and prediction data. JP, EN, and TW servers are not supported here.",
-      "gameProfileBindingDescription": "UID binding and automatic profile sync only support the CN server. JP, EN, and TW servers are not supported here."
+      "eventtrackerDescription": "This event tracker only supports CN server rankings and prediction data. JP, EN, and TW servers are not supported here."
     }
   },
   "stamps": {
@@ -434,6 +433,8 @@
       },
       "bind": {
         "title": "Bind new UID",
+        "server": "Game server",
+        "syncRegion": "Automatic profile sync is available for CN accounts.",
         "uidPlaceholder": "Game UID",
         "limitReached": "UID binding limit reached. Unbind one before binding another UID.",
         "challengeLabel": "Verification code",
@@ -449,13 +450,13 @@
         "title": "UID Management",
         "quota": "Auto profiles {count}/{limit}",
         "syncWarning": "To sync, sign in to the corresponding Bilibili account in the pop-up window and click “I've signed in” within 5 minutes",
-        "syncAuthorization": "You will authorize HHWX to log in to the game account once and save all cards, area items, character bonuses, and titles. HHWX will not record or store any other account or game data",
+        "syncAuthorization": "You authorize HHWX to sign in to your game account once and save your full card collection, area items, character bonuses, and titles for your personal profile. HHWX also updates its public player database with the profile details your in-game privacy settings make public. Those public details are retained after you unlink the account.",
         "syncDisclaimer": "This feature is for personal learning and research only. Please comply with Bilibili’s platform rules and the game’s rules. You are responsible for all consequences of using this feature",
         "syncConsent": "I understand and agree to the above",
         "syncUnavailable": "Automatic game profile sync is temporarily unavailable; please use manual profiles",
         "syncPaused": "Sync paused",
         "loading": "Loading...",
-        "empty": "No bound UIDs yet. Bind a game UID to create an auto-sync profile.",
+        "empty": "No bound game accounts yet.",
         "generated": "Auto profile generated",
         "notSynced": "Not synced",
         "boundAt": "Bound at: {date}",
@@ -525,6 +526,7 @@
         "deleted": "Profile deleted."
       },
       "confirm": {
+        "unbindOnly": "Unbind game account {uid} from this website account?",
         "unbind": "Unbind game UID {uid}? This removes the UID binding from the current web account and also deletes the corresponding auto-sync profile{profileName}.",
         "profileNameSuffix": " \"{profileName}\"",
         "sync": "Sign in on the official Bilibili page to import the matching role’s cards, area items, character potential and mission bonuses.\n\nSync checks Android and iOS roles and may disconnect active game sessions for this Bilibili account. Continue?",

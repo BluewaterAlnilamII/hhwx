@@ -6,7 +6,7 @@ const account = (uid, name = null) => ({ server: 3, gameUid: uid, playerName: na
 
 test("all parent/account/title privacy combinations filter public data and preserve owner choices", () => {
   for (const master of [true, false]) for (const visible of [true, false]) for (const titles of [true, false]) {
-    const preferences = { ...defaultHomepagePreferences(), publicAccounts: master, accounts: [{ gameUid: "10001", public: visible, titlesPublic: titles }] };
+    const preferences = { ...defaultHomepagePreferences(), publicAccounts: master, accounts: [{ server: 3, gameUid: "10001", public: visible, titlesPublic: titles }] };
     const original = structuredClone(preferences);
     const publicResult = projectProfileBindings([account("10001")], preferences, false);
     assert.equal(publicResult.length, Number(master && visible));
@@ -24,7 +24,7 @@ test("all parent/account/title privacy combinations filter public data and prese
 });
 
 test("missing game names stay absent without affecting title ownership; order is shared", () => {
-  const shared = { ...defaultHomepagePreferences(), accounts: [{ gameUid: "10001", public: true, titlesPublic: true }] };
+  const shared = { ...defaultHomepagePreferences(), accounts: [{ server: 3, gameUid: "10001", public: true, titlesPublic: true }] };
   for (const name of [null, undefined, "", "  "]) {
     const result = projectProfileBindings([account("10001", name)], shared, false)[0];
     assert.equal(result.playerName, null);
@@ -34,13 +34,13 @@ test("missing game names stay absent without affecting title ownership; order is
   assert.equal(byDefault.titlesPublic, false);
   assert.deepEqual(byDefault.ownedDegreeIds, []);
   assert.deepEqual(byDefault.ownedDegreeEffectIds, []);
-  const prefs = { ...defaultHomepagePreferences(), accounts: [{ gameUid: "10002", public: true, titlesPublic: true }] };
+  const prefs = { ...defaultHomepagePreferences(), accounts: [{ server: 3, gameUid: "10002", public: true, titlesPublic: true }] };
   for (const owner of [false, true]) assert.deepEqual(projectProfileBindings([account("10001"), account("10002", " Game ")], prefs, owner).map(a => a.gameUid), ["10002", "10001"]);
 });
 
 test("homepage writes reject coercion, unknown fields, incomplete or duplicate orders", () => {
   for (const value of [null, [], {}, { userId: "other" }, { publicAccounts: 1 }, { allowGameIdSearch: "false" },
-    { modules: [{ id: "cards", public: true }] }, { accounts: [{ gameUid: "10001", public: true }] },
+    { modules: [{ id: "cards", public: true }] }, { accounts: [{ server: 3, gameUid: "10001", public: true }] },
     { cover: { cardId: "1", entityServer: null, trainType: "normal", x: 50, y: 50 } },
     { cover: { cardId: 1, entityServer: null, trainType: "normal", x: Infinity, y: 50 } },
     { cover: { cardId: 1, entityServer: 6, trainType: "normal", x: 50, y: 50 } },
@@ -69,4 +69,18 @@ test("game grouping distinguishes ordinary variants from owned effects and prese
     degree(5, 4, { degreeType: "score_ranking" }), degree(6, 1, { baseImageName: "ani_degree_6" }), degree(7, 9, { degreeEffect: { biliDegreeEffectId: 70 } })];
   const groups = groupProfileDegrees({ gameUid: "10001", server: 3, ownedDegreeIds: degrees.map(d => d.id), ownedDegreeEffectIds: [70] }, new Map(degrees.map(d => [d.id, d])));
   assert.deepEqual(groups.map(g => g.map(v => [v.degree.id, v.degreeEffectId])), [[[2, null], [1, null], [7, null]], [[3, null]], [[4, null]], [[5, null]], [[7, 70], [6, null]]]);
+});
+
+test("equal UIDs on two servers retain independent order, visibility and titles", () => {
+  const gameUid = "18446744073709551615";
+  const rows = [{ ...account(gameUid), server: 0 }, { ...account(gameUid), server: 3 }];
+  const patch = parseHomepagePatch({ accounts: [
+    { gameUid, server: 3, public: false, titlesPublic: true },
+    { gameUid, server: 0, public: true, titlesPublic: false },
+  ] });
+  const prefs = { ...defaultHomepagePreferences(), ...patch };
+  assert.deepEqual(projectProfileBindings(rows, prefs, true).map(row => row.server), [3, 0]);
+  const visitor = projectProfileBindings(rows, prefs, false);
+  assert.deepEqual(visitor.map(row => row.server), [0]);
+  assert.deepEqual(visitor[0].ownedDegreeIds, []);
 });

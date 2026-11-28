@@ -1,6 +1,7 @@
 import "server-only";
 
 import { ApiRouteError } from "@/lib/api-contracts";
+import { PUBLIC_PLAYER_RESPONSE_BYTES, recordPublicPlayerProfile } from "@/lib/bandori-public-player-server";
 import { getBandoriBackendToken } from "@/lib/hhwx-bandori-backend-server";
 import type { GameProfileLoginTask } from "@/lib/user-game-profile-sync";
 
@@ -84,7 +85,8 @@ async function requestLogin(action: LoginAction, ownerId: string, gameUid: strin
       redirect: "error",
       signal: AbortSignal.timeout(action === "start" ? 45_000 : 150_000),
     });
-    payload = await readSnapshotLoginJson(response, action === "confirm" ? 16 * 1024 * 1024 : 16_384);
+    // Confirmation carries the original 16 MiB snapshot plus a public profile.
+    payload = await readSnapshotLoginJson(response, action === "confirm" ? 16 * 1024 * 1024 + PUBLIC_PLAYER_RESPONSE_BYTES : 16_384);
   } catch {
     throw new ApiRouteError(502, "TRACKER_SERVICE_FAILED", "同步服务未能完成本次请求，请重新同步");
   }
@@ -123,6 +125,9 @@ export async function fetchGameUserSnapshot(ownerId: string, gameUid: string, ta
   if (payload.gameUid !== gameUid || !isRecord(payload.snapshot)
     || !isRecord(payload.snapshot.profile) || !isRecord(payload.snapshot.suite_user)) {
     throw new ApiRouteError(502, "TRACKER_SERVICE_INVALID_RESPONSE", "同步服务返回的数据格式异常，请稍后重新同步");
+  }
+  if (isRecord(payload.publicProfile) && payload.publicProfile.userId === gameUid) {
+    await recordPublicPlayerProfile("cn", gameUid, payload.publicProfile);
   }
   return { gameUid, snapshot: { profile: payload.snapshot.profile, suite_user: payload.snapshot.suite_user } };
 }

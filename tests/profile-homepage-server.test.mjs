@@ -4,6 +4,7 @@ import { runInNewContext } from "node:vm";
 import test from "node:test";
 import ts from "typescript";
 import * as domain from "../src/lib/profile-homepage.ts";
+import * as region from "../src/lib/bandori-server.ts";
 import * as avatar from "../src/lib/account-avatar-card.ts";
 import * as degree from "../src/lib/account-display-degree.ts";
 import * as tables from "../src/lib/supabase-table-names.ts";
@@ -14,15 +15,15 @@ function load(path, dependencies) {
   const {outputText} = ts.transpileModule(readFileSync(new URL(path,import.meta.url),"utf8"), {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}});
   const exports={};runInNewContext(outputText,{exports,Buffer,TextDecoder,require:id=>{assert.ok(Object.hasOwn(dependencies,id),id);return dependencies[id];}});return exports;
 }
-function service({preferences={},profileName=" Game name ",namesError=false,bindingsError=false}={}) {
+function service({extraBindings=[],preferences={},profileName=" Game name ",namesError=false,bindingsError=false}={}) {
   const calls=[];
   const rows={
     [tables.PROFILES_TABLE]:{id:"owner",public_uid:42,username:"Profile",created_at:null,avatar_card_id:1,preferences},
-    [tables.USER_GAME_BINDINGS_TABLE]:[{game_uid:"10001",owned_degree_ids:[100],owned_degree_effect_ids:[]}],
+    [tables.USER_GAME_BINDINGS_TABLE]:[{game_uid:"10001",server:"cn",owned_degree_ids:[100],owned_degree_effect_ids:[]}, ...extraBindings],
     [tables.USER_GAME_PROFILES_TABLE]:[{source_game_uid:"10001",profile_name:profileName}],
   };
   const api=load("../src/lib/profile-homepage-server.ts",{
-    "server-only":{},"@/lib/api-contracts":{ApiRouteError},"@/lib/profile-homepage":domain,"@/lib/account-avatar-card":avatar,"@/lib/account-display-degree":degree,"@/lib/supabase-table-names":tables,
+    "@/lib/bandori-server":region,"server-only":{},"@/lib/api-contracts":{ApiRouteError},"@/lib/profile-homepage":domain,"@/lib/account-avatar-card":avatar,"@/lib/account-display-degree":degree,"@/lib/supabase-table-names":tables,
     "@/lib/bandori/cards/api-server":{readBandoriCardApiDetail:async id=>id==="1"?{resourceSetName:"card1"}:null},
     "@/lib/bandori/cards/regional-extensions":{isKnownBandoriCardEntityCollision:id=>id===5000,materializeBandoriCardForServer:c=>c},
     "@/lib/bandori/cards/training":{hasTrainedCardArt:()=>false},
@@ -55,6 +56,17 @@ test("a newly bound account is public without its titles; explicit title sharing
   assert.deepEqual(visitor.ownedDegreeEffectIds,[]);
   const shared=service({preferences:{accounts:[{gameUid:"10001",public:true,titlesPublic:true}]}});
   assert.deepEqual((await shared.api.readProfileHomepage(42,null)).bindings[0].ownedDegreeIds,[100]);
+});
+test("a regional namesake cannot inherit CN profile data or old CN-only visibility settings", async () => {
+  const {api}=service({preferences:{accounts:[{gameUid:"10001",public:false,titlesPublic:true}]},
+    extraBindings:[{server:"tw",game_uid:"10001",owned_degree_ids:[],owned_degree_effect_ids:[]}]});
+  const visitor=await api.readProfileHomepage(42,null);
+  assert.equal(visitor.bindings.length,1);
+  assert.equal(visitor.bindings[0].server,2);
+  assert.equal(visitor.bindings[0].playerName,null);
+  assert.deepEqual([...visitor.bindings[0].ownedDegreeIds],[]);
+  const owner=await api.readProfileHomepage(42,"owner");
+  assert.equal(owner.bindings.find(binding=>binding.server===3).playerName,"Game name");
 });
 test("name acquisition is auxiliary; privacy and binding failures fail closed",async()=>{
   assert.equal((await service({namesError:true}).api.readProfileHomepage(42,null)).bindings[0].playerName,null);
@@ -93,7 +105,7 @@ test("cover validates catalog identity and training before persistence",async()=
 });
 test("write route requires verified identity and passes only that owner to persistence",async()=>{
   let verified=false, called=0;
-  const api=load("../src/app/api/account/homepage/route.ts",{
+  const api=load("../src/app/api/account/homepage/settings/route.ts",{
     "@/lib/api-contracts":{ApiRouteError},
     "@/lib/api-request":{readBoundedRequestBody},
     "@/lib/api-cache":{NO_STORE_HTTP_CACHE_POLICY:{},withHttpCachePolicy:()=>({"Cache-Control":"no-store"})},
@@ -101,7 +113,7 @@ test("write route requires verified identity and passes only that owner to persi
     "@/lib/auth-server":{requireVerifiedAccount:async()=>{if(!verified)throw new ApiRouteError(403,"FORBIDDEN","Forbidden");return {id:"verified-owner"};}},
     "@/lib/profile-homepage-server":{updateProfileHomepage:async(id,body)=>{called++;assert.equal(id,"verified-owner");return body;}},
   });
-  const request=body=>new Request("http://localhost/api/account/homepage",{method:"PATCH",body});
+  const request=body=>new Request("http://localhost/api/account/homepage/settings",{method:"PATCH",body});
   assert.equal((await api.PATCH(request('{"signature":"x"}'))).status,403);assert.equal(called,0);
   verified=true;assert.equal((await api.PATCH(request("{"))).status,400);
   assert.equal((await api.PATCH(request(JSON.stringify({signature:"x".repeat(32768)})))).status,413);assert.equal(called,0);

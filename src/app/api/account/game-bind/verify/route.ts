@@ -1,11 +1,13 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
 import { requireVerifiedAccount } from "@/lib/auth-server";
+import type { BandoriPlayerServer } from "@/lib/bandori-player-fetcher";
 import { GAME_BIND_CHALLENGE_MAX_ATTEMPTS, fetchGameProfileSignature, isSignatureMatch } from "@/lib/game-account-binding";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { USER_GAME_BIND_CHALLENGES_TABLE } from "@/lib/supabase-table-names";
 
 type ChallengeRow = {
+  server: BandoriPlayerServer;
   id: string;
   game_uid: string;
   challenge: string;
@@ -37,7 +39,7 @@ export async function POST(request: Request) {
     const serviceClient = createServerSupabaseClient();
     const { data, error } = await serviceClient
       .from(USER_GAME_BIND_CHALLENGES_TABLE)
-      .select("id, game_uid, challenge, expires_at, attempt_count")
+      .select("id, server, game_uid, challenge, expires_at, attempt_count")
       .eq("id", challengeId)
       .eq("web_user_id", user.id)
       .maybeSingle();
@@ -60,7 +62,7 @@ export async function POST(request: Request) {
       throw new ApiRouteError(429, "GAME_BIND_TOO_MANY_ATTEMPTS", "\u9a8c\u8bc1\u6b21\u6570\u8fc7\u591a\uff0c\u8bf7\u91cd\u65b0\u751f\u6210\u9a8c\u8bc1\u7801");
     }
 
-    const profile = await fetchGameProfileSignature(challenge.game_uid);
+    const profile = await fetchGameProfileSignature(challenge.server, challenge.game_uid);
     if (!isSignatureMatch(profile.signature, challenge.challenge)) {
       await serviceClient.rpc("increment_game_bind_challenge_attempt", {
         p_challenge_id: challenge.id,
@@ -72,6 +74,7 @@ export async function POST(request: Request) {
     const { data: result, error: rpcError } = await serviceClient.rpc("complete_game_uid_binding", {
       p_challenge_id: challenge.id,
       p_game_uid: challenge.game_uid,
+      p_server: challenge.server,
       p_web_user_id: user.id,
     });
 
@@ -80,8 +83,10 @@ export async function POST(request: Request) {
     }
 
     return jsonSuccess({
+      server: challenge.server,
       gameUid: challenge.game_uid,
-      transferred: Boolean((result as { transferred?: unknown } | null)?.transferred),
+      boundAt: result.boundAt,
+      transferred: result.transferred,
     });
   } catch (error) {
     console.error("Game bind verify API error:", error);

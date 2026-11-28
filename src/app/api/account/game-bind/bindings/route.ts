@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     const serviceClient = createServerSupabaseClient();
     const { data, error } = await serviceClient
       .from(USER_GAME_BINDINGS_TABLE)
-      .select("game_uid, bound_at")
+      .select("server, game_uid, bound_at")
       .eq("web_user_id", user.id)
       .order("bound_at", { ascending: false });
 
@@ -19,6 +19,7 @@ export async function GET(request: Request) {
     }
 
     return jsonSuccess((data ?? []).map((row) => ({
+      server: row.server,
       gameUid: row.game_uid,
       boundAt: row.bound_at,
     })));

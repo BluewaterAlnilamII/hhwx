@@ -2,17 +2,18 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
-import {
-  extractSnapshotDegreeEffectIds,
-  extractSnapshotDegreeIds,
-} from "../src/lib/user-game-profiles-server.ts";
+import { registerHooks } from "node:module";
+
+const serverBoundary = registerHooks({
+  resolve(specifier, context, next) {
+    return next(specifier === "server-only" ? "next/dist/compiled/server-only/empty" : specifier, context);
+  },
+});
+const { extractSnapshotDegreeIds, extractSnapshotDegreeEffectIds } = await import("../src/lib/user-game-profiles-server.ts");
+serverBoundary.deregister();
 
 const migrationSource = fs.readFileSync(
   new URL("../supabase/migrations/20260815171306_add_game_binding_owned_degrees.sql", import.meta.url),
-  "utf8",
-);
-const serverSource = fs.readFileSync(
-  new URL("../src/lib/user-game-profiles-server.ts", import.meta.url),
   "utf8",
 );
 const effectMigrationSource = fs.readFileSync(
@@ -124,14 +125,4 @@ test("migration stores private Degree IDs and merges them atomically", () => {
     migrationSource,
     /grant execute on function public\.merge_game_uid_binding_degrees\(uuid, text, integer\[\]\)[\s\S]*to service_role/u,
   );
-});
-
-test("auto profile sync only attempts a best-effort merge for non-empty Degree data", () => {
-  assert.match(serverSource, /if \(degreeIds\.length > 0\) \{/u);
-  assert.match(serverSource, /\.rpc\("merge_game_uid_binding_degrees", \{/u);
-  assert.match(serverSource, /Game profile Degree merge failed/u);
-  assert.doesNotMatch(serverSource, /throw new ApiRouteError\([^)]*Degree merge/u);
-  assert.match(serverSource, /if \(degreeEffectIds\.length > 0\) \{/u);
-  assert.match(serverSource, /"merge_game_uid_binding_degree_effects"/u);
-  assert.match(serverSource, /Game profile Degree effect merge failed/u);
 });

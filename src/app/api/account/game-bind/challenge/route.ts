@@ -1,11 +1,11 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { jsonRouteError, jsonSuccess } from "@/lib/api-response";
+import { normalizeBandoriPlayerServer, normalizeBandoriPlayerUid } from "@/lib/bandori-player-fetcher";
 import { requireVerifiedAccount } from "@/lib/auth-server";
 import {
   GAME_BIND_CHALLENGE_RETENTION_DAYS,
   createChallengeExpiresAt,
   createGameBindChallenge,
-  normalizeGameUid,
 } from "@/lib/game-account-binding";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { USER_GAME_BIND_CHALLENGES_TABLE } from "@/lib/supabase-table-names";
@@ -17,7 +17,7 @@ function getChallengeRetentionCutoff(): string {
 export async function POST(request: Request) {
   try {
     const user = await requireVerifiedAccount(request);
-    let body: { gameUid?: unknown };
+    let body: { gameUid?: unknown; server?: unknown };
 
     try {
       body = await request.json();
@@ -25,7 +25,10 @@ export async function POST(request: Request) {
       throw new ApiRouteError(400, "INVALID_JSON", "\u8bf7\u6c42\u4f53\u4e0d\u662f\u6709\u6548\u7684 JSON");
     }
 
-    const gameUid = normalizeGameUid(body.gameUid);
+    // Older CN clients also submitted the UID as a JSON number.
+    const inputUid = Number.isSafeInteger(body.gameUid) ? String(body.gameUid) : body.gameUid;
+    const gameUid = normalizeBandoriPlayerUid(inputUid);
+    const server = normalizeBandoriPlayerServer(body.server === undefined ? "cn" : body.server);
     const serviceClient = createServerSupabaseClient();
 
     await serviceClient
@@ -37,6 +40,7 @@ export async function POST(request: Request) {
     const { data, error } = await serviceClient.rpc("create_game_uid_bind_challenge", {
       p_web_user_id: user.id,
       p_game_uid: gameUid,
+      p_server: server,
       p_challenge: createGameBindChallenge(),
       p_expires_at: createChallengeExpiresAt(),
     });
@@ -47,6 +51,7 @@ export async function POST(request: Request) {
 
     return jsonSuccess({
       id: data.id,
+      server: data.server,
       gameUid: data.game_uid,
       challenge: data.challenge,
       expiresAt: data.expires_at,

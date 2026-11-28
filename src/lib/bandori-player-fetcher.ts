@@ -1,7 +1,8 @@
 import { ApiRouteError } from "@/lib/api-contracts";
 import { getBandoriBackendToken } from "@/lib/hhwx-bandori-backend-server";
 import { BANDORI_SERVER_CODES } from "@/lib/bandori-server";
-import { isValidPlayerUid, redactBandoriPlayerProfile } from "@/lib/bandori/player-profile";
+import { isValidPlayerUid } from "@/lib/bandori/player-profile";
+import { PUBLIC_PLAYER_RESPONSE_BYTES, recordPublicPlayerProfile } from "@/lib/bandori-public-player-server";
 
 const BANDORI_PLAYER_SERVERS = ["jp", "en", "tw", "cn", "kr"] as const;
 const SUPPORTED_BANDORI_PLAYER_SERVERS = BANDORI_SERVER_CODES;
@@ -99,7 +100,7 @@ function normalizeTrackerPlayerPayload(payload: TrackerBandoriPlayerPayload | nu
       : fallback.server,
     uid: typeof payload.gameUid === "string" ? payload.gameUid : fallback.uid,
     fetchedAt: typeof payload.fetchedAt === "string" ? payload.fetchedAt : null,
-    profile: redactBandoriPlayerProfile(payload.profile),
+    profile: payload.profile,
   };
 }
 
@@ -144,7 +145,7 @@ export async function fetchBandoriPlayerProfile(
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > 1024 * 1024) throw new Error("Player response exceeds limit");
+      if (size > PUBLIC_PLAYER_RESPONSE_BYTES) throw new Error("Player response exceeds limit");
       chunks.push(value);
     }
   } catch {
@@ -186,5 +187,7 @@ export async function fetchBandoriPlayerProfile(
     }
     payload = { ...payload.data, gameUid: payload.data.uid };
   }
-  return normalizeTrackerPlayerPayload(isRecord(payload) ? payload : null, { server, uid });
+  const data = normalizeTrackerPlayerPayload(isRecord(payload) ? payload : null, { server, uid });
+  if (!developmentProxy) await recordPublicPlayerProfile(server, uid, data.profile);
+  return data;
 }

@@ -7,7 +7,7 @@ select ok(has_function_privilege('service_role',
   'public.upsert_auto_game_profile(uuid,text,text,text,text,integer,integer,jsonb)', 'EXECUTE'),
   'the private save RPC remains available to service_role');
 select ok(has_function_privilege('service_role',
-  'public.unbind_game_uid(text,uuid)', 'EXECUTE'),
+  'public.unbind_game_uid(text,uuid,text)', 'EXECUTE'),
   'the private unbind RPC remains available to service_role');
 
 set local role anon;
