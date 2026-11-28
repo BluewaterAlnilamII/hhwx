@@ -4,10 +4,11 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { PROFILES_TABLE, USER_GAME_BINDINGS_TABLE, USER_GAME_PROFILES_TABLE } from "@/lib/supabase-table-names";
 import { normalizeStoredDisplayDegree, CURRENT_GAME_BINDING_SERVER } from "@/lib/account-display-degree";
 import { normalizeAccountAvatarCardServer, resolveStoredAccountAvatarCardIdentity } from "@/lib/account-avatar-card";
+import { getBandoriServerFromCode } from "@/lib/bandori-server";
 import { readBandoriCardApiDetail } from "@/lib/bandori/cards/api-server";
 import { isKnownBandoriCardEntityCollision, materializeBandoriCardForServer } from "@/lib/bandori/cards/regional-extensions";
 import { hasTrainedCardArt } from "@/lib/bandori/cards/training";
-import { DEFAULT_BINDING_VISIBILITY, defaultHomepagePreferences, parseHomepagePatch, projectProfileBindings,
+import { profileAccountKey, DEFAULT_BINDING_VISIBILITY, defaultHomepagePreferences, parseHomepagePatch, projectProfileBindings,
   type ProfileBinding, type ProfileHomepage, type ProfileHomepagePreferences } from "@/lib/profile-homepage";
 
 export async function readProfileHomepage(publicUid: number, viewerId: string | null): Promise<ProfileHomepage | null> {
@@ -19,11 +20,13 @@ export async function readProfileHomepage(publicUid: number, viewerId: string | 
   if (!profile) return null;
   const isOwner = profile.id === viewerId;
   const preferences: ProfileHomepagePreferences = { ...defaultHomepagePreferences(), ...profile.preferences };
+  // Older CN-only clients can still write preferences during a rolling release.
+  preferences.accounts = preferences.accounts.map(a => ({ ...a, server: a.server ?? CURRENT_GAME_BINDING_SERVER }));
   let accounts: ProfileBinding[] = [];
   if (isOwner || preferences.publicAccounts) {
     const includeTitles = isOwner || preferences.accounts.some(a => a.public && a.titlesPublic);
     const table = client.from(USER_GAME_BINDINGS_TABLE);
-    const accountQuery = includeTitles ? table.select("game_uid, owned_degree_ids, owned_degree_effect_ids") : table.select("game_uid");
+    const accountQuery = includeTitles ? table.select("server, game_uid, owned_degree_ids, owned_degree_effect_ids") : table.select("server, game_uid");
     const [bindings, names] = await Promise.all([
       accountQuery.eq("web_user_id", profile.id),
       client.from(USER_GAME_PROFILES_TABLE).select("source_game_uid, profile_name").eq("web_user_id", profile.id)
@@ -34,17 +37,18 @@ export async function readProfileHomepage(publicUid: number, viewerId: string | 
       .filter(row => row.profile_name !== `UID ${row.source_game_uid}`)
       .map(row => [row.source_game_uid, row.profile_name]));
     accounts = (bindings.data ?? []).map(row => ({
-      server: CURRENT_GAME_BINDING_SERVER, gameUid: row.game_uid, playerName: playerNames.get(row.game_uid) ?? null,
+      server: getBandoriServerFromCode(row.server)!, gameUid: row.game_uid,
+      playerName: row.server === "cn" ? playerNames.get(row.game_uid) ?? null : null,
       ownedDegreeIds: "owned_degree_ids" in row ? row.owned_degree_ids ?? [] : [],
       ownedDegreeEffectIds: "owned_degree_effect_ids" in row ? row.owned_degree_effect_ids ?? [] : [],
       ...DEFAULT_BINDING_VISIBILITY,
     }));
   }
   // Remove stale preferences from the owner payload; unbound IDs are never public data.
-  preferences.accounts = preferences.accounts.filter(a => accounts.some(b => b.gameUid === a.gameUid));
+  preferences.accounts = preferences.accounts.filter(a => accounts.some(b => b.server === a.server && b.gameUid === a.gameUid));
   for (const account of accounts) {
-    if (!preferences.accounts.some(a => a.gameUid === account.gameUid)) {
-      preferences.accounts.push({ gameUid: account.gameUid, ...DEFAULT_BINDING_VISIBILITY });
+    if (!preferences.accounts.some(a => a.server === account.server && a.gameUid === account.gameUid)) {
+      preferences.accounts.push({ server: account.server, gameUid: account.gameUid, ...DEFAULT_BINDING_VISIBILITY });
     }
   }
   const identity = resolveStoredAccountAvatarCardIdentity(profile.avatar_card_id ?? 1, profile.avatar_card_server);
@@ -63,10 +67,10 @@ export async function updateProfileHomepage(userId: string, value: unknown): Pro
   if (!patch) throw new ApiRouteError(400, "INVALID_HOMEPAGE", "Invalid profile settings");
   const client = createServerSupabaseClient();
   if (patch.accounts) {
-    const { data, error } = await client.from(USER_GAME_BINDINGS_TABLE).select("game_uid").eq("web_user_id", userId);
+    const { data, error } = await client.from(USER_GAME_BINDINGS_TABLE).select("server, game_uid").eq("web_user_id", userId);
     if (error) throw new ApiRouteError(500, "PROFILE_SAVE_FAILED", "Failed to save profile");
-    const owned = new Set((data ?? []).map(row => row.game_uid));
-    if (patch.accounts.some(a => !owned.has(a.gameUid)) || patch.accounts.length !== owned.size) {
+    const owned = new Set((data ?? []).map(row => profileAccountKey({ server: getBandoriServerFromCode(row.server)!, gameUid: row.game_uid })));
+    if (patch.accounts.some(a => !owned.has(profileAccountKey(a))) || patch.accounts.length !== owned.size) {
       throw new ApiRouteError(409, "PROFILE_BINDINGS_CHANGED", "Bound accounts changed");
     }
   }

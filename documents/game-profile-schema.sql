@@ -1,5 +1,5 @@
+-- Historical CN-only reference. Use supabase/migrations/ for regional ownership checks.
 -- Game profile schema for compressed synced and manually uploaded profile data.
--- Run after documents/game-account-binding-schema.sql.
 -- This migration intentionally drops the early row-level detail tables; the
 -- compressed payload in user_game_profiles is the source of truth.
 

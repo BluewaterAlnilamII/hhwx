@@ -47,6 +47,12 @@ English version: [supabase-setup.md](supabase-setup.md)
 - `documents/game-account-binding-schema.sql`：游戏账号绑定验证码和绑定关系。
 - `supabase/maintenance/bandori_tracker_maintenance.sql`：仅用于手动观察和维护查询，不要当作迁移执行。
 
+## 四服绑定与公开资料
+
+四服绑定迁移把旧验证码、绑定关系、主页账号排序与可见性归为国服。游戏账号以区服及 UID 联合标识。先暂停 Web 流量，等待在途写入结束后停掉旧 Web，再执行迁移、更新私有后端并启动新版 Web。确认就绪后恢复访问。解绑请求必须带区服，主页设置统一写入 `PATCH /api/account/homepage/settings`。停机前已打开的页面若保存失败，刷新后即可重试。产生多服绑定后，回滚版本也必须识别区服。公开观察表和合并函数仅供服务端使用，数据来自玩家查询、签名验码和国服完整同步中按公开设置过滤的 `profile`。 [SQL](../supabase/migrations/20261127060443_regional_game_bindings_and_public_players.sql)
+
+先应用[档案同步优化迁移](../supabase/migrations/20261127075659_optimize_player_profile_sync.sql)，再部署调用 `merge_game_uid_binding_titles` 的 Web 版本。旧 Web 在切换期间仍可调用原称号函数。公开玩家表在合并结果与已有记录相同时跳过行更新。
+
 ## 本地个人主页开发
 
 2026-11-17 建立的主页开发环境使用独立本地项目 `hhwx-profile-dev`，配置目录为 `temp/profile-dev/supabase`。配置、迁移和邮件模板均复制自仓库。原 `hhwx` 数据卷已保留：其表结构与迁移记录不一致，因此没有清空或修复。新库从头应用了仓库全部 47 条迁移，最新为 `20261116105541_profile_homepage.sql`。

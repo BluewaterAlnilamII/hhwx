@@ -1357,7 +1357,7 @@ try {
   assert.equal((await fetch(origin+"/api/bandori/favorites?view=keys")).status,401);
   await api("/cards:1755", "PUT");
   assert.deepEqual((await api("")).find(g=>g.kind==="cards").items.map(x=>Number(x.target)),cards.toReversed());
-  const settings = await fetch(origin + "/api/account/homepage", {method:"PATCH",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({modules:["cards","events","songs"].map(id=>({id,public:id!=="cards"}))})});
+  const settings = await fetch(origin + "/api/account/homepage/settings", {method:"PATCH",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({modules:["cards","events","songs"].map(id=>({id,public:id!=="cards"}))})});
   assert.equal(settings.status,200);
   assert.ok(!(await api("?profile="+profile.data.public_uid,"GET",false)).some(g=>g.kind==="cards"));
   assert.equal((await profileCards()).items.filter(item => item.target === "1755").length, 1);

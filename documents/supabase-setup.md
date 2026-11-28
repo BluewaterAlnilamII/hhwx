@@ -34,6 +34,12 @@ This document describes HHWX's Supabase schema workflow. New schema changes shou
 - `documents/game-account-binding-schema.sql`: game-account binding challenges and bindings.
 - `supabase/maintenance/bandori_tracker_maintenance.sql`: manual observation and maintenance queries only. Do not treat this as a migration.
 
+## Regional game bindings and public observations
+
+The regional binding migration gives outstanding challenges, bindings and old homepage visibility/order entries a CN region. The key for each game account is now (server, game_uid). Take Web traffic offline and let in-flight writes finish before stopping the old Web server. Apply the migrations, deploy the private profile backend, then start the updated Web server and check readiness before reopening traffic. Unbinding requires an explicit server. Homepage edits use `PATCH /api/account/homepage/settings`; users with a page open across the deployment can refresh before retrying a failed write. After accepting regional data, rollback requires a region-aware Web version. The public observation table and merge RPC are service-only; no visitor profile is seeded from private inventory. [SQL](../supabase/migrations/20261127060443_regional_game_bindings_and_public_players.sql)
+
+Apply [the profile sync optimization migration](../supabase/migrations/20261127075659_optimize_player_profile_sync.sql) before deploying the Web build that calls `merge_game_uid_binding_titles`. Older Web builds can still use their existing title RPCs. The public player table skips a row update when the merged observation matches the stored record.
+
 ## Local profile development
 
 The 2026-11-17 profile environment uses the separate local project `hhwx-profile-dev` in `temp/profile-dev/supabase`. Its config, migrations and email templates are copies of the repository sources. The older `hhwx` volume was retained: its schema and recorded migrations disagree, so it was not reset or repaired. The new database replayed all 47 repository migrations through `20261116105541_profile_homepage.sql`.

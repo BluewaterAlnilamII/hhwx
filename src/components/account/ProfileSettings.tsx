@@ -9,7 +9,7 @@ import Switch from "@/components/Switch";
 import ActionFeedback from "@/components/ActionFeedback";
 import type { ActionFeedbackState } from "@/hooks/useActionFeedback";
 import BandoriServerIcon from "@/components/bandori/BandoriServerIcon";
-import { bindingVisibility, type ProfileHomepagePreferences } from "@/lib/profile-homepage";
+import { profileAccountKey, bindingVisibility, type ProfileHomepagePreferences } from "@/lib/profile-homepage";
 import styles from "./PublicProfile.module.css";
 
 function Row({ id, label, readOnly, saving, children, feedback }: { id: string; label: string; readOnly: boolean; saving: boolean; children: ReactNode; feedback: ActionFeedbackState | null }) {
@@ -57,14 +57,15 @@ export default function ProfileSettings({ preferences, readOnly, modules, accoun
     <section><div className={styles.settingRow}><h2>{t("accounts")}</h2>{toggle(accounts, "accounts", t("publish", { name: t("accounts") }), preferences.publicAccounts, value => saveBindings({ publicAccounts: value }, "accounts"))}</div>
       <div className={`${styles.settingRow} ${styles.lookupRow}`}><span>{t("allowGameIdSearch")}</span>
         {toggle(accounts, "allowGameIdSearch", t("allowGameIdSearch"), preferences.publicAccounts && preferences.allowGameIdSearch, value => saveBindings({ allowGameIdSearch: value }, "allowGameIdSearch"), !preferences.publicAccounts)}</div>
-      <SortList ids={preferences.accounts.map(a => a.gameUid)} onOrder={(ids, movedId) => saveBindings({ accounts: ids.map(id => preferences.accounts.find(a => a.gameUid === id)!) }, `account-order:${movedId}`)}>
+      <SortList ids={preferences.accounts.map(profileAccountKey)} onOrder={(ids, movedId) => saveBindings({ accounts: ids.map(id => preferences.accounts.find(a => profileAccountKey(a) === id)!) }, `account-order:${movedId}`)}>
         {preferences.accounts.map(account => {
           const effective = bindingVisibility(preferences.publicAccounts, account);
-          const update = (patch: Partial<typeof account>, target: string) => saveBindings({ accounts: preferences.accounts.map(a => a.gameUid === account.gameUid ? { ...a, ...patch } : a) }, target);
-          return <Row key={account.gameUid} id={account.gameUid} label={t("reorder", { name: account.gameUid })} readOnly={readOnly} saving={Boolean(accounts.pending)} feedback={accounts.feedbackFor(`account-order:${account.gameUid}`)}>
-            <div className={styles.settingRow}><span className={styles.accountId}><BandoriServerIcon server={3} size={20} />{account.gameUid}</span>
-              {toggle(accounts, `account:${account.gameUid}`, t("publish", { name: account.gameUid }), effective.public, value => update({ public: value }, `account:${account.gameUid}`), !preferences.publicAccounts)}</div>
-            <div className={`${styles.settingRow} ${styles.settingChild}`}><span>{t("titles")}</span>{toggle(accounts, `titles:${account.gameUid}`, t("publishTitles", { id: account.gameUid }), effective.titlesPublic, value => update({ titlesPublic: value }, `titles:${account.gameUid}`), !effective.public)}</div>
+          const key = profileAccountKey(account);
+          const update = (patch: Partial<typeof account>, target: string) => saveBindings({ accounts: preferences.accounts.map(a => profileAccountKey(a) === key ? { ...a, ...patch } : a) }, target);
+          return <Row key={key} id={key} label={t("reorder", { name: account.gameUid })} readOnly={readOnly} saving={Boolean(accounts.pending)} feedback={accounts.feedbackFor(`account-order:${key}`)}>
+            <div className={styles.settingRow}><span className={styles.accountId}><BandoriServerIcon server={account.server} size={20} />{account.gameUid}</span>
+              {toggle(accounts, `account:${key}`, t("publish", { name: account.gameUid }), effective.public, value => update({ public: value }, `account:${key}`), !preferences.publicAccounts)}</div>
+            <div className={`${styles.settingRow} ${styles.settingChild}`}><span>{t("titles")}</span>{toggle(accounts, `titles:${key}`, t("publishTitles", { id: account.gameUid }), effective.titlesPublic, value => update({ titlesPublic: value }, `titles:${key}`), !effective.public)}</div>
           </Row>;
         })}
       </SortList>

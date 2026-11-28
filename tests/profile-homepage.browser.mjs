@@ -16,7 +16,7 @@ require("@next/env").loadEnvConfig(fileURLToPath(new URL("..", import.meta.url))
 const authUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 assert.ok(authUrl, "Local public Supabase URL is required for the isolated browser session");
 const initial = { signature: "今天也想听到喜欢的歌", cover: {cardId:2254,entityServer:null,trainType:"after_training",x:28,y:26}, publicAccounts:true, allowGameIdSearch:true,
-  modules:["cards","events","songs"].map(id=>({id,public:true})), accounts:["1000001234","1234567890123456"].map(gameUid=>({gameUid,public:true,titlesPublic:false})) };
+  modules:["cards","events","songs"].map(id=>({id,public:true})), accounts:["1000001234","1234567890123456"].map(gameUid=>({server:3,gameUid,public:true,titlesPublic:false})) };
 let preferences = structuredClone(initial), persisted = {}, owner = true, username = "Bluewater Alnilam Player", failSave = false, failLoad = false, failAvatar = false;
 const avatar = { avatarCardId: 1, avatarCardServer: null, avatarCardTrainType: "normal" };
 const gameProfileJson = JSON.stringify({bestdoriProfile:{name:"Picker regression",server:0,compression:"2",data:{cards:{ids:"",levels:[],masters:[],skills:[],eps:[],trains:[],excludes:[]},items:{}}}});
@@ -31,7 +31,7 @@ await context.route("**/api/account/**", async route=>{
     compressed:{storageCodec:"hhwx-profile+gzip+base64-v1",payloadCompressed:gzipSync(gameProfileJson).toString("base64"),payloadSha256:createHash("sha256").update(gameProfileJson).digest("hex"),payloadSize:Buffer.byteLength(gameProfileJson)},
     profile:{id:"picker-fixture",kind:"manual",name:"Picker regression",isEditable:true,updatedAt:"2026-01-01T00:00:00Z"},sectionVersions:{cardsHash:"fixture",itemsHash:"fixture"}
   }}});
-  if(path.endsWith("/homepage")) {
+  if(path === "/api/account/homepage/settings") {
     assert.equal(route.request().method(),"PATCH");
     const patch = route.request().postDataJSON(); writes.push(patch);
     if(failSave) return route.fulfill({status:500,json:{success:false,error:{code:"PROFILE_SAVE_FAILED",message:"Internal error"}}});
@@ -73,6 +73,10 @@ const feedbackNear=async(control,side="left",type="success")=>{
   assert.ok(notice.x>=0&&notice.x+notice.width<=page.viewportSize().width,"feedback stays inside the viewport");
 };
 try {
+  await check("the retired homepage write address has no PATCH handler", async () => {
+    const response = await context.request.patch(origin + "/api/account/homepage", { data: {} });
+    assert.ok([404, 405].includes(response.status()));
+  });
   await check("account menu opens the personal homepage above Account Center",async()=>{
     await page.goto(origin+"/account",{waitUntil:"domcontentloaded"});
     await page.getByRole("button",{name:"打开账户菜单"}).click();
@@ -382,7 +386,7 @@ try {
     // The second binding was added after the first account's privacy was saved.
     persisted.accounts = initial.accounts.slice(0, 1);
     await input.fill("新绑定账号仍然可见");
-    const saved = page.waitForResponse("**/api/account/homepage");
+    const saved = page.waitForResponse("**/api/account/homepage/settings");
     await input.press("Enter");
     await saved;
     await page.waitForFunction(() => !document.querySelector("main header input").readOnly);
@@ -391,7 +395,7 @@ try {
   await check("clicking an account switch while leaving the signature saves both actions independently",async()=>{
     const field = page.getByRole("textbox", {name:"个性签名"});
     const first = page.getByRole("switch", {name:"公开1000001234", exact:true});
-    const url = "**/api/account/homepage";
+    const url = "**/api/account/homepage/settings";
     for (const failSignature of [false, true]) {
       let release;
       const delayed = new Promise(resolve => { release = resolve; });
@@ -427,7 +431,7 @@ try {
   await check("a late privacy response preserves a newer confirmed signature", async () => {
     const field = page.getByRole("textbox", {name:"个性签名"});
     const first = page.getByRole("switch", {name:"公开1000001234", exact:true});
-    const url = "**/api/account/homepage";
+    const url = "**/api/account/homepage/settings";
     let release;
     const holdReply = new Promise(resolve => { release = resolve; });
     await page.route(url, async route => {
@@ -734,7 +738,7 @@ try {
   await check("a failed settings column rolls back only itself", async () => {
     await page.goto(origin + "/user/" + publicUid);
     await page.getByRole("tab",{name:"设置",exact:true}).click();
-    const url = "**/api/account/homepage";
+    const url = "**/api/account/homepage/settings";
     const card = page.getByRole("switch", {name:"公开收藏的卡牌",exact:true});
     const lookup = page.getByRole("switch", {name:"允许通过游戏ID搜索到网站账号",exact:true});
     for (const [slow, fast, field] of [[card, lookup, "modules"], [lookup, card, "allowGameIdSearch"]]) {

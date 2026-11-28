@@ -33,7 +33,7 @@ try {
       const req = route.request();
       const path = new URL(req.url()).pathname;
       const success = data => route.fulfill({ json: { success: true, data } });
-      if (owner && ((path === "/api/account/homepage" && req.method() === "PATCH") || (path === "/api/bandori/favorites/songs:1" && req.method() === "DELETE"))) {
+      if (owner && ((path === "/api/account/homepage/settings" && req.method() === "PATCH") || (path === "/api/bandori/favorites/songs:1" && req.method() === "DELETE"))) {
         if (failWrite) return route.fulfill({status:503,json:{success:false}});
         return success(req.method() === "PATCH" ? req.postDataJSON() : true);
       }

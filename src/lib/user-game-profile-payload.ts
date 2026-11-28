@@ -17,6 +17,7 @@ export const USER_GAME_PROFILE_STORAGE_CODEC = "hhwx-profile+gzip+base64-v1";
 export const HHWX_BESTDORI_PROFILE_FORMAT = "hhwx-profile-v1";
 
 export type UserGameProfileCardRecord = {
+  createdAt?: number;
   cardId: number;
   level: number;
   masterRank: number;
@@ -71,6 +72,7 @@ export type CompactGameProfileMissionBonusRecords = {
 };
 
 export type UserGameProfilePayload = {
+  cardAcquiredAt?: Record<string, number>;
   bestdoriProfile: BestdoriProfile;
   characterPotentials?: CompactGameProfilePotentialRecords;
   characterMissionBonuses?: CompactGameProfileMissionBonusRecords;
@@ -81,6 +83,7 @@ export type UserGameProfilePayload = {
 };
 
 export type HhwxBestdoriProfileExtension = {
+  cardAcquiredAt?: Record<string, number>;
   format: typeof HHWX_BESTDORI_PROFILE_FORMAT;
   characterPotentials?: CompactGameProfilePotentialRecords;
   characterMissionBonuses?: CompactGameProfileMissionBonusRecords;
@@ -112,13 +115,23 @@ function normalizeBestdoriImportAreaItemLevel(level: number | null): number | nu
   return Math.max(0, Math.trunc(toFiniteNumber(level)) + 1);
 }
 
-function getHhwxBestdoriProfileExtension(profile: BestdoriProfile): HhwxBestdoriProfileExtension | null {
+function cardAcquisitionTimes(value: unknown, cards: UserGameProfileCardRecord[]): Record<string, number> | undefined {
+  if (!isRecord(value)) return undefined;
+  const times = Object.fromEntries(cards.flatMap(({ cardId }) => {
+    const time = value[cardId];
+    return typeof time === "number" && Number.isSafeInteger(time) && time > 0 ? [[cardId, time]] : [];
+  }));
+  return Object.keys(times).length ? times : undefined;
+}
+
+function getHhwxBestdoriProfileExtension(profile: BestdoriProfile, cards: UserGameProfileCardRecord[]): HhwxBestdoriProfileExtension | null {
   if (!isRecord(profile.hhwx) || profile.hhwx.format !== HHWX_BESTDORI_PROFILE_FORMAT) {
     return null;
   }
 
   return {
     format: HHWX_BESTDORI_PROFILE_FORMAT,
+    cardAcquiredAt: cardAcquisitionTimes(profile.hhwx.cardAcquiredAt, cards),
     characterPotentials: isRecord(profile.hhwx.characterPotentials)
       ? profile.hhwx.characterPotentials as CompactGameProfilePotentialRecords
       : undefined,
@@ -129,7 +142,10 @@ function getHhwxBestdoriProfileExtension(profile: BestdoriProfile): HhwxBestdori
 }
 
 export function getGameProfileCards(payload: UserGameProfilePayload): UserGameProfileCardRecord[] {
-  return decodeBestdoriProfile(payload.bestdoriProfile).cards;
+  return decodeBestdoriProfile(payload.bestdoriProfile).cards.map(card => {
+    const createdAt = payload.cardAcquiredAt?.[card.cardId];
+    return createdAt === undefined ? card : { ...card, createdAt };
+  });
 }
 
 export function replaceGameProfileCards(
@@ -140,6 +156,7 @@ export function replaceGameProfileCards(
   normalizedProfile.cards = cards;
   return {
     ...payload,
+    cardAcquiredAt: cardAcquisitionTimes(payload.cardAcquiredAt, cards),
     bestdoriProfile: encodeBestdoriProfile(normalizedProfile),
   };
 }
@@ -266,9 +283,10 @@ export function importBestdoriGameProfilePayload(bestdoriProfile: BestdoriProfil
   );
   normalizedProfile.potentials = [];
 
-  const extension = getHhwxBestdoriProfileExtension(bestdoriProfile);
+  const extension = getHhwxBestdoriProfileExtension(bestdoriProfile, normalizedProfile.cards);
   return {
     bestdoriProfile: encodeBestdoriProfile(normalizedProfile),
+    cardAcquiredAt: extension?.cardAcquiredAt,
     characterPotentials: compactPotentialRecords(
       extension?.characterPotentials ?? importPotentialRecordsFromBestdoriTotals(bestdoriPotentials),
     ),
@@ -324,6 +342,7 @@ export function exportBestdoriGameProfilePayload(payload: UserGameProfilePayload
   const exportedProfile = encodeBestdoriProfile(normalizedProfile);
   exportedProfile.hhwx = {
     format: HHWX_BESTDORI_PROFILE_FORMAT,
+    cardAcquiredAt: compactPayload.cardAcquiredAt,
     characterPotentials: compactPayload.characterPotentials,
     characterMissionBonuses: compactPayload.characterMissionBonuses,
   } satisfies HhwxBestdoriProfileExtension;
@@ -446,6 +465,7 @@ export function compactGameProfilePayload(payload: UserGameProfilePayload): User
 
   return {
     bestdoriProfile: encodeBestdoriProfile(normalizedProfile),
+    cardAcquiredAt: cardAcquisitionTimes(payload.cardAcquiredAt, normalizedProfile.cards),
     characterPotentials: compactPotentialRecords(payload.characterPotentials),
     characterMissionBonuses: compactMissionBonusRecords(payload.characterMissionBonuses),
     source: payload.source,

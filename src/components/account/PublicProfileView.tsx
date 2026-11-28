@@ -62,7 +62,7 @@ function ProfilePage({ publicUid, viewerId }: { publicUid: number; viewerId: str
   async function persist(patch: Partial<ProfileHomepagePreferences>) {
     const session = await getSafeSession();
     if (!viewerId || session?.user.id !== viewerId || useGameStore.getState().userId !== viewerId) throw new Error("session");
-    const response = await fetch("/api/account/homepage", { method: "PATCH", cache: "no-store", headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" }, body: JSON.stringify(patch) });
+    const response = await fetch("/api/account/homepage/settings", { method: "PATCH", cache: "no-store", headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" }, body: JSON.stringify(patch) });
     const persisted = parseApiSuccessData<Partial<ProfileHomepagePreferences>>(await response.json());
     if (!response.ok || !persisted || !mounted.current || useGameStore.getState().userId !== viewerId) throw new Error("save");
     return persisted;

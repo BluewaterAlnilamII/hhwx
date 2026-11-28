@@ -84,20 +84,25 @@ export type UserGameProfileSectionUpdateResult = {
   sectionVersions: UserGameProfileSectionVersions;
 };
 
-type UserGameProfileRow = {
+const PROFILE_SUMMARY_COLUMNS = "id, profile_kind, profile_name, server, source_game_uid, card_count, summary, synced_at, updated_at";
+
+type UserGameProfileSummaryRow = {
   id: string;
   profile_kind: UserGameProfileKind;
   profile_name: string;
   server: number;
   source_game_uid: string | null;
-  storage_codec: string;
-  payload_compressed: string;
-  payload_sha256: string;
-  payload_size: number;
   card_count: number | null;
   summary: unknown;
   synced_at: string | null;
   updated_at: string;
+};
+
+type UserGameProfileRow = UserGameProfileSummaryRow & {
+  storage_codec: string;
+  payload_compressed: string;
+  payload_sha256: string;
+  payload_size: number;
 };
 
 type TrackerCard = {
@@ -253,7 +258,7 @@ function inferEpisodeCountFromAppendParameter(masterRank: number, appendParamete
   return untrainedEpisodeCounts.get(performance) ?? 0;
 }
 
-function toProfileSummary(row: UserGameProfileRow): UserGameProfileSummary {
+function toProfileSummary(row: UserGameProfileSummaryRow): UserGameProfileSummary {
   const summary = isRecord(row.summary) ? row.summary : {};
   return {
     id: row.id,
@@ -873,7 +878,7 @@ export async function listUserGameProfiles(webUserId: string): Promise<UserGameP
   const serviceClient = createServerSupabaseClient();
   const { data, error } = await serviceClient
     .from(USER_GAME_PROFILES_TABLE)
-    .select("id, profile_kind, profile_name, server, source_game_uid, storage_codec, payload_compressed, payload_sha256, payload_size, card_count, summary, synced_at, updated_at")
+    .select(PROFILE_SUMMARY_COLUMNS)
     .eq("web_user_id", webUserId)
     .order("profile_kind", { ascending: true })
     .order("updated_at", { ascending: false });
@@ -882,7 +887,7 @@ export async function listUserGameProfiles(webUserId: string): Promise<UserGameP
     throw new ApiRouteError(500, "GAME_PROFILES_READ_FAILED", "读取游戏档案失败", error.message);
   }
 
-  return ((data ?? []) as UserGameProfileRow[]).map(toProfileSummary);
+  return (data ?? []).map(toProfileSummary);
 }
 
 export async function createManualGameProfile(webUserId: string, name: unknown): Promise<UserGameProfileSummary> {
@@ -1063,6 +1068,7 @@ export async function requireBoundGameUid(webUserId: string, gameUid: string): P
   const { data: binding, error: bindingError } = await serviceClient
     .from(USER_GAME_BINDINGS_TABLE)
     .select("game_uid")
+    .eq("server", "cn")
     .eq("web_user_id", webUserId)
     .eq("game_uid", gameUid)
     .maybeSingle();
@@ -1089,6 +1095,13 @@ export async function syncAutoGameProfile(webUserId: string, gameUid: string, ta
     potentialLevels: suiteUser.character_potential_levels,
     missionBonuses: suiteUser.character_mission_bonuses,
   });
+  if (Array.isArray(suiteUser.cards)) {
+    payload.cardAcquiredAt = Object.fromEntries(suiteUser.cards.filter(isRecord).flatMap(card => {
+      const id = toInteger(card.situation_id);
+      const time = card.created_at;
+      return id > 0 && typeof time === "number" && Number.isSafeInteger(time) && time > 0 ? [[id, time]] : [];
+    }));
+  }
   const compressed = encodeGameProfilePayload(payload);
 
   const { data, error } = await serviceClient.rpc("upsert_auto_game_profile", {
@@ -1100,40 +1113,27 @@ export async function syncAutoGameProfile(webUserId: string, gameUid: string, ta
     p_payload_size: compressed.payloadSize,
     p_card_count: getGameProfileCardCount(payload),
     p_summary: {},
-  });
+  }).select(PROFILE_SUMMARY_COLUMNS).single();
 
   if (error) {
     throw new ApiRouteError(400, "AUTO_GAME_PROFILE_SYNC_FAILED", "保存自动档案失败");
   }
 
   const degreeIds = extractSnapshotDegreeIds(snapshot);
-  if (degreeIds.length > 0) {
-    const { error: degreeMergeError } = await serviceClient.rpc("merge_game_uid_binding_degrees", {
+  const degreeEffectIds = extractSnapshotDegreeEffectIds(snapshot);
+  if (degreeIds.length || degreeEffectIds.length) {
+    const { error: titleError } = await serviceClient.rpc("merge_game_uid_binding_titles", {
       p_web_user_id: webUserId,
       p_game_uid: gameUid,
       p_degree_ids: degreeIds,
+      p_degree_effect_ids: degreeEffectIds,
     });
-    if (degreeMergeError) {
+    if (titleError) {
       throw new ApiRouteError(500, "AUTO_GAME_PROFILE_SYNC_FAILED", "保存自动档案失败");
     }
   }
 
-  const degreeEffectIds = extractSnapshotDegreeEffectIds(snapshot);
-  if (degreeEffectIds.length > 0) {
-    const { error: degreeEffectMergeError } = await serviceClient.rpc(
-      "merge_game_uid_binding_degree_effects",
-      {
-        p_web_user_id: webUserId,
-        p_game_uid: gameUid,
-        p_degree_effect_ids: degreeEffectIds,
-      },
-    );
-    if (degreeEffectMergeError) {
-      throw new ApiRouteError(500, "AUTO_GAME_PROFILE_SYNC_FAILED", "保存自动档案失败");
-    }
-  }
-
-  return toProfileSummary(data as UserGameProfileRow);
+  return toProfileSummary(data as UserGameProfileSummaryRow);
 }
 
 export async function readCompressedGameProfilePayload(webUserId: string, profileId: string): Promise<CompressedGameProfilePayload> {

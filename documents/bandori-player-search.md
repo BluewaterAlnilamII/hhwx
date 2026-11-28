@@ -7,12 +7,25 @@ The BANDORI navigation entry opens `/bandori/player`. Results use the shareable
 Player search accepts 1–20 ASCII decimal digits, up to the uint64 maximum
 `18446744073709551615`. The input keeps leading zeros; server-side normalization
 removes them before querying. UIDs remain strings to preserve precision.
-Account binding and snapshot synchronization retain their separate UID validation.
+Account binding uses the same normalization. Full CN snapshot sync retains its existing UID validation.
 
 The browser calls `GET /api/bandori/player/{server}/{uid}`. Successful responses
 use `{ success, data: { server, uid, fetchedAt, profile } }`. The private backend
 uses `gameUid` in place of `uid`. Supported servers are JP, EN, TW and CN.
 Binding verification reads the public `profile.introduction` through the same live query.
+On successful verification the account page updates the binding from the returned server, UID and binding time.
+
+After a successful visitor query, the Web server also submits the observed public fields to
+`bandori_public_players`, keyed by server and UID. This happens during both search and
+signature verification. The API returns the live result even if this separate write fails.
+Looking up the fetcher's own game UID through search or verification also records the filtered public fields. A full CN account sync applies the same public-field filter to the self-profile it already requested and submits those fields to the same database. Background keepalive does not write to the database. The development proxy skips the duplicate write.
+
+Names, ranks and ordinary signatures update when supplied. A binding code never replaces a
+signature. Observed card and title IDs accumulate. Band and character ranks, independent
+CLEAR/FC/AP counts, and deck ranks update by key. Each observed Rating group replaces its song list.
+An observed sparse stage map supplies zero for omitted main challenges. Missing sections preserve
+previous observations. Public cards contain only IDs and never become calculator input.
+Future archive views should indicate that some information can be stale due to player privacy settings.
 
 Every query fetches the game profile synchronously, waiting at most five seconds
 for that server's account lane. There is no backend profile cache, background
@@ -71,7 +84,7 @@ Invalid UID requests can exercise the edge rule without fetching game data.
 
 ## Privacy and presentation
 
-The API removes values protected by `publish*Flg` before returning the profile.
+The private backend removes values protected by `publish*Flg` before returning the profile.
 Section headings remain visible with “Private” when their flag is false or absent.
 CLEAR, FULL COMBO and ALL PERFECT each use their own flag. Public fields with
 missing data show “No data”; explicit zero is retained. The queried UID is always
@@ -265,8 +278,7 @@ For local player lookup without starting the private user-fetcher, set
 `HHWX_DEV_PLAYER_API_PROXY=1` in `.env.local` and run `npm run dev`. Only in
 `NODE_ENV=development`, the public player GET route forwards to the fixed
 `https://hhwx.org/api/bandori/player/{server}/{uid}` endpoint without a mode parameter. It
-validates the public response envelope and player identity, applies local privacy
-redaction, and retains the same timeout and body limits. The target must use the
+validates the public response envelope and player identity, and retains the same timeout and body limits. The target must use the
 same live-query contract. It sends no backend
 token, cookies, or browser request headers. Failures do not switch sources.
 

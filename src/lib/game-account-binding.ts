@@ -1,23 +1,23 @@
 import { ApiRouteError } from "@/lib/api-contracts";
-import { fetchBandoriPlayerProfile } from "@/lib/bandori-player-fetcher";
+import { fetchBandoriPlayerProfile, type BandoriPlayerServer } from "@/lib/bandori-player-fetcher";
 
 export const GAME_BIND_CHALLENGE_TTL_MINUTES = 10;
 export const GAME_BIND_CHALLENGE_MAX_ATTEMPTS = 5;
 export const GAME_BIND_CHALLENGE_RETENTION_DAYS = 7;
 
-
 const CHALLENGE_PREFIX = "hhwx";
 const GAME_UID_PATTERN = /^[1-9][0-9]{3,15}$/;
 const CHALLENGE_SUFFIX_LENGTH = 6;
-const GAME_BIND_PROFILE_SERVER = "cn";
 
 export type GameAccountBinding = {
+  server: BandoriPlayerServer;
   gameUid: string;
   boundAt: string;
 };
 
 export type GameBindChallenge = {
   id: string;
+  server: BandoriPlayerServer;
   gameUid: string;
   challenge: string;
   expiresAt: string;
@@ -62,8 +62,8 @@ export function isSignatureMatch(signature: unknown, challenge: string): boolean
   return typeof signature === "string" && signature.trim() === challenge;
 }
 
-export async function fetchGameProfileSignature(gameUid: string): Promise<{ signature: string; fetchedAt: string | null }> {
-  const player = await fetchBandoriPlayerProfile(GAME_BIND_PROFILE_SERVER, gameUid);
+export async function fetchGameProfileSignature(server: BandoriPlayerServer, gameUid: string): Promise<{ signature: string; fetchedAt: string | null }> {
+  const player = await fetchBandoriPlayerProfile(server, gameUid);
   const signature = player.profile.introduction;
 
   if (typeof signature !== "string") {

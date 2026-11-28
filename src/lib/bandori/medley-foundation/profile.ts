@@ -271,7 +271,7 @@ export function decodeMedleyProfile(value: unknown, path = "profilePayload"): De
   const payload = readRecord(value, path, "INVALID_PROFILE");
   assertAllowedKeys(
     payload,
-    ["bestdoriProfile", "characterPotentials", "characterMissionBonuses", "source"],
+    ["bestdoriProfile", "characterPotentials", "characterMissionBonuses", "cardAcquiredAt", "source"],
     ["bestdoriProfile"],
     path,
     "INVALID_PROFILE",

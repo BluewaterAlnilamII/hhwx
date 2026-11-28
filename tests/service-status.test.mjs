@@ -7,7 +7,7 @@ import ts from "typescript";
 import { ApiRouteError } from "../src/lib/api-contracts.ts";
 import * as apiCache from "../src/lib/api-cache.ts";
 import { BANDORI_SERVER_CODES } from "../src/lib/bandori-server.ts";
-import { redactBandoriPlayerProfile } from "../src/lib/bandori/player-profile.ts";
+import { isValidPlayerUid } from "../src/lib/bandori/player-profile.ts";
 
 const require = createRequire(import.meta.url);
 const epoch = Date.parse("2026-09-07T06:00:00Z");
@@ -40,7 +40,8 @@ function harness(env = {
     "@/lib/api-contracts": { ApiRouteError },
     "@/lib/api-cache": apiCache,
     "@/lib/bandori-server": { BANDORI_SERVER_CODES },
-    "@/lib/bandori/player-profile": { redactBandoriPlayerProfile },
+    "@/lib/bandori/player-profile": { isValidPlayerUid },
+    "@/lib/bandori-public-player-server": { PUBLIC_PLAYER_RESPONSE_BYTES: 1024 * 1024, recordPublicPlayerProfile: async () => {} },
     "next/server": require("next/server"),
   };
   const context = createContext({

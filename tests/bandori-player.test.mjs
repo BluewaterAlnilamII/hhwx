@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import test from "node:test";
 import { ApiRouteError } from "../src/lib/api-contracts.ts";
-import { parseBandoriPlayerResponse, redactBandoriPlayerProfile, isValidPlayerUid, PLAYER_BAND_ORDER, retainPlayerDataOnError, playerErrorMessageKey } from "../src/lib/bandori/player-profile.ts";
+import { parseBandoriPlayerResponse, publicPlayerObservation, isValidPlayerUid, PLAYER_BAND_ORDER, retainPlayerDataOnError, playerErrorMessageKey } from "../src/lib/bandori/player-profile.ts";
 import { buildBandoriBandLogoUrl, buildBandoriDeckRankSpriteUrls, buildBandoriPlayerSpriteUrl } from "../src/lib/bandori-builtin-resources.ts";
 import { calculatePlayerPower, getPlayerCharacterBonusParameters } from "../src/lib/bandori/player-power.ts";
 import { getBandoriPowerDisplayValue, getBandoriTotalPowerDisplayValue } from "../src/lib/bandori/power-display.ts";
@@ -29,15 +29,13 @@ function sample() {
     publishDeckRankFlg: true, publishStageChallengeAchievementConditionsFlg: false, publishCharacterRankFlg: true,
     mainUserDeck: { leader: 2402 },
     mainDeckUserSituations: { entries: [
-      { situationId: 2401, level: 60, illust: "normal", limitBreakRank: 0, skillLevel: 5, userAppendParameter: { performance: 9999 } },
+      { situationId: 2401, level: 60, illust: "normal", limitBreakRank: 0, skillLevel: 5 },
       { situationId: 2402, level: 60, illust: "normal", trainingStatus: "done", limitBreakRank: 4, skillLevel: 5 },
     ] },
     userProfileSituation: { situationId: 2403, illust: "after_training", viewProfileSituationStatus: "profile_situation" },
     userProfileDegreeMap: { entries: { first: { degreeId: 100 }, second: { degreeId: 101 } } },
     bandRankMap: { entries: { 1: 0, 2: 50 } },
-    userMusicClearInfoMap: { entries: { easy: { clearedMusicCount: 0, fullComboMusicCount: 99, allPerfectMusicCount: 3 } } },
-    enabledUserAreaItems: { entries: [{ areaItemId: 1 }] },
-    stageChallengeAchievementConditionsMap: { entries: { 1: 77 } },
+    userMusicClearInfoMap: { entries: { easy: { clearedMusicCount: 0, allPerfectMusicCount: 3 } } },
     userDeckTotalRatingMap: { entries: { 1: { rank: "ss", level: 5, score: 10013490 } } },
     userCharacterRankMap: { entries: { 1: { rank: 100 } } },
     userHighScoreRating: Object.fromEntries([
@@ -49,33 +47,29 @@ function sample() {
   return { success: true, data: { server: "jp", uid: profile.userId, fetchedAt: new Date().toISOString(), profile } };
 }
 
-test("privacy redaction removes protected values without changing the source or hiding the supplied ID", () => {
+test("visitor observations preserve real zeroes, sparse progress and independent rating groups", () => {
   const input = sample();
-  const original = structuredClone(input.data.profile);
-  const profile = redactBandoriPlayerProfile(input.data.profile);
-  assert.equal(profile.userId, "9007199254740997");
-  assert.equal(profile.introduction, original.introduction);
-  assert.equal(profile.stageChallengeAchievementConditionsMap, undefined);
-  assert.equal(profile.enabledUserAreaItems, undefined);
-  assert.equal(profile.mainDeckUserSituations.entries[0].userAppendParameter, undefined);
-  assert.deepEqual(profile.userMusicClearInfoMap.entries.easy, { clearedMusicCount: 0, allPerfectMusicCount: 3 });
-  assert.deepEqual(input.data.profile, original);
-  const view = parseBandoriPlayerResponse({ ...input, data: { ...input.data, profile } });
-  assert.equal(view.clears[0].value.easy, 0);
-  assert.equal(view.clears[0].value.expert, null);
+  const { profile } = input.data;
+  const view = parseBandoriPlayerResponse(input);
   assert.deepEqual(view.clears[1], { public: false, value: null });
-  assert.deepEqual(view.stage, { public: false, value: null });
   assert.deepEqual(view.power, { public: false, value: null });
-  assert.equal(calculatePlayerPower(view, {}, {}, {}), null);
-  assert.equal(view.bandRanks.value[1], 0);
-  assert.equal(view.uid, "9007199254740997");
-  for (const key of Object.keys(original).filter((key) => key.startsWith("publish"))) original[key] = false;
-  const closed = redactBandoriPlayerProfile(original);
-  assert.equal(closed.userHighScoreRating, undefined);
-  assert.equal(closed.userDeckTotalRatingMap, undefined);
-  assert.equal(closed.userCharacterRankMap, undefined);
-  assert.equal(closed.bandRankMap, undefined);
-  assert.deepEqual(closed.userMusicClearInfoMap.entries.easy, {});
+  let facts = publicPlayerObservation(profile);
+  assert.deepEqual(facts.owned_card_ids, [2401, 2402, 2403]);
+  assert.deepEqual(facts.owned_degree_ids, [100, 101]);
+  assert.deepEqual(facts.band_ranks, { 1: 0, 2: 50 });
+  assert.deepEqual(facts.music_clear_counts, { easy: 0 });
+  assert.equal(facts.music_full_combo_counts, undefined);
+  assert.equal(facts.stage_challenge_stars, undefined);
+  profile.introduction = "  hhwx012345 ";
+  profile.stageChallengeAchievementConditionsMap = { entries: { 3: 77 } };
+  profile.userHighScoreRating = { userAfterglowHighScoreMusicList: { entries: [] } };
+  profile.userProfileSituation.viewProfileSituationStatus = "deck_leader";
+  facts = publicPlayerObservation(profile);
+  assert.equal(facts.introduction, undefined);
+  assert.deepEqual(facts.stage_challenge_stars, { 1: 0, 2: 0, 3: 77, 4: 0, 5: 0, 6: 0, 7: 0 });
+  assert.deepEqual(facts.high_score_rating, { 2: [] });
+  assert.deepEqual(facts.owned_card_ids, [2401, 2402]);
+  assert.equal(publicPlayerObservation({ introduction: "" }).introduction, "");
 });
 
 function powerSample() {
@@ -213,6 +207,8 @@ test("invalid power inputs and missing regional master values fail instead of di
   input.data.profile.mainDeckUserSituations.entries[0].userAppendParameter.characterPotentialPerformance = "100";
   assert.throws(() => parseBandoriPlayerResponse(input), /append parameter/);
   input.data.profile.publishTotalDeckPowerFlg = false;
+  delete input.data.profile.enabledUserAreaItems;
+  for (const card of input.data.profile.mainDeckUserSituations.entries) delete card.userAppendParameter;
   assert.deepEqual(parseBandoriPlayerResponse(input).power, { public: false, value: null });
 });
 
@@ -233,7 +229,7 @@ test("profile view preserves card order, selected illustration, both titles, all
   assert.equal(parseBandoriPlayerResponse(input).portrait.cardId, 2402);
   assert.equal(parseBandoriPlayerResponse(input).avatar.cardId, 2402);
   input.data.profile.publishStageChallengeAchievementConditionsFlg = true;
-  input.data.profile.stageChallengeAchievementConditionsMap.entries = { 1: 80, 2: 68, 3: 72, 4: 85, 5: 69, 6: 6, 101: 999 };
+  input.data.profile.stageChallengeAchievementConditionsMap = { entries: { 1: 80, 2: 68, 3: 72, 4: 85, 5: 69, 6: 6, 101: 999 } };
   assert.deepEqual(parseBandoriPlayerResponse(input).stage.value, { 1: 80, 2: 68, 4: 72, 5: 85, 3: 69, 21: 6, 18: 0 });
   input.data.profile.stageChallengeAchievementConditionsMap = null;
   assert.equal(parseBandoriPlayerResponse(input).stage.value, null);
@@ -245,7 +241,7 @@ test("profile view preserves card order, selected illustration, both titles, all
   delete input.data.profile.userHighScoreRating.userMyGOScoreMusicList;
   assert.equal(parseBandoriPlayerResponse(input).rating.value.total, null);
   input.data.profile.userMusicClearInfoMap.entries.easy.clearedMusicCount = "999";
-  assert.equal(parseBandoriPlayerResponse(input).clears[0].value.easy, null);
+  assert.equal(parseBandoriPlayerResponse(input).clears[0].value, null);
   input.data.profile.userId = "1234";
   assert.throws(() => parseBandoriPlayerResponse(input), /identity|response/);
 });
@@ -284,7 +280,7 @@ test("profile images use the published fixed asset contract and reject unsupport
   }
 });
 
-test("all four servers share safe player transport, identity checks, redaction and bounded responses", async () => {
+test("all four servers share safe player transport, identity checks and bounded responses", async () => {
   const savedFetch = globalThis.fetch;
   const savedBase = process.env.HHWX_USER_FETCHER_BASE_URL;
   const savedToken = process.env.HHWX_BANDORI_BACKEND_TOKEN;
@@ -515,9 +511,9 @@ test("public query rejects retired modes and binding uses the same live-only con
     const { data } = await response.json();
     assert.deepEqual(Object.keys(data).sort(), ["fetchedAt", "profile", "server", "uid"]);
     assert.equal(data.uid, "1001");
-    assert.equal((await fetchGameProfileSignature("1001")).signature, "synthetic-signature");
+    assert.equal((await fetchGameProfileSignature("cn", "1001")).signature, "synthetic-signature");
     globalThis.fetch = async () => Response.json({ ...data, gameUid: "1001", cache: true, mode: 2 });
-    await assert.rejects(fetchGameProfileSignature("1001"), { code: "TRACKER_SERVICE_INVALID_RESPONSE" });
+    await assert.rejects(fetchGameProfileSignature("cn", "1001"), { code: "TRACKER_SERVICE_INVALID_RESPONSE" });
   } finally {
     globalThis.fetch = savedFetch;
     console.error = savedLog;
@@ -525,5 +521,43 @@ test("public query rejects retired modes and binding uses the same live-only con
       if (saved[index] === undefined) delete process.env[key];
       else process.env[key] = saved[index];
     });
+  }
+});
+
+test("lookup and binding archive each public reply, including the bot's, and tolerate a failed write", async () => {
+  const keys = ["HHWX_USER_FETCHER_BASE_URL", "HHWX_BANDORI_BACKEND_TOKEN", "SUPABASE_URL", "SUPABASE_SECRET_KEY"];
+  const previous = keys.map(k => process.env[k]);
+  const savedFetch = globalThis.fetch;
+  let fail = false;
+  const reads = [], writes = [];
+  try {
+    Object.assign(process.env, { HHWX_USER_FETCHER_BASE_URL: "https://backend.example.test",
+      HHWX_BANDORI_BACKEND_TOKEN: "fixture", SUPABASE_URL: "https://database.example.test", SUPABASE_SECRET_KEY: "fixture" });
+    globalThis.fetch = async (input, init) => {
+      const url = new URL(input instanceof Request ? input.url : input);
+      if (url.hostname === "backend.example.test") {
+        reads.push(url.pathname);
+        const uid = url.pathname.split("/").at(-1);
+        // A backend from before the rollout can still include the self-lookup marker.
+        return Response.json({ server: "tw", gameUid: uid, ...(uid === "2002" ? { ownProfile: true } : {}),
+          profile: { userId: uid, introduction: "hhwx012345", degree: 12 } });
+      }
+      assert.equal(url.pathname, "/rest/v1/rpc/merge_bandori_public_player");
+      writes.push(JSON.parse(init.body));
+      return new Response(null, { status: fail ? 400 : 204 });
+    };
+    const data = await fetchBandoriPlayerProfile("tw", "1001");
+    assert.equal(data.profile.introduction, "hhwx012345");
+    fail = true;
+    assert.equal((await fetchGameProfileSignature("tw", "1001")).signature, "hhwx012345");
+    fail = false;
+    await fetchBandoriPlayerProfile("tw", "2002");
+    const uids = ["1001", "1001", "2002"];
+    assert.deepEqual(reads, uids.map(uid => `/internal/hhwx-user-fetcher/player/tw/${uid}`));
+    assert.deepEqual(writes, uids.map(uid => ({ p_server: "tw", p_game_uid: uid,
+      p_observation: { owned_card_ids: [], owned_degree_ids: [12] } })));
+  } finally {
+    globalThis.fetch = savedFetch;
+    keys.forEach((key, i) => { if (previous[i] === undefined) delete process.env[key]; else process.env[key] = previous[i]; });
   }
 });
