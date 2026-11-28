@@ -24,7 +24,7 @@ Live2D 依赖与静态 SD PNG 均在同一命名空间下按内容寻址。
 
 卡牌详情页通过私有 Costumes reader 流式读取关联服装摘要，只有独立的 Live2D 区域等待结果，
 服装读取缓慢或失败不阻塞卡牌详情。浏览器共享索引缓存查找服装缩略图及卡牌自身的 LiveSD PNG。
-图片严格选择当前区服槽位，SD 保留完整原图，
+图片严格选择当前服务器槽位，SD 保留完整原图，
 不裁剪、不播放动画。服装读取失败只影响该区域，并提供重试。
 紧凑的“资源”区域依次展示 `thumb` 头像、`trim` 无背景卡面和 LiveSD，
 点击各项在共用的页内图片查看器中展示完整原图，支持滚轮或双指缩放、拖动查看、
@@ -67,7 +67,7 @@ Cloudflare Cache Rule 可以只把目标公开 `GET`/`HEAD` 路径标记为符�
 
 Events、Cards、Degrees、Music 与 Stamps master API 会通过 `BANDORI_PRIVATE_R2_BUCKET` 配置的私有桶，直接读取各自的内容寻址 snapshot。其余 master 数据集始终从 `BANDORI_PUBLIC_R2_BUCKET` 的 `bandori/master` 路径合并固定 JP、EN、TW、CN 四服 artifact。pointer、manifest、dataset 或 pack 缺失、无权限、格式错误、损坏或超限时都会失败关闭，且不会回退到 Bestdori、公开 asset index、公开 CDN 读取或 Supabase pointer。`BANDORI_EVENT_API_LOCAL_STORE_ROOT`、`BANDORI_CARDS_API_LOCAL_STORE_ROOT`、`BANDORI_DEGREES_API_LOCAL_STORE_ROOT`、`BANDORI_MUSIC_API_LOCAL_STORE_ROOT` 与 `BANDORI_STAMPS_API_LOCAL_STORE_ROOT` 可在本地开发时指向 tracker 生成的 content store，生产环境会拒绝这些设置。
 
-浏览器只从 `GET /api/bandori/master/cards` 读取一次完整 canonical Cards map，并在整个 SPA 生命周期内复用解析后的 map；账号所在服务器对应的标量扩展在浏览器本地物化。公开 Cards 列表/详情请求可选使用精确的 `server=0|1|2|3`，固定对应 JP/EN/TW/CN，字符串区服代码会被拒绝。旧的稀疏接口 `GET /api/bandori/cards?ids=...` 已删除。无服务器上下文的展示界面按“首选服务器、JP、EN、TW、CN”去重回退；卡牌档案和组队计算器中的档案卡牌则把档案所在服务器放在这个顺序之前，因此卡牌名和技能描述都优先服从档案身份，同时不修改用户的全局首选服务器。组队计算器还会在档案所在服务器缺少某张卡、但 JP 槽存在时纳入该 JP 卡；此规则只判断 snapshot 槽位是否存在，不读取 `releasedAt`，也不会把仅存在于 EN、TW 或 CN 的卡横向借给其他服务器。公开的按服务器过滤 API 与其他档案界面仍保持严格隔离。ID `10001`–`10010` 的冲突卡在计算和持久化中仍使用数字 ID；无服务器上下文的头像选择会将 EN/CN 实体展开成仅供 UI 使用的带区服引用，并把实际选择写入可空的 `profiles.avatar_card_server` 字段。
+浏览器只从 `GET /api/bandori/master/cards` 读取一次完整 canonical Cards map，并在整个 SPA 生命周期内复用解析后的 map；账号所在服务器对应的标量扩展在浏览器本地物化。公开 Cards 列表/详情请求可选使用精确的 `server=0|1|2|3`，固定对应 JP/EN/TW/CN，字符串服务器代码会被拒绝。旧的稀疏接口 `GET /api/bandori/cards?ids=...` 已删除。无服务器上下文的展示界面按“首选服务器、JP、EN、TW、CN”去重回退；卡牌档案和组队计算器中的档案卡牌则把档案所在服务器放在这个顺序之前，因此卡牌名和技能描述都优先服从档案身份，同时不修改用户的全局首选服务器。组队计算器还会在档案所在服务器缺少某张卡、但 JP 槽存在时纳入该 JP 卡；此规则只判断 snapshot 槽位是否存在，不读取 `releasedAt`，也不会把仅存在于 EN、TW 或 CN 的卡横向借给其他服务器。公开的按服务器过滤 API 与其他档案界面仍保持严格隔离。ID `10001`–`10010` 的冲突卡在计算和持久化中仍使用数字 ID；无服务器上下文的头像选择会将 EN/CN 实体展开成仅供 UI 使用的带服务器引用，并把实际选择写入可空的 `profiles.avatar_card_server` 字段。
 
 浏览器同样只从 `GET /api/bandori/master/events` 读取一次完整 Events map，并在 SPA 会话内供 Event Tracker、Calendar 和组队计算器共享。活动记录包含原始四服 master 字段，以及 `band`、四槽服务器本地 `stampRewardId`、标量 `stampCharacterId`；仅在官方 CN 时间范围不完整时按需包含顶层 `cnSchedule`。组队计算器直接使用这些记录内的 bonus 字段。旧 Events 列表和 bonus API 已删除；`/api/bandori/events/{eventId}/comments` 下的评论路由保持独立。
 
@@ -101,7 +101,7 @@ manifest 不存在、manifest 没有请求的 pack 类型，或有效 pack 中�
 
 parsed cache 权重按“解压字节 + 每个点 64 字节 + 少量 Map/分组开销”保守估算。解析完成后不会保留压缩 Buffer、解压 Buffer 或 JSON 文本。对象超过保护上限时不会被截断，而是返回 `503`。只有新的生产盘点证明数据规模确实增长后，才应人工调整限制。
 
-为了提供切流证据，每个 Web 进程对于同一区服、目标类型和 manifest generation 最多记录一次结构化 `Bandori tracker history R2 read succeeded` 日志，其中包含 server、generation、读取耗时和返回记录数，但不包含凭据或对象正文。降级读取同样按区服与目标独立限频。
+为了提供切流证据，每个 Web 进程对于同一服务器、目标类型和 manifest generation 最多记录一次结构化 `Bandori tracker history R2 read succeeded` 日志，其中包含 server、generation、读取耗时和返回记录数，但不包含凭据或对象正文。降级读取同样按服务器与目标独立限频。
 
 生产切换到 R2-first 前，使用只读命令对照代表性目标；命令不会写入任何数据源：
 
@@ -277,7 +277,7 @@ bandori/stamps/animation/atlases/{sha256}.png
 
 `GET /api/bandori/master/stamps` 返回 `{ success: true, data }`，其中 `data` 以 stamp ID 为 key。每条记录都包含固定 `[jp, en, tw, cn]` 四槽的 `imageName` 与 nullable `characterId`；缺失名称使用 `""`，缺失或无法解析的角色 ID 使用 `null`。存在 Changed Stamp 的记录还会包含可选四槽 `changedStamps`；每服内部按 `(imageName, soundName)` 排序去重，不公开原始 Changed 规则 ID、时间或概率。此 API 不公开存储 pointer、来源元数据、资源 URL 或资源 hash。
 
-`bandori/stamps/index.json` 是公开 asset index，根结构与 Cards/Events 一致：`schemaVersion`、`updatedAt`、`stamps` 领域 map 和 `changedStampGroups`。每个 Stamp 条目包含四槽 `images` SHA-256、可选四槽 `voices` SHA-256、可选四槽 Changed 图片/音频 hash，以及只含 `manifest` 与 `atlas` SHA-256 的可选 `animations`。`changedStampGroups` 按服务器和规则 ID 列出所有已发布 Changed manifest，即使当前前端未展示对应资源也不会从 index 省略。标准缺失槽位使用 `""`，Changed 缺失槽位使用空数组；复用普通图片的 Changed 条目可以省略 `image`，没有可用转码音频时可以省略 `audio`。客户端直接推导不可变路径：`bandori/stamps/images/{sha256}.png`、`bandori/stamps/voices/{sha256}.mp3`、`bandori/stamps/changed/manifests/{sha256}.json`、`bandori/stamps/animation/manifests/{sha256}.json` 和 `bandori/stamps/animation/atlases/{sha256}.png`，不再需要查询字符串版本参数。源语音名称和原始 Changed 规则元数据保留在内部提取元数据中，不进入精简根 index。标准单个 stamp manifest 不属于公开 index 合约。动画 manifest 严格使用精简 `hhwx-bandori-stamp-animation-v1` 结构：`schemaVersion`、显式正数 `frameRate`、`atlasDimensions` 和有序 `frames: [{ name, cssRect }]`。`cssRect` 使用 atlas PNG 的左上角坐标且不能越界；不再提供 12 FPS 或 `unityRect` fallback，bundle 审计字段只保留在各区服诊断 index。Web reader 仍会为兼容旧根描述符而校验并丢弃可选的 `frameRate`、`frameCount`。重新发布时先写入并验证新的不可变对象，再写区服诊断 index 和 root；root 切换后再部署仅使用 cssRect 的 Web reader，因此无需回滚或原地覆盖不可变对象。
+`bandori/stamps/index.json` 是公开 asset index，根结构与 Cards/Events 一致：`schemaVersion`、`updatedAt`、`stamps` 领域 map 和 `changedStampGroups`。每个 Stamp 条目包含四槽 `images` SHA-256、可选四槽 `voices` SHA-256、可选四槽 Changed 图片/音频 hash，以及只含 `manifest` 与 `atlas` SHA-256 的可选 `animations`。`changedStampGroups` 按服务器和规则 ID 列出所有已发布 Changed manifest，即使当前前端未展示对应资源也不会从 index 省略。标准缺失槽位使用 `""`，Changed 缺失槽位使用空数组；复用普通图片的 Changed 条目可以省略 `image`，没有可用转码音频时可以省略 `audio`。客户端直接推导不可变路径：`bandori/stamps/images/{sha256}.png`、`bandori/stamps/voices/{sha256}.mp3`、`bandori/stamps/changed/manifests/{sha256}.json`、`bandori/stamps/animation/manifests/{sha256}.json` 和 `bandori/stamps/animation/atlases/{sha256}.png`，不再需要查询字符串版本参数。源语音名称和原始 Changed 规则元数据保留在内部提取元数据中，不进入精简根 index。标准单个 stamp manifest 不属于公开 index 合约。动画 manifest 严格使用精简 `hhwx-bandori-stamp-animation-v1` 结构：`schemaVersion`、显式正数 `frameRate`、`atlasDimensions` 和有序 `frames: [{ name, cssRect }]`。`cssRect` 使用 atlas PNG 的左上角坐标且不能越界；不再提供 12 FPS 或 `unityRect` fallback，bundle 审计字段只保留在各服务器诊断 index。Web reader 仍会为兼容旧根描述符而校验并丢弃可选的 `frameRate`、`frameCount`。重新发布时先写入并验证新的不可变对象，再写服务器诊断 index 和 root；root 切换后再部署仅使用 cssRect 的 Web reader，因此无需回滚或原地覆盖不可变对象。
 
 Degree 元数据、静态图与动画资源：
 
@@ -302,7 +302,7 @@ bandori/degrees/effect/atlases/{sha256}.png
 
 前两个对象存储路径为私有对象，其余 Degree index 和内容寻址媒体路径为公开对象。Master 响应按 degree ID 组织，包含八个 `[jp, en, tw, cn]` canonical 字段：`degreeType`、`iconImageName`、`baseImageName`、`rank`、`degreeName`、`description`、`seq`、`characterId`；只有 CN 动态效果存在时才增加四槽 `serverExtensions`。它沿用 Cards/Music 的共享槽位语义：该服不存在 Degree 时为 `null`，存在但没有扩展时为 `{}`，只有 CN 槽可以包含 `degreeEffect`。缺失字符串使用 `""`，缺失数字槽使用 `0`，`rank` 保持字符串。公开 schema 2 index 按资源名组织：base 使用 `baseImageName`；rank 使用 `rank_none` 或 `{degreeType}_{rank}`；icon 使用 `icon_none` 或 `{iconImageName}_{rank}`；effect 直接使用 master `assetBundleName`，并位于该资源的 `effects.cn`。`ani_degree*` 动画、普通图片和 effect 资源不能混用；浏览器可在发布过渡期读取 schema 1。公开资料选择和视觉渲染属于独立的应用合同。
 
-Degree 动画 manifest 必须恰好使用 `schemaVersion: "hhwx-bandori-degree-animation-v1"`、`frameRate: 30`、`loop: true`、`atlasDimensions` 和有序 `frames: [{ name, rect }]`。矩形使用图集左上角坐标且不能越界；零填充帧名按字典序连续排列。内容 hash 针对最终 PNG 或 JSON 字节计算，因此即使区服描述符分开，完全相同的字节也会自然复用同一个不可变对象。
+Degree 动画 manifest 必须恰好使用 `schemaVersion: "hhwx-bandori-degree-animation-v1"`、`frameRate: 30`、`loop: true`、`atlasDimensions` 和有序 `frames: [{ name, rect }]`。矩形使用图集左上角坐标且不能越界；零填充帧名按字典序连续排列。内容 hash 针对最终 PNG 或 JSON 字节计算，因此即使服务器描述符分开，完全相同的字节也会自然复用同一个不可变对象。
 
 Degree effect manifest 使用 `schemaVersion: "hhwx-bandori-degree-effect-v1"`、bundle 内显式的正整数 `frameRate`、`loop: true` 和连续的 `effect_degree_0000...` 帧。
 

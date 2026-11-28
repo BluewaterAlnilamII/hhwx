@@ -94,7 +94,7 @@ start[w+1] = max(triggerTime[w+1], end[w] + 0.75)
 | 基础分的哪一步已在游戏中核实？ | 两区上述 10.1.3 构建的 `ScoreUtility.calculateBaseScore` 均以单精度按 `((totalParameter * playLevelScoreRate) / maxNoteCount) * 3` 运算（JP RVA `0x331f708`，CN `0x34169ac`）。这确认了给定三个参数时的基础分计算。Combo、判定、Fever、技能效果和最终取整要分别核对各自的执行路径。HHWX 的 binary64 运算与分阶段取整见下文。 |
 | 客户端能确认哪些实发 Pt 信息？ | 普通活动结果页读取结算响应的 `point`（本局所得）和 `eventPoint`（累计）。`ResultEventPointController.Setup` 中的读取从 JP `0x355aaf0`、CN `0x36e2eb4` 开始，累计减去本局所得即动画起点。结算数据含 `basePoint`、`scoreBonus`、`memberBonus`、`memberBonusRate` 和 `liveBoostUseCount`，任务活动另含 `supportDeckBonus`。这些字段能标识实发值及分项，仅凭结果页还无法确定服务器计算各分项与取整的过程。 |
 
-用实玩结算核对公式时，需要同一局的区服、活动与公式版本、个人实际得分（协力还需要房间分）、加成、支援、消耗的火或 CP，以及该局实发 Pt。本文未引用满足这些条件的配对样本。当前搜索把期望分代入活动公式。一局实测能核对这个输入下的 Pt 换算，技能顺序随机时如何定义搜索目标则需要单独约定。
+用实玩结算核对公式时，需要同一局的服务器、活动与公式版本、个人实际得分（协力还需要房间分）、加成、支援、消耗的火或 CP，以及该局实发 Pt。本文未引用满足这些条件的配对样本。当前搜索把期望分代入活动公式。一局实测能核对这个输入下的 Pt 换算，技能顺序随机时如何定义搜索目标则需要单独约定。
 
 ## 计分范围
 
@@ -180,7 +180,7 @@ lake build
 
 | 环节 | 共用契约或保留的模式差异 |
 | --- | --- |
-| 档案、区服主数据、技能 | 同一 `buildSearchRoster`、实体 ID、排除规则、CN null 回退与显式零值、技能等级／持续时间、完整队伍乐队／属性条件。只有外部玩家独立提供条件输入。 |
+| 档案、服务器主数据、技能 | 同一 `buildSearchRoster`、实体 ID、排除规则、CN null 回退与显式零值、技能等级／持续时间、完整队伍乐队／属性条件。只有外部玩家独立提供条件输入。 |
 | 角色及队伍参数 | 同一 v4 分项取整、已拥有道具配置、适用条件、小数综合力和队长居中的累加顺序。活动类型决定加成作用于综合力还是 Pt；组曲始终使用自己的综合力加成规则。 |
 | 谱面与技能边界 | 同一计分音符、六次触发、同拍稳定排序、BPM 锚定时间、触发音符排除、起止端点包含、不加 epsilon。只有单曲调度实际开始时间。 |
 | 音符计分及技能化简 | 同一 binary64 系数、判定／技能倍率函数、覆盖音符计数和两次分阶段取整。两种模式均未增加生命、原生 f32 或采样判定模型。新窗口函数对照所有共享技能行为及 P=0／0.73／1。 |
@@ -219,6 +219,6 @@ lake build
 - 公开档案／主数据／谱面 API 及持久化卡牌 ID 不变。页面默认开启外部技能条件，旧演出偏好缺少 `conditionSatisfied` 时也按开启迁移；已明确保存的 false 仍为 false。页面始终发送布尔值；底层适配器调用方若省略该字段，仍按基础技能效果处理。旧 TypeScript 可调用搜索导出删除，`bandori-team-search.ts` 只保留展示／设置类型。历史比较必须显式指定干净的退役前检出。
 - 组曲使用 `hhwx-medley-bestdori-v5`；输入 schema、均匀顺序模型、三曲搜索和输出结构不变，受影响技能的分数可能变化。
 
-`npm run test:team-builder` 使用实际生成绑定，对照独立逐音符／站位／顺序枚举，覆盖区服回退与零值、端点、Fever、Combo 上限、Pt、支援、协力输入和中止／错误。Rust 测试对照完整枚举验证搜索及每个部分分支上界。共享来源和组曲绑定受影响时继续回归，见[组曲测试](medley-testing.zh-CN.md)。浏览器必须实际运行 Worker 和重建后的 WASM，检查进度、最终状态、取消与展示；仅构建不能证明这些路径。
+`npm run test:team-builder` 使用实际生成绑定，对照独立逐音符／站位／顺序枚举，覆盖服务器回退与零值、端点、Fever、Combo 上限、Pt、支援、协力输入和中止／错误。Rust 测试对照完整枚举验证搜索及每个部分分支上界。共享来源和组曲绑定受影响时继续回归，见[组曲测试](medley-testing.zh-CN.md)。浏览器必须实际运行 Worker 和重建后的 WASM，检查进度、最终状态、取消与展示；仅构建不能证明这些路径。
 
 要核对组队页的两项最低门槛，先启动本地生产构建，再从仓库根目录运行 `node --import tsx tests/bandori-team-builder-constraints.browser.mjs`。将 `BASE_URL` 设为构建的本地地址（默认 `http://localhost:3000`），使用与构建相同的 `NEXT_PUBLIC_SUPABASE_URL`，以便浏览器写入模拟会话。如果 Playwright 安装在项目之外，将 `PLAYWRIGHT_MODULE` 指向该安装目录。测试提供公开的五卡样本，执行生产 Worker 和 WASM，检查手动输入、粘贴、刷新恢复、清空及小数输入后的页面结果。[浏览器回归](../../tests/bandori-team-builder-constraints.browser.mjs)

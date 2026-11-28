@@ -49,7 +49,7 @@ English version: [supabase-setup.md](supabase-setup.md)
 
 ## 四服绑定与公开资料
 
-四服绑定迁移把旧验证码、绑定关系、主页账号排序与可见性归为国服。游戏账号以区服及 UID 联合标识。先暂停 Web 流量，等待在途写入结束后停掉旧 Web，再执行迁移、更新私有后端并启动新版 Web。确认就绪后恢复访问。解绑请求必须带区服，主页设置统一写入 `PATCH /api/account/homepage/settings`。停机前已打开的页面若保存失败，刷新后即可重试。产生多服绑定后，回滚版本也必须识别区服。公开观察表和合并函数仅供服务端使用，数据来自玩家查询、签名验码和国服完整同步中按公开设置过滤的 `profile`。 [SQL](../supabase/migrations/20261127060443_regional_game_bindings_and_public_players.sql)
+四服绑定迁移把旧验证码、绑定关系、主页账号排序与可见性归为国服。游戏账号以服务器及 UID 联合标识。先暂停 Web 流量，等待在途写入结束后停掉旧 Web，再执行迁移、更新私有后端并启动新版 Web。确认就绪后恢复访问。解绑请求必须带服务器，主页设置统一写入 `PATCH /api/account/homepage/settings`。停机前已打开的页面若保存失败，刷新后即可重试。产生多服绑定后，回滚版本也必须识别服务器。公开观察表和合并函数仅供服务端使用，数据来自玩家查询、签名验码和国服完整同步中按公开设置过滤的 `profile`。 [SQL](../supabase/migrations/20261127060443_regional_game_bindings_and_public_players.sql)
 
 先应用[档案同步优化迁移](../supabase/migrations/20261127075659_optimize_player_profile_sync.sql)，再部署调用 `merge_game_uid_binding_titles` 的 Web 版本。旧 Web 在切换期间仍可调用原称号函数。公开玩家表在合并结果与已有记录相同时跳过行更新。
 
@@ -91,7 +91,7 @@ Git 忽略的 `.env.development.local` 同时覆盖开发环境的两个 Supabas
 | 表 | 字段与约束 | 用途 |
 | --- | --- | --- |
 | `profile_homepages` | `user_id uuid` 为主键，外键指向 `profiles.id` 并级联删除。`preferences jsonb` 为非空对象，默认 `{}`。`card_preview_count smallint` 默认 6，范围 1–6。 | 每位用户至多一行。偏好存签名、封面及焦点、栏目与绑定账号的顺序和隐私设置。没有记录时使用默认值。展示数为 6 时，随收藏自然增长，最多显示六张。 |
-| `bandori_favorites` | 唯一索引是复合主键 `(user_id uuid, kind text, target text)`。`user_id` 外键指向 `profiles.id` 并级联删除。`position bigint generated always as identity` 记录加入顺序。`display_order bigint` 是卡牌和歌曲可选的正整数排序值。`normal_art boolean not null default false` 记录卡牌是否选择特训前卡面。 | 每位用户对同一内容一行。歌曲与普通卡牌使用数字 ID 的文本形式，撞号卡牌用 `en:id` 或 `cn:id`，活动使用区服码加 ID。取消后重新收藏会获得新的加入序号。 |
+| `bandori_favorites` | 唯一索引是复合主键 `(user_id uuid, kind text, target text)`。`user_id` 外键指向 `profiles.id` 并级联删除。`position bigint generated always as identity` 记录加入顺序。`display_order bigint` 是卡牌和歌曲可选的正整数排序值。`normal_art boolean not null default false` 记录卡牌是否选择特训前卡面。 | 每位用户对同一内容一行。歌曲与普通卡牌使用数字 ID 的文本形式，撞号卡牌用 `en:id` 或 `cn:id`，活动使用服务器代码加 ID。取消后重新收藏会获得新的加入序号。 |
 
 编辑器用目标 ID 数组提交展示顺序。数据库中每项收藏占一行，单项增删、卡面选择和跨用户按目标计数共用这条记录，小范围调序通常只需更新移动的条目。
 

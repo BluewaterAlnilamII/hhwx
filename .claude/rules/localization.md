@@ -13,6 +13,7 @@ paths:
 - Action feedback must use the same verb as the user-facing action: posting fails to post, saving fails to save. Do not substitute implementation terms such as submit or request for the product action.
 - Do not render raw exception messages or HTTP details as action feedback. Use the shared presentation with the action's concise result; preserve specific guidance only for recognized, actionable validation or permission errors mapped to localized messages.
 - Treat `messages/zh-CN` as the source locale and key baseline. Every locale must keep the same namespace files and key shape; update affected locale catalogs and call sites together when adding, deleting, or renaming a key.
+- Use “服务器” for a game server in Chinese UI copy, documentation, and replies. Use the established names 日服、国际服、台服、国服 for individual Bandori servers.
 - Use stable semantic message keys rather than source text as keys. Keep each key in the narrowest existing namespace that owns the UI or workflow.
 - Keep ICU placeholder names and argument semantics consistent across locales. Do not translate placeholder identifiers, and preserve the corresponding plural or select structure when a message uses it.
 - Run `npm run i18n:check` after changing message catalogs, namespace configuration, or the localization pipeline. Resolve missing or extra keys and placeholder mismatches instead of bypassing the check.

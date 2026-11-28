@@ -95,14 +95,14 @@ hhwx/
 
 - `auth-*.ts`、`supabase-*.ts`、`turnstile-server.ts` 和 `turnstile-public.ts`：认证、安全验证以及服务端/公开配置封装。
 - 根目录中保留的 `bandori-*.ts` 和 `calendar-*.ts`：不属于单一功能目录的跨领域基础设施与兼容入口。
-- `bandori/cards/`：卡牌目录、区服数据物化、API 契约与服务、发布/训练规则、生成的卡牌元数据、布局和档案卡牌辅助逻辑。
+- `bandori/cards/`：卡牌目录、服务器数据物化、API 契约与服务、发布/训练规则、生成的卡牌元数据、布局和档案卡牌辅助逻辑。
 - `ournotes/`：共享来源/槽位合同、通用私有 master 发现与按需读取，以及 HTTP 参数/错误处理。`catalogs-contract.ts`/`catalogs-server.ts` 负责角色/乐队验证与合并；`skills-contract.ts`/`skills-server.ts` 负责独立技能目录；`cards/` 负责独立快照合同、读取、卡牌投影、合并与筛选。
 - `catalog-search.ts`、`public-asset-index-client.ts`：共享目录分词与按 URL 缓存的浏览器资源索引；领域适配器保留各自的搜索语义与索引校验。
-- `bandori/costumes/`：服装元数据校验、区服物化和私有 snapshot API 读取；媒体提取由 assets-builder 负责。
-- `bandori/events/`：活动目录、API 契约与服务、路由/区服/状态辅助逻辑、横幅代理和活动评论目标校验。
+- `bandori/costumes/`：服装元数据校验、服务器物化和私有 snapshot API 读取；媒体提取由 assets-builder 负责。
+- `bandori/events/`：活动目录、API 契约与服务、路由/服务器/状态辅助逻辑、横幅代理和活动评论目标校验。
 - `bandori/event-tracker/`：Event Tracker 的档线、TOP10、实时序列、投影、历史与预测契约/服务，由活动、歌曲和月度追踪模式共同使用。
 - `ournotes/event-tracker/`：JP/EN/TW/KR 普通与 TOP10 发布契约、签名历史读取及 HTTP 处理。
-- `bandori/chart-simulator/`：无损谱面编译、带版本的 Worker 传输、定位状态重建、原生演出／效果／音频运行时，以及 CDN manifest 解析；谱面模拟器实体资源不进入 Web 仓库，而是通过逻辑路径解析，同时这里不包含区服选择。
+- `bandori/chart-simulator/`：无损谱面编译、带版本的 Worker 传输、定位状态重建、原生演出／效果／音频运行时，以及 CDN manifest 解析；谱面模拟器实体资源不进入 Web 仓库，而是通过逻辑路径解析，同时这里不包含服务器选择。
 - `bandori/medley-foundation/`：共享 HHWX 档案／主数据、卡牌、技能和谱面规范化，以及带版本的组曲计分／搜索契约。
 - `bandori/medley-wasm/pkg/`：组曲与单曲 Rust 搜索及结果补算的生成浏览器绑定，由组队 Worker 加载。
 - `bandori/team-builder/`：单曲 UI 设置、活动策略和来源适配器；`core/calculator.ts` 保留通用卡牌计算。两种组队模式使用共享 Rust 计分／搜索包，原 TypeScript `single/` 引擎已退役。
