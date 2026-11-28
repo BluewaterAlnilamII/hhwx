@@ -76,6 +76,7 @@ function profilePayload() {
 
 test("complete profile decode preserves cards, items, potentials, and mission bonuses", () => {
   const decoded = decodeMedleyProfile(profilePayload());
+  assert.deepEqual(decodeMedleyProfile({ ...profilePayload(), cardAcquiredAt: { 1: 1700000000000 } }), decoded);
 
   assert.equal(decoded.name, "Foundation fixture");
   assert.equal(decoded.server, 3);
