@@ -433,7 +433,7 @@
       },
       "bind": {
         "title": "绑定新 UID",
-        "server": "游戏区服",
+        "server": "服务器",
         "syncRegion": "国服账号支持自动同步个人档案。",
         "uidPlaceholder": "游戏 UID",
         "limitReached": "已达到绑定 UID 上限，解绑后可继续绑定。",

@@ -166,7 +166,7 @@ async function checkPendingEvents(page, api, profilePath) {
     for (const id of [1, 349, 347, 348]) await api(`/events:${code}:${id}`, "PUT");
   }
   await page.goto(origin + profilePath, {waitUntil:"domcontentloaded"});
-  const flags = page.getByRole("group", { name: "活动区服" });
+  const flags = page.getByRole("group", { name: "活动服务器" });
   const stations = page.getByRole("tabpanel").locator('li:has(a[href*="/bandori/events/"])');
   const stationIds = () => stations.getByRole("link").evaluateAll(links => links.map(link => Number(new URL(link.href).pathname.split("/").pop())));
   await page.locator("[data-more=events]").click();
@@ -470,7 +470,7 @@ async function checkCollectionHeader(page, panel, title, phone) {
 async function checkEventEditor(page, panel, phone, api) {
   const section = panel.locator('[data-collection=events]');
   const heading = await section.locator("h2").innerText();
-  const flags = panel.getByRole("group", { name: "活动区服" });
+  const flags = panel.getByRole("group", { name: "活动服务器" });
   const rows = panel.locator('li:has(a[href*="/bandori/events/"])');
   const expected = await rows.evaluateAll(items => items.map(row => ({
     href: row.querySelector("a").getAttribute("href"),
@@ -1551,7 +1551,7 @@ try {
     await api("/cards:"+removedId,"PUT");
     cards.push(removedId);
     await checkSongPlaylist(page, panel, songs, phone, api);
-    const flags = panel.getByRole("group",{name:"活动区服"});
+    const flags = panel.getByRole("group",{name:"活动服务器"});
     const beforeEdit = page.url();
     await panel.getByRole("button", { name: "编辑收藏活动" }).click();
     await panel.locator("[data-edit=events][aria-pressed=true]").waitFor();
